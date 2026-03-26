@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# pre-commit hook — Python lint (placeholder)
+#
+# This script is a placeholder. Actual Python lint implementation
+# will be added in a future change (e.g., ruff, flake8, mypy).
+#
+# To enable: install via `bash install.sh python` from wk-agent-ops
+
+echo "⚠️  Python pre-commit hook: not yet implemented"
+exit 0
