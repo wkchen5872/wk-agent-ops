@@ -18,6 +18,52 @@ else
     PYTHON="python3"
 fi
 
+# 從 pyproject.toml 動態讀取 source 目錄（fallback: src）
+# 支援：setuptools、poetry、pdm、hatch
+if [[ -f "$PROJECT_ROOT/pyproject.toml" ]]; then
+    SRC_DIR=$("$PYTHON" - <<'PYEOF'
+import sys
+try:
+    import tomllib
+except ImportError:
+    try:
+        import tomli as tomllib
+    except ImportError:
+        print("src"); sys.exit()
+
+import os
+pyproject = os.environ.get("PROJECT_ROOT", ".") + "/pyproject.toml"
+with open(pyproject, "rb") as f:
+    d = tomllib.load(f)
+t = d.get("tool", {})
+
+# setuptools: [tool.setuptools.packages.find] where = ["src"]
+where = t.get("setuptools", {}).get("packages", {}).get("find", {}).get("where", [])
+if where:
+    print(where[0]); sys.exit()
+
+# poetry: [[tool.poetry.packages]] from = "src"
+pkgs = t.get("poetry", {}).get("packages", [])
+if pkgs and "from" in pkgs[0]:
+    print(pkgs[0]["from"]); sys.exit()
+
+# pdm: [tool.pdm.build] package-dir = "src"
+pkg_dir = t.get("pdm", {}).get("build", {}).get("package-dir", "")
+if pkg_dir:
+    print(pkg_dir); sys.exit()
+
+# hatch: [tool.hatch.build.targets.wheel] packages = ["src/mypkg"]
+hatch_pkgs = t.get("hatch", {}).get("build", {}).get("targets", {}).get("wheel", {}).get("packages", [])
+if hatch_pkgs:
+    print(os.path.dirname(hatch_pkgs[0])); sys.exit()
+
+print("src")
+PYEOF
+    PROJECT_ROOT="$PROJECT_ROOT" 2>/dev/null || echo "src")
+else
+    SRC_DIR="src"
+fi
+
 mkdir -p "$LOG_DIR"
 
 # ── 初始化計數 ────────────────────────────────────────────────────────────────
@@ -56,7 +102,7 @@ for test_dir in "${test_dirs[@]}"; do
 
     # 執行測試，擷取輸出
     set +e
-    output=$(PYTHONPATH="$PROJECT_ROOT/src" "$PYTHON" -m pytest "$test_dir" -q --tb=short 2>&1)
+    output=$(PYTHONPATH="$PROJECT_ROOT/$SRC_DIR" "$PYTHON" -m pytest "$test_dir" -q --tb=short 2>&1)
     exit_code=$?
     set -e
 

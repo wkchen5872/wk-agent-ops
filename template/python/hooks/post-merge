@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# post-merge hook — 偵測 pyproject.toml 變動，自動執行 pip install -e .
+# 安裝方式：bash scripts/skills/install.sh python
+
+set -euo pipefail
+
+PROJECT_ROOT="$(git rev-parse --show-toplevel)"
+
+# 選擇 Python 解譯器：優先使用專案 venv
+if [[ -x "$PROJECT_ROOT/.venv/bin/pip" ]]; then
+    PIP="$PROJECT_ROOT/.venv/bin/pip"
+else
+    PIP="pip"
+fi
+
+# 檢查 pyproject.toml 是否在此次 merge 中有變動
+changed=$(git diff ORIG_HEAD HEAD --name-only 2>/dev/null || true)
+
+if echo "$changed" | grep -q "^pyproject\.toml$"; then
+    echo "📦 pyproject.toml changed — running pip install -e ."
+    "$PIP" install -e . --quiet
+    echo "✅ Done."
+fi
