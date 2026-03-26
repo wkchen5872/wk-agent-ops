@@ -24,23 +24,9 @@
 ```text
 /opsx:new           ← 描述需求，OpenSpec 將產出 feature 名稱（如 etf-nav-fetcher）
 /opsx:continue ×4   ← 依序產出 proposal → specs → design → tasks
+or 
+/opsx:ff            ← 描述需求，OpenSpec 將自動產出所有文件
 ```
-
-> **💡 進階技巧：一鍵完成全套規劃 (Auto-Planning)**
-> 為了避免手動輸入 4 次 `/opsx:continue`，你可以在啟動 PM Agent 時（或下達需求前），先給予以下 System Prompt，讓 Agent 一口氣把所有文件寫完再來找你 Review：
-> 
-> ```text
-> 你現在扮演 SA (System Analyst) 與 PO (Product Owner) 的角色。
-> 接下來我會透過 `/opsx:ff` 或 `/opsx:new` 指令提供開發需求給你。
-> 
-> 為了加速開發節奏，當我給予需求後，請你「自動且連續地」完成以下四個階段的規劃與檔案產出：
-> 1. Proposal (提案：proposal.md)
-> 2. Specs (規格：specs/...)
-> 3. Design (設計：design.md)
-> 4. Tasks (任務：tasks.md)
-> 
-> 請依序直接產出所有內容並寫入對應的檔案中。在全部 4 個階段都完成之前，請「不要中斷」詢問我是否繼續。等所有檔案（proposal、specs、design、tasks）都建立完畢後，再通知我進行一次性的整體 Review。
-> ```
 
 ### 步驟二：獨立開發 (RD Agent 在 Worktree)
 
