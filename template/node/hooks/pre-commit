@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# pre-commit hook — Node.js lint (placeholder)
+#
+# This script is a placeholder. Actual Node.js lint implementation
+# will be added in a future change (e.g., eslint, prettier).
+#
+# To enable: install via `bash install.sh node` from wk-agent-ops
+
+echo "⚠️  Node.js pre-commit hook: not yet implemented"
+exit 0
