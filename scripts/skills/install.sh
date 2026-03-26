@@ -106,6 +106,12 @@ for profile in "${PROFILES[@]}"; do
     rsync -a --itemize-changes "$PROFILE_DIR/.claude/rules/" "$TARGET/.claude/rules/"
   fi
 
+  # .github/instructions/
+  if [[ -d "$PROFILE_DIR/.github/instructions" ]]; then
+    mkdir -p "$TARGET/.github/instructions"
+    rsync -a --itemize-changes "$PROFILE_DIR/.github/instructions/" "$TARGET/.github/instructions/"
+  fi
+
   # hooks/ → .git/hooks/ (chmod +x each file)
   if [[ -d "$PROFILE_DIR/hooks" ]]; then
     mkdir -p "$TARGET/.git/hooks"
