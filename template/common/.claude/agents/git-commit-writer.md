@@ -62,7 +62,26 @@ Without openspec change:
 - `<subject>`: imperative mood, max 72 chars, no trailing period
 - `<body>`: 2–5 lines, what + why
 
-## Step 5 — Execute
+## Step 5 — Verify archive exists (if archive_path provided)
+
+If `archive_path` was passed in, verify the directory exists before staging:
+
+```bash
+ls <archive_path>
+```
+
+If the directory is **not found**, stop immediately and output:
+```
+❌ Archive not found at <archive_path>
+   The archive operation did not complete before this commit was attempted.
+   Run opsx:archive first, then retry.
+```
+
+Do NOT proceed to `git add -A` if the archive directory is missing.
+
+---
+
+## Step 6 — Execute
 
 Include `Co-Authored-By` using **your own model name** (the model you are currently running on):
 
@@ -77,7 +96,7 @@ Example: if you are Claude Haiku 4.5, write `Co-Authored-By: Claude Haiku 4.5 <n
 
 On pre-commit hook failure: fix the issue and re-run `git commit`. Do NOT use `--no-verify`.
 
-## Step 6 — Output
+## Step 7 — Output
 
 ```
 💾 Commit: <short-hash> <type>[(<change-id>)]: <subject>
