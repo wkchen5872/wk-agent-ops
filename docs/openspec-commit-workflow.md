@@ -88,9 +88,10 @@ wt-done <feature-name>
    ┌─────────────────────────────────────────┐
    │ Conventional Commits 格式               │
    │                                         │
-   │ 自動偵測 archive (git status):           │
-   │   openspec/changes/archive/             │
-   │   YYYY-MM-DD-<change-id>                │
+   │ 偵測優先序：                             │
+   │ 1. git status (archived)                │
+   │ 2. git status (active changes)          │
+   │ 3. CLI保底 (openspec list)              │
    │                                         │
    │ type 推斷：                             │
    │   feat     新功能/新資料來源             │

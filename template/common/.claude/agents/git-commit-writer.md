@@ -15,35 +15,72 @@ Two modes:
 
 ## Step 1 — Gather context (run in parallel)
 
+### A. Code Changes (for writing the message)
 ```bash
 git diff --cached --stat
 git diff --cached
-openspec list --json
+```
+
+### B. OpenSpec Context (for determining the scope)
+```bash
+# Detect openspec changes from git working tree
+if [ ! -d "openspec/changes" ]; then
+  echo "NO_OPENSPEC"
+else
+  # 1. Archived changes: dirs modified under openspec/changes/archive/
+  archived_changes=$(
+    git status --short \
+    | awk '{print $NF}' \
+    | grep '^openspec/changes/archive/' \
+    | sed 's|^openspec/changes/archive/||' \
+    | cut -d'/' -f1 \
+    | sort -u
+  )
+
+  # 2. Active changes: dirs modified under openspec/changes/ (excluding archive/)
+  active_changes=$(
+    git status --short \
+    | awk '{print $NF}' \
+    | grep '^openspec/changes/' \
+    | grep -v '^openspec/changes/archive/' \
+    | sed 's|^openspec/changes/||' \
+    | cut -d'/' -f1 \
+    | sort -u
+  )
+
+  # 3. Fallback: Check CLI if no directory changes detected
+  cli_active=""
+  if [ -z "$archived_changes" ] && [ -z "$active_changes" ] && command -v openspec >/dev/null 2>&1; then
+    cli_active=$(openspec list --json | grep -v "\[\]" || echo "")
+  fi
+
+  # Strip YYYY-MM-DD- prefix to get change_id
+  archived_ids=$(echo "$archived_changes" | sed 's/^[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}-//')
+
+  echo "archived_changes: $archived_changes"
+  echo "archived_ids: $archived_ids"
+  echo "active_changes: $active_changes"
+  echo "cli_fallback: $cli_active"
+fi
 ```
 
 ## Step 2 — Determine openspec context
 
-Run the following to find staged/unstaged archive directories:
+Based on the detection script output from Step 1:
 
-```bash
-git status --short
-```
-
-**Check for archived changes (preferred):**
-
-Look for new entries under `openspec/changes/archive/` in the git status output.
-The format is `YYYY-MM-DD-<change-name>`.
-
-- **Exactly one archived directory found** → use it directly
-  - Set `archive_path = openspec/changes/archive/<dir>`
-  - Set `change_id = <change-name>` (strip the date prefix)
+**Priority 1 — Archived changes** (`archived_changes` not empty):
+- **Exactly one** → use it directly
+  - `archive_path = openspec/changes/archive/<archived_changes>`
+  - `change_id = <archived_ids>` (already stripped of date prefix)
   - Read `<archive_path>/proposal.md` — focus on **Why** and **What Changes**
-- **Multiple archived directories found** → ask the user to select one before proceeding
-- **No archived directories found** → fall back to active change detection:
-  - Check `openspec list --json`
-  - One active change → read `openspec/changes/<name>/proposal.md`
-  - Multiple → use the first one
-  - None → use git diff only
+- **Multiple** → ask the user to select one (show `archived_ids` list); use the chosen `archived_changes` entry to build `archive_path` and `archived_ids` entry as `change_id`
+
+**Priority 2 — Active changes** (`archived_changes` empty, `active_changes` or `cli_fallback` not empty):
+- **Exactly one** → read `openspec/changes/<name>/proposal.md`
+- **Multiple** → use the first one from `active_changes` or the CLI output
+
+**Priority 3 — No openspec context**:
+- `NO_OPENSPEC` output or all lists empty → use git diff only, no scope
 
 ## Step 3 — Infer commit type
 

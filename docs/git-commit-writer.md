@@ -18,19 +18,22 @@
 
 ```mermaid
 graph TD
-    Start[呼叫 git-commit-writer] --> Gather[Step 1: 收集 Context<br/>git diff, git status, openspec list]
+    Start[呼叫 git-commit-writer] --> Gather[Step 1: 收集 Context<br/>git diff + 偵測腳本]
     Gather --> Detect[Step 2: 判定 OpenSpec Context]
     
     subgraph Context Detection
-    Detect --> CheckArchive{git status 有新 archive?}
+    Detect --> CheckArchive{Priority 1:<br/>git status 有新 archive?}
     CheckArchive -- Yes --> UseArchive[使用 archive 資料作為 scope<br/>讀取其 proposal.md]
-    CheckArchive -- No --> CheckActive{openspec list 有變更?}
-    CheckActive -- Yes --> UseActive[使用 active change 作為 scope<br/>讀取其 proposal.md]
-    CheckActive -- No --> NoScope[不使用 scope<br/>僅參考 git diff]
+    CheckArchive -- No --> CheckStatus{Priority 2:<br/>git status 有 active change?}
+    CheckStatus -- Yes --> UseActive[使用 active change 作為 scope<br/>讀取其 proposal.md]
+    CheckStatus -- No --> CheckCLI{Priority 2 Fallback:<br/>CLI 有 active change?}
+    CheckCLI -- Yes --> UseCLI[使用 CLI 為 scope<br/>讀取 proposal.md]
+    CheckCLI -- No --> NoScope[Priority 3:<br/>不使用 scope<br/>僅參考 git diff]
     end
     
     UseArchive --> Infer[Step 3: 推斷 Commit Type]
     UseActive --> Infer
+    UseCLI --> Infer
     NoScope --> Infer
     
     Infer --> Format[Step 4: 格式化訊息]
