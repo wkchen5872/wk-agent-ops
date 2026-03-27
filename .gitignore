@@ -1,0 +1,5 @@
+# Git worktrees
+.worktrees/
+
+# Claude settings
+.claude/settings.local.json

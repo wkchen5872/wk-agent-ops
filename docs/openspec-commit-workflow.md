@@ -74,8 +74,8 @@ wt-done <feature-name>
    ┌─────────────────────────────────────────────────────────┐
    │ feature 影響              更新目標                       │
    │ ─────────────────────────────────────────────────────  │
-   │ 資料來源（kgi/yuanta…）  docs/datasources/{source}.md  │
-   │ init runner 異動          docs/datasources/init-runner.md│
+   │ API（api-a/b…）           docs/api/{source}.md         │
+   │ runner 核心異動           docs/runner.md                │
    │ 架構分層異動              docs/architecture.md          │
    │ 新資料來源/重大功能        README.md（支援來源段落）      │
    │ 純 skill/工具             通常不需更新 README            │
@@ -84,14 +84,14 @@ wt-done <feature-name>
    ● 只改相關 section，不重寫無關段落
         │
         ▼
-⑤ git add -A
-   git commit -m "<type>: <subject>\n\n<body>"
+⑤ git-commit-writer
    ┌─────────────────────────────────────────┐
    │ Conventional Commits 格式               │
    │                                         │
-   │ <type>: <subject>                       │
-   │                                         │
-   │ <body（2-5 行）>                        │
+   │ 偵測優先序：                             │
+   │ 1. git status (archived)                │
+   │ 2. git status (active changes)          │
+   │ 3. CLI保底 (openspec list)              │
    │                                         │
    │ type 推斷：                             │
    │   feat     新功能/新資料來源             │
@@ -100,6 +100,9 @@ wt-done <feature-name>
    │   refactor  重構（無行為改變）           │
    │   chore     工具/設定/維護              │
    │   test      新增/修正測試              │
+   │                                         │
+   │ Claude Code: Haiku subagent 執行        │
+   │ 其他工具: 工具層 model 決定              │
    └─────────────────────────────────────────┘
         │
         ▼
@@ -150,4 +153,5 @@ skills/openspec-commit/SKILL.md      ← 專案原始檔（版本控制）
 - `scripts/worktree/wt-new.sh` — 建立 worktree
 - `scripts/worktree/wt-done.sh` — 合併 worktree 回 develop
 - `.claude/skills/openspec-commit/SKILL.md` — Skill 定義
+- `.claude/skills/git-commit-writer/SKILL.md` — Commit 寫入 skill（可獨立呼叫）
 - `openspec/changes/archive/` — 已封存的 change 目錄
