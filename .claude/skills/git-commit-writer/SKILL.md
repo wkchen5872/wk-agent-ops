@@ -5,10 +5,10 @@ description: >
   standalone or when called from openspec-commit. Adds scope when an openspec
   change is present; omits scope otherwise. Executes without confirmation.
 license: MIT
-compatibility: Requires git. Optional: openspec CLI.
+compatibility: "Requires git. Optional: openspec CLI."
 metadata:
   author: wkchen
-  version: "1.0"
+  version: "1.1"
 ---
 
 # Git Commit Writer
@@ -37,15 +37,29 @@ Skip `openspec list` if the CLI is not available.
 
 ## Step 2 — Determine openspec context
 
-**If called from `openspec-commit` with explicit context provided:**
-- Use the given `archive_path` and `change_id` directly
-- Read `<archive_path>/proposal.md` — focus on **Why** and **What Changes**
+Run the following to find staged/unstaged archive directories:
 
-**If called standalone:**
-- Check `openspec list --json`
-- Exactly one active change → read `openspec/changes/<name>/proposal.md`
-- Multiple active changes → use the first one
-- No active changes → skip proposal, use git diff only
+```bash
+git status --short
+```
+
+**Check for archived changes (preferred):**
+
+Look for new entries under `openspec/changes/archive/` in the git status output.
+The format is `YYYY-MM-DD-<change-name>`.
+
+- **Exactly one archived directory found** → use it directly
+  - Set `archive_path = openspec/changes/archive/<dir>`
+  - Set `change_id = <change-name>` (strip the date prefix)
+  - Read `<archive_path>/proposal.md` — focus on **Why** and **What Changes**
+- **Multiple archived directories found** → ask the user to select one before proceeding
+- **No archived directories found** → fall back to active change detection:
+  - Check `openspec list --json`
+  - Exactly one active change → read `openspec/changes/<name>/proposal.md`
+  - Multiple active changes → use the first one
+  - No active changes → skip proposal, use git diff only
+
+Skip `openspec list` if the CLI is not available.
 
 ---
 

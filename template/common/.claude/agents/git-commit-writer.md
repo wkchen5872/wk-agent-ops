@@ -1,6 +1,6 @@
 ---
 name: git-commit-writer
-description: Generate and execute a Conventional Commits-formatted git commit. Invoke after implementation is complete and changes are ready to commit. Pass archive_path and change_id when called from openspec-commit; omit for standalone use (auto-detects openspec context).
+description: Generate and execute a Conventional Commits-formatted git commit. Invoke after implementation is complete and changes are ready to commit. Auto-detects openspec context from git status (archived changes) or active changes. No parameters needed.
 model: haiku
 tools: Read, Bash, Grep
 ---
@@ -23,14 +23,27 @@ openspec list --json
 
 ## Step 2 — Determine openspec context
 
-**If archive_path and change_id were passed in:**
-- Read `<archive_path>/proposal.md` — focus on **Why** and **What Changes**
+Run the following to find staged/unstaged archive directories:
 
-**If called standalone:**
-- Check `openspec list --json`
-- One active change → read `openspec/changes/<name>/proposal.md`
-- Multiple → use the first one
-- None → use git diff only
+```bash
+git status --short
+```
+
+**Check for archived changes (preferred):**
+
+Look for new entries under `openspec/changes/archive/` in the git status output.
+The format is `YYYY-MM-DD-<change-name>`.
+
+- **Exactly one archived directory found** → use it directly
+  - Set `archive_path = openspec/changes/archive/<dir>`
+  - Set `change_id = <change-name>` (strip the date prefix)
+  - Read `<archive_path>/proposal.md` — focus on **Why** and **What Changes**
+- **Multiple archived directories found** → ask the user to select one before proceeding
+- **No archived directories found** → fall back to active change detection:
+  - Check `openspec list --json`
+  - One active change → read `openspec/changes/<name>/proposal.md`
+  - Multiple → use the first one
+  - None → use git diff only
 
 ## Step 3 — Infer commit type
 
@@ -62,26 +75,7 @@ Without openspec change:
 - `<subject>`: imperative mood, max 72 chars, no trailing period
 - `<body>`: 2–5 lines, what + why
 
-## Step 5 — Verify archive exists (if archive_path provided)
-
-If `archive_path` was passed in, verify the directory exists before staging:
-
-```bash
-ls <archive_path>
-```
-
-If the directory is **not found**, stop immediately and output:
-```
-❌ Archive not found at <archive_path>
-   The archive operation did not complete before this commit was attempted.
-   Run opsx:archive first, then retry.
-```
-
-Do NOT proceed to `git add -A` if the archive directory is missing.
-
----
-
-## Step 6 — Execute
+## Step 5 — Execute
 
 Include `Co-Authored-By` using **your own model name** (the model you are currently running on):
 
@@ -96,7 +90,7 @@ Example: if you are Claude Haiku 4.5, write `Co-Authored-By: Claude Haiku 4.5 <n
 
 On pre-commit hook failure: fix the issue and re-run `git commit`. Do NOT use `--no-verify`.
 
-## Step 7 — Output
+## Step 6 — Output
 
 ```
 💾 Commit: <short-hash> <type>[(<change-id>)]: <subject>
