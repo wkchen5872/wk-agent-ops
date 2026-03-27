@@ -75,4 +75,5 @@ On pre-commit hook failure: fix the issue and retry. Do NOT use `--no-verify`.
 
 ```
 💾 Commit: <short-hash> <type>[(<change-id>)]: <subject>
+🤖 Executed by: git-commit-writer agent (haiku)
 ```
