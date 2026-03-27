@@ -1,268 +1,94 @@
-# git-commit-writer
+# Git Commit Writer
 
-獨立的 Conventional Commits 格式化與執行工具。既可作為 Claude Code sub-agent 自動使用，也可作為通用 skill 跨工具呼叫。
-
----
-
-## 快速開始
-
-### Claude Code 中
-
-在任何 git worktree 中，直接呼叫 sub-agent：
-
-```
-Use the git-commit-writer agent.
-archive_path: openspec/changes/archive/YYYY-MM-DD-<name>/
-change_id: <change-name>
-```
-
-（或搭配 `openspec-commit` skill 自動 invoke）
-
-### 其他工具 (Copilot CLI, Antigravity)
-
-呼叫 skill：
-
-```
-/git-commit-writer
-archive_path: <archive_path>
-change_id: <change_id>
-```
+`git-commit-writer` 是一個專門用來生成符合 [Conventional Commits](https://www.conventionalcommits.org/) 規範之 git commit 的工具。它可以作為 `openspec-commit` 流程的一部分，也可以獨立呼叫。
 
 ---
 
-## 架構
+## 核心功能
 
-### Sub-Agent 與 Skill 的區別
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     git-commit-writer                       │
-├──────────────────────────┬──────────────────────────────────┤
-│    .claude/agents/       │   .claude/skills/                │
-│   git-commit-writer.md   │   git-commit-writer/SKILL.md     │
-├──────────────────────────┼──────────────────────────────────┤
-│ 用途: Claude Code 專用   │ 用途: 跨工具（CC/Copilot/Ag）   │
-│ model: haiku             │ model: 工具決定                  │
-│ frontmatter 鎖死模型     │ 純 markdown 指令集               │
-│ 自動權限檢查             │ 需手動傳入 context               │
-└──────────────────────────┴──────────────────────────────────┘
-```
-
-### 兩者的運作邏輯
-
-**Sub-Agent（.claude/agents/git-commit-writer.md）**
-
-1. **觸發方式**：自然語言或 `@` mention
-2. **模型選定**：frontmatter `model: haiku` 固定使用 Haiku 4.5
-3. **Context 來源**：
-   - 可從使用者輸入讀取 `archive_path` 和 `change_id`
-   - 或自動偵測 `openspec list --json`
-4. **執行流程**：
-   - Step 1：蒐集 `git diff --cached` 和 openspec 上下文
-   - Step 2：讀取 proposal.md（如果有）
-   - Step 3：推斷 commit type
-   - Step 4：組合 commit message
-   - Step 5：驗證 archive 目錄存在（若傳入 `archive_path`）
-   - Step 6：執行 `git add -A && git commit`
-
-**Skill（.claude/skills/git-commit-writer/SKILL.md）**
-
-1. **觸發方式**：用戶在任何工具上呼叫 `/git-commit-writer`
-2. **模型選定**：工具層決定（Copilot CLI 用 GPT-5 mini，Antigravity 用 Gemini Flash）
-3. **Context 來源**：使用者或上一步（如 `openspec-commit`）傳入
-4. **執行流程**：同 Sub-Agent（含 Step 5 archive guard）
+1. **自動 context 偵測**：自動識別當前是否有 OpenSpec change (archived 或 active)，並據此決定是否加上 scope。
+2. **語意化 Commit Type**：根據 `git diff` 內容自動推斷 type (feat, fix, docs, refactor, chore, test)。
+3. **高品質 Subject/Body**：從 `proposal.md` 或 diff 內容推斷變更的原因 (Why) 與細節 (What)。
+4. **Co-Authored-By 注入**：自動在 commit footer 加入執行該操作的 AI 模型名稱。
+5. **即刻執行**：生成後不需額外確認，直接執行 `git commit`。
 
 ---
 
-## 使用情境
+## 運作流程
 
-### 情境 1：openspec-commit 自動呼叫
-
-```
-開發者: /openspec-commit
-       │
-       ├─ Step 1-4: archive + docs
-       │
-       └─ Step 5: Use the git-commit-writer agent
-            │
-            └─ Haiku 讀 archive_path/proposal.md
-            └─ 執行 git commit (自動，無確認)
-            └─ 返回 commit hash
-       │
-       └─ Step 6: 完成摘要
-```
-
-**效果**：無需確認，費用省 ~90%（Haiku vs Sonnet）
-
-### 情境 2：獨立執行
-
-```
-開發者: 在 git worktree 做好變更，未呼叫 openspec-commit
-       │
-       └─ /git-commit-writer
-            │
-            └─ Haiku 自動偵測：無 active openspec change
-            └─ 只靠 git diff 推斷 type + subject
-            └─ 執行 commit（無 scope）
-
-結果: feat: add new feature
-      (不包含 <change-id> scope)
-```
-
-### 情境 3：跨工具使用
-
-```
-Copilot CLI 使用者: gh copilot /git-commit-writer
-                                    │
-                                    └─ GPT-5 mini 執行 skill
-                                    └─ 同樣的邏輯，模型不同
-
-Antigravity 使用者: 在 Antigravity 中呼叫 /git-commit-writer
-                      │
-                      └─ Gemini Flash 執行 skill
+```mermaid
+graph TD
+    Start[呼叫 git-commit-writer] --> Gather[Step 1: 收集 Context<br/>git diff, git status, openspec list]
+    Gather --> Detect[Step 2: 判定 OpenSpec Context]
+    
+    subgraph Context Detection
+    Detect --> CheckArchive{git status 有新 archive?}
+    CheckArchive -- Yes --> UseArchive[使用 archive 資料作為 scope<br/>讀取其 proposal.md]
+    CheckArchive -- No --> CheckActive{openspec list 有變更?}
+    CheckActive -- Yes --> UseActive[使用 active change 作為 scope<br/>讀取其 proposal.md]
+    CheckActive -- No --> NoScope[不使用 scope<br/>僅參考 git diff]
+    end
+    
+    UseArchive --> Infer[Step 3: 推斷 Commit Type]
+    UseActive --> Infer
+    NoScope --> Infer
+    
+    Infer --> Format[Step 4: 格式化訊息]
+    Format --> Execute[Step 5: 執行 commit<br/>git add -A + git commit]
+    Execute --> Done[Step 6: 輸出結果]
 ```
 
 ---
 
-## Archive Guard
+## Commit 格式規範
 
-當呼叫者傳入 `archive_path` 時，git-commit-writer 在執行 `git commit` 之前會先確認該目錄存在：
+### 帶有 OpenSpec Context
+```
+<type>(<change-id>): <subject>
 
-```bash
-ls <archive_path>
+<body>
+
+Co-Authored-By: <Model Name> <noreply@anthropic.com>
 ```
 
-若目錄**不存在**，立即停止並輸出：
-
+### 無 OpenSpec Context
 ```
-Archive not found at <archive_path>
-   The archive operation did not complete before this commit was attempted.
-   Run opsx:archive first, then retry.
-```
+<type>: <subject>
 
-此 guard 確保 openspec archive 步驟在 commit 發生前已確實完成，避免在 archive 尚未落地的情況下建立 commit。`openspec-commit` skill 在呼叫 git-commit-writer 之前也有相同的本地驗證（Step 5），形成雙重防護。
+<body>
 
----
-
-## Conventional Commits 格式
-
-### 有 openspec change
-
-```
-feat(<change-id>): add new capability
-
-Detailed description of what was done.
-Why this change is necessary.
-
-1-2 lines describing motivation and approach.
-```
-
-例子：
-```
-feat(git-commit-writer): extract commit formatting to standalone skill
-
-Separate git commit logic from openspec-commit to enable execution
-on cheaper models (Haiku/GPT-5 mini/Gemini Flash) in Claude Code,
-Copilot CLI, and Antigravity.
-```
-
-### 無 openspec change
-
-```
-feat: add new feature
-
-Detailed description.
-```
-
-例子：
-```
-chore: update dependencies
-
-Bump @types/node to latest stable version.
-Fixes potential security vulnerabilities.
-```
-
-### Co-Authored-By
-
-git-commit-writer 在每次 commit 時，會自動在 commit message 末尾附加 `Co-Authored-By` 標記，使用**執行當下的模型名稱**：
-
-```
-Co-Authored-By: Claude Haiku 4.6 <noreply@anthropic.com>
-```
-
-- Agent 模式：填入 agent frontmatter 指定的模型（目前為 haiku）
-- Skill 模式：填入工具層決定的模型名稱（動態）
-
----
-
-### Type 推斷規則
-
-| 變更性質 | type |
-|---------|------|
-| 新功能、新資料來源 | `feat` |
-| 修正錯誤行為 | `fix` |
-| 重構（無行為改變） | `refactor` |
-| 文件異動 | `docs` |
-| 工具、設定、維護 | `chore` |
-| 測試新增或修正 | `test` |
-
----
-
-## 費用節省對比
-
-```
-情境：openspec 開發週期完整 (archive → docs → commit)
-
-Sonnet 4.6:  1 次 token 消耗（全部做完）
-Haiku 4.5:   ~1/20 token 費用
-
-使用 git-commit-writer:
-  openspec-commit (Sonnet): archive + docs 步驟
-  git-commit-writer (Haiku):          ↓ commit 步驟
-  ─────────────────────────────────────────────────
-  總費用: ≈ Sonnet tokens + 少量 Haiku tokens
-        = 約 10-20% Sonnet 全做的費用
-
-GitHub Copilot CLI:
-  整個 openspec-commit → GPT-5 mini
-  = 原生更便宜，plus git-commit-writer skill 可獨立使用
-
-Antigravity:
-  整個 openspec-commit → Gemini Flash
-  = 費用最低
+Co-Authored-By: <Model Name> <noreply@anthropic.com>
 ```
 
 ---
 
-## 常見問題
+## Type 推斷原則
 
-### Q: 為什麼需要 sub-agent 和 skill 兩種？
-
-**A:** 不同場景需要不同工具：
-- **Sub-agent** 在 Claude Code 中提供最佳體驗（自動模型選定，與 openspec-commit 無縫整合）
-- **Skill** 讓 Copilot CLI 和 Antigravity 使用者也能享有相同功能
-
-### Q: Haiku 的 commit message 品質夠嗎？
-
-**A:** Conventional Commits 是結構化格式，Haiku 完全能勝任。如果品質不滿意，使用者可用 `git commit --amend` 修正。
-
-### Q: 如果 commit 失敗（pre-commit hook）怎麼辦？
-
-**A:** git-commit-writer 會自動修正並重試。如果仍失敗，使用者須手動介入。
-
-### Q: 可以互動式編輯 commit message 嗎？
-
-**A:** 不行。設計上直接執行，無確認流程。這是為了支援背景執行和自動化場景。如需編輯，用 `git commit --amend`。
-
-### Q: 在 openspec-commit 中不想用 Haiku，改用 Sonnet 可以嗎？
-
-**A:** 可以。修改 `.claude/agents/git-commit-writer.md` 的 `model` 欄位為 `sonnet`，但就失去省錢的優勢了。
+| 變更性質 | Type | 範例 |
+| :--- | :--- | :--- |
+| **新功能 / 新能力** | `feat` | 新增資料來源、新工具、新 Skill |
+| **修復錯誤** | `fix` | 修正爬蟲解析邏輯、修正邏輯錯誤 |
+| **重構** | `refactor` | 結構調整、不改變外部行為的程式優化 |
+| **文件** | `docs` | 僅修改 `docs/` 或 `README.md` |
+| **腳本、設定、維護** | `chore` | 修改 `.gitignore`、更新 dependencies、調整 CI |
+| **測試** | `test` | 新增或修正測試案例 |
 
 ---
 
-## 相關文件
+## 獨立使用方式
 
-- `docs/commit-feature-workflow.md` — 完整 `/openspec-commit` workflow
-- `.claude/agents/git-commit-writer.md` — Sub-agent 定義
-- `.claude/skills/git-commit-writer/SKILL.md` — Skill 定義
-- `.claude/rules/openspec-commits.md` — Conventional Commits 規範
+如果你已經手動實作完畢，想直接提交：
+
+1. **Claude Code**: 直接輸入 `@"git-commit-writer (agent)"`
+2. **Antigravity (Slash Command)**: 輸入 `/opsx-commit` (如果包含 archive 流程) 或 `/git-commit` (如果有對應配置)
+
+> [!TIP]
+> **自動偵測優先序**：`git-commit-writer` 會優先尋找 `git status` 中剛被搬移至 `openspec/changes/archive/` 的目錄。這對 `openspec-commit` 流程非常友善。
+
+---
+
+## 相關組件
+
+- **Skill**: `template/common/skills/git-commit-writer/SKILL.md`
+- **Agent**: `template/common/.claude/agents/git-commit-writer.md`
+- **Workflow**: `openspec-commit-workflow.md`
