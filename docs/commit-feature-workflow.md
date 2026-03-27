@@ -84,7 +84,15 @@ wt-done <feature-name>
    ● 只改相關 section，不重寫無關段落
         │
         ▼
-⑤ git-commit-writer（由 openspec-commit 呼叫）
+⑤ 驗證 archive 目錄存在（openspec-commit Step 5）
+   ┌─────────────────────────────────────────┐
+   │ ls openspec/changes/archive/<dir>/      │
+   │   存在  → 繼續                          │
+   │   不存在 → 停止，提示重新執行 archive    │
+   └─────────────────────────────────────────┘
+        │
+        ▼
+⑥ git-commit-writer（由 openspec-commit 呼叫）
    ┌─────────────────────────────────────────┐
    │ Conventional Commits 格式               │
    │                                         │
@@ -109,7 +117,7 @@ wt-done <feature-name>
    └─────────────────────────────────────────┘
         │
         ▼
-⑥ 完成摘要
+⑦ 完成摘要
    ┌─────────────────────────────────────────┐
    │ Archive:  openspec/changes/archive/...  │
    │ Docs:     docs/<feature>.md（更新 X section） │
