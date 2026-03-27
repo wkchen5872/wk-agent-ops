@@ -64,16 +64,18 @@ Without openspec change:
 
 ## Step 5 — Execute
 
-Always include `Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>` — this agent always runs on Haiku regardless of the parent session model.
+Include `Co-Authored-By` using **your own model name** (the model you are currently running on):
 
 ```bash
 git add -A
 git commit -m "<message>
 
-Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>"
+Co-Authored-By: <your model name> <noreply@anthropic.com>"
 ```
 
-On pre-commit hook failure: fix the issue and retry. Do NOT use `--no-verify`.
+Example: if you are Claude Haiku 4.5, write `Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>`.
+
+On pre-commit hook failure: fix the issue and re-run `git commit`. Do NOT use `--no-verify`.
 
 ## Step 6 — Output
 
