@@ -1,10 +1,11 @@
 ---
 name: doc-updater
 description: >
-  Update docs/, README.md, and AGENTS.md based on the last git commit.
-  Reads the last commit message and diff, classifies the change type, makes
-  minimal targeted edits to relevant documentation, then creates a separate
-  docs: commit. Skips trivial commits automatically.
+  Update docs/, README.md, and AGENTS.md based on current changes.
+  If uncommitted changes exist, scans those and updates docs in-place (Mode A —
+  doc changes join the upcoming commit). If working tree is clean, scans last N
+  commits (asks user, default 1) and leaves doc changes in working tree for
+  review (Mode B). Never commits automatically.
 license: MIT
 compatibility: Requires git.
 metadata:
@@ -14,59 +15,41 @@ metadata:
 
 # Doc Updater
 
-在每一次 git commit 後，自動同步 `docs/`、`README.md`、`AGENTS.md` 等說明文件。
+自動分析當前變更或最近的 commit，並同步更新 `docs/`、`README.md`、`AGENTS.md` 等說明文件。
 
-適用於所有類型的 commit，不依賴 OpenSpec 工作流程。針對瑣碎變更（test、style、typo 等）會自動跳過，只在有實質影響時才更新文件並建立獨立的 `docs:` commit。
+不依賴 OpenSpec 工作流程，適用於所有類型的變更。根據 git 狀態自動選擇運作模式：
+
+- **Mode A**（有未 commit 的變更）：掃描當前變更，文件更新加入工作區，與 feature 一起 commit
+- **Mode B**（工作區乾淨）：掃描最近 N 個 commit，建立獨立的 `docs:` commit
 
 **立即執行，不需確認。**
 
 ---
 
-## Step 1 — Gather context (run in parallel)
+## Step 1 — Detect mode
 
 ```bash
-git log -1 --format="%H%n%s%n%b"
-git diff HEAD~1 HEAD --stat
-git diff HEAD~1 HEAD
+git status --short
 ```
+
+- **有任何輸出**（有 staged 或 unstaged 檔案）→ **Mode A**
+- **無輸出**（工作區乾淨）→ **Mode B**
 
 ---
 
-## Step 2 — Classify the commit (skip check)
+## Mode A — 有未 commit 的變更
 
-檢查 commit subject 與 diff 內容。符合以下任一條件時，輸出 skip 訊息並**停止**：
-
-| 條件 | 跳過原因 |
-|------|---------|
-| Subject 以 `docs:` 開頭 | 已是 docs commit，避免無限循環 |
-| Type 為 `test:` | 僅測試變更 |
-| Type 為 `style:` | 僅格式/排版調整 |
-| Subject 含 "typo"、"wording"、"rename var"、"whitespace" | 瑣碎編輯 |
-| Type 為 `fix:` **且** diff 總行數 < 10 | 微小修正，無文件影響 |
-| Type 為 `chore:` 或 `refactor:` **且** 無新增檔案 | 純維護性變更 |
-
-跳過時輸出：
-```
-⏭️  No doc update needed
-Reason: <reason>
-```
-
----
-
-## Step 3 — Inventory existing docs
+### Step A1 — Read the diff
 
 ```bash
-ls docs/
+git diff HEAD
 ```
 
-讀取每個現有 `docs/*.md` 的前 30 行，了解各文件涵蓋範圍。
-`README.md` 與 `AGENTS.md` 永遠列為候選更新目標。
+同時讀取 staged 和 unstaged 的所有變更。
 
----
+### Step A2 — Analyze diff for documentation impact
 
-## Step 4 — Decide which docs to update
-
-根據 diff 中偵測到的變更，套用以下決策表：
+根據 diff 套用決策表：
 
 | 偵測到的變更 | 更新目標 |
 |------------|---------|
@@ -75,70 +58,80 @@ ls docs/
 | 新增 `template/<profile>/` 或修改 `install.sh` | `docs/template-profiles.md`、`README.md` |
 | 修改 `scripts/worktree/` | `docs/multi-agent-workflow.md`、`README.md` |
 | 新增 env var 或新外部相依套件 | `README.md`（相依套件區段） |
-| `feat:` commit 且有廣泛功能影響 | `README.md` 及/或 `docs/<feature>.md` |
-| 純內部重構、只改設定、無新使用者功能 | 跳過 |
+| 重大新功能或新使用者可見能力 | `README.md` 及/或 `docs/<feature>.md` |
+| 純內部實作、無使用者可見影響 | 無需更新 → 輸出原因並停止 |
 
-在開始編輯前，顯示計畫更新清單：
-```
-📝 Planned doc updates:
-  - AGENTS.md     — <原因>
-  - README.md     — <原因>
-```
-
----
-
-## Step 5 — Read target docs
-
-對 Step 4 中確定的每個檔案，先完整讀取再進行編輯。
-
----
-
-## Step 6 — Make targeted edits
+### Step A3 — Read target docs, then edit
 
 對每個目標文件：
-- **只編輯相關 section**，不重寫無關段落
+- **先完整讀取，再編輯**
+- **只改相關 section**，不重寫無關段落
 - **AGENTS.md**：完全遵循現有 `### <name>` 項目格式（位置/用途/特性/觸發方式）
 - **README.md**：保持繁體中文；只新增表格列或清單項目，不改結構
 - **docs/*.md**：比對現有語氣與格式；在邏輯位置新增 section
-- 若需建立新的 `docs/<feature>.md`（有重大新使用者功能時），以 `docs/git-commit-writer.md` 為結構參考
 
-**重要語言規則**：
-- README.md 使用繁體中文 → 新增內容必須用繁體中文
-- AGENTS.md 混合中英 → 維持現有語言風格
-- docs/*.md → 比對該文件已有的語言
-
----
-
-## Step 7 — Create docs commit
-
-編輯完成後，確認有實際變更：
-```bash
-git diff --stat docs/ README.md AGENTS.md
-```
-
-若有變更，只 stage 已修改的檔案並 commit：
-```bash
-git add <只 stage 已修改的檔案>
-git commit -m "docs: update documentation for <原始 commit subject>
-
-Co-Authored-By: <your current model name> <noreply@anthropic.com>"
-```
-
-若無實際變更（已有文件），跳過 commit 並說明原因。
-
----
-
-## Step 8 — Output
+### Step A4 — Output（不建立 commit）
 
 成功時：
 ```
-📝 Docs updated:
+📝 Docs updated (Mode A — uncommitted changes):
   - <file>   — <what changed>
 
-💾 Docs commit: <short-hash> docs: update documentation for <subject>
+ℹ️  Doc changes are in your working tree. They will be included in your next commit.
 ```
 
 無需更新時：
 ```
-✅ Docs already up to date — no commit needed
+⏭️  No doc update needed
+Reason: <reason>
+```
+
+---
+
+## Mode B — 工作區乾淨（post-commit）
+
+### Step B1 — Ask how many commits to scan
+
+使用 AskUserQuestion 詢問：
+> "要掃描最近幾個 commit 來更新文件？（1-10，預設 1）"
+
+將答案作為 N 使用（若接受預設則 N=1）。
+
+### Step B2 — Read the commits
+
+```bash
+git log -N --format="%H %s"
+git diff HEAD~N HEAD
+```
+
+### Step B3 — Skip check
+
+若以下任一條件符合，輸出 skip 訊息並停止：
+- 所有 N 個 commits 的 subject 都以 `docs:` 開頭 → 已是 docs commit，避免無限循環
+- 所有 N 個 commits 的 subject 都以 `test:` 或 `style:` 開頭 → 無文件影響
+
+### Step B4 — Analyze and edit（與 Mode A 的 Step A2 & A3 相同邏輯）
+
+套用相同的決策表和編輯規則。
+
+### Step B5 — Confirm changes
+
+```bash
+git diff --stat docs/ README.md AGENTS.md
+```
+
+### Step B6 — Output
+
+成功時：
+```
+📝 Docs updated (Mode B — scanned last N commit(s)):
+  - <file>   — <what changed>
+
+ℹ️  Doc changes are in your working tree. Review and commit when ready.
+```
+
+無需更新時：
+```
+⏭️  No doc update needed
+Reason: <reason>
 ```

@@ -120,45 +120,23 @@ Skip any? (type file names or 'none')
 
 ---
 
-## Step 5 — Verify archive completed
-
-Before calling git-commit-writer, confirm the archive directory actually exists on disk:
-
-```bash
-ls openspec/changes/archive/<archive-dir>/
-```
-
-If the directory is **missing**, stop and display:
-```
-❌ Archive directory not found: openspec/changes/archive/<archive-dir>/
-   opsx:archive did not complete. Re-run Step 2 before proceeding.
-```
-
-Do NOT proceed to git-commit-writer until this check passes.
-
----
-
-## Step 6 — Execute git commit via git-commit-writer
-
-Pass the following context:
-- `archive_path`: the archive directory from Step 3 (e.g., `openspec/changes/archive/YYYY-MM-DD-<name>/`)
-- `change_id`: the change folder name (e.g., `daily-runner-summary-refactor`)
+## Step 5 — Execute git commit via git-commit-writer
 
 **In Claude Code or Copilot CLI:** Use the `git-commit-writer` agent (defined in `.claude/agents/git-commit-writer.md`, runs on Haiku automatically):
 
 ```
 Use the git-commit-writer agent.
-archive_path: <archive_path>
-change_id: <change_id>
 ```
 
-**In other tools (Antigravity):** Invoke the `git-commit-writer` skill directly, passing `archive_path` and `change_id` as context.
+**In other tools (Antigravity):** Invoke the `git-commit-writer` skill directly.
+
+The agent/skill will automatically detect the archived change from `git status` output — no parameters needed.
 
 Capture the commit hash output for Step 6.
 
 ---
 
-## Step 7 — Display completion summary
+## Step 6 — Display completion summary
 
 ```
 ✅ Feature committed
@@ -167,7 +145,7 @@ Capture the commit hash output for Step 6.
              Specs: ✓ Synced  (or: Sync skipped)
 
 📝 Docs updated:
-   - docs/kgi.md — updated section: fetch_agent_list.py usage
+   - docs/feature.md — updated section: fetch_agent_list.py usage
    - README.md   — updated: 支援的資料來源
 
 💾 Commit:  <short-hash> <type>(<change-id>): <subject>
