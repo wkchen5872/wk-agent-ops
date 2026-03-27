@@ -126,30 +126,15 @@ Pass the following context:
 - `archive_path`: the archive directory from Step 3 (e.g., `openspec/changes/archive/YYYY-MM-DD-<name>/`)
 - `change_id`: the change folder name (e.g., `daily-runner-summary-refactor`)
 
-**In Claude Code:** Dispatch a Haiku subagent using the Agent tool:
+**In Claude Code or Copilot CLI:** Use the `git-commit-writer` agent (defined in `.claude/agents/git-commit-writer.md`, runs on Haiku automatically):
 
 ```
-Agent(
-  model = "haiku",
-  description = "Write and execute git commit",
-  prompt = """
-Follow the git-commit-writer skill logic:
-
-1. Read <archive_path>/proposal.md (Why + What Changes sections)
-2. Run: git diff --cached --stat
-3. Infer commit type (feat/fix/refactor/docs/chore/test)
-4. Format: feat(<change_id>): <subject max 72 chars>
-
-   <body: 2-5 lines, what + why>
-
-5. Execute: git add -A && git commit -m "<message>"
-   No confirmation needed. Do NOT use --no-verify on hook failure.
-6. Print: 💾 Commit: <short-hash> <message first line>
-"""
-)
+Use the git-commit-writer agent.
+archive_path: <archive_path>
+change_id: <change_id>
 ```
 
-**In other tools (Copilot CLI, Antigravity):** Invoke the `git-commit-writer` skill directly, passing `archive_path` and `change_id` as context.
+**In other tools (Antigravity):** Invoke the `git-commit-writer` skill directly, passing `archive_path` and `change_id` as context.
 
 Capture the commit hash output for Step 6.
 
