@@ -64,15 +64,13 @@ Without openspec change:
 
 ## Step 5 — Execute
 
-Always include `Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>` —
-this agent always runs on Haiku regardless of the parent session model:
-
 ```bash
 git add -A
-git commit -m "<message>
-
-Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>"
+git commit -m "<message>"
 ```
+
+**Note:** `Co-Authored-By: Claude Haiku 4.5` is automatically added by Claude Code.
+Do NOT manually include it — let the system handle attribution.
 
 On pre-commit hook failure: fix the issue and retry. Do NOT use `--no-verify`.
 
