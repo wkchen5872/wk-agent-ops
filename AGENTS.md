@@ -138,6 +138,7 @@ diff template/common/.claude/agents/my-agent.md \
 - 支援 openspec 上下文（有 change 時加 scope）
 - Haiku 4.5 model，省省費用
 - 不需要確認，直接執行
+- Archive guard：若傳入 `archive_path`，在 commit 前驗證目錄存在；archive 未完成則停止
 
 **觸發方式：**
 ```
@@ -208,8 +209,9 @@ Skill 和 Agent 應該遵循相同的邏輯和步驟，差異只在：
 - **Skill** 是通用指令集，需要更詳細的解釋
 
 例：`git-commit-writer`
-- Skill 中：「Step 5 — Execute」包含 `Co-Authored-By: <current model name>`（動態）
-- Agent 中：「Step 5 — Execute」同樣動態寫入 `Co-Authored-By: <your own model name>`（執行時自填）
+- Skill 中：「Step 6 — Execute」包含 `Co-Authored-By: <current model name>`（動態）
+- Agent 中：「Step 6 — Execute」同樣動態寫入 `Co-Authored-By: <your own model name>`（執行時自填）
+- 兩者在 Step 5 均加入 archive guard：archive 目錄不存在則停止
 
 ---
 

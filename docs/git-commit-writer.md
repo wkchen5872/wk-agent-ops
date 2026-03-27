@@ -62,14 +62,15 @@ change_id: <change_id>
    - Step 2：讀取 proposal.md（如果有）
    - Step 3：推斷 commit type
    - Step 4：組合 commit message
-   - Step 5：執行 `git add -A && git commit`
+   - Step 5：驗證 archive 目錄存在（若傳入 `archive_path`）
+   - Step 6：執行 `git add -A && git commit`
 
 **Skill（.claude/skills/git-commit-writer/SKILL.md）**
 
 1. **觸發方式**：用戶在任何工具上呼叫 `/git-commit-writer`
 2. **模型選定**：工具層決定（Copilot CLI 用 GPT-5 mini，Antigravity 用 Gemini Flash）
 3. **Context 來源**：使用者或上一步（如 `openspec-commit`）傳入
-4. **執行流程**：同上
+4. **執行流程**：同 Sub-Agent（含 Step 5 archive guard）
 
 ---
 
@@ -120,6 +121,26 @@ Antigravity 使用者: 在 Antigravity 中呼叫 /git-commit-writer
                       │
                       └─ Gemini Flash 執行 skill
 ```
+
+---
+
+## Archive Guard
+
+當呼叫者傳入 `archive_path` 時，git-commit-writer 在執行 `git commit` 之前會先確認該目錄存在：
+
+```bash
+ls <archive_path>
+```
+
+若目錄**不存在**，立即停止並輸出：
+
+```
+Archive not found at <archive_path>
+   The archive operation did not complete before this commit was attempted.
+   Run opsx:archive first, then retry.
+```
+
+此 guard 確保 openspec archive 步驟在 commit 發生前已確實完成，避免在 archive 尚未落地的情況下建立 commit。`openspec-commit` skill 在呼叫 git-commit-writer 之前也有相同的本地驗證（Step 5），形成雙重防護。
 
 ---
 
