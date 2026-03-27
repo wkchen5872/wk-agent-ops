@@ -8,7 +8,7 @@ license: MIT
 compatibility: Requires openspec CLI and git.
 metadata:
   author: wkchen
-  version: "1.1"
+  version: "1.2"
 ---
 
 # OpenSpec Commit
@@ -120,57 +120,19 @@ Skip any? (type file names or 'none')
 
 ---
 
-## Step 5 — Generate and execute git commit
+## Step 5 — Execute git commit via git-commit-writer
 
-### Determine commit type
-
-| Feature nature | type |
-|---------------|------|
-| New feature / new data source | `feat` |
-| Bug fix / correcting behavior | `fix` |
-| Documentation only | `docs` |
-| Restructuring without behavior change | `refactor` |
-| Scripts, config, tooling, maintenance | `chore` |
-| Adding or fixing tests | `test` |
-
-### Draft commit message
+**In Claude Code or Copilot CLI:** Use the `git-commit-writer` agent (defined in `.claude/agents/git-commit-writer.md`, runs on Haiku automatically):
 
 ```
-<type>(<change-id>): <subject>
-
-<body>
+Use the git-commit-writer agent.
 ```
 
-- `<type>(<change-id>)`: scope 使用 openspec change 的資料夾名稱（e.g., `feat(parallel-init-download):`）
-- `<subject>`: imperative mood, max 72 chars, no trailing period, derived from **What Changes** in proposal
-- `<body>`: 2–5 lines describing what was done and why, derived from **Why** + **What Changes**
+**In other tools (Antigravity):** Invoke the `git-commit-writer` skill directly.
 
-### Display for confirmation
+The agent/skill will automatically detect the archived change from `git status` output — no parameters needed.
 
-Show the full commit message and ask user to confirm:
-```
-📋 Commit message:
-
-feat(kgi-agent-list): add KGI agent list fetcher and multi-id query support
-
-Add fetch_agent_list.py to retrieve KGI fund manager list without
-Playwright. Extend fetch_fund_detail.py and fetch_fund_run.py to
-support --fund-id, --isin, and --bloomberg query parameters in
-addition to --symbol.
-
-Confirm? (yes / edit)
-```
-
-If user requests edits: revise and display again before committing.
-
-### Execute
-
-```bash
-git add -A
-git commit -m "<type>(<change-id>): <subject>
-
-<body>"
-```
+Capture the commit hash output for Step 6.
 
 ---
 
@@ -183,7 +145,7 @@ git commit -m "<type>(<change-id>): <subject>
              Specs: ✓ Synced  (or: Sync skipped)
 
 📝 Docs updated:
-   - docs/kgi.md — updated section: fetch_agent_list.py usage
+   - docs/feature.md — updated section: fetch_agent_list.py usage
    - README.md   — updated: 支援的資料來源
 
 💾 Commit:  <short-hash> <type>(<change-id>): <subject>

@@ -91,6 +91,10 @@ wt-new etf-nav-fetcher --agent codex
 | `.agent/workflows/opsx-commit.md` | Agent workflow |
 | `.claude/rules/openspec-commits.md` | Commit 規範（永遠載入） |
 | `.github/instructions/openspec-commits.md` | GitHub Copilot instructions |
+| `.claude/agents/git-commit-writer.md` | `@"git-commit-writer"` — 自動產生 Conventional Commits |
+| `.claude/skills/git-commit-writer/` | `/git-commit-writer` skill |
+| `.claude/agents/doc-updater.md` | `@"doc-updater"` — 分析 git 變更並同步更新說明文件 |
+| `.claude/skills/doc-updater/` | `/doc-updater` skill |
 
 ### Python Profile
 
@@ -130,9 +134,11 @@ wk-agent-ops/
 │       ├── wt-new.sh
 │       └── wt-done.sh
 ├── docs/
-│   ├── multi-agent-workflow.md ← 多 Agent 工作流完整說明
-│   ├── commit-feature-workflow.md
-│   └── template-profiles.md   ← Template profile 說明與新增方式
+│   ├── multi-agent-workflow.md    ← 多 Agent 工作流完整說明
+│   ├── commit-feature-workflow.md ← /opsx:commit 工作流說明
+│   ├── git-commit-writer.md       ← git-commit-writer 使用說明
+│   ├── doc-updater.md             ← doc-updater 使用說明
+│   └── template-profiles.md       ← Template profile 說明與新增方式
 └── openspec/                   ← 本專案的 OpenSpec 變更記錄
 ```
 
