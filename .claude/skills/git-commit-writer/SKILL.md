@@ -90,15 +90,13 @@ Rules:
 
 ## Step 5 — Execute
 
-Include `Co-Authored-By` in the commit message using the **current model name**
-(e.g., `Claude Sonnet 4.6` if running on Sonnet, `Claude Haiku 4.5` if on Haiku):
-
 ```bash
 git add -A
-git commit -m "<message>
-
-Co-Authored-By: <current model name> <noreply@anthropic.com>"
+git commit -m "<message>"
 ```
+
+**Note:** `Co-Authored-By` is automatically added by Claude Code based on the current model.
+Do NOT manually include it — let the system handle attribution.
 
 On pre-commit hook failure: fix the issue and re-run `git commit`. Do NOT use `--no-verify`.
 
