@@ -74,8 +74,8 @@ wt-done <feature-name>
    ┌─────────────────────────────────────────────────────────┐
    │ feature 影響              更新目標                       │
    │ ─────────────────────────────────────────────────────  │
-   │ 資料來源（kgi/yuanta…）  docs/datasources/{source}.md  │
-   │ init runner 異動          docs/datasources/init-runner.md│
+   │ API（api-a/b…）           docs/api/{source}.md         │
+   │ runner 核心異動           docs/runner.md                │
    │ 架構分層異動              docs/architecture.md          │
    │ 新資料來源/重大功能        README.md（支援來源段落）      │
    │ 純 skill/工具             通常不需更新 README            │
