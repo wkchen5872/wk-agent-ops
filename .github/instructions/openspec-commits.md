@@ -50,7 +50,6 @@ fix(<change-id>): <description>
 ## 執行規範
 
 - **禁止省略 scope**：`change-id` 不可省略
-- **禁止混合提交**：`docs`（規格）與 `feat`/`fix`（程式碼）必須分開 commit
 - **apply 後 type 用 feat/fix**：程式碼變更不使用 `docs`
 - **路徑核對**：docs commit 的檔案必須位於 `openspec/changes/{CHANGE_NAME}/` 下
 
