@@ -8,7 +8,7 @@ license: MIT
 compatibility: Requires openspec CLI and git.
 metadata:
   author: wkchen
-  version: "1.1"
+  version: "1.2"
 ---
 
 # OpenSpec Commit
@@ -120,57 +120,38 @@ Skip any? (type file names or 'none')
 
 ---
 
-## Step 5 — Generate and execute git commit
+## Step 5 — Execute git commit via git-commit-writer
 
-### Determine commit type
+Pass the following context:
+- `archive_path`: the archive directory from Step 3 (e.g., `openspec/changes/archive/YYYY-MM-DD-<name>/`)
+- `change_id`: the change folder name (e.g., `daily-runner-summary-refactor`)
 
-| Feature nature | type |
-|---------------|------|
-| New feature / new data source | `feat` |
-| Bug fix / correcting behavior | `fix` |
-| Documentation only | `docs` |
-| Restructuring without behavior change | `refactor` |
-| Scripts, config, tooling, maintenance | `chore` |
-| Adding or fixing tests | `test` |
-
-### Draft commit message
+**In Claude Code:** Dispatch a Haiku subagent using the Agent tool:
 
 ```
-<type>(<change-id>): <subject>
+Agent(
+  model = "haiku",
+  description = "Write and execute git commit",
+  prompt = """
+Follow the git-commit-writer skill logic:
 
-<body>
+1. Read <archive_path>/proposal.md (Why + What Changes sections)
+2. Run: git diff --cached --stat
+3. Infer commit type (feat/fix/refactor/docs/chore/test)
+4. Format: feat(<change_id>): <subject max 72 chars>
+
+   <body: 2-5 lines, what + why>
+
+5. Execute: git add -A && git commit -m "<message>"
+   No confirmation needed. Do NOT use --no-verify on hook failure.
+6. Print: 💾 Commit: <short-hash> <message first line>
+"""
+)
 ```
 
-- `<type>(<change-id>)`: scope 使用 openspec change 的資料夾名稱（e.g., `feat(parallel-init-download):`）
-- `<subject>`: imperative mood, max 72 chars, no trailing period, derived from **What Changes** in proposal
-- `<body>`: 2–5 lines describing what was done and why, derived from **Why** + **What Changes**
+**In other tools (Copilot CLI, Antigravity):** Invoke the `git-commit-writer` skill directly, passing `archive_path` and `change_id` as context.
 
-### Display for confirmation
-
-Show the full commit message and ask user to confirm:
-```
-📋 Commit message:
-
-feat(kgi-agent-list): add KGI agent list fetcher and multi-id query support
-
-Add fetch_agent_list.py to retrieve KGI fund manager list without
-Playwright. Extend fetch_fund_detail.py and fetch_fund_run.py to
-support --fund-id, --isin, and --bloomberg query parameters in
-addition to --symbol.
-
-Confirm? (yes / edit)
-```
-
-If user requests edits: revise and display again before committing.
-
-### Execute
-
-```bash
-git add -A
-git commit -m "<type>(<change-id>): <subject>
-
-<body>"
-```
+Capture the commit hash output for Step 6.
 
 ---
 
