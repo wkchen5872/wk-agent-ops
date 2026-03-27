@@ -161,6 +161,19 @@ Bump @types/node to latest stable version.
 Fixes potential security vulnerabilities.
 ```
 
+### Co-Authored-By
+
+git-commit-writer 在每次 commit 時，會自動在 commit message 末尾附加 `Co-Authored-By` 標記，使用**執行當下的模型名稱**：
+
+```
+Co-Authored-By: Claude Haiku 4.6 <noreply@anthropic.com>
+```
+
+- Agent 模式：填入 agent frontmatter 指定的模型（目前為 haiku）
+- Skill 模式：填入工具層決定的模型名稱（動態）
+
+---
+
 ### Type 推斷規則
 
 | 變更性質 | type |
