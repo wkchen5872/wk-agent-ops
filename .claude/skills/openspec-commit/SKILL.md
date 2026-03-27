@@ -120,7 +120,25 @@ Skip any? (type file names or 'none')
 
 ---
 
-## Step 5 — Execute git commit via git-commit-writer
+## Step 5 — Verify archive completed
+
+Before calling git-commit-writer, confirm the archive directory actually exists on disk:
+
+```bash
+ls openspec/changes/archive/<archive-dir>/
+```
+
+If the directory is **missing**, stop and display:
+```
+❌ Archive directory not found: openspec/changes/archive/<archive-dir>/
+   opsx:archive did not complete. Re-run Step 2 before proceeding.
+```
+
+Do NOT proceed to git-commit-writer until this check passes.
+
+---
+
+## Step 6 — Execute git commit via git-commit-writer
 
 Pass the following context:
 - `archive_path`: the archive directory from Step 3 (e.g., `openspec/changes/archive/YYYY-MM-DD-<name>/`)
@@ -140,7 +158,7 @@ Capture the commit hash output for Step 6.
 
 ---
 
-## Step 6 — Display completion summary
+## Step 7 — Display completion summary
 
 ```
 ✅ Feature committed
