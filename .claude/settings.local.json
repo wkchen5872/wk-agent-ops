@@ -20,7 +20,10 @@
       "Bash(brew list:*)",
       "Bash(brew search:*)",
       "Bash(cp -r /Users/chenwenkai/wk_projects/wk-agent-ops/template/common/skills/git-commit-writer /Users/chenwenkai/wk_projects/wk-agent-ops/.claude/skills/)",
-      "Bash(cp -r /Users/chenwenkai/wk_projects/wk-agent-ops/template/common/skills/git-commit-writer /Users/chenwenkai/wk_projects/wk-agent-ops/.agent/skills/)"
+      "Bash(cp -r /Users/chenwenkai/wk_projects/wk-agent-ops/template/common/skills/git-commit-writer /Users/chenwenkai/wk_projects/wk-agent-ops/.agent/skills/)",
+      "Bash(cp /Users/chenwenkai/wk_projects/wk-agent-ops/.claude/skills/git-commit-writer/SKILL.md /Users/chenwenkai/wk_projects/wk-agent-ops/.agent/skills/git-commit-writer/SKILL.md)",
+      "Bash(cp /Users/chenwenkai/wk_projects/wk-agent-ops/.claude/skills/git-commit-writer/SKILL.md /Users/chenwenkai/wk_projects/wk-agent-ops/template/common/skills/git-commit-writer/SKILL.md)",
+      "Bash(cp /Users/chenwenkai/wk_projects/wk-agent-ops/.claude/agents/git-commit-writer.md /Users/chenwenkai/wk_projects/wk-agent-ops/template/common/.claude/agents/git-commit-writer.md)"
     ]
   }
 }
