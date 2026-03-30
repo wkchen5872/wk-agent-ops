@@ -10,13 +10,13 @@
 #   wt-new etf-nav-fetcher -a codex
 #
 # Description:
-#   Creates a feature/<name> branch and worktree from develop,
-#   inheriting openspec/changes/ planning files committed to develop.
+#   Creates a feature/<name> branch and worktree from main,
+#   inheriting openspec/changes/ planning files committed to main.
 #
 # Prerequisites:
 #   - Must be run inside a git repo
-#   - develop branch must exist
-#   - openspec planning (opsx:new + opsx:continue x4) must be committed to develop
+#   - main branch must exist
+#   - openspec planning (opsx:new + opsx:continue x4) must be committed to main
 
 set -euo pipefail
 
@@ -77,8 +77,8 @@ else
     exit 1
   fi
 
-  echo "Switching to develop..."
-  git -C "$REPO" checkout develop
+  echo "Switching to main..."
+  git -C "$REPO" checkout main
 
   echo "Creating worktree: $WORKTREE_DIR (branch: $BRANCH)"
   git -C "$REPO" worktree add "$WORKTREE_DIR" -b "$BRANCH"
