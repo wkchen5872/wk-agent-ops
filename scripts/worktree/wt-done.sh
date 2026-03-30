@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# wt-done — Merge worktree branch back to develop and clean up
+# wt-done — Merge worktree branch back to main and clean up
 #
 # Usage:
 #   wt-done <feature-name>
@@ -8,7 +8,7 @@
 #   wt-done etf-nav-fetcher
 #
 # Description:
-#   Switches to develop, merges the feature branch, removes the worktree
+#   Switches to main, merges the feature branch, removes the worktree
 #   directory, and deletes the branch.
 #
 # Prerequisites:
@@ -39,10 +39,10 @@ if ! git -C "$REPO" show-ref --quiet "refs/heads/$BRANCH"; then
   exit 1
 fi
 
-echo "Switching to develop..."
-git -C "$REPO" checkout develop
+echo "Switching to main..."
+git -C "$REPO" checkout main
 
-echo "Merging $BRANCH → develop..."
+echo "Merging $BRANCH → main..."
 if git -C "$REPO" merge "$BRANCH"; then
   echo "✅ Merge successful, cleaning up..."
 
