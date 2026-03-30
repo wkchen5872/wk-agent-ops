@@ -11,7 +11,7 @@
 2. **獨立開發 (RD Agent)：** 
    使用 `wt-new.sh` 自動建立專屬的 feature 分支與 worktree 目錄，並開啟新的對話作為 RD Agent 進行實作。Agent 在獨立環境下開發，互不干擾。
 3. **合併與清理 (Merge & Clean)：** 
-   開發完成後，使用 `wt-done.sh` 將 feature 分支合併回 `develop` 分支，並自動刪除對應的 worktree 與暫存環境。
+   開發完成後，使用 `wt-done.sh` 將 feature 分支合併回 `main` 分支，並自動刪除對應的 worktree 與暫存環境。
 
 **🛠️ 腳本功能說明 (Scripts)**
 
@@ -22,5 +22,5 @@
   2. **環境配置：** 將主環境的相關設定檔複製到新建的 worktree 中。
   3. **啟動任務：** 自動進入 worktree 目錄並執行 `claude` 指令，同時透過 `opsx:apply` 指令讓 RD Agent 自動開始執行實作任務。
 * **`wt-done.sh`**
-  * **合併分支：** 將實作完成的 feature branch 合併回 `develop` 分支。
+  * **合併分支：** 將實作完成的 feature branch 合併回 `main` 分支。
   * **清理環境：** 刪除該 feature branch 以及對應的 worktree 目錄，釋放空間。
