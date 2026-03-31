@@ -1,91 +1,95 @@
 ## ADDED Requirements
 
-### Requirement: Notification script supports Claude Code Stop events
-腳本 `~/.claude/hooks/telegram-notify.sh` 在 `$1=stop` 且 `TELEGRAM_NOTIFY_LEVEL=all`（或未設定）時 SHALL 透過 Telegram Bot API 傳送「Task Complete」通知。
+### Requirement: 共用基礎庫 — config.sh
+`scripts/notify/lib/config.sh` SHALL 提供讀寫 `~/.config/ai-notify/config` 的 shell 函式，格式為 shell-sourceable key=value，支援 read_config、write_config、update_config_key。
 
-#### Scenario: Stop event with level=all
-- **WHEN** 腳本以 `$1=stop` 呼叫，stdin JSON `hook_event_name` 為 `Stop`，`TELEGRAM_NOTIFY_LEVEL` 為 `all` 或未設定
-- **THEN** 傳送包含 icon ✅、標題 "Task Complete"、工具名稱、專案名稱、時間戳記的 Telegram 訊息
+#### Scenario: 首次安裝寫入 config
+- **WHEN** install.sh 呼叫 write_config 並傳入 TELEGRAM_BOT_TOKEN、TELEGRAM_CHAT_ID、NOTIFY_LEVEL
+- **THEN** `~/.config/ai-notify/config` 被建立，chmod 600，包含正確的 key=value 條目
 
-#### Scenario: Stop event suppressed in notify_only mode
-- **WHEN** 腳本以 `$1=stop` 呼叫，`TELEGRAM_NOTIFY_LEVEL=notify_only`
-- **THEN** 腳本立即退出（exit 0），不發送任何通知
-
----
-
-### Requirement: Notification script supports Notification events
-腳本在 `hook_event_name=Notification`（或 `$1=notification`）時 SHALL 傳送「Action Required」通知，包含 stdin 中的 `message` 欄位內容。
-
-#### Scenario: Notification event triggers alert
-- **WHEN** 腳本以 `$1=notification` 呼叫，stdin JSON 含 `message` 欄位
-- **THEN** 傳送包含 icon ⚠️、標題 "Action Required"、`message` 欄位內容的 Telegram 訊息
-
-#### Scenario: Notification event fires in both notify levels
-- **WHEN** `TELEGRAM_NOTIFY_LEVEL` 為任意值（`all` 或 `notify_only`）
-- **THEN** Notification 事件均正常傳送，不被抑制
+#### Scenario: 更新單一 config key
+- **WHEN** update.sh 呼叫 update_config_key NOTIFY_LEVEL notify_only
+- **THEN** config 檔案中的 NOTIFY_LEVEL 被更新，其他 key 不受影響
 
 ---
 
-### Requirement: Graceful no-op when credentials absent
-腳本 SHALL 在 `TELEGRAM_BOT_TOKEN` 或 `TELEGRAM_CHAT_ID` 任一未設定時，靜默退出（exit 0），不輸出任何錯誤。
+### Requirement: 共用基礎庫 — registry.sh (idempotent hook 註冊)
+`scripts/notify/lib/registry.sh` 的 `register_hook()` SHALL 以 jq 安全地將 hook 條目加入 `~/.claude/settings.json` 與 `~/.gemini/settings.json`，並確保重複執行不產生重複條目（idempotent）。
 
-#### Scenario: Missing token
-- **WHEN** `TELEGRAM_BOT_TOKEN` 為空字串或未設定
-- **THEN** 腳本立即退出，無輸出，退出碼 0
+#### Scenario: 首次註冊 hook
+- **WHEN** register_hook 被呼叫，settings.json 尚無此 hook
+- **THEN** Stop 與 Notification 事件的 hook 條目被加入，JSON 結構合法
 
-#### Scenario: Missing chat ID
-- **WHEN** `TELEGRAM_CHAT_ID` 為空字串或未設定
-- **THEN** 腳本立即退出，無輸出，退出碼 0
+#### Scenario: 重複註冊
+- **WHEN** register_hook 被呼叫兩次（install.sh 重複執行）
+- **THEN** settings.json 中的 hook 條目不重複，數量與第一次相同
 
----
-
-### Requirement: Graceful failure on network error
-腳本 SHALL 在 curl 請求失敗（網路錯誤、Telegram API 錯誤）時仍退出碼 0，不影響 AI CLI 正常運作。
-
-#### Scenario: Network timeout
-- **WHEN** curl 超過 10 秒 max-time
-- **THEN** curl 被中止，腳本退出碼 0，AI CLI 繼續正常執行
+#### Scenario: unregister_hook 清除
+- **WHEN** unregister_hook 被呼叫
+- **THEN** 對應的 hook 條目從 settings.json 移除，其他 hook 條目不受影響
 
 ---
 
-### Requirement: Project name extracted from environment
-腳本 SHALL 優先從 `CLAUDE_PROJECT_DIR`（Claude Code）取得專案目錄，其次從 `GEMINI_PROJECT_DIR`，最後從 stdin JSON 的 `cwd` 欄位。專案名稱為目錄的 basename。
+### Requirement: install.sh 互動式安裝精靈
+`scripts/telegram-notify/install.sh` SHALL 引導使用者完成從零到收到第一則 Telegram 通知的完整流程，包含 token 驗證、Chat ID 自動偵測、config 寫入、hook 部署、settings.json 更新。
 
-#### Scenario: Claude Code environment
-- **WHEN** `CLAUDE_PROJECT_DIR=/Users/me/my-project` 環境變數存在
-- **THEN** Telegram 訊息顯示工具名稱 "Claude Code"，專案名稱 "my-project"
+#### Scenario: 成功完整安裝
+- **WHEN** 使用者執行 `bash scripts/telegram-notify/install.sh` 並輸入有效的 Bot Token
+- **THEN** `~/.config/ai-notify/config` 建立（含 TELEGRAM_ENABLED=true、token、chat_id、NOTIFY_LEVEL）；`~/.config/ai-notify/hooks/telegram-notify.sh` 存在且可執行；`~/.claude/settings.json` 包含 Stop + Notification hooks
 
-#### Scenario: Gemini CLI environment
-- **WHEN** `GEMINI_PROJECT_DIR=/Users/me/another-project` 環境變數存在（且 `CLAUDE_PROJECT_DIR` 不存在）
-- **THEN** Telegram 訊息顯示工具名稱 "Gemini CLI"，專案名稱 "another-project"
+#### Scenario: 重複執行 install（幂等）
+- **WHEN** install.sh 在已安裝的環境執行第二次
+- **THEN** 流程成功完成，settings.json 無重複 hook，config 不重複寫入
 
----
-
-### Requirement: Claude Code global hooks configured
-`~/.claude/settings.json` 的 `hooks` 區塊 SHALL 包含 `Stop` 與 `Notification` 兩個事件，均使用 `async: true` 非同步呼叫通知腳本。
-
-#### Scenario: Stop hook fires asynchronously
-- **WHEN** Claude Code 完成一個 response
-- **THEN** hook 以 `async: true` 在背景執行，不阻塞 Claude Code 回應
-
-#### Scenario: Hooks apply to all projects globally
-- **WHEN** Claude Code 在任意專案目錄啟動
-- **THEN** 全域 `~/.claude/settings.json` 的 hooks 自動生效，無需專案級設定
+#### Scenario: Bot Token 無效
+- **WHEN** 使用者輸入無效的 Bot Token
+- **THEN** install.sh 顯示錯誤說明，要求重新輸入，不繼續後續步驟
 
 ---
 
-### Requirement: Gemini CLI global hooks configured
-`~/.gemini/settings.json` 的 `hooks` 區塊 SHALL 包含 `AfterAgent` 與 `Notification` 兩個事件，呼叫同一通知腳本。
+### Requirement: hook.sh — 通知腳本
+`~/.config/ai-notify/hooks/telegram-notify.sh`（從 `scripts/telegram-notify/hook.sh` 複製）SHALL source `~/.config/ai-notify/config`，依 TELEGRAM_ENABLED 與 NOTIFY_LEVEL 決定是否傳送 Telegram 通知。
 
-#### Scenario: AfterAgent hook fires on response completion
-- **WHEN** Gemini CLI 完成一個 agent 回應
-- **THEN** `AfterAgent` hook 執行通知腳本
+#### Scenario: Stop event（NOTIFY_LEVEL=all）
+- **WHEN** 腳本以 `$1=stop` 呼叫，NOTIFY_LEVEL=all（或未設定），TELEGRAM_ENABLED=true
+- **THEN** 傳送含 ✅ 圖示、"Task Complete"、工具名稱、專案名稱、時間戳記的 Telegram 訊息
+
+#### Scenario: Stop event 被抑制（NOTIFY_LEVEL=notify_only）
+- **WHEN** 腳本以 `$1=stop` 呼叫，NOTIFY_LEVEL=notify_only
+- **THEN** 腳本立即退出（exit 0），不傳送
+
+#### Scenario: Notification event（任意 NOTIFY_LEVEL）
+- **WHEN** 腳本以 `$1=notification` 呼叫，stdin JSON 含 message 欄位
+- **THEN** 傳送含 ⚠️ 圖示、"Action Required"、message 欄位內容的 Telegram 訊息
+
+#### Scenario: credentials 缺失
+- **WHEN** TELEGRAM_BOT_TOKEN 或 TELEGRAM_CHAT_ID 未設定（config 檔不存在或 key 為空）
+- **THEN** 腳本靜默退出（exit 0），無輸出
+
+#### Scenario: 網路失敗
+- **WHEN** curl 請求超過 10 秒或失敗
+- **THEN** 腳本退出碼 0，AI CLI 不受影響
 
 ---
 
-### Requirement: docs/telegram-notify-hook.md 安裝說明
-`docs/telegram-notify-hook.md` SHALL 包含完整安裝步驟：Telegram Bot 建立、環境變數設定、腳本安裝、settings.json 修改方式、手動測試指令，以及 `TELEGRAM_NOTIFY_LEVEL` 切換說明。
+### Requirement: /notify-setup Claude Code 指令
+`.claude/commands/notify-setup.md` SHALL 定義 `/notify-setup` 指令，使使用者能在 Claude Code 內完成 Telegram 通知的設定、更新、測試與移除。
 
-#### Scenario: User can follow docs to complete setup
-- **WHEN** 使用者閱讀 `docs/telegram-notify-hook.md`
-- **THEN** 能夠按步驟完成從 0 到收到第一則 Telegram 通知的完整設定
+#### Scenario: 無參數呼叫
+- **WHEN** 使用者輸入 `/notify-setup`（無額外參數）
+- **THEN** Claude 呈現選單：setup / update / test / status / uninstall，並根據選擇執行對應腳本
+
+#### Scenario: 顯示目前設定（status）
+- **WHEN** 使用者選擇 status
+- **THEN** Claude 讀取 `~/.config/ai-notify/config`，顯示 NOTIFY_LEVEL、TELEGRAM_ENABLED，Bot Token 僅顯示末 4 碼
+
+---
+
+### Requirement: Line Notify 架構佔位
+`scripts/line-notify/` 目錄 SHALL 存在，包含 `.placeholder` 檔案，說明實作時應參考 `scripts/notify/README.md` 的 Provider 擴充指南。
+
+---
+
+### Requirement: 說明文件
+`docs/notify-hooks-architecture.md` SHALL 說明整體架構（目錄結構、config 格式、hook 生命週期、如何新增 provider）。
+`docs/telegram-notify-hook.md` SHALL 提供 Telegram 快速安裝說明（含 `/notify-setup` 指令用法與手動方式）。
