@@ -1,0 +1,36 @@
+# Line Notify — Placeholder
+
+This directory is reserved for the Line Notify provider.
+
+When implementing, follow the Provider Extension Guide in `scripts/notify/README.md`.
+
+## Quick Start
+
+1. Copy this directory structure from `scripts/telegram-notify/`:
+   ```
+   scripts/line-notify/
+     hook.sh
+     install.sh
+     update.sh
+     uninstall.sh
+   ```
+
+2. Implement `hook.sh` using the interface defined in `scripts/notify/README.md`.
+
+3. Use config key prefix `LINE_` (e.g., `LINE_ENABLED`, `LINE_NOTIFY_TOKEN`).
+
+4. Deploy hook to `~/.config/ai-notify/hooks/line-notify.sh` from `install.sh`.
+
+## Line Notify API Reference
+
+- Token endpoint: `https://notify-api.line.me/api/notify`
+- Auth header: `Authorization: Bearer <LINE_NOTIFY_TOKEN>`
+- POST field: `message=<text>`
+
+```bash
+curl --silent --max-time 10 \
+  -X POST "https://notify-api.line.me/api/notify" \
+  -H "Authorization: Bearer ${LINE_NOTIFY_TOKEN}" \
+  --data-urlencode "message=${MESSAGE}" \
+  || true
+```

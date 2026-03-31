@@ -127,6 +127,14 @@ wk-agent-ops/
 │   ├── python/                 ← Python 專案
 │   └── node/                   ← Node.js 專案
 ├── scripts/
+│   ├── notify/
+│   │   └── lib/                ← 共用庫（config.sh、registry.sh）
+│   ├── telegram-notify/        ← Telegram 通知 hook 與安裝腳本
+│   │   ├── install.sh          ← 互動式安裝精靈
+│   │   ├── hook.sh             ← AI CLI hook 腳本
+│   │   ├── update.sh           ← 更新設定
+│   │   └── uninstall.sh        ← 移除
+│   ├── line-notify/            ← Line Notify（架構佔位，未實作）
 │   ├── skills/
 │   │   └── install.sh          ← 安裝擴充套件到目標專案
 │   └── worktree/
@@ -138,9 +146,41 @@ wk-agent-ops/
 │   ├── commit-feature-workflow.md ← /opsx:commit 工作流說明
 │   ├── git-commit-writer.md       ← git-commit-writer 使用說明
 │   ├── doc-updater.md             ← doc-updater 使用說明
-│   └── template-profiles.md       ← Template profile 說明與新增方式
+│   ├── template-profiles.md       ← Template profile 說明與新增方式
+│   ├── telegram-notify-hook.md    ← Telegram 通知快速安裝說明
+│   └── notify-hooks-architecture.md ← 通知 hook 架構與擴充指南
 └── openspec/                   ← 本專案的 OpenSpec 變更記錄
 ```
+
+---
+
+## Telegram 通知
+
+當 AI CLI 在背景執行長時間任務時，透過 Telegram 接收任務完成或等待授權的通知。
+
+### 快速安裝
+
+```bash
+# 互動式安裝精靈
+bash scripts/telegram-notify/install.sh
+
+# 或在 Claude Code 內
+/notify-setup
+```
+
+### 管理設定
+
+```bash
+bash scripts/telegram-notify/update.sh       # 更新 token / chat_id / level
+bash scripts/telegram-notify/uninstall.sh    # 移除 hook 與 config
+```
+
+| 通知等級 | Stop（任務完成）| Notification（等待授權）|
+|---------|--------------|----------------------|
+| `all`（預設）| ✅ | ✅ |
+| `notify_only` | ❌ | ✅ |
+
+詳細說明：[docs/telegram-notify-hook.md](docs/telegram-notify-hook.md) · [docs/notify-hooks-architecture.md](docs/notify-hooks-architecture.md)
 
 ---
 
