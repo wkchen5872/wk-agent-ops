@@ -56,9 +56,85 @@
 ### Requirement: hook.sh — 通知腳本
 `~/.config/ai-notify/hooks/telegram-notify.sh`（從 `scripts/telegram-notify/hook.sh` 複製）SHALL source `~/.config/ai-notify/config`，依 TELEGRAM_ENABLED 與 NOTIFY_LEVEL 決定是否傳送 Telegram 通知。
 
+### Requirement: 工具偵測以環境變數為準
+腳本 SHALL 以 `GEMINI_PROJECT_DIR` 作為首要工具識別信號：有此 var → Gemini CLI；無此 var 但有 `CLAUDE_PROJECT_DIR` → Claude Code；兩者皆無 → "AI CLI"（bug indicator）。`PROJECT_DIR` 優先取 `GEMINI_PROJECT_DIR`，fallback `CLAUDE_PROJECT_DIR`。
+
+#### Scenario: Gemini CLI environment（GEMINI_PROJECT_DIR 存在）
+- **WHEN** `GEMINI_PROJECT_DIR=/Users/me/my-project` 存在（無論 `CLAUDE_PROJECT_DIR` 是否也存在）
+- **THEN** TOOL_NAME="Gemini CLI"，PROJECT_DIR 取 `GEMINI_PROJECT_DIR` 值
+
+#### Scenario: Claude Code environment（僅 CLAUDE_PROJECT_DIR）
+- **WHEN** `CLAUDE_PROJECT_DIR=/Users/me/my-project` 存在，且 `GEMINI_PROJECT_DIR` 不存在
+- **THEN** TOOL_NAME="Claude Code"，PROJECT_DIR 取 `CLAUDE_PROJECT_DIR` 值
+
+#### Scenario: 兩者皆無
+- **WHEN** `GEMINI_PROJECT_DIR` 和 `CLAUDE_PROJECT_DIR` 均未設定
+- **THEN** TOOL_NAME="AI CLI"，PROJECT_DIR 為空字串
+
+### Requirement: 訊息排版
+通知訊息 SHALL 使用以下結構，兩種通知類型共用相同的欄位順序：
+
+```
+{STATUS_ICON} **{TITLE}**
+
+🤖 {TOOL_NAME}
+📂 {PROJECT_NAME}
+⏰ {TIMESTAMP}
+
+{MESSAGE} #{HOOK_EVENT_NAME}
+```
+
+- TASK COMPLETE：STATUS_ICON = 🟢，TITLE = `TASK COMPLETE`
+- Action Required：STATUS_ICON = 🔴，TITLE = `Action Required`
+- `{MESSAGE}` fallback：TASK COMPLETE → `Process finished successfully`；Action Required → `Waiting for user interaction...`
+- `#{HOOK_EVENT_NAME}` 附加於訊息行末，例如 `#Stop`、`#AfterAgent`、`#Notification`
+
+#### Scenario: TASK COMPLETE 訊息格式
+- **WHEN** Stop 或 AfterAgent event 觸發，PROJECT_NAME=wk-agent-ops，TOOL_NAME=Claude Code
+- **THEN** 訊息為：
+  ```
+  🟢 **TASK COMPLETE**
+
+  🤖 Claude Code
+  📂 wk-agent-ops
+  ⏰ 2026-03-31 16:36:23
+
+  Process finished successfully #Stop
+  ```
+
+#### Scenario: Action Required 訊息格式（含 message）
+- **WHEN** Notification event 觸發，stdin JSON 含 `message` 欄位
+- **THEN** 訊息為：
+  ```
+  🔴 **Action Required**
+
+  🤖 Claude Code
+  📂 wk-agent-ops
+  ⏰ 2026-03-31 16:36:03
+
+  Claude needs your permission to use Bash #Notification
+  ```
+
+#### Scenario: Action Required 訊息格式（無 message）
+- **WHEN** Notification event 觸發，stdin JSON 無 `message` 欄位（或為空）
+- **THEN** 訊息為：
+  ```
+  🔴 **Action Required**
+
+  🤖 Claude Code
+  📂 wk-agent-ops
+  ⏰ 2026-03-31 16:36:03
+
+  Waiting for user interaction... #Notification
+  ```
+
+#### Scenario: Gemini CLI AfterAgent event
+- **WHEN** AfterAgent event 觸發，GEMINI_PROJECT_DIR 存在
+- **THEN** 訊息格式與 TASK COMPLETE 相同，TOOL_NAME=Gemini CLI，#tag 為 `#AfterAgent`
+
 #### Scenario: Stop event（NOTIFY_LEVEL=all）
 - **WHEN** 腳本以 `$1=stop` 呼叫，NOTIFY_LEVEL=all（或未設定），TELEGRAM_ENABLED=true
-- **THEN** 傳送含 ✅ 圖示、"Task Complete"、工具名稱、專案名稱、時間戳記的 Telegram 訊息
+- **THEN** 傳送含 🟢 圖示、"TASK COMPLETE"、工具名稱、專案名稱、時間戳記、#EventTag 的 Telegram 訊息
 
 #### Scenario: Stop event 被抑制（NOTIFY_LEVEL=notify_only）
 - **WHEN** 腳本以 `$1=stop` 呼叫，NOTIFY_LEVEL=notify_only
@@ -66,7 +142,7 @@
 
 #### Scenario: Notification event（任意 NOTIFY_LEVEL）
 - **WHEN** 腳本以 `$1=notification` 呼叫，stdin JSON 含 message 欄位
-- **THEN** 傳送含 ⚠️ 圖示、"Action Required"、message 欄位內容的 Telegram 訊息
+- **THEN** 傳送含 🔴 圖示、"Action Required"、message 欄位內容（或 fallback）、#Notification tag 的 Telegram 訊息
 
 #### Scenario: credentials 缺失
 - **WHEN** TELEGRAM_BOT_TOKEN 或 TELEGRAM_CHAT_ID 未設定（config 檔不存在或 key 為空）
