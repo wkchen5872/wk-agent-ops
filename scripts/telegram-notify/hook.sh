@@ -68,7 +68,7 @@ MESSAGE=""
 
 case "${EVENT_TYPE}" in
   stop|afteragent)
-    MESSAGE="🟢 **Task Complete**
+    MESSAGE="🟢 **TASK COMPLETE**
 
 🤖 ${TOOL_NAME}
 📂 ${PROJECT_NAME}
@@ -87,7 +87,7 @@ Process finished successfully ${EVENT_TAG}"
 
     [[ -z "${NOTIFICATION_MSG}" ]] && NOTIFICATION_MSG="Waiting for user interaction..."
 
-    MESSAGE="🔴 **Action Required**
+    MESSAGE="🟠 **Action Required**
 
 🤖 ${TOOL_NAME}
 📂 ${PROJECT_NAME}
