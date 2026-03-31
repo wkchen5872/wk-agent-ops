@@ -1,0 +1,160 @@
+# Notify Hooks — Architecture
+
+This document describes the architecture of the AI CLI notification hook system.
+
+---
+
+## Overview
+
+The notification system allows AI CLI tools (Claude Code, Gemini CLI) to send real-time notifications when tasks complete or require user attention.
+
+**Design principle:** The repository contains only scripts. All machine state (config files, deployed hooks, settings.json entries) is created exclusively by running `install.sh` — never at repository checkout time.
+
+---
+
+## Directory Structure
+
+```
+scripts/
+  notify/
+    lib/
+      config.sh        # Shared: read/write ~/.config/ai-notify/config
+      registry.sh      # Shared: register/unregister hooks in AI CLI settings.json
+    README.md          # Provider extension guide
+
+  telegram-notify/
+    hook.sh            # Notification hook (called by AI CLI at runtime)
+    install.sh         # Interactive install wizard
+    update.sh          # Update individual config keys
+    uninstall.sh       # Remove hooks and config
+
+  line-notify/
+    .placeholder       # Reserved for future Line Notify implementation
+
+.claude/
+  commands/
+    notify-setup.md    # /notify-setup Claude Code command
+```
+
+**Runtime layout (created by install.sh):**
+
+```
+~/.config/ai-notify/
+  config               # Shell-sourceable key=value (chmod 600)
+  hooks/
+    telegram-notify.sh # Deployed copy of scripts/telegram-notify/hook.sh
+```
+
+---
+
+## Config Format
+
+`~/.config/ai-notify/config` is a shell-sourceable key=value file:
+
+```bash
+TELEGRAM_ENABLED=true
+TELEGRAM_BOT_TOKEN="7123456789:ABCdef..."
+TELEGRAM_CHAT_ID="987654321"
+NOTIFY_LEVEL=all           # all | notify_only
+# LINE_ENABLED=false       # Future extension
+```
+
+**Security:** The file is created with `chmod 600` and never committed to the repository.
+
+**NOTIFY_LEVEL values:**
+| Value | Behaviour |
+|-------|-----------|
+| `all` (default) | Notify on Stop (task complete) AND Notification (action required) |
+| `notify_only` | Notify only on Notification events; Stop events are suppressed |
+
+---
+
+## Installation Flow
+
+```
+User runs: bash scripts/telegram-notify/install.sh
+          (or: /notify-setup → setup in Claude Code)
+
+Step 1  Guide user to create Telegram Bot via @BotFather
+Step 2  Read and validate Bot Token (Telegram API call)
+Step 3  Auto-detect Chat ID (getUpdates API call)
+Step 4  Choose NOTIFY_LEVEL
+Step 5  Write ~/.config/ai-notify/config (chmod 600)
+Step 6  Deploy hook: copy hook.sh → ~/.config/ai-notify/hooks/telegram-notify.sh
+Step 7  Register hooks in ~/.claude/settings.json (and ~/.gemini/settings.json if present)
+Step 8  Send test notification to confirm end-to-end
+```
+
+**Idempotent:** Running `install.sh` multiple times is safe. Existing config values are preserved unless overwritten, and `registry.sh` prevents duplicate hook entries.
+
+---
+
+## Hook Lifecycle
+
+```
+AI CLI event fires (e.g., task complete)
+        │
+        ▼
+~/.claude/settings.json hooks.Stop[...] or hooks.Notification[...]
+        │
+        ▼
+bash ~/.config/ai-notify/hooks/telegram-notify.sh <event-type>
+  (stdin: JSON payload from AI CLI)
+        │
+        ├─ source ~/.config/ai-notify/config
+        ├─ check TELEGRAM_ENABLED, credentials
+        ├─ check NOTIFY_LEVEL gate
+        ├─ detect tool name + project from env / stdin
+        ├─ build message
+        └─ curl --silent --max-time 10 Telegram API || true
+           (always exits 0 — never blocks AI CLI)
+```
+
+---
+
+## Shared Libraries
+
+### `scripts/notify/lib/config.sh`
+
+| Function | Description |
+|----------|-------------|
+| `read_config` | Source the config file into current shell |
+| `write_config KEY=VAL ...` | Create/overwrite config with given pairs (chmod 600) |
+| `update_config_key KEY VAL` | Update a single key; leave others intact |
+| `remove_config_keys_by_prefix PREFIX` | Remove all keys matching a prefix |
+
+### `scripts/notify/lib/registry.sh`
+
+| Function | Description |
+|----------|-------------|
+| `register_hook <hook_path>` | Add Stop + Notification hooks to AI CLI settings (idempotent) |
+| `unregister_hook <hook_path>` | Remove hook entries without affecting other hooks |
+
+Both functions require `jq`.
+
+---
+
+## How to Add a New Provider
+
+See `scripts/notify/README.md` for the step-by-step provider extension guide.
+
+Summary:
+1. Copy `scripts/telegram-notify/` to `scripts/<provider-name>/`
+2. Implement `hook.sh` with the standard interface
+3. Use `{PROVIDER}_ENABLED` config key prefix
+4. Deploy hook to `~/.config/ai-notify/hooks/<provider-name>.sh` from `install.sh`
+5. Call `register_hook` / `unregister_hook` from shared library
+
+---
+
+## Rollback
+
+```bash
+# Full removal
+bash scripts/telegram-notify/uninstall.sh
+
+# Or in Claude Code
+/notify-setup → uninstall
+```
+
+Uninstall removes hook entries from `settings.json`, `TELEGRAM_*` keys from config, and the deployed hook file. Other providers and settings are not affected.
