@@ -18,6 +18,8 @@ _ensure_settings_file() {
 }
 
 # Register the telegram-notify hook into a settings.json file (idempotent).
+# Writes the correct Claude Code nested format:
+#   "Stop": [{ "hooks": [{ "type": "command", "command": "...", "async": true, "timeout": 15 }] }]
 # Arguments: $1 = settings file path, $2 = deployed hook path
 _register_hooks_in_file() {
   local settings_file="$1"
@@ -25,42 +27,48 @@ _register_hooks_in_file() {
 
   _ensure_settings_file "${settings_file}"
 
+  local stop_cmd="bash \"${hook_path}\" stop"
+  local notify_cmd="bash \"${hook_path}\" notification"
+
   local tmp
   tmp="$(mktemp)"
 
-  # Build the hook entries we want to ensure exist
-  # Stop hook
-  local stop_hook
-  stop_hook=$(jq -n --arg cmd "bash \"${hook_path}\" stop" \
-    '{"type":"command","command":$cmd}')
+  # Build the correctly nested hook group objects
+  local stop_group notify_group
+  stop_group=$(jq -n --arg cmd "${stop_cmd}" \
+    '{"hooks":[{"type":"command","command":$cmd,"async":true,"timeout":15}]}')
+  notify_group=$(jq -n --arg cmd "${notify_cmd}" \
+    '{"hooks":[{"type":"command","command":$cmd,"async":true,"timeout":15}]}')
 
-  # Notification hook
-  local notify_hook
-  notify_hook=$(jq -n --arg cmd "bash \"${hook_path}\" notification" \
-    '{"type":"command","command":$cmd}')
-
-  # Idempotent merge: add Stop hook if not already present
+  # Idempotent merge: only add group if no existing group already contains this command.
+  # Also handles migration from old flat format (direct {"type","command"} objects).
   if jq \
-    --argjson stop_hook "${stop_hook}" \
-    --argjson notify_hook "${notify_hook}" \
+    --argjson stop_group "${stop_group}" \
+    --argjson notify_group "${notify_group}" \
+    --arg stop_cmd "${stop_cmd}" \
+    --arg notify_cmd "${notify_cmd}" \
     '
-    # Helper: check if hooks array contains a command entry for the hook path
-    def has_hook(arr; entry):
+    # Returns true if the array already has a nested-format group containing cmd,
+    # OR an old flat-format entry with that command (to prevent double-registration
+    # when the old format is still present).
+    def has_command(arr; cmd):
       if arr == null then false
-      else (arr | map(select(.command == entry.command)) | length) > 0
+      else (arr | map(
+        select(
+          (.command? == cmd) or
+          (.hooks? != null and (.hooks | map(select(.command == cmd)) | length) > 0)
+        )
+      ) | length) > 0
       end;
 
-    # Ensure .hooks.Stop array exists and contains the stop hook
     .hooks.Stop = (
-      if has_hook(.hooks.Stop; $stop_hook) then .hooks.Stop
-      else ((.hooks.Stop // []) + [$stop_hook])
+      if has_command(.hooks.Stop; $stop_cmd) then .hooks.Stop
+      else ((.hooks.Stop // []) + [$stop_group])
       end
     ) |
-
-    # Ensure .hooks.Notification array exists and contains the notification hook
     .hooks.Notification = (
-      if has_hook(.hooks.Notification; $notify_hook) then .hooks.Notification
-      else ((.hooks.Notification // []) + [$notify_hook])
+      if has_command(.hooks.Notification; $notify_cmd) then .hooks.Notification
+      else ((.hooks.Notification // []) + [$notify_group])
       end
     )
     ' "${settings_file}" > "${tmp}"; then
@@ -72,6 +80,7 @@ _register_hooks_in_file() {
 }
 
 # Unregister the telegram-notify hook from a settings.json file.
+# Handles both old flat format and new nested format for smooth migration.
 # Arguments: $1 = settings file path, $2 = deployed hook path
 _unregister_hooks_in_file() {
   local settings_file="$1"
@@ -81,24 +90,30 @@ _unregister_hooks_in_file() {
     return
   fi
 
-  local tmp
-  tmp="$(mktemp)"
-
   local stop_cmd="bash \"${hook_path}\" stop"
   local notify_cmd="bash \"${hook_path}\" notification"
+
+  local tmp
+  tmp="$(mktemp)"
 
   if jq \
     --arg stop_cmd "${stop_cmd}" \
     --arg notify_cmd "${notify_cmd}" \
     '
-    # Remove matching entries from Stop
+    # Remove Stop entries — handles both flat format and nested format groups
     if .hooks.Stop then
-      .hooks.Stop = (.hooks.Stop | map(select(.command != $stop_cmd)))
+      .hooks.Stop = (.hooks.Stop | map(select(
+        (.command? // "") != $stop_cmd and
+        (.hooks? == null or (.hooks | map(select(.command == $stop_cmd)) | length) == 0)
+      )))
     else . end |
 
-    # Remove matching entries from Notification
+    # Remove Notification entries — same dual-format handling
     if .hooks.Notification then
-      .hooks.Notification = (.hooks.Notification | map(select(.command != $notify_cmd)))
+      .hooks.Notification = (.hooks.Notification | map(select(
+        (.command? // "") != $notify_cmd and
+        (.hooks? == null or (.hooks | map(select(.command == $notify_cmd)) | length) == 0)
+      )))
     else . end
     ' "${settings_file}" > "${tmp}"; then
     mv "${tmp}" "${settings_file}"
@@ -119,12 +134,12 @@ register_hook() {
   fi
 
   _register_hooks_in_file "${CLAUDE_SETTINGS}" "${hook_path}"
-  echo "✓ Registered hooks in ${CLAUDE_SETTINGS}"
+  echo "  ✓ Registered hooks in ${CLAUDE_SETTINGS}"
 
-  # Register in Gemini settings if the directory exists or we can create it
+  # Register in Gemini settings if the directory exists
   if [[ -d "${HOME}/.gemini" ]] || [[ -f "${GEMINI_SETTINGS}" ]]; then
     _register_hooks_in_file "${GEMINI_SETTINGS}" "${hook_path}"
-    echo "✓ Registered hooks in ${GEMINI_SETTINGS}"
+    echo "  ✓ Registered hooks in ${GEMINI_SETTINGS}"
   fi
 }
 
@@ -139,10 +154,10 @@ unregister_hook() {
   fi
 
   _unregister_hooks_in_file "${CLAUDE_SETTINGS}" "${hook_path}"
-  echo "✓ Unregistered hooks from ${CLAUDE_SETTINGS}"
+  echo "  ✓ Unregistered hooks from ${CLAUDE_SETTINGS}"
 
   if [[ -f "${GEMINI_SETTINGS}" ]]; then
     _unregister_hooks_in_file "${GEMINI_SETTINGS}" "${hook_path}"
-    echo "✓ Unregistered hooks from ${GEMINI_SETTINGS}"
+    echo "  ✓ Unregistered hooks from ${GEMINI_SETTINGS}"
   fi
 }
