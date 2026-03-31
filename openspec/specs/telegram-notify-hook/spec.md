@@ -84,16 +84,16 @@
 {MESSAGE} #{HOOK_EVENT_NAME}
 ```
 
-- TASK COMPLETE：STATUS_ICON = 🟢，TITLE = `TASK COMPLETE`
+- Task Complete：STATUS_ICON = 🟢，TITLE = `Task Complete`
 - Action Required：STATUS_ICON = 🟠，TITLE = `Action Required`
-- `{MESSAGE}` fallback：TASK COMPLETE → `Process finished successfully`；Action Required → `Waiting for user interaction...`
+- `{MESSAGE}` fallback：Task Complete → `Process finished successfully`；Action Required → `Waiting for user interaction...`
 - `#{HOOK_EVENT_NAME}` 附加於訊息行末，例如 `#Stop`、`#AfterAgent`、`#Notification`
 
-#### Scenario: TASK COMPLETE 訊息格式
+#### Scenario: Task Complete 訊息格式
 - **WHEN** Stop 或 AfterAgent event 觸發，PROJECT_NAME=wk-agent-ops，TOOL_NAME=Claude Code
 - **THEN** 訊息為：
   ```
-  🟢 **TASK COMPLETE**
+  🟢 **Task Complete**
 
   🤖 Claude Code
   📂 wk-agent-ops
@@ -130,11 +130,11 @@
 
 #### Scenario: Gemini CLI AfterAgent event
 - **WHEN** AfterAgent event 觸發，GEMINI_PROJECT_DIR 存在
-- **THEN** 訊息格式與 TASK COMPLETE 相同，TOOL_NAME=Gemini CLI，#tag 為 `#AfterAgent`
+- **THEN** 訊息格式與 Task Complete 相同，TOOL_NAME=Gemini CLI，#tag 為 `#AfterAgent`
 
 #### Scenario: Stop event（NOTIFY_LEVEL=all）
 - **WHEN** 腳本以 `$1=stop` 呼叫，NOTIFY_LEVEL=all（或未設定），TELEGRAM_ENABLED=true
-- **THEN** 傳送含 🟢 圖示、"TASK COMPLETE"、工具名稱、專案名稱、時間戳記、#EventTag 的 Telegram 訊息
+- **THEN** 傳送含 🟢 圖示、"Task Complete"、工具名稱、專案名稱、時間戳記、#EventTag 的 Telegram 訊息
 
 #### Scenario: Stop event 被抑制（NOTIFY_LEVEL=notify_only）
 - **WHEN** 腳本以 `$1=stop` 呼叫，NOTIFY_LEVEL=notify_only

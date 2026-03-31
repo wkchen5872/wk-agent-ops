@@ -68,7 +68,7 @@ MESSAGE=""
 
 case "${EVENT_TYPE}" in
   stop|afteragent)
-    MESSAGE="🟢 **TASK COMPLETE**
+    MESSAGE="🟢 **Task Complete**
 
 🤖 ${TOOL_NAME}
 📂 ${PROJECT_NAME}
