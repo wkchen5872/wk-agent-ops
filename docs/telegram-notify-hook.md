@@ -62,21 +62,35 @@ bash scripts/telegram-notify/update.sh notify_level
 
 **Stop event (task complete):**
 ```
-✅ Task Complete
+🟢 **TASK COMPLETE**
 
-🔧 Tool: Claude Code
-📁 Project: my-project
-🕐 2025-03-31 14:22:05
+🤖 Claude Code
+📂 my-project
+⏰ 2025-03-31 14:22:05
+
+Process finished successfully #Stop
 ```
 
 **Notification event (action required):**
 ```
-⚠️ Action Required
+🔴 **Action Required**
 
-🔧 Tool: Claude Code
-📁 Project: my-project
-💬 Please approve the file deletion
-🕐 2025-03-31 14:22:05
+🤖 Claude Code
+📂 my-project
+⏰ 2025-03-31 14:22:05
+
+Please approve the file deletion #Notification
+```
+
+**Notification event (no message):**
+```
+🔴 **Action Required**
+
+🤖 Claude Code
+📂 my-project
+⏰ 2025-03-31 14:22:05
+
+Waiting for user interaction... #Notification
 ```
 
 ---
