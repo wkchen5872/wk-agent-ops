@@ -85,7 +85,7 @@
 ```
 
 - TASK COMPLETE：STATUS_ICON = 🟢，TITLE = `TASK COMPLETE`
-- Action Required：STATUS_ICON = 🔴，TITLE = `Action Required`
+- Action Required：STATUS_ICON = 🟠，TITLE = `Action Required`
 - `{MESSAGE}` fallback：TASK COMPLETE → `Process finished successfully`；Action Required → `Waiting for user interaction...`
 - `#{HOOK_EVENT_NAME}` 附加於訊息行末，例如 `#Stop`、`#AfterAgent`、`#Notification`
 
@@ -106,7 +106,7 @@
 - **WHEN** Notification event 觸發，stdin JSON 含 `message` 欄位
 - **THEN** 訊息為：
   ```
-  🔴 **Action Required**
+  🟠 **Action Required**
 
   🤖 Claude Code
   📂 wk-agent-ops
@@ -119,7 +119,7 @@
 - **WHEN** Notification event 觸發，stdin JSON 無 `message` 欄位（或為空）
 - **THEN** 訊息為：
   ```
-  🔴 **Action Required**
+  🟠 **Action Required**
 
   🤖 Claude Code
   📂 wk-agent-ops

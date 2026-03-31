@@ -73,7 +73,7 @@ Process finished successfully #Stop
 
 **Notification event (action required):**
 ```
-🔴 **Action Required**
+🟠 **Action Required**
 
 🤖 Claude Code
 📂 my-project
@@ -84,7 +84,7 @@ Please approve the file deletion #Notification
 
 **Notification event (no message):**
 ```
-🔴 **Action Required**
+🟠 **Action Required**
 
 🤖 Claude Code
 📂 my-project
