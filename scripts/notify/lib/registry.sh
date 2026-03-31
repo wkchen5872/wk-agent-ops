@@ -39,12 +39,21 @@ _register_hooks_in_file() {
   local tmp
   tmp="$(mktemp)"
 
-  # Build the correctly nested hook group objects
+  # Build the correctly nested hook group objects.
+  # Claude: async=true, timeout in seconds (15s)
+  # Gemini: no async field (unsupported), timeout in milliseconds (15000ms)
   local stop_group notify_group
-  stop_group=$(jq -n --arg cmd "${stop_cmd}" \
-    '{"hooks":[{"type":"command","command":$cmd,"async":true,"timeout":15}]}')
-  notify_group=$(jq -n --arg cmd "${notify_cmd}" \
-    '{"hooks":[{"type":"command","command":$cmd,"async":true,"timeout":15}]}')
+  if [[ "${mode}" == "gemini" ]]; then
+    stop_group=$(jq -n --arg cmd "${stop_cmd}" \
+      '{"hooks":[{"type":"command","command":$cmd,"timeout":15000}]}')
+    notify_group=$(jq -n --arg cmd "${notify_cmd}" \
+      '{"hooks":[{"type":"command","command":$cmd,"timeout":15000}]}')
+  else
+    stop_group=$(jq -n --arg cmd "${stop_cmd}" \
+      '{"hooks":[{"type":"command","command":$cmd,"async":true,"timeout":15}]}')
+    notify_group=$(jq -n --arg cmd "${notify_cmd}" \
+      '{"hooks":[{"type":"command","command":$cmd,"async":true,"timeout":15}]}')
+  fi
 
   # Idempotent merge: only add group if no existing group already contains this command.
   # Also handles migration from old flat format (direct {"type","command"} objects).
