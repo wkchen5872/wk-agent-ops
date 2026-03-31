@@ -67,7 +67,7 @@ TIMESTAMP="$(date '+%Y-%m-%d %H:%M:%S')"
 MESSAGE=""
 
 case "${EVENT_TYPE}" in
-  stop)
+  stop|afteragent)
     MESSAGE="✅ *Task Complete*
 
 🔧 Tool: ${TOOL_NAME}"
