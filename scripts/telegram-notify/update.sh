@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Update individual Telegram Notify config settings.
-# Usage: bash scripts/telegram-notify/update.sh [token|chat_id|notify_level]
-# Does NOT touch settings.json (hook registration is preserved).
+# Usage: bash scripts/telegram-notify/update.sh [token|chat_id|notify_level|fix-hooks]
+# fix-hooks: re-registers hooks with the correct format (use to fix format issues).
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -14,6 +14,7 @@ source "${LIB_DIR}/config.sh"
 read_config 2>/dev/null || true
 
 KEY="${1:-}"
+DEPLOYED_HOOK="${HOME}/.config/ai-notify/hooks/telegram-notify.sh"
 
 show_menu() {
   echo ""
@@ -22,6 +23,7 @@ show_menu() {
   echo "  1) Bot Token"
   echo "  2) Chat ID"
   echo "  3) Notification Level (current: ${NOTIFY_LEVEL:-all})"
+  echo "  4) Fix hook registration (re-register with correct format)"
   echo "  q) Quit"
   echo ""
 }
@@ -68,11 +70,39 @@ update_notify_level() {
   echo "✓ NOTIFY_LEVEL updated to ${new_level}."
 }
 
+fix_hooks() {
+  # shellcheck source=../notify/lib/registry.sh
+  source "${LIB_DIR}/registry.sh"
+
+  echo ""
+  echo "── Re-registering hooks with correct format ──"
+  echo ""
+
+  if [[ ! -f "${DEPLOYED_HOOK}" ]]; then
+    echo "ERROR: Deployed hook not found at ${DEPLOYED_HOOK}"
+    echo "Please run install.sh first."
+    return 1
+  fi
+
+  if ! command -v jq &>/dev/null; then
+    echo "ERROR: jq is required. Please install jq and re-run."
+    return 1
+  fi
+
+  # Unregister old/broken entries, then re-register with correct nested format
+  unregister_hook "${DEPLOYED_HOOK}"
+  register_hook "${DEPLOYED_HOOK}"
+
+  echo ""
+  echo "✓ Hooks re-registered. Restart Claude Code to apply changes."
+}
+
 # Handle direct key argument
 case "${KEY}" in
-  token)      update_token;        exit 0 ;;
-  chat_id)    update_chat_id;      exit 0 ;;
+  token)        update_token;        exit 0 ;;
+  chat_id)      update_chat_id;      exit 0 ;;
   notify_level) update_notify_level; exit 0 ;;
+  fix-hooks)    fix_hooks;           exit 0 ;;
   "")
     # Interactive menu
     while true; do
@@ -82,6 +112,7 @@ case "${KEY}" in
         1) update_token ;;
         2) update_chat_id ;;
         3) update_notify_level ;;
+        4) fix_hooks ;;
         q|Q) echo ""; echo "Done."; exit 0 ;;
         *) echo "Invalid choice." ;;
       esac
@@ -89,7 +120,7 @@ case "${KEY}" in
     ;;
   *)
     echo "Unknown key: ${KEY}"
-    echo "Usage: $0 [token|chat_id|notify_level]"
+    echo "Usage: $0 [token|chat_id|notify_level|fix-hooks]"
     exit 1
     ;;
 esac
