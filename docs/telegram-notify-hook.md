@@ -62,7 +62,7 @@ bash scripts/telegram-notify/update.sh notify_level
 
 **Stop event (task complete):**
 ```
-🟢 **TASK COMPLETE**
+🟢 **Task Complete**
 
 🤖 Claude Code
 📂 my-project
