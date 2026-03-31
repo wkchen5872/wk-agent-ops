@@ -18,17 +18,23 @@ _ensure_settings_file() {
 }
 
 # Register the telegram-notify hook into a settings.json file (idempotent).
-# Writes the correct Claude Code nested format:
-#   "Stop": [{ "hooks": [{ "type": "command", "command": "...", "async": true, "timeout": 15 }] }]
-# Arguments: $1 = settings file path, $2 = deployed hook path
+# Supports two modes via $3:
+#   "claude" (default) — registers Stop + Notification (Claude Code event names)
+#   "gemini"           — registers AfterAgent + Notification (Gemini CLI event names)
+# Arguments: $1 = settings file path, $2 = deployed hook path, $3 = mode (claude|gemini)
 _register_hooks_in_file() {
   local settings_file="$1"
   local hook_path="$2"
+  local mode="${3:-claude}"
 
   _ensure_settings_file "${settings_file}"
 
   local stop_cmd="bash \"${hook_path}\" stop"
   local notify_cmd="bash \"${hook_path}\" notification"
+
+  # Claude Code uses "Stop"; Gemini CLI uses "AfterAgent"
+  local stop_event="Stop"
+  [[ "${mode}" == "gemini" ]] && stop_event="AfterAgent"
 
   local tmp
   tmp="$(mktemp)"
@@ -47,6 +53,7 @@ _register_hooks_in_file() {
     --argjson notify_group "${notify_group}" \
     --arg stop_cmd "${stop_cmd}" \
     --arg notify_cmd "${notify_cmd}" \
+    --arg stop_event "${stop_event}" \
     '
     # Returns true if the array already has a nested-format group containing cmd,
     # OR an old flat-format entry with that command (to prevent double-registration
@@ -61,9 +68,9 @@ _register_hooks_in_file() {
       ) | length) > 0
       end;
 
-    .hooks.Stop = (
-      if has_command(.hooks.Stop; $stop_cmd) then .hooks.Stop
-      else ((.hooks.Stop // []) + [$stop_group])
+    .hooks[$stop_event] = (
+      if has_command(.hooks[$stop_event]; $stop_cmd) then .hooks[$stop_event]
+      else ((.hooks[$stop_event] // []) + [$stop_group])
       end
     ) |
     .hooks.Notification = (
@@ -80,7 +87,7 @@ _register_hooks_in_file() {
 }
 
 # Unregister the telegram-notify hook from a settings.json file.
-# Handles both old flat format and new nested format for smooth migration.
+# Clears entries from Stop, AfterAgent, and Notification (handles both formats).
 # Arguments: $1 = settings file path, $2 = deployed hook path
 _unregister_hooks_in_file() {
   local settings_file="$1"
@@ -100,21 +107,22 @@ _unregister_hooks_in_file() {
     --arg stop_cmd "${stop_cmd}" \
     --arg notify_cmd "${notify_cmd}" \
     '
-    # Remove Stop entries — handles both flat format and nested format groups
-    if .hooks.Stop then
-      .hooks.Stop = (.hooks.Stop | map(select(
-        (.command? // "") != $stop_cmd and
-        (.hooks? == null or (.hooks | map(select(.command == $stop_cmd)) | length) == 0)
-      )))
-    else . end |
+    def remove_cmd(arr; cmd):
+      if arr == null then []
+      else arr | map(select(
+        (.command? // "") != cmd and
+        (.hooks? == null or (.hooks | map(select(.command == cmd)) | length) == 0)
+      ))
+      end;
 
-    # Remove Notification entries — same dual-format handling
-    if .hooks.Notification then
-      .hooks.Notification = (.hooks.Notification | map(select(
-        (.command? // "") != $notify_cmd and
-        (.hooks? == null or (.hooks | map(select(.command == $notify_cmd)) | length) == 0)
-      )))
-    else . end
+    # Remove from Stop (Claude Code), AfterAgent (Gemini CLI), and Notification,
+    # then delete keys that are empty to keep settings.json clean.
+    .hooks.Stop         = remove_cmd(.hooks.Stop;         $stop_cmd)   |
+    .hooks.AfterAgent   = remove_cmd(.hooks.AfterAgent;   $stop_cmd)   |
+    .hooks.Notification = remove_cmd(.hooks.Notification; $notify_cmd) |
+    if (.hooks.Stop         | length) == 0 then del(.hooks.Stop)         else . end |
+    if (.hooks.AfterAgent   | length) == 0 then del(.hooks.AfterAgent)   else . end |
+    if (.hooks.Notification | length) == 0 then del(.hooks.Notification) else . end
     ' "${settings_file}" > "${tmp}"; then
     mv "${tmp}" "${settings_file}"
   else
@@ -133,12 +141,12 @@ register_hook() {
     return 1
   fi
 
-  _register_hooks_in_file "${CLAUDE_SETTINGS}" "${hook_path}"
+  _register_hooks_in_file "${CLAUDE_SETTINGS}" "${hook_path}" "claude"
   echo "  ✓ Registered hooks in ${CLAUDE_SETTINGS}"
 
-  # Register in Gemini settings if the directory exists
+  # Register in Gemini settings using AfterAgent (Gemini's equivalent of Stop)
   if [[ -d "${HOME}/.gemini" ]] || [[ -f "${GEMINI_SETTINGS}" ]]; then
-    _register_hooks_in_file "${GEMINI_SETTINGS}" "${hook_path}"
+    _register_hooks_in_file "${GEMINI_SETTINGS}" "${hook_path}" "gemini"
     echo "  ✓ Registered hooks in ${GEMINI_SETTINGS}"
   fi
 }
