@@ -32,7 +32,7 @@ elif [[ -n "${STDIN_JSON}" ]]; then
 fi
 
 # Normalised lowercase for branching
-EVENT_TYPE="${EVENT_ARG:-$(echo "${HOOK_EVENT_NAME}" | tr '[:upper:]' '[:lower:]')}"
+EVENT_TYPE="$(echo "${EVENT_ARG:-${HOOK_EVENT_NAME}}" | tr '[:upper:]' '[:lower:]')"
 
 # ── NOTIFY_LEVEL gate ──────────────────────────────────────────────────────────
 NOTIFY_LEVEL="${NOTIFY_LEVEL:-all}"
@@ -52,7 +52,7 @@ PROJECT_DIR=""
 if [[ -n "${GEMINI_PROJECT_DIR:-}" ]]; then
   TOOL_NAME="Gemini CLI"
   PROJECT_DIR="${GEMINI_PROJECT_DIR}"
-elif [[ -n "${GITHUB_COPILOT_SESSION_ID:-}" ]]; then
+elif [[ -n "${GITHUB_COPILOT_SESSION_ID:-}" ]] || [[ "${EVENT_TYPE}" == "sessionend" ]]; then
   TOOL_NAME="Copilot CLI"
   PROJECT_DIR="${PWD}"
 elif [[ -n "${CLAUDE_PROJECT_DIR:-}" ]]; then
