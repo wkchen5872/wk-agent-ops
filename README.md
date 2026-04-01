@@ -46,8 +46,9 @@ bash /path/to/wk-agent-ops/scripts/skills/install.sh python node
 ```
 PM Agent（主環境 develop）          RD Agent（獨立 Worktree）
 ────────────────────────────────    ──────────────────────────
+pm-start  → 啟動 PM Master Session
 /opsx:ff  → 建立規格                wt-new <feature>
-/opsx:new                             └─ 自動建立 worktree
+/opsx:new                             └─ 自動建立 worktree（或 resume）
 /opsx:continue ×4                     └─ 自動啟動 Agent
    proposal → specs                /opsx:apply <feature>
    design → tasks                    └─ 依規格實作
@@ -55,6 +56,7 @@ PM Agent（主環境 develop）          RD Agent（獨立 Worktree）
                                      └─ archive + docs + commit
                                    wt-done <feature>
                                      └─ merge → develop
+                                   wt-resume <feature>  ← 事後回顧
 ```
 
 詳細說明：[docs/multi-agent-workflow.md](docs/multi-agent-workflow.md)
@@ -65,15 +67,26 @@ PM Agent（主環境 develop）          RD Agent（獨立 Worktree）
 
 | 指令 | 說明 |
 |---|---|
-| `wt-new <feature>` | 建立 `feature/<name>` worktree，自動啟動 Agent |
-| `wt-done <feature>` | 合併回 develop，刪除 worktree 與 branch |
+| `wt-new <feature>` | 建立 `feature/<name>` worktree 並啟動 Agent；worktree 已存在則自動 resume |
+| `wt-done <feature>` | 合併回 base branch，刪除 worktree 與 branch |
+| `wt-resume <feature>` | 以 session 名稱恢復 Agent session（worktree 已刪除也可用）|
+| `pm-start` | 啟動或恢復 PM Master Claude session（Plan Mode）|
 
 支援指定 Agent：
 
 ```bash
-wt-new etf-nav-fetcher --agent claude    # 預設
-wt-new etf-nav-fetcher --agent copilot
-wt-new etf-nav-fetcher --agent codex
+wt-new feature123 --agent claude    # 預設
+wt-new feature123 --agent copilot
+wt-new feature123 --agent codex
+
+wt-resume feature123 --agent copilot
+```
+
+支援指定 base branch（預設 `main`）：
+
+```bash
+wt-new feature123 --base develop
+wt-done feature123 --base develop
 ```
 
 ---
@@ -138,9 +151,12 @@ wk-agent-ops/
 │   ├── skills/
 │   │   └── install.sh          ← 安裝擴充套件到目標專案
 │   └── worktree/
-│       ├── install.sh          ← 安裝 wt-new / wt-done 到全域
+│       ├── install.sh          ← 安裝 wt-* / pm-start 到全域 + zsh 補全
 │       ├── wt-new.sh
-│       └── wt-done.sh
+│       ├── wt-done.sh
+│       ├── wt-resume.sh
+│       ├── pm-start.sh
+│       └── _wt                 ← zsh completion
 ├── docs/
 │   ├── multi-agent-workflow.md    ← 多 Agent 工作流完整說明
 │   ├── commit-feature-workflow.md ← /opsx:commit 工作流說明
