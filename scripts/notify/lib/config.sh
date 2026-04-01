@@ -18,10 +18,7 @@ read_config() {
 # Usage: write_config KEY1=VALUE1 KEY2=VALUE2 ...
 write_config() {
   mkdir -p "$(dirname "${AI_NOTIFY_CONFIG}")"
-  : > "${AI_NOTIFY_CONFIG}"
-  for pair in "$@"; do
-    echo "${pair}" >> "${AI_NOTIFY_CONFIG}"
-  done
+  printf '%s\n' "$@" > "${AI_NOTIFY_CONFIG}"
   chmod 600 "${AI_NOTIFY_CONFIG}"
 }
 
@@ -29,18 +26,11 @@ write_config() {
 # Leaves all other keys untouched.
 # Usage: update_config_key KEY VALUE
 update_config_key() {
-  local key="$1"
-  local value="$2"
-
+  local key="$1" value="$2"
   mkdir -p "$(dirname "${AI_NOTIFY_CONFIG}")"
-
   if [[ ! -f "${AI_NOTIFY_CONFIG}" ]]; then
     echo "${key}=\"${value}\"" > "${AI_NOTIFY_CONFIG}"
-    chmod 600 "${AI_NOTIFY_CONFIG}"
-    return
-  fi
-
-  if grep -q "^${key}=" "${AI_NOTIFY_CONFIG}" 2>/dev/null; then
+  elif grep -q "^${key}=" "${AI_NOTIFY_CONFIG}" 2>/dev/null; then
     # Replace existing key (macOS-compatible sed with backup)
     sed -i.bak "s|^${key}=.*|${key}=\"${value}\"|" "${AI_NOTIFY_CONFIG}"
     rm -f "${AI_NOTIFY_CONFIG}.bak"
@@ -54,8 +44,7 @@ update_config_key() {
 # Usage: remove_config_keys_by_prefix PREFIX
 remove_config_keys_by_prefix() {
   local prefix="$1"
-  if [[ -f "${AI_NOTIFY_CONFIG}" ]]; then
-    sed -i.bak "/^${prefix}/d" "${AI_NOTIFY_CONFIG}"
-    rm -f "${AI_NOTIFY_CONFIG}.bak"
-  fi
+  [[ -f "${AI_NOTIFY_CONFIG}" ]] || return 0
+  sed -i.bak "/^${prefix}/d" "${AI_NOTIFY_CONFIG}"
+  rm -f "${AI_NOTIFY_CONFIG}.bak"
 }

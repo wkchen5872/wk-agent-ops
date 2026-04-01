@@ -6,6 +6,26 @@
 CLAUDE_SETTINGS="${HOME}/.claude/settings.json"
 GEMINI_SETTINGS="${HOME}/.gemini/settings.json"
 
+# Write jq output back to a file atomically; cleans up on failure.
+_jq_write() {
+  local file="$1"; shift
+  local tmp
+  tmp="$(mktemp)"
+  if jq "$@" "${file}" > "${tmp}"; then
+    mv "${tmp}" "${file}"
+  else
+    rm -f "${tmp}"
+    return 1
+  fi
+}
+
+# Abort with an error if jq is not installed.
+_require_jq() {
+  command -v jq &>/dev/null && return 0
+  echo "ERROR: jq is required but not installed. Please install jq and re-run." >&2
+  return 1
+}
+
 # Ensure a settings.json file exists with a valid JSON object.
 _ensure_settings_file() {
   local file="$1"
@@ -45,12 +65,6 @@ _register_hooks_in_file() {
   fi
   base_notify_cmd="bash \"${hook_path}\" notification"
 
-  local tmp
-  tmp="$(mktemp)"
-
-  # Build the correctly nested hook group objects.
-  # Claude: async=true, timeout in seconds (15s)
-  # Gemini: no async field (unsupported), timeout in milliseconds (15000ms)
   local stop_group notify_group
   if [[ "${mode}" == "gemini" ]]; then
     stop_group=$(jq -n --arg cmd "${stop_cmd}" \
@@ -66,7 +80,7 @@ _register_hooks_in_file() {
 
   # Idempotent merge: only add group if no existing group already contains this command.
   # Checks both new format (with tool name) and old format (base cmd only) for migration.
-  if jq \
+  _jq_write "${settings_file}" \
     --argjson stop_group "${stop_group}" \
     --argjson notify_group "${notify_group}" \
     --arg stop_cmd "${stop_cmd}" \
@@ -97,12 +111,7 @@ _register_hooks_in_file() {
       else ((.hooks.Notification // []) + [$notify_group])
       end
     )
-    ' "${settings_file}" > "${tmp}"; then
-    mv "${tmp}" "${settings_file}"
-  else
-    rm -f "${tmp}"
-    return 1
-  fi
+    '
 }
 
 # Unregister the telegram-notify hook from a settings.json file.
@@ -120,10 +129,7 @@ _unregister_hooks_in_file() {
   local base_afteragent_cmd="bash \"${hook_path}\" AfterAgent"
   local base_notify_cmd="bash \"${hook_path}\" notification"
 
-  local tmp
-  tmp="$(mktemp)"
-
-  if jq \
+  _jq_write "${settings_file}" \
     --arg base_stop_cmd "${base_stop_cmd}" \
     --arg base_afteragent_cmd "${base_afteragent_cmd}" \
     --arg base_notify_cmd "${base_notify_cmd}" \
@@ -150,23 +156,14 @@ _unregister_hooks_in_file() {
     if (.hooks.Stop         | length) == 0 then del(.hooks.Stop)         else . end |
     if (.hooks.AfterAgent   | length) == 0 then del(.hooks.AfterAgent)   else . end |
     if (.hooks.Notification | length) == 0 then del(.hooks.Notification) else . end
-    ' "${settings_file}" > "${tmp}"; then
-    mv "${tmp}" "${settings_file}"
-  else
-    rm -f "${tmp}"
-    return 1
-  fi
+    '
 }
 
 # Public: register the telegram-notify hook in all supported AI CLI settings files.
 # Usage: register_hook <deployed_hook_path>
 register_hook() {
   local hook_path="$1"
-
-  if ! command -v jq &>/dev/null; then
-    echo "ERROR: jq is required but not installed. Please install jq and re-run." >&2
-    return 1
-  fi
+  _require_jq || return 1
 
   _register_hooks_in_file "${CLAUDE_SETTINGS}" "${hook_path}" "claude"
   echo "  ✓ Registered hooks in ${CLAUDE_SETTINGS}"
@@ -188,10 +185,7 @@ register_hook_copilot() {
   local hooks_dir="${repo_root}/.github/hooks"
   local hooks_file="${hooks_dir}/hooks.json"
 
-  if ! command -v jq &>/dev/null; then
-    echo "ERROR: jq is required but not installed. Please install jq and re-run." >&2
-    return 1
-  fi
+  _require_jq || return 1
 
   mkdir -p "${hooks_dir}"
 
@@ -203,10 +197,7 @@ register_hook_copilot() {
   local session_end_cmd="bash \"${hook_path}\" sessionEnd \"Copilot CLI\""
   local base_session_end_cmd="bash \"${hook_path}\" sessionEnd"
 
-  local tmp
-  tmp="$(mktemp)"
-
-  if jq \
+  if _jq_write "${hooks_file}" \
     --arg session_end_cmd "${session_end_cmd}" \
     --arg base_session_end_cmd "${base_session_end_cmd}" \
     '
@@ -221,11 +212,9 @@ register_hook_copilot() {
       else ((.hooks.sessionEnd // []) + [{"type":"command","bash":$session_end_cmd}])
       end
     )
-    ' "${hooks_file}" > "${tmp}"; then
-    mv "${tmp}" "${hooks_file}"
+    '; then
     echo "  ✓ Registered Copilot hooks in ${hooks_file}"
   else
-    rm -f "${tmp}"
     echo "ERROR: Failed to write ${hooks_file}" >&2
     return 1
   fi
@@ -243,18 +232,12 @@ unregister_hook_copilot() {
     return
   fi
 
-  if ! command -v jq &>/dev/null; then
-    echo "ERROR: jq is required but not installed. Please install jq and re-run." >&2
-    return 1
-  fi
+  _require_jq || return 1
 
   # Base command prefix matches both old (without tool name) and new (with tool name) format.
   local base_session_end_cmd="bash \"${hook_path}\" sessionEnd"
 
-  local tmp
-  tmp="$(mktemp)"
-
-  if jq \
+  if _jq_write "${hooks_file}" \
     --arg base_session_end_cmd "${base_session_end_cmd}" \
     '
     def remove_bash_cmd(arr; base_cmd):
@@ -266,12 +249,8 @@ unregister_hook_copilot() {
 
     .hooks.sessionEnd = remove_bash_cmd(.hooks.sessionEnd; $base_session_end_cmd) |
     if (.hooks.sessionEnd | length) == 0 then del(.hooks.sessionEnd) else . end
-    ' "${hooks_file}" > "${tmp}"; then
-    mv "${tmp}" "${hooks_file}"
+    '; then
     echo "  ✓ Unregistered Copilot hooks from ${hooks_file}"
-  else
-    rm -f "${tmp}"
-    return 1
   fi
 }
 
@@ -279,11 +258,7 @@ unregister_hook_copilot() {
 # Usage: unregister_hook <deployed_hook_path>
 unregister_hook() {
   local hook_path="$1"
-
-  if ! command -v jq &>/dev/null; then
-    echo "ERROR: jq is required but not installed. Please install jq and re-run." >&2
-    return 1
-  fi
+  _require_jq || return 1
 
   _unregister_hooks_in_file "${CLAUDE_SETTINGS}" "${hook_path}"
   echo "  ✓ Unregistered hooks from ${CLAUDE_SETTINGS}"
