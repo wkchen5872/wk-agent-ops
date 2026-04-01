@@ -45,11 +45,8 @@ EVENT_TYPE="$(echo "${EVENT_ARG:-${HOOK_EVENT_NAME}}" | tr '[:upper:]' '[:lower:
 
 # ── NOTIFY_LEVEL gate ──────────────────────────────────────────────────────────
 NOTIFY_LEVEL="${NOTIFY_LEVEL:-all}"
-if [[ "${NOTIFY_LEVEL}" == "notify_only" && "${EVENT_TYPE}" == "stop" ]]; then
-  exit 0
-fi
-# Also suppress sessionEnd (Copilot's equivalent of stop) when notify_only
-if [[ "${NOTIFY_LEVEL}" == "notify_only" && "${EVENT_TYPE}" == "sessionend" ]]; then
+# Suppress stop and sessionEnd (Copilot's equivalent of stop) when notify_only
+if [[ "${NOTIFY_LEVEL}" == "notify_only" && ("${EVENT_TYPE}" == "stop" || "${EVENT_TYPE}" == "sessionend") ]]; then
   exit 0
 fi
 

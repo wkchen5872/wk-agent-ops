@@ -28,6 +28,10 @@
 
 set -euo pipefail
 
+usage() {
+  echo "Usage: wt-work <feature-name> [--base <branch>] [--agent claude|copilot|gemini|codex] [--session <id|name>]"
+}
+
 NAME=""
 AGENT="claude"
 BASE_BRANCH="main"
@@ -49,7 +53,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     -*)
       echo "Unknown option: $1"
-      echo "Usage: wt-work <feature-name> [--base <branch>] [--agent claude|copilot|gemini|codex] [--session <id|name>]"
+      usage
       exit 1
       ;;
     *)
@@ -57,7 +61,7 @@ while [[ $# -gt 0 ]]; do
         NAME="$1"
       else
         echo "Unexpected argument: $1"
-        echo "Usage: wt-work <feature-name> [--base <branch>] [--agent claude|copilot|gemini|codex] [--session <id|name>]"
+        usage
         exit 1
       fi
       shift
@@ -66,15 +70,18 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$NAME" ]]; then
-  echo "Usage: wt-work <feature-name> [--base <branch>] [--agent claude|copilot|gemini|codex] [--session <id|name>]"
+  usage
   echo "Example: wt-work feature123"
   exit 1
 fi
 
-if [[ "$AGENT" != "claude" && "$AGENT" != "copilot" && "$AGENT" != "gemini" && "$AGENT" != "codex" ]]; then
-  echo "Error: --agent must be one of: claude, copilot, gemini, codex (got: $AGENT)"
-  exit 1
-fi
+case "$AGENT" in
+  claude|copilot|gemini|codex) ;;
+  *)
+    echo "Error: --agent must be one of: claude, copilot, gemini, codex (got: $AGENT)"
+    exit 1
+    ;;
+esac
 
 REPO=$(git rev-parse --show-toplevel 2>/dev/null)
 
@@ -86,33 +93,31 @@ fi
 WORKTREE_DIR="$REPO/.worktrees/$NAME"
 BRANCH="feature/$NAME"
 
-if [[ -d "$WORKTREE_DIR" ]]; then
-  # ── RESUME PATH ──────────────────────────────────────────────────────────
-  if [[ "${TERM_PROGRAM:-}" == "iTerm.app" ]]; then
-    printf "\033]1337;SetBadgeFormat=%s\a" "$(echo -n "RD: $NAME" | base64)"
-  fi
-
+print_banner() {
+  local title="$1" mode_label="$2" color="$3"
+  local session_label="${SESSION:-RD: ${NAME}}"
   echo ""
   echo -e "\033[1;34m══════════════════════════════════════════════════════\033[0m"
-  echo -e "\033[1;33m  🔄 RESUMING: feature/${NAME}\033[0m"
+  echo -e "${color}  ${title}: feature/${NAME}\033[0m"
   echo -e "\033[1;34m══════════════════════════════════════════════════════\033[0m"
-  echo -e "\033[1;33m  Mode     : resume\033[0m"
-  if [[ -n "$SESSION" ]]; then
-  echo -e "\033[1;33m  Session  : ${SESSION}\033[0m"
-  else
-  echo -e "\033[1;33m  Session  : RD: ${NAME}\033[0m"
-  fi
+  echo -e "${color}  Mode     : ${mode_label}\033[0m"
+  echo -e "\033[1;33m  Session  : ${session_label}\033[0m"
   echo -e "\033[1;36m  Dir      : ${WORKTREE_DIR}\033[0m"
   echo -e "\033[1;36m  Branch   : feature/${NAME}\033[0m"
   echo -e "\033[1;35m  Agent    : ${AGENT}\033[0m"
   echo -e "\033[1;34m══════════════════════════════════════════════════════\033[0m"
   echo ""
+}
 
-  cd "$WORKTREE_DIR"
+# $1 = "true" for new session, "false" for resume
+launch_agent() {
+  local is_new="$1"
   case "$AGENT" in
     claude)
       if [[ -n "$SESSION" ]]; then
         claude --resume "$SESSION" "/opsx:apply $NAME" --enable-auto-mode
+      elif [[ "$is_new" == "true" ]]; then
+        claude --name "RD: $NAME" "/opsx:apply $NAME" --enable-auto-mode
       else
         claude --resume "RD: $NAME" "/opsx:apply $NAME" --enable-auto-mode
       fi
@@ -120,6 +125,8 @@ if [[ -d "$WORKTREE_DIR" ]]; then
     copilot)
       if [[ -n "$SESSION" ]]; then
         copilot --resume="$SESSION" --allow-all -i "/openspec-apply-change $NAME"
+      elif [[ "$is_new" == "true" ]]; then
+        copilot --allow-all -i "/openspec-apply-change $NAME"
       else
         copilot --resume --allow-all -i "/openspec-apply-change $NAME"
       fi
@@ -127,6 +134,8 @@ if [[ -d "$WORKTREE_DIR" ]]; then
     gemini)
       if [[ -n "$SESSION" ]]; then
         gemini --resume "$SESSION" -i "/opsx:apply $NAME"
+      elif [[ "$is_new" == "true" ]]; then
+        gemini -i "/opsx:apply $NAME"
       else
         gemini --resume latest -i "/opsx:apply $NAME"
       fi
@@ -135,6 +144,16 @@ if [[ -d "$WORKTREE_DIR" ]]; then
       codex "/opsx:apply $NAME"
       ;;
   esac
+}
+
+if [[ -d "$WORKTREE_DIR" ]]; then
+  # ── RESUME PATH ──────────────────────────────────────────────────────────
+  if [[ "${TERM_PROGRAM:-}" == "iTerm.app" ]]; then
+    printf "\033]1337;SetBadgeFormat=%s\a" "$(echo -n "RD: $NAME" | base64)"
+  fi
+  print_banner "🔄 RESUMING" "resume" "\033[1;33m"
+  cd "$WORKTREE_DIR"
+  launch_agent "false"
 else
   # ── NEW SESSION PATH ──────────────────────────────────────────────────────
   if git -C "$REPO" show-ref --quiet "refs/heads/$BRANCH"; then
@@ -167,49 +186,7 @@ else
     printf "\033]1337;SetBadgeFormat=%s\a" "$(echo -n "RD: $NAME" | base64)"
   fi
 
-  echo ""
-  echo -e "\033[1;34m══════════════════════════════════════════════════════\033[0m"
-  echo -e "\033[1;32m  🚀 NEW SESSION: feature/${NAME}\033[0m"
-  echo -e "\033[1;34m══════════════════════════════════════════════════════\033[0m"
-  echo -e "\033[1;32m  Mode     : new\033[0m"
-  if [[ -n "$SESSION" ]]; then
-  echo -e "\033[1;33m  Session  : ${SESSION}\033[0m"
-  else
-  echo -e "\033[1;33m  Session  : RD: ${NAME}\033[0m"
-  fi
-  echo -e "\033[1;36m  Dir      : ${WORKTREE_DIR}\033[0m"
-  echo -e "\033[1;36m  Branch   : feature/${NAME}\033[0m"
-  echo -e "\033[1;35m  Agent    : ${AGENT}\033[0m"
-  echo -e "\033[1;34m══════════════════════════════════════════════════════\033[0m"
-  echo ""
-
+  print_banner "🚀 NEW SESSION" "new" "\033[1;32m"
   cd "$WORKTREE_DIR"
-
-  # title 會被 agent CLI 覆蓋，title 是 conversation 的名稱
-  case "$AGENT" in
-    claude)
-      if [[ -n "$SESSION" ]]; then
-        claude --resume "$SESSION" "/opsx:apply $NAME" --enable-auto-mode
-      else
-        claude --name "RD: $NAME" "/opsx:apply $NAME" --enable-auto-mode
-      fi
-      ;;
-    copilot)
-      if [[ -n "$SESSION" ]]; then
-        copilot --resume="$SESSION" --allow-all -i "/openspec-apply-change $NAME"
-      else
-        copilot --allow-all -i "/openspec-apply-change $NAME"
-      fi
-      ;;
-    gemini)
-      if [[ -n "$SESSION" ]]; then
-        gemini --resume "$SESSION" -i "/opsx:apply $NAME"
-      else
-        gemini -i "/opsx:apply $NAME"
-      fi
-      ;;
-    codex)
-      codex "/opsx:apply $NAME"
-      ;;
-  esac
+  launch_agent "true"
 fi
