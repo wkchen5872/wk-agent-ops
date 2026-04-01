@@ -1,6 +1,6 @@
 # Telegram Notify Hook — Quick Setup
 
-Get Telegram notifications when Claude Code (or Gemini CLI) finishes a task or needs your attention.
+Get Telegram notifications when Claude Code, Gemini CLI, or Copilot CLI finishes a task or needs your attention.
 
 ---
 
@@ -17,7 +17,7 @@ Select **setup** from the menu. Claude will run the interactive wizard in your t
 ### Option B: Manual
 
 ```bash
-bash scripts/telegram-notify/install.sh
+bash scripts/notify/telegram/install.sh
 ```
 
 The wizard guides you through:
@@ -36,6 +36,7 @@ The wizard guides you through:
 | Config (credentials) | `~/.config/ai-notify/config` (chmod 600) |
 | Deployed hook script | `~/.config/ai-notify/hooks/telegram-notify.sh` |
 | Claude Code hooks | `~/.claude/settings.json` → `hooks.Stop`, `hooks.Notification` |
+| Copilot CLI hooks (opt-in) | `.github/hooks/hooks.json` → `sessionEnd`, `userPromptSubmitted` |
 
 ---
 
@@ -51,7 +52,7 @@ Control which events trigger a notification:
 **Change level after install:**
 
 ```bash
-bash scripts/telegram-notify/update.sh notify_level
+bash scripts/notify/telegram/update.sh notify_level
 # or
 /notify-setup → update
 ```
@@ -99,12 +100,12 @@ Waiting for user interaction... #Notification
 
 ```bash
 # Interactive menu
-bash scripts/telegram-notify/update.sh
+bash scripts/notify/telegram/update.sh
 
 # Direct key update
-bash scripts/telegram-notify/update.sh token
-bash scripts/telegram-notify/update.sh chat_id
-bash scripts/telegram-notify/update.sh notify_level
+bash scripts/notify/telegram/update.sh token
+bash scripts/notify/telegram/update.sh chat_id
+bash scripts/notify/telegram/update.sh notify_level
 
 # Or in Claude Code
 /notify-setup → update
@@ -131,7 +132,7 @@ Or in Claude Code: `/notify-setup → test`
 ## Rollback
 
 ```bash
-bash scripts/telegram-notify/uninstall.sh
+bash scripts/notify/telegram/uninstall.sh
 # or
 /notify-setup → uninstall
 ```
@@ -167,7 +168,7 @@ Check `~/.claude/settings.json` contains:
 }
 ```
 
-If missing, re-run `bash scripts/telegram-notify/install.sh` (idempotent).
+If missing, re-run `bash scripts/notify/telegram/install.sh` (idempotent).
 
 ---
 
