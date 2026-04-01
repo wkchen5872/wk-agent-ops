@@ -18,7 +18,7 @@ bash scripts/workflow/install.sh
 source ~/.zshrc
 ```
 
-安裝後可在任何 repo 使用 `wt-new`、`wt-done`、`wt-resume` 與 `pm-start`。
+安裝後可在任何 repo 使用 `wt-work`、`wt-done`、`wt-resume` 與 `pm-start`。
 
 ### 安裝 Agent 擴充套件（到目標專案）
 
@@ -46,7 +46,7 @@ bash /path/to/wk-agent-ops/scripts/skills/install.sh python node
 ```
 PM Agent（主環境 main）             RD Agent（獨立 Worktree）
 ────────────────────────────────    ──────────────────────────
-/opsx:ff  → 建立規格                wt-new <feature>
+/opsx:ff  → 建立規格                wt-work <feature>
 /opsx:new                             └─ 自動建立 worktree
 /opsx:continue ×4                     └─ 自動啟動 Agent
    proposal → specs                /opsx:apply <feature>
@@ -66,25 +66,34 @@ PM Agent（主環境 main）             RD Agent（獨立 Worktree）
 
 | 指令 | 說明 |
 |---|---|
-| `wt-new <feature>` | 建立 `feature/<name>` worktree 並啟動 Agent；worktree 已存在則自動 resume |
+| `wt-work <feature>` | 建立 `feature/<name>` worktree 並啟動 Agent；worktree 已存在則自動 resume，均帶入 `/opsx:apply` |
 | `wt-done <feature>` | 合併回 base branch，刪除 worktree 與 branch |
-| `wt-resume <feature>` | 以 session 名稱恢復 Agent session（worktree 已刪除也可用）|
+| `wt-resume <feature>` | 恢復 Agent session（無 `--session` 時顯示互動選單；worktree 已刪除也可用）|
 | `pm-start` | 啟動或恢復 PM Master Claude session（Plan Mode）|
 
-支援指定 Agent：
+支援指定 Agent（含 Gemini）：
 
 ```bash
-wt-new feature123 --agent claude    # 預設
-wt-new feature123 --agent copilot
-wt-new feature123 --agent codex
+wt-work feature123 --agent claude    # 預設
+wt-work feature123 --agent copilot
+wt-work feature123 --agent gemini
+wt-work feature123 --agent codex
 
 wt-resume feature123 --agent copilot
+wt-resume feature123 --agent gemini
+```
+
+支援指定 session（`--session` / `-s`）：
+
+```bash
+wt-work feature123 --session a469f20a-a791-4c6f-af7a-5a0e599527f4
+wt-resume feature123 --session "RD: feature123"
 ```
 
 支援指定 base branch（預設 `main`）：
 
 ```bash
-wt-new feature123 --base main
+wt-work feature123 --base main
 wt-done feature123 --base main
 ```
 
@@ -183,5 +192,5 @@ mkdir -p template/<profile>/hooks
 ## 相依
 
 - [OpenSpec CLI](https://github.com/Fission-AI/OpenSpec)：`npm install -g @fission-ai/openspec`
-- Claude Code CLI（`wt-new` 預設 Agent）
+- Claude Code CLI（`wt-work` 預設 Agent；亦支援 Copilot、Gemini、Codex）
 - bash 4+、rsync、git 2.5+（worktree 支援）

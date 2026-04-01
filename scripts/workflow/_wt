@@ -1,17 +1,36 @@
-#compdef wt-new wt-done wt-resume
+#compdef wt-work wt-done wt-resume
 
 _wt() {
+  local context state state_descr line
+  typeset -A opt_args
+
   local repo
   repo=$(git rev-parse --show-toplevel 2>/dev/null)
 
-  if [[ -z "$repo" || ! -d "$repo/.worktrees" ]]; then
-    return 0
+  local -a features
+  if [[ -n "$repo" && -d "$repo/.worktrees" ]]; then
+    features=("${(@f)$(ls "$repo/.worktrees/" 2>/dev/null)}")
   fi
 
-  local -a features
-  features=("${(@f)$(ls "$repo/.worktrees/" 2>/dev/null)}")
+  local -a agents
+  agents=(claude copilot gemini codex)
+
+  case "$service" in
+    wt-work|wt-resume)
+      _arguments \
+        '1:feature name:((${(q)features[@]}))' \
+        {--agent,-a}'[agent to use]:agent:(claude copilot gemini codex)' \
+        {--session,-s}'[session ID or name]:session ID or name: ' \
+        && return 0
+      ;;
+    wt-done)
+      _arguments \
+        '1:feature name:((${(q)features[@]}))' \
+        && return 0
+      ;;
+  esac
 
   _describe 'feature names' features
 }
 
-compdef _wt wt-new wt-done wt-resume
+compdef _wt wt-work wt-done wt-resume
