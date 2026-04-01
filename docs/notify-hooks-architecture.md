@@ -102,14 +102,16 @@ AI CLI event fires (e.g., task complete)
 ~/.claude/settings.json hooks.Stop[...] or hooks.Notification[...]
         │
         ▼
-bash ~/.config/ai-notify/hooks/telegram-notify.sh <event-type>
+bash ~/.config/ai-notify/hooks/telegram-notify.sh <event-type> [tool-name]
   (stdin: JSON payload from AI CLI)
         │
         ├─ source ~/.config/ai-notify/config
-        ├─ check TELEGRAM_ENABLED, credentials
+        ├─ check TELEGRAM_ENABLED, credentials (skipped in dry-run)
         ├─ check NOTIFY_LEVEL gate
-        ├─ detect tool name + project from env / stdin
-        ├─ build message
+        ├─ TOOL_NAME = $2 arg (set by registry.sh) or "AI CLI"
+        ├─ PROJECT_DIR = GEMINI_PROJECT_DIR || CLAUDE_PROJECT_DIR || PWD
+        ├─ SESSION_LABEL from stdin JSON (.session_id / .sessionId) or GITHUB_COPILOT_SESSION_ID
+        ├─ build message (title includes session label when available)
         └─ curl --silent --max-time 10 Telegram API || true
            (always exits 0 — never blocks AI CLI)
 ```
@@ -171,10 +173,10 @@ Copilot CLI uses a different hook mechanism from Claude Code and Gemini CLI. Hoo
   "version": 1,
   "hooks": {
     "sessionEnd": [
-      { "type": "bash", "command": "bash \"~/.config/ai-notify/hooks/telegram-notify.sh\" sessionEnd" }
+      { "type": "command", "bash": "bash \"/Users/<user>/.config/ai-notify/hooks/telegram-notify.sh\" sessionEnd \"Copilot CLI\"" }
     ],
     "userPromptSubmitted": [
-      { "type": "bash", "command": "bash \"~/.config/ai-notify/hooks/telegram-notify.sh\" userPromptSubmitted" }
+      { "type": "command", "bash": "bash \"/Users/<user>/.config/ai-notify/hooks/telegram-notify.sh\" userPromptSubmitted \"Copilot CLI\"" }
     ]
   }
 }
@@ -187,9 +189,21 @@ Copilot CLI uses a different hook mechanism from Claude Code and Gemini CLI. Hoo
 | `sessionEnd` | `stop` (task complete) | 🟢 Task Complete |
 | `userPromptSubmitted` | `notification` (action required) | 🟠 Action Required |
 
-### Detection in hook.sh
+### Tool name in hook.sh
 
-`hook.sh` detects Copilot CLI via the `GITHUB_COPILOT_SESSION_ID` environment variable. Detection order: Gemini CLI → Copilot CLI → Claude Code → "AI CLI".
+`hook.sh` receives the tool name as `$2` CLI argument, hardcoded by `registry.sh` at registration time:
+
+| Caller | `$1` (event) | `$2` (tool name) |
+|--------|-------------|-----------------|
+| Claude Code | `stop` / `notification` | `"Claude Code"` |
+| Gemini CLI | `AfterAgent` / `notification` | `"Gemini CLI"` |
+| Copilot CLI | `sessionEnd` | `"Copilot CLI"` |
+
+When `$2` is absent (old-format registered hooks), `TOOL_NAME` defaults to `"AI CLI"`. Run `fix-hooks` to upgrade:
+
+```bash
+bash scripts/notify/telegram/update.sh fix-hooks
+```
 
 ### Setup
 

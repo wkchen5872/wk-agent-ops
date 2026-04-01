@@ -1,17 +1,26 @@
 #!/usr/bin/env bash
-# Telegram notification hook for AI CLI (Claude Code / Gemini CLI).
+# Telegram notification hook for AI CLI (Claude Code / Gemini CLI / Copilot CLI).
 # Deployed to: ~/.config/ai-notify/hooks/telegram-notify.sh
-# Called by AI CLI with: $1 = event type (stop | notification), JSON on stdin.
+# Called with: $1 = event type (stop | notification | sessionEnd | AfterAgent),
+#              $2 = tool name (optional; "Claude Code" | "Gemini CLI" | "Copilot CLI"),
+#              JSON on stdin.
 # Always exits 0 — never blocks the calling AI CLI.
 
 # ── Load config ────────────────────────────────────────────────────────────────
+# Save env vars that should take priority over config file values (e.g., in tests).
+_SAVED_NOTIFY_LEVEL="${NOTIFY_LEVEL:-}"
 # shellcheck source=/dev/null
 source "${HOME}/.config/ai-notify/config" 2>/dev/null || true
+# Restore explicitly-set env vars (env var > config file, following Unix convention).
+[[ -n "${_SAVED_NOTIFY_LEVEL}" ]] && NOTIFY_LEVEL="${_SAVED_NOTIFY_LEVEL}"
 
 # ── Guard: skip if disabled or credentials missing ─────────────────────────────
-[[ "${TELEGRAM_ENABLED}" != "true" ]] && exit 0
-[[ -z "${TELEGRAM_BOT_TOKEN}" ]] && exit 0
-[[ -z "${TELEGRAM_CHAT_ID}" ]] && exit 0
+# Bypass credential guard in dry-run mode — no HTTP request will be made.
+if [[ "${TELEGRAM_DRY_RUN:-}" != "true" ]]; then
+  [[ "${TELEGRAM_ENABLED}" != "true" ]] && exit 0
+  [[ -z "${TELEGRAM_BOT_TOKEN}" ]] && exit 0
+  [[ -z "${TELEGRAM_CHAT_ID}" ]] && exit 0
+fi
 
 # ── Read stdin ─────────────────────────────────────────────────────────────────
 STDIN_JSON=""
@@ -45,25 +54,47 @@ if [[ "${NOTIFY_LEVEL}" == "notify_only" && "${EVENT_TYPE}" == "sessionend" ]]; 
 fi
 
 # ── Detect AI CLI tool and project ────────────────────────────────────────────
-# Detection order: GEMINI_PROJECT_DIR → GITHUB_COPILOT_SESSION_ID → CLAUDE_PROJECT_DIR → "AI CLI"
-TOOL_NAME="AI CLI"
-PROJECT_DIR=""
-
-if [[ -n "${GEMINI_PROJECT_DIR:-}" ]]; then
-  TOOL_NAME="Gemini CLI"
-  PROJECT_DIR="${GEMINI_PROJECT_DIR}"
-elif [[ -n "${GITHUB_COPILOT_SESSION_ID:-}" ]] || [[ "${EVENT_TYPE}" == "sessionend" ]]; then
-  TOOL_NAME="Copilot CLI"
-  PROJECT_DIR="${PWD}"
-elif [[ -n "${CLAUDE_PROJECT_DIR:-}" ]]; then
-  TOOL_NAME="Claude Code"
-  PROJECT_DIR="${CLAUDE_PROJECT_DIR}"
-fi
+# TOOL_NAME is supplied by the caller via $2 (hardcoded in registry.sh per tool).
+# PROJECT_DIR resolves from env vars set by each AI CLI, falling back to PWD.
+TOOL_NAME="${2:-AI CLI}"
+PROJECT_DIR="${GEMINI_PROJECT_DIR:-${CLAUDE_PROJECT_DIR:-${PWD}}}"
 
 PROJECT_NAME=""
 [[ -n "${PROJECT_DIR}" ]] && PROJECT_NAME="$(basename "${PROJECT_DIR}")"
 
 TIMESTAMP="$(date '+%Y-%m-%d %H:%M:%S')"
+
+# ── Session identification ─────────────────────────────────────────────────────
+# Source priority: stdin JSON .session_id (Claude) → stdin JSON .sessionId (Copilot)
+# → env var GITHUB_COPILOT_SESSION_ID (first 8 chars, always prefixed with #)
+SESSION_LABEL=""
+SESSION_ID=""
+
+if command -v jq &>/dev/null && [[ -n "${STDIN_JSON}" ]]; then
+  SESSION_ID="$(echo "${STDIN_JSON}" | jq -r '.session_id // .sessionId // empty' 2>/dev/null)"
+elif [[ -n "${STDIN_JSON}" ]]; then
+  SESSION_ID="$(echo "${STDIN_JSON}" | grep -o '"session_id"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')"
+  if [[ -z "${SESSION_ID}" ]]; then
+    SESSION_ID="$(echo "${STDIN_JSON}" | grep -o '"sessionId"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*"sessionId"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')"
+  fi
+fi
+
+# Format stdin-sourced session: UUID (standard 8-4-4-4-12 format) → #<first8>; else direct
+if [[ -n "${SESSION_ID}" ]]; then
+  if [[ "${SESSION_ID}" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]; then
+    SESSION_LABEL="#${SESSION_ID:0:8}"
+  else
+    SESSION_LABEL="${SESSION_ID}"
+  fi
+fi
+
+# Env var fallback: always prefix with # (it's a raw ID fragment, not a readable name)
+if [[ -z "${SESSION_LABEL}" ]] && [[ -n "${GITHUB_COPILOT_SESSION_ID:-}" ]]; then
+  SESSION_LABEL="#${GITHUB_COPILOT_SESSION_ID:0:8}"
+fi
+
+TITLE_SUFFIX=""
+[[ -n "${SESSION_LABEL}" ]] && TITLE_SUFFIX=" (${SESSION_LABEL})"
 
 # ── Hook event tag (appended to message line) ─────────────────────────────────
 EVENT_TAG="#${HOOK_EVENT_NAME:-${EVENT_TYPE:-unknown}}"
@@ -73,7 +104,7 @@ MESSAGE=""
 
 case "${EVENT_TYPE}" in
   stop|afteragent|sessionend)
-    MESSAGE="🟢 **Task Complete**
+    MESSAGE="🟢 **Task Complete**${TITLE_SUFFIX}
 
 🤖 ${TOOL_NAME}
 📂 ${PROJECT_NAME}
@@ -92,7 +123,7 @@ Process finished successfully ${EVENT_TAG}"
 
     [[ -z "${NOTIFICATION_MSG}" ]] && NOTIFICATION_MSG="Waiting for user interaction..."
 
-    MESSAGE="🟠 **Action Required**
+    MESSAGE="🟠 **Action Required**${TITLE_SUFFIX}
 
 🤖 ${TOOL_NAME}
 📂 ${PROJECT_NAME}
@@ -112,7 +143,12 @@ ${EVENT_TAG}"
     ;;
 esac
 
-# ── Send via Telegram Bot API ──────────────────────────────────────────────────
+# ── Send via Telegram Bot API (or dry-run) ─────────────────────────────────────
+if [[ "${TELEGRAM_DRY_RUN:-}" == "true" ]]; then
+  echo "${MESSAGE}"
+  exit 0
+fi
+
 TELEGRAM_API="https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage"
 
 curl \
