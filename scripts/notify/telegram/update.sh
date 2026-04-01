@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Update individual Telegram Notify config settings.
-# Usage: bash scripts/telegram-notify/update.sh [token|chat_id|notify_level|fix-hooks]
+# Usage: bash scripts/notify/telegram/update.sh [token|chat_id|notify_level|fix-hooks]
 # fix-hooks: re-registers hooks with the correct format (use to fix format issues).
 set -euo pipefail
 
@@ -24,6 +24,7 @@ show_menu() {
   echo "  2) Chat ID"
   echo "  3) Notification Level (current: ${NOTIFY_LEVEL:-all})"
   echo "  4) Fix hook registration (re-register with correct format)"
+  echo "  5) Register Copilot CLI hooks"
   echo "  q) Quit"
   echo ""
 }
@@ -93,16 +94,45 @@ fix_hooks() {
   unregister_hook "${DEPLOYED_HOOK}"
   register_hook "${DEPLOYED_HOOK}"
 
+  # Re-register Copilot hooks if hooks.json already exists
+  local repo_root
+  repo_root="$(git rev-parse --show-toplevel 2>/dev/null || echo "${PWD}")"
+  if [[ -f "${repo_root}/.github/hooks/hooks.json" ]]; then
+    unregister_hook_copilot "${DEPLOYED_HOOK}"
+    register_hook_copilot "${DEPLOYED_HOOK}"
+  fi
+
   echo ""
   echo "✓ Hooks re-registered. Restart Claude Code to apply changes."
 }
 
+register_copilot_hooks() {
+  # shellcheck source=../notify/lib/registry.sh
+  source "${LIB_DIR}/registry.sh"
+
+  echo ""
+  echo "── Register Copilot CLI Hooks ──"
+  echo ""
+
+  if [[ ! -f "${DEPLOYED_HOOK}" ]]; then
+    echo "ERROR: Deployed hook not found at ${DEPLOYED_HOOK}"
+    echo "Please run install.sh first."
+    return 1
+  fi
+
+  register_hook_copilot "${DEPLOYED_HOOK}"
+  echo "  ℹ You may want to commit .github/hooks/hooks.json to your repository."
+  echo ""
+  echo "✓ Copilot CLI hooks registered."
+}
+
 # Handle direct key argument
 case "${KEY}" in
-  token)        update_token;        exit 0 ;;
-  chat_id)      update_chat_id;      exit 0 ;;
-  notify_level) update_notify_level; exit 0 ;;
-  fix-hooks)    fix_hooks;           exit 0 ;;
+  token)          update_token;          exit 0 ;;
+  chat_id)        update_chat_id;        exit 0 ;;
+  notify_level)   update_notify_level;   exit 0 ;;
+  fix-hooks)      fix_hooks;             exit 0 ;;
+  copilot-hooks)  register_copilot_hooks; exit 0 ;;
   "")
     # Interactive menu
     while true; do
@@ -113,6 +143,7 @@ case "${KEY}" in
         2) update_chat_id ;;
         3) update_notify_level ;;
         4) fix_hooks ;;
+        5) register_copilot_hooks ;;
         q|Q) echo ""; echo "Done."; exit 0 ;;
         *) echo "Invalid choice." ;;
       esac
@@ -120,7 +151,7 @@ case "${KEY}" in
     ;;
   *)
     echo "Unknown key: ${KEY}"
-    echo "Usage: $0 [token|chat_id|notify_level|fix-hooks]"
+    echo "Usage: $0 [token|chat_id|notify_level|fix-hooks|copilot-hooks]"
     exit 1
     ;;
 esac

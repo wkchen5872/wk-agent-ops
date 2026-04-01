@@ -19,17 +19,15 @@ scripts/
   notify/
     lib/
       config.sh        # Shared: read/write ~/.config/ai-notify/config
-      registry.sh      # Shared: register/unregister hooks in AI CLI settings.json
+      registry.sh      # Shared: register/unregister hooks in AI CLI settings
+    telegram/
+      hook.sh          # Notification hook (called by AI CLI at runtime)
+      install.sh       # Interactive install wizard
+      update.sh        # Update individual config keys
+      uninstall.sh     # Remove hooks and config
+    line/
+      .placeholder     # Reserved for future Line Notify implementation
     README.md          # Provider extension guide
-
-  telegram-notify/
-    hook.sh            # Notification hook (called by AI CLI at runtime)
-    install.sh         # Interactive install wizard
-    update.sh          # Update individual config keys
-    uninstall.sh       # Remove hooks and config
-
-  line-notify/
-    .placeholder       # Reserved for future Line Notify implementation
 
 .claude/
   commands/
@@ -42,7 +40,12 @@ scripts/
 ~/.config/ai-notify/
   config               # Shell-sourceable key=value (chmod 600)
   hooks/
-    telegram-notify.sh # Deployed copy of scripts/telegram-notify/hook.sh
+    telegram-notify.sh # Deployed copy of scripts/notify/telegram/hook.sh
+
+# Copilot CLI hooks (opt-in, created by install.sh if user accepts):
+.github/
+  hooks/
+    hooks.json         # Copilot CLI hook config (version:1)
 ```
 
 ---
@@ -72,7 +75,7 @@ NOTIFY_LEVEL=all           # all | notify_only
 ## Installation Flow
 
 ```
-User runs: bash scripts/telegram-notify/install.sh
+User runs: bash scripts/notify/telegram/install.sh
           (or: /notify-setup → setup in Claude Code)
 
 Step 1  Guide user to create Telegram Bot via @BotFather
@@ -82,7 +85,8 @@ Step 4  Choose NOTIFY_LEVEL
 Step 5  Write ~/.config/ai-notify/config (chmod 600)
 Step 6  Deploy hook: copy hook.sh → ~/.config/ai-notify/hooks/telegram-notify.sh
 Step 7  Register hooks in ~/.claude/settings.json (and ~/.gemini/settings.json if present)
-Step 8  Send test notification to confirm end-to-end
+Step 8  Optionally register Copilot CLI hooks in .github/hooks/hooks.json [y/N]
+Step 9  Send test notification to confirm end-to-end
 ```
 
 **Idempotent:** Running `install.sh` multiple times is safe. Existing config values are preserved unless overwritten, and `registry.sh` prevents duplicate hook entries.
@@ -127,10 +131,54 @@ bash ~/.config/ai-notify/hooks/telegram-notify.sh <event-type>
 
 | Function | Description |
 |----------|-------------|
-| `register_hook <hook_path>` | Add Stop + Notification hooks to AI CLI settings (idempotent) |
+| `register_hook <hook_path>` | Add Stop + Notification hooks to Claude/Gemini settings (idempotent) |
 | `unregister_hook <hook_path>` | Remove hook entries without affecting other hooks |
+| `register_hook_copilot <hook_path>` | Write `sessionEnd` + `userPromptSubmitted` entries to `.github/hooks/hooks.json` (idempotent) |
+| `unregister_hook_copilot <hook_path>` | Remove Copilot hook entries from `.github/hooks/hooks.json` |
 
-Both functions require `jq`.
+All functions require `jq`.
+
+---
+
+## Copilot CLI Integration
+
+Copilot CLI uses a different hook mechanism from Claude Code and Gemini CLI. Hooks are stored in a per-repo file rather than a global settings file.
+
+### Hook file: `.github/hooks/hooks.json`
+
+```json
+{
+  "version": 1,
+  "hooks": {
+    "sessionEnd": [
+      { "type": "bash", "command": "bash \"~/.config/ai-notify/hooks/telegram-notify.sh\" sessionEnd" }
+    ],
+    "userPromptSubmitted": [
+      { "type": "bash", "command": "bash \"~/.config/ai-notify/hooks/telegram-notify.sh\" userPromptSubmitted" }
+    ]
+  }
+}
+```
+
+### Event mapping
+
+| Copilot CLI event | Mapped to | Message type |
+|-------------------|-----------|-------------|
+| `sessionEnd` | `stop` (task complete) | 🟢 Task Complete |
+| `userPromptSubmitted` | `notification` (action required) | 🟠 Action Required |
+
+### Detection in hook.sh
+
+`hook.sh` detects Copilot CLI via the `GITHUB_COPILOT_SESSION_ID` environment variable. Detection order: Gemini CLI → Copilot CLI → Claude Code → "AI CLI".
+
+### Setup
+
+Copilot hook registration is **opt-in** during `install.sh` (step 8). The resulting `.github/hooks/hooks.json` can be committed to the repository so all machines with the notify hook installed benefit automatically.
+
+To register after install:
+```bash
+bash scripts/notify/telegram/update.sh copilot-hooks
+```
 
 ---
 
@@ -139,7 +187,7 @@ Both functions require `jq`.
 See `scripts/notify/README.md` for the step-by-step provider extension guide.
 
 Summary:
-1. Copy `scripts/telegram-notify/` to `scripts/<provider-name>/`
+1. Copy `scripts/notify/telegram/` to `scripts/<provider-name>/`
 2. Implement `hook.sh` with the standard interface
 3. Use `{PROVIDER}_ENABLED` config key prefix
 4. Deploy hook to `~/.config/ai-notify/hooks/<provider-name>.sh` from `install.sh`
@@ -151,7 +199,7 @@ Summary:
 
 ```bash
 # Full removal
-bash scripts/telegram-notify/uninstall.sh
+bash scripts/notify/telegram/uninstall.sh
 
 # Or in Claude Code
 /notify-setup → uninstall
