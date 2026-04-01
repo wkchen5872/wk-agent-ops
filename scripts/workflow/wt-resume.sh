@@ -23,6 +23,10 @@
 
 set -euo pipefail
 
+usage() {
+  echo "Usage: wt-resume <feature-name> [--agent claude|copilot|gemini|codex] [--session <id|name>]"
+}
+
 NAME=""
 AGENT="claude"
 SESSION=""
@@ -39,7 +43,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     -*)
       echo "Unknown option: $1"
-      echo "Usage: wt-resume <feature-name> [--agent claude|copilot|gemini|codex] [--session <id|name>]"
+      usage
       exit 1
       ;;
     *)
@@ -47,7 +51,7 @@ while [[ $# -gt 0 ]]; do
         NAME="$1"
       else
         echo "Unexpected argument: $1"
-        echo "Usage: wt-resume <feature-name> [--agent claude|copilot|gemini|codex] [--session <id|name>]"
+        usage
         exit 1
       fi
       shift
@@ -56,15 +60,18 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$NAME" ]]; then
-  echo "Usage: wt-resume <feature-name> [--agent claude|copilot|gemini|codex] [--session <id|name>]"
+  usage
   echo "Example: wt-resume feature123"
   exit 1
 fi
 
-if [[ "$AGENT" != "claude" && "$AGENT" != "copilot" && "$AGENT" != "gemini" && "$AGENT" != "codex" ]]; then
-  echo "Error: --agent must be one of: claude, copilot, gemini, codex (got: $AGENT)"
-  exit 1
-fi
+case "$AGENT" in
+  claude|copilot|gemini|codex) ;;
+  *)
+    echo "Error: --agent must be one of: claude, copilot, gemini, codex (got: $AGENT)"
+    exit 1
+    ;;
+esac
 
 REPO=$(git rev-parse --show-toplevel 2>/dev/null)
 
