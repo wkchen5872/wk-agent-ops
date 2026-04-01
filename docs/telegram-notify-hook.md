@@ -66,7 +66,7 @@ Telegram 通知訊息採用統一的 Markdown 排版，結構如下：
 ### Output Layout (Markdown)
 
 ```
-{STATUS_ICON} **{TITLE}**
+{STATUS_ICON} **{TITLE}** ({SESSION})
 
 🤖 {TOOL_NAME}
 📂 {PROJECT_NAME}
@@ -77,6 +77,11 @@ Telegram 通知訊息採用統一的 Markdown 排版，結構如下：
 
 - **STATUS_ICON**: `🟢` (Task Complete) | `🔴` (Action Required) | `🤖` (Generic Event)
 - **TITLE**: `Task Complete` | `Action Required`
+- **SESSION** *(optional)*: shown when session info is available
+  - UUID `session_id` (Claude) → `#<first 8 chars>` e.g. `(#a1b2c3d4)`
+  - Non-UUID `sessionId` (Copilot) → used as-is e.g. `(copilot-xyz)`
+  - `GITHUB_COPILOT_SESSION_ID` env var → `#<first 8 chars>`
+  - No session info → title has no parentheses
 - **MESSAGE Fallback**:
   - Task Complete: `Process finished successfully`
   - Action Required: `Waiting for user interaction...`
@@ -86,6 +91,17 @@ Telegram 通知訊息採用統一的 Markdown 排版，結構如下：
 ## Notification Examples
 
 **Stop event (task complete):**
+```
+🟢 **Task Complete** (#a1b2c3d4)
+
+🤖 Claude Code
+📂 my-project
+⏰ 2025-03-31 14:22:05
+
+Process finished successfully #Stop
+```
+
+**Stop event (no session info):**
 ```
 🟢 **Task Complete**
 
@@ -140,13 +156,19 @@ bash scripts/notify/telegram/update.sh notify_level
 ## Testing
 
 ```bash
-# Test Stop event manually
-echo '{"hook_event_name":"Stop"}' \
-  | CLAUDE_PROJECT_DIR=$(pwd) bash ~/.config/ai-notify/hooks/telegram-notify.sh stop
+# Automated test suite (dry-run, no Telegram connection needed)
+bash scripts/notify/telegram/test.sh
 
-# Test Notification event
+# Manual: test Stop event (Claude Code)
+echo '{"hook_event_name":"Stop"}' \
+  | bash ~/.config/ai-notify/hooks/telegram-notify.sh stop "Claude Code"
+
+# Manual: test Notification event
 echo '{"hook_event_name":"Notification","message":"Please approve this action"}' \
-  | CLAUDE_PROJECT_DIR=$(pwd) bash ~/.config/ai-notify/hooks/telegram-notify.sh notification
+  | bash ~/.config/ai-notify/hooks/telegram-notify.sh notification "Claude Code"
+
+# Manual: dry-run (outputs message to stdout, no HTTP request)
+TELEGRAM_DRY_RUN=true bash scripts/notify/telegram/hook.sh stop "Claude Code"
 ```
 
 Or in Claude Code: `/notify-setup → test`
@@ -186,8 +208,8 @@ Check `~/.claude/settings.json` contains:
 ```json
 {
   "hooks": {
-    "Stop": [{"type": "command", "command": "bash \"~/.config/ai-notify/hooks/telegram-notify.sh\" stop"}],
-    "Notification": [{"type": "command", "command": "bash \"~/.config/ai-notify/hooks/telegram-notify.sh\" notification"}]
+    "Stop": [{"hooks": [{"type": "command", "command": "bash \"~/.config/ai-notify/hooks/telegram-notify.sh\" stop \"Claude Code\"", "async": true, "timeout": 15}]}],
+    "Notification": [{"hooks": [{"type": "command", "command": "bash \"~/.config/ai-notify/hooks/telegram-notify.sh\" notification \"Claude Code\"", "async": true, "timeout": 15}]}]
   }
 }
 ```
