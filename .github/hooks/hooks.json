@@ -4,7 +4,7 @@
     "sessionEnd": [
       {
         "type": "command",
-        "bash": "bash \"/Users/chenwenkai/.config/ai-notify/hooks/telegram-notify.sh\" sessionEnd"
+        "bash": "bash \"/Users/chenwenkai/.config/ai-notify/hooks/telegram-notify.sh\" sessionEnd \"Copilot CLI\""
       }
     ]
   }
