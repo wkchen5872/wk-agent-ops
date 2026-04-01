@@ -59,6 +59,30 @@ bash scripts/notify/telegram/update.sh notify_level
 
 ---
 
+## Notification Format
+
+Telegram 通知訊息採用統一的 Markdown 排版，結構如下：
+
+### Output Layout (Markdown)
+
+```
+{STATUS_ICON} **{TITLE}**
+
+🤖 {TOOL_NAME}
+📂 {PROJECT_NAME}
+⏰ {TIMESTAMP}
+
+{MESSAGE} #{HOOK_EVENT_NAME}
+```
+
+- **STATUS_ICON**: `🟢` (Task Complete) | `🔴` (Action Required) | `🤖` (Generic Event)
+- **TITLE**: `Task Complete` | `Action Required`
+- **MESSAGE Fallback**:
+  - Task Complete: `Process finished successfully`
+  - Action Required: `Waiting for user interaction...`
+
+---
+
 ## Notification Examples
 
 **Stop event (task complete):**
