@@ -39,8 +39,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-TARGET="${TARGET:-$(pwd)}"
-TARGET="$(cd "$TARGET" && pwd)"
+TARGET="$(cd "${TARGET:-$(pwd)}" && pwd)"
 
 # Validate target is a git repo
 if [[ ! -d "$TARGET/.git" ]]; then
@@ -56,72 +55,55 @@ for d in "$TEMPLATE"/*/; do
 done
 
 # Validate requested profiles
-if [[ ${#PROFILES[@]} -gt 0 ]]; then
-  for profile in "${PROFILES[@]}"; do
-    valid=false
-    for avail in "${AVAILABLE_PROFILES[@]}"; do
-      [[ "$profile" == "$avail" ]] && valid=true && break
-    done
-    if [[ "$valid" == false ]]; then
-      echo "❌ Unknown profile: '$profile'"
-      echo "   Available profiles: ${AVAILABLE_PROFILES[*]:-"(none yet)"}"
-      exit 1
-    fi
+for profile in "${PROFILES[@]}"; do
+  valid=false
+  for avail in "${AVAILABLE_PROFILES[@]}"; do
+    [[ "$profile" == "$avail" ]] && valid=true && break
   done
-fi
+  if [[ "$valid" == false ]]; then
+    echo "❌ Unknown profile: '$profile'"
+    echo "   Available profiles: ${AVAILABLE_PROFILES[*]:-"(none yet)"}"
+    exit 1
+  fi
+done
 
-if [[ ${#PROFILES[@]} -gt 0 ]]; then
-  PROFILES_DISPLAY="common ${PROFILES[*]}"
-else
-  PROFILES_DISPLAY="common"
-fi
+PROFILES_DISPLAY="common${PROFILES[*]:+ ${PROFILES[*]}}"
 echo "🔧 Installing custom agent extensions"
 echo "   source  : $TEMPLATE"
 echo "   target  : $TARGET"
 echo "   profiles: ${PROFILES_DISPLAY}"
 echo ""
 
+sync_dir() {
+  local src="$1" dst="$2"
+  [[ -d "$src" ]] || return 0
+  mkdir -p "$dst"
+  rsync -a --itemize-changes "$src/" "$dst/"
+}
+
 # --- Install common ---
 
 # skills/ → .claude/skills/ and .agent/skills/
-mkdir -p "$TARGET/.claude/skills" "$TARGET/.agent/skills"
-rsync -a --itemize-changes "$COMMON/skills/" "$TARGET/.claude/skills/"
-rsync -a --itemize-changes "$COMMON/skills/" "$TARGET/.agent/skills/"
+sync_dir "$COMMON/skills" "$TARGET/.claude/skills"
+sync_dir "$COMMON/skills" "$TARGET/.agent/skills"
 
 # .claude/ .agent/ .github/ (excluding skills/)
 mkdir -p "$TARGET/.claude" "$TARGET/.agent" "$TARGET/.github"
 rsync -a --itemize-changes --exclude 'skills/' "$COMMON/.claude/" "$TARGET/.claude/"
-rsync -a --itemize-changes "$COMMON/.agent/" "$TARGET/.agent/"
-rsync -a --itemize-changes "$COMMON/.github/" "$TARGET/.github/"
+sync_dir "$COMMON/.agent"  "$TARGET/.agent"
+sync_dir "$COMMON/.github" "$TARGET/.github"
 
 # --- Install requested profiles ---
 
-if [[ ${#PROFILES[@]} -gt 0 ]]; then
 for profile in "${PROFILES[@]}"; do
   PROFILE_DIR="$TEMPLATE/$profile"
-
-  # .claude/rules/
-  if [[ -d "$PROFILE_DIR/.claude/rules" ]]; then
-    mkdir -p "$TARGET/.claude/rules"
-    rsync -a --itemize-changes "$PROFILE_DIR/.claude/rules/" "$TARGET/.claude/rules/"
-  fi
-
-  # .github/instructions/
-  if [[ -d "$PROFILE_DIR/.github/instructions" ]]; then
-    mkdir -p "$TARGET/.github/instructions"
-    rsync -a --itemize-changes "$PROFILE_DIR/.github/instructions/" "$TARGET/.github/instructions/"
-  fi
-
-  # hooks/ → .git/hooks/ (chmod +x each file)
+  sync_dir "$PROFILE_DIR/.claude/rules"        "$TARGET/.claude/rules"
+  sync_dir "$PROFILE_DIR/.github/instructions" "$TARGET/.github/instructions"
   if [[ -d "$PROFILE_DIR/hooks" ]]; then
-    mkdir -p "$TARGET/.git/hooks"
-    rsync -a --itemize-changes "$PROFILE_DIR/hooks/" "$TARGET/.git/hooks/"
-    find "$TARGET/.git/hooks" -maxdepth 1 -type f | while read -r hook; do
-      chmod +x "$hook"
-    done
+    sync_dir "$PROFILE_DIR/hooks" "$TARGET/.git/hooks"
+    find "$TARGET/.git/hooks" -maxdepth 1 -type f -exec chmod +x {} +
   fi
 done
-fi
 
 echo ""
 echo "✅ Done. Installed profiles: ${PROFILES_DISPLAY}"
