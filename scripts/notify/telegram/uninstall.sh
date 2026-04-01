@@ -30,11 +30,20 @@ echo ""
 # 1. Unregister from AI CLI settings
 unregister_hook "${DEPLOYED_HOOK}"
 
-# 2. Remove TELEGRAM_* config keys
+# 2. Remove Copilot CLI hooks if present
+_repo_root="$(git rev-parse --show-toplevel 2>/dev/null || echo "${PWD}")"
+if [[ -f "${_repo_root}/.github/hooks/hooks.json" ]]; then
+  read -rp "Remove Copilot CLI hooks from .github/hooks/hooks.json? [y/N]: " _copilot_remove
+  if [[ "${_copilot_remove}" =~ ^[Yy]$ ]]; then
+    unregister_hook_copilot "${DEPLOYED_HOOK}"
+  fi
+fi
+
+# 3. Remove TELEGRAM_* config keys
 remove_config_keys_by_prefix "TELEGRAM_"
 echo "✓ Removed TELEGRAM_* keys from ${AI_NOTIFY_CONFIG}"
 
-# 3. Remove deployed hook script
+# 4. Remove deployed hook script
 if [[ -f "${DEPLOYED_HOOK}" ]]; then
   rm -f "${DEPLOYED_HOOK}"
   echo "✓ Removed ${DEPLOYED_HOOK}"

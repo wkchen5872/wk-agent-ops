@@ -39,17 +39,22 @@ NOTIFY_LEVEL="${NOTIFY_LEVEL:-all}"
 if [[ "${NOTIFY_LEVEL}" == "notify_only" && "${EVENT_TYPE}" == "stop" ]]; then
   exit 0
 fi
+# Also suppress sessionEnd (Copilot's equivalent of stop) when notify_only
+if [[ "${NOTIFY_LEVEL}" == "notify_only" && "${EVENT_TYPE}" == "sessionend" ]]; then
+  exit 0
+fi
 
 # ── Detect AI CLI tool and project ────────────────────────────────────────────
-# GEMINI_PROJECT_DIR is only injected by Gemini CLI.
-# CLAUDE_PROJECT_DIR is injected by both (Gemini injects it for compatibility),
-# so check GEMINI_PROJECT_DIR first.
+# Detection order: GEMINI_PROJECT_DIR → GITHUB_COPILOT_SESSION_ID → CLAUDE_PROJECT_DIR → "AI CLI"
 TOOL_NAME="AI CLI"
 PROJECT_DIR=""
 
 if [[ -n "${GEMINI_PROJECT_DIR:-}" ]]; then
   TOOL_NAME="Gemini CLI"
   PROJECT_DIR="${GEMINI_PROJECT_DIR}"
+elif [[ -n "${GITHUB_COPILOT_SESSION_ID:-}" ]]; then
+  TOOL_NAME="Copilot CLI"
+  PROJECT_DIR="${PWD}"
 elif [[ -n "${CLAUDE_PROJECT_DIR:-}" ]]; then
   TOOL_NAME="Claude Code"
   PROJECT_DIR="${CLAUDE_PROJECT_DIR}"
@@ -67,7 +72,7 @@ EVENT_TAG="#${HOOK_EVENT_NAME:-${EVENT_TYPE:-unknown}}"
 MESSAGE=""
 
 case "${EVENT_TYPE}" in
-  stop|afteragent)
+  stop|afteragent|sessionend)
     MESSAGE="🟢 **Task Complete**
 
 🤖 ${TOOL_NAME}
@@ -77,7 +82,7 @@ case "${EVENT_TYPE}" in
 Process finished successfully ${EVENT_TAG}"
     ;;
 
-  notification)
+  notification|userpromptsubmitted)
     NOTIFICATION_MSG=""
     if command -v jq &>/dev/null && [[ -n "${STDIN_JSON}" ]]; then
       NOTIFICATION_MSG="$(echo "${STDIN_JSON}" | jq -r '.message // empty' 2>/dev/null)"

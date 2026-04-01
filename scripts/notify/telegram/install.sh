@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Telegram Notify — Interactive Install Wizard
-# Usage: bash scripts/telegram-notify/install.sh
+# Usage: bash scripts/notify/telegram/install.sh
 # All machine state is created by this script; nothing is modified at dev time.
 set -euo pipefail
 
@@ -82,7 +82,8 @@ echo "  3. Auto-detect your Chat ID"
 echo "  4. Set your notification level"
 echo "  5. Deploy the hook to ~/.config/ai-notify/"
 echo "  6. Register hooks in ~/.claude/settings.json"
-echo "  7. Send a test notification"
+echo "  7. Optionally register Copilot CLI hooks"
+echo "  8. Send a test notification"
 echo ""
 echo "Press Ctrl+C at any time to cancel."
 
@@ -192,8 +193,20 @@ print_step 7 "Register Hooks in AI CLI Settings"
 
 register_hook "${DEPLOYED_HOOK}"
 
-# ── Step 8: Test notification ──────────────────────────────────────────────────
-print_step 8 "Send Test Notification"
+# ── Step 8: Register Copilot CLI hooks (opt-in) ────────────────────────────────
+print_step 8 "Register Copilot CLI Hooks (optional)"
+echo ""
+echo "  Copilot CLI hooks are stored in .github/hooks/hooks.json inside your repo."
+echo "  This file can be committed so all machines benefit automatically."
+echo ""
+read -rp "  Register Copilot CLI hooks? Writes .github/hooks/hooks.json in your repo. [y/N]: " _copilot_choice
+if [[ "${_copilot_choice}" =~ ^[Yy]$ ]]; then
+  register_hook_copilot "${DEPLOYED_HOOK}"
+  echo "  ℹ You may want to commit .github/hooks/hooks.json to your repository."
+fi
+
+# ── Step 9: Test notification ──────────────────────────────────────────────────
+print_step 9 "Send Test Notification"
 
 echo -n "  Sending test message to Telegram... "
 TEST_RESPONSE="$(curl \
