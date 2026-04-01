@@ -22,6 +22,23 @@
 
 ---
 
+## 多工具相容性規範 (Multi-Tool Compatibility)
+
+在進行任何功能規劃、Agent 設計或腳本撰寫時，**必須同時考慮並支援**以下 AI CLI 工具：
+
+- **Claude Code**: 主要研發與執行工具。
+- **GitHub Copilot CLI**: 輔助程式碼生成介面。
+- **Gemini CLI**: 高性能模型整合。
+- **Codex**: 替代執行引擎。
+
+**具體要求：**
+1. **設定隔離**：確保 `.claude/`、`.gemini/` 等工具特定設定目錄互不干擾。
+2. **環境變數偵測**：腳本必須能根據環境變數（如 `CLAUDE_PROJECT_DIR`、`GEMINI_PROJECT_DIR`）自動偵測當前運作的工具。
+3. **輸入輸出規範**：優先支援 Standard Input (stdin) 與 Command-line Arguments，確保所有工具都能透過管道 (pipe) 呼叫。
+4. **文件一致性**：`README.md` 與 `docs/` 必須包含各工具的安裝與使用說明。
+
+---
+
 ## 目錄結構
 
 ```
