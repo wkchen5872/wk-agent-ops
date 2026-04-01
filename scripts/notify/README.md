@@ -19,7 +19,7 @@ scripts/
     uninstall.sh  # Remove hook and config entries
 ```
 
-Use `scripts/telegram-notify/` as your reference implementation.
+Use `scripts/notify/telegram/` as your reference implementation.
 
 ### 2. Implement `hook.sh`
 
@@ -99,7 +99,7 @@ register_hook "${HOME}/.config/ai-notify/hooks/<provider-name>.sh"
 ~/.config/ai-notify/
   config                      # Shell-sourceable key=value (chmod 600)
   hooks/
-    telegram-notify.sh        # Deployed from scripts/telegram-notify/hook.sh
+    telegram-notify.sh        # Deployed from scripts/notify/telegram/hook.sh
     <provider-name>.sh        # Your provider's deployed hook
 ```
 
