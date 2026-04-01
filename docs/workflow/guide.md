@@ -13,6 +13,9 @@
 | **Phase 1: 規劃** | **PM Agent** | 專案根目錄 (`main`) | 只撰寫規格文件 (Markdown)，不改程式碼。 |
 | **Phase 2: 實作** | **RD Agent** | 獨立 Worktree (`.worktrees/`) | 修改實際程式碼。為避免互相覆蓋，必須隔離。 |
 
+> [!TIP]
+> 關於 OpenSpec 如何與 Git Worktree 配合達成「多 Agent 並行開發」的底層指令與運作邏輯，請參考：[並行開發模式核心概念](concepts.md)。
+
 ---
 
 ## 🔄 標準協作流程
