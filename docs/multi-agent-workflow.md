@@ -19,10 +19,16 @@
 
 在主 Claude 視窗（工作目錄為專案根目錄，位於 `develop` 分支）進行需求拆解與規格撰寫。此時可**同時規劃多個功能**，產出的 Markdown 文件會直接 Commit 至 `develop` 分支。
 
-**執行指令：**
+**啟動 PM Agent：**
+
+```bash
+pm-start    ← 以 Plan Mode 啟動（或恢復）PM Master Session，session 名稱為 "PM: <repo-name>"
+```
+
+**在 PM Agent 內執行：**
 
 ```text
-/opsx:new           ← 描述需求，OpenSpec 將產出 feature 名稱（如 etf-nav-fetcher）
+/opsx:new           ← 描述需求，OpenSpec 將產出 feature 名稱（如 feature123）
 /opsx:continue ×4   ← 依序產出 proposal → specs → design → tasks
 or 
 /opsx:ff            ← 描述需求，OpenSpec 將自動產出所有文件
@@ -36,19 +42,28 @@ or
 **執行指令：**
 
 ```bash
-# 在終端機執行：建立獨立環境並自動啟動 Claude
+# 在終端機執行：建立獨立環境並自動啟動 Agent
 wt-new FEATURE_NAME
+
+# 指定不同 Agent（預設 claude）
+wt-new FEATURE_NAME --agent copilot
+
+# 指定不同 base branch（預設 main）
+wt-new FEATURE_NAME --base develop
 ```
 
-feature 名稱建議與 openspec change 的名稱同名，會便於管理
+feature 名稱建議與 openspec change 的名稱同名，會便於管理。
+
+**`wt-new` 自動偵測模式：**
+- Worktree **不存在** → 🚀 NEW SESSION：建立 branch + worktree，複製 `.env` 與 `settings.local.json`
+- Worktree **已存在** → 🔄 RESUMING：直接進入並恢復 Agent session（中途外出後只需再執行一次 `wt-new <name>` 即可繼續）
 
 
 ```bash
 # 在自動啟動的 Claude 中執行：
-/opsx:apply etf-nav-fetcher   ← RD Agent 依照規格自動開始撰寫程式碼
+/opsx:apply feature123   ← RD Agent 依照規格自動開始撰寫程式碼
 /opsx:commit                  ← 實作完成後，一鍵完成 archive、更新文件與 Git Commit
 ```
-> *註：若 `wt-new` 發現 Worktree 已存在，會直接啟動 Claude 並進入該目錄，適合關閉視窗後重新進入。*
 
 ### 步驟三：合併與清理 (Merge & Clean)
 功能開發並 Commit 完成後，回到主終端機將程式碼合併回主分支，並釋放環境。
@@ -57,10 +72,26 @@ feature 名稱建議與 openspec change 的名稱同名，會便於管理
 
 ```bash
 wt-done FEATURE_NAME
+
+# 指定不同 base branch（預設 main）
+wt-done FEATURE_NAME --base develop
 ```
 
-* **合併成功：** 自動切回 `develop`、合併分支、移除 Worktree 目錄並刪除 feature branch。
-* **發生衝突：** 腳本會安全停下並印出提示，請依提示手動解決衝突（Resolve Conflicts）後再完成清理。
+* **合併成功：** 自動切回 base branch、合併分支、移除 Worktree 目錄、執行 `git worktree prune`、刪除 feature branch，並重置 iTerm2 badge。
+* **發生衝突：** 腳本安全停下並提示使用 `wt-resume FEATURE_NAME` 以 Agent 協助解衝突，或手動解決後清理。
+
+### 步驟四：事後回顧 (Post-done Resume)
+若在 `wt-done` 刪除 worktree 後需要重新進入 session（例如：code review），使用 `wt-resume`。
+
+```bash
+wt-resume FEATURE_NAME
+
+# 指定不同 Agent
+wt-resume FEATURE_NAME --agent copilot
+```
+
+* Worktree 目錄**存在**：`cd` 進入後以 `--resume` 恢復（僅 claude）。
+* Worktree 目錄**已刪除**：從當前目錄以 session 名稱恢復（claude），或直接啟動（copilot/codex）。
 
 ---
 
@@ -68,10 +99,11 @@ wt-done FEATURE_NAME
 
 ### 1. Worktree 自動化腳本
 
-為簡化 Git 操作，我們提供了 `wt-new` 與 `wt-done` 腳本。
+為簡化 Git 操作，我們提供了 `wt-new`、`wt-done`、`wt-resume`、`pm-start` 腳本與 zsh tab 補全。
 
 * **安裝方式：** 執行 `bash scripts/worktree/install.sh` 並 `source ~/.zshrc`。
 * **特性：** 安裝腳本具備冪等性（重複執行無害），且後續更新 `.sh` 檔即可自動生效。
+* **Tab 補全：** 安裝後 `wt-new <TAB>`、`wt-done <TAB>`、`wt-resume <TAB>` 可自動列出現有 feature 名稱（zsh）。
 
 ### 2. `/commit-feature` 專屬 Skill
 
