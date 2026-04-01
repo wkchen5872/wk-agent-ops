@@ -15,6 +15,7 @@ When invoked without arguments, present an interactive menu. When invoked with a
 - `uninstall` — Remove hooks and config entries
 
 ## Instructions
+## Instructions
 
 1. If no argument was provided after `/notify-setup`, show this menu and ask the user to choose:
 
@@ -36,7 +37,6 @@ When invoked without arguments, present an interactive menu. When invoked with a
    - token → `bash scripts/notify/telegram/update.sh token`
    - chat_id → `bash scripts/notify/telegram/update.sh chat_id`
    - notify_level → `bash scripts/notify/telegram/update.sh notify_level`
-   - copilot hooks → `bash scripts/notify/telegram/update.sh copilot-hooks`
 
 4. **test**: Send a test notification by running:
    ```bash
@@ -50,7 +50,7 @@ When invoked without arguments, present an interactive menu. When invoked with a
    - `TELEGRAM_BOT_TOKEN` — show only the last 4 characters, mask the rest with `****`
    - `TELEGRAM_CHAT_ID`
    - `NOTIFY_LEVEL`
-   
+
    If the config file does not exist, tell the user that Telegram Notify is not installed and suggest running `/notify-setup setup`.
 
 6. **uninstall**: Run `bash scripts/notify/telegram/uninstall.sh`. Show all output.

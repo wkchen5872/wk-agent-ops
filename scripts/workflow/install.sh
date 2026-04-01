@@ -2,10 +2,10 @@
 # install.sh — Install wt-new / wt-done / wt-resume / pm-start globally
 #
 # Usage:
-#   bash scripts/worktree/install.sh
+#   bash scripts/workflow/install.sh
 #
 # Description:
-#   Copies the worktree helpers to ~/.local/bin, installs the _wt zsh
+#   Copies the workflow helpers to ~/.local/bin, installs the _wt zsh
 #   completion to ~/.local/share/zsh/site-functions/, and ensures the
 #   directories are in the user's PATH / fpath.
 
@@ -23,15 +23,15 @@ ZSH_FUNC_DIR="$HOME/.local/share/zsh/site-functions"
 mkdir -p "$INSTALL_DIR" "$ZSH_FUNC_DIR"
 
 # 2. 複製執行檔並賦予執行權限
-cp -f "$REPO/scripts/worktree/wt-new.sh"    "$INSTALL_DIR/wt-new"
-cp -f "$REPO/scripts/worktree/wt-done.sh"   "$INSTALL_DIR/wt-done"
-cp -f "$REPO/scripts/worktree/wt-resume.sh" "$INSTALL_DIR/wt-resume"
-cp -f "$REPO/scripts/worktree/pm-start.sh"  "$INSTALL_DIR/pm-start"
+cp -f "$REPO/scripts/workflow/wt-new.sh"    "$INSTALL_DIR/wt-new"
+cp -f "$REPO/scripts/workflow/wt-done.sh"   "$INSTALL_DIR/wt-done"
+cp -f "$REPO/scripts/workflow/wt-resume.sh" "$INSTALL_DIR/wt-resume"
+cp -f "$REPO/scripts/workflow/pm-start.sh"  "$INSTALL_DIR/pm-start"
 chmod +x "$INSTALL_DIR/wt-new" "$INSTALL_DIR/wt-done" \
          "$INSTALL_DIR/wt-resume" "$INSTALL_DIR/pm-start"
 
 # 3. 安裝 zsh completion
-cp -f "$REPO/scripts/worktree/_wt" "$ZSH_FUNC_DIR/_wt"
+cp -f "$REPO/scripts/workflow/_wt" "$ZSH_FUNC_DIR/_wt"
 
 # 4. 偵測使用者的 Shell 設定檔
 SHELL_RC=""
@@ -45,7 +45,7 @@ else
 fi
 
 # 5. 檢查並更新 PATH + fpath (Idempotent)
-PATH_MARKER="# invest-data-fetcher worktree helpers PATH"
+PATH_MARKER="# wk-agent-ops workflow helpers PATH"
 if grep -q "$PATH_MARKER" "$SHELL_RC" 2>/dev/null; then
   echo "⏭️  PATH 已配置於 ${SHELL_RC}。腳本已更新至最新版本。"
 else

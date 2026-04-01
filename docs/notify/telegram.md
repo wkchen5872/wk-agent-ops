@@ -220,5 +220,5 @@ If missing, re-run `bash scripts/notify/telegram/install.sh` (idempotent).
 
 ## See Also
 
-- [Notify Hooks Architecture](notify-hooks-architecture.md) — full architecture, extension guide
-- `scripts/notify/README.md` — adding a new notification provider
+- [Notify Hooks Architecture](architecture.md) — full architecture, extension guide
+- `../../scripts/notify/README.md` — adding a new notification provider
