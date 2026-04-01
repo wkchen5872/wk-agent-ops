@@ -5,7 +5,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-LIB_DIR="${SCRIPT_DIR}/../notify/lib"
+LIB_DIR="${SCRIPT_DIR}/../lib"
 
 # shellcheck source=../notify/lib/config.sh
 source "${LIB_DIR}/config.sh"
