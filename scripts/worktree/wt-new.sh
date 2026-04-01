@@ -6,7 +6,7 @@
 #
 # Example:
 #   wt-new feature123
-#   wt-new feature123 --base develop
+#   wt-new feature123 --base main
 #   wt-new feature123 --agent copilot
 #   wt-new feature123 -a codex
 #

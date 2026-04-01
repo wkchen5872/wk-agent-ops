@@ -11,7 +11,7 @@
 Terminal                        Claude (in worktree)
 ─────────────────────────────────────────────────────────────────
 wt-new <feature-name>
-  ├── git checkout develop
+  ├── git checkout main
   ├── git worktree add .worktrees/<name> -b feature/<name>
   └── cd .worktrees/<name> && claude ──────► /opsx:apply <name>
                                                     │
@@ -26,7 +26,7 @@ wt-new <feature-name>
                                             └───────┬────────┘
                                                     │
 wt-done <feature-name>
-  ├── git checkout develop
+  ├── git checkout main
   ├── git merge feature/<name>
   ├── git worktree remove .worktrees/<name>
   └── git branch -d feature/<name>
@@ -120,7 +120,7 @@ wt-done <feature-name>
 
 ## 設計決策
 
-### 方案 A：`/openspec-commit` 包含 archive
+### `/openspec-commit` 包含 archive
 
 選擇讓 `/openspec-commit` 作為唯一的收尾指令，內含完整 archive 流程。
 使用者不需要分別執行 `/opsx:archive` 再 `/openspec-commit`。
@@ -150,8 +150,6 @@ skills/openspec-commit/SKILL.md      ← 專案原始檔（版本控制）
 
 ## 相關文件
 
-- `scripts/worktree/wt-new.sh` — 建立 worktree
-- `scripts/worktree/wt-done.sh` — 合併 worktree 回 develop
-- `.claude/skills/openspec-commit/SKILL.md` — Skill 定義
-- `.claude/skills/git-commit-writer/SKILL.md` — Commit 寫入 skill（可獨立呼叫）
-- `openspec/changes/archive/` — 已封存的 change 目錄
+*   **多 Agent 協作工作流**：了解整體開發流程，請看 [Master Guide](multi-agent-workflow.md)。
+*   **Worktree 腳本參考**：了解 `wt-new`、`wt-done` 的詳細參數與安裝，請看 [Technical Reference](../../scripts/worktree/README.md)。
+*   **Git Commit Writer**：了解獨立呼叫 commit 生成工具的方式，請看 [git-commit-writer.md](git-commit-writer.md)。
