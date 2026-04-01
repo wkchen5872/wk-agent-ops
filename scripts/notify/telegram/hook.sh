@@ -28,17 +28,29 @@ if [[ -p /dev/stdin ]] || [[ ! -t 0 ]]; then
   STDIN_JSON="$(cat)"
 fi
 
+# Extract a string field from JSON; tries fields left-to-right (jq or grep fallback).
+_json_str() {
+  local json="$1"; shift
+  if command -v jq &>/dev/null; then
+    local expr
+    expr="$(printf '.%s // ' "$@")empty"
+    echo "${json}" | jq -r "${expr}" 2>/dev/null
+  else
+    local field val
+    for field in "$@"; do
+      val="$(echo "${json}" | grep -o "\"${field}\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" | \
+             sed "s/.*\"${field}\"[[:space:]]*:[[:space:]]*\"\\([^\"]*\\)\".*/\\1/")"
+      [[ -n "${val}" ]] && { echo "${val}"; return; }
+    done
+  fi
+}
+
 # ── Detect event type ──────────────────────────────────────────────────────────
 # Primary source: $1 argument (stop | notification)
 # Fallback: parse stdin JSON hook_event_name
 EVENT_ARG="${1:-}"
 HOOK_EVENT_NAME=""
-
-if command -v jq &>/dev/null && [[ -n "${STDIN_JSON}" ]]; then
-  HOOK_EVENT_NAME="$(echo "${STDIN_JSON}" | jq -r '.hook_event_name // empty' 2>/dev/null)"
-elif [[ -n "${STDIN_JSON}" ]]; then
-  HOOK_EVENT_NAME="$(echo "${STDIN_JSON}" | grep -o '"hook_event_name"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*"hook_event_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')"
-fi
+[[ -n "${STDIN_JSON}" ]] && HOOK_EVENT_NAME="$(_json_str "${STDIN_JSON}" "hook_event_name")"
 
 # Normalised lowercase for branching
 EVENT_TYPE="$(echo "${EVENT_ARG:-${HOOK_EVENT_NAME}}" | tr '[:upper:]' '[:lower:]')"
@@ -56,8 +68,7 @@ fi
 TOOL_NAME="${2:-AI CLI}"
 PROJECT_DIR="${GEMINI_PROJECT_DIR:-${CLAUDE_PROJECT_DIR:-${PWD}}}"
 
-PROJECT_NAME=""
-[[ -n "${PROJECT_DIR}" ]] && PROJECT_NAME="$(basename "${PROJECT_DIR}")"
+PROJECT_NAME="${PROJECT_DIR:+$(basename "${PROJECT_DIR}")}"
 
 TIMESTAMP="$(date '+%Y-%m-%d %H:%M:%S')"
 
@@ -66,15 +77,7 @@ TIMESTAMP="$(date '+%Y-%m-%d %H:%M:%S')"
 # → env var GITHUB_COPILOT_SESSION_ID (first 8 chars, always prefixed with #)
 SESSION_LABEL=""
 SESSION_ID=""
-
-if command -v jq &>/dev/null && [[ -n "${STDIN_JSON}" ]]; then
-  SESSION_ID="$(echo "${STDIN_JSON}" | jq -r '.session_id // .sessionId // empty' 2>/dev/null)"
-elif [[ -n "${STDIN_JSON}" ]]; then
-  SESSION_ID="$(echo "${STDIN_JSON}" | grep -o '"session_id"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')"
-  if [[ -z "${SESSION_ID}" ]]; then
-    SESSION_ID="$(echo "${STDIN_JSON}" | grep -o '"sessionId"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*"sessionId"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')"
-  fi
-fi
+[[ -n "${STDIN_JSON}" ]] && SESSION_ID="$(_json_str "${STDIN_JSON}" "session_id" "sessionId")"
 
 # Format stdin-sourced session: UUID (standard 8-4-4-4-12 format) → #<first8>; else direct
 if [[ -n "${SESSION_ID}" ]]; then
@@ -112,11 +115,7 @@ Process finished successfully ${EVENT_TAG}"
 
   notification|userpromptsubmitted)
     NOTIFICATION_MSG=""
-    if command -v jq &>/dev/null && [[ -n "${STDIN_JSON}" ]]; then
-      NOTIFICATION_MSG="$(echo "${STDIN_JSON}" | jq -r '.message // empty' 2>/dev/null)"
-    elif [[ -n "${STDIN_JSON}" ]]; then
-      NOTIFICATION_MSG="$(echo "${STDIN_JSON}" | grep -o '"message"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*"message"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')"
-    fi
+    [[ -n "${STDIN_JSON}" ]] && NOTIFICATION_MSG="$(_json_str "${STDIN_JSON}" "message")"
 
     [[ -z "${NOTIFICATION_MSG}" ]] && NOTIFICATION_MSG="Waiting for user interaction..."
 
