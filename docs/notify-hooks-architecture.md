@@ -116,6 +116,26 @@ bash ~/.config/ai-notify/hooks/telegram-notify.sh <event-type>
 
 ---
 
+## Data Formats
+
+AI CLI 工具（Claude Code, Gemini CLI, Copilot CLI）透過 `stdin` 將 JSON payload 傳遞給 Hook 腳本。
+
+### Standard JSON Payload (Incoming)
+
+```json
+{
+  "hook_event_name": "Stop",     // 事件類型：Stop | Notification | sessionEnd | ...
+  "message": "...",              // (選填) 通知詳細訊息，如等待授權的內容
+  "project_dir": "/path/to/proj" // (選填) 專案路徑
+}
+```
+
+*   **Claude Code**: 傳送 `Stop` 與 `Notification` 事件。
+*   **Gemini CLI**: 傳送 `AfterAgent` 與 `Notification` 事件。
+*   **Copilot CLI**: 傳送 `sessionEnd` 與 `userPromptSubmitted` 事件。
+
+---
+
 ## Shared Libraries
 
 ### `scripts/notify/lib/config.sh`

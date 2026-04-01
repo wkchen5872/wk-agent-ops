@@ -85,6 +85,11 @@ fix_hooks() {
     return 1
   fi
 
+  # Re-deploy hook script from source
+  cp "${SCRIPT_DIR}/hook.sh" "${DEPLOYED_HOOK}"
+  chmod +x "${DEPLOYED_HOOK}"
+  echo "  ✓ Hook script updated at ${DEPLOYED_HOOK}"
+
   if ! command -v jq &>/dev/null; then
     echo "ERROR: jq is required. Please install jq and re-run."
     return 1
