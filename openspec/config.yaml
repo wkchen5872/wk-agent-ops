@@ -2,19 +2,22 @@ schema: spec-driven
 
 # Project context (optional)
 # This is shown to AI when creating artifacts.
-# Add your tech stack, conventions, style guides, domain knowledge, etc.
-# Example:
-#   context: |
-#     Tech stack: TypeScript, React, Node.js
-#     We use conventional commits
-#     Domain: e-commerce platform
+context: |
+  ## Multi-Tool Compatibility Requirement
+  All feature planning and implementation MUST consider and support the following AI CLI tools:
+  - **Claude Code**: Primary tool for research and execution.
+  - **GitHub Copilot CLI**: Secondary interface for code generation.
+  - **Gemini CLI**: High-performance model integration.
+  - **Codex**: Legacy/Alternate execution engine.
+
+  Ensure that:
+  1. File structures are compatible with each tool's local configuration (e.g., .claude/, .gemini/).
+  2. Scripts and tools are accessible via command-line arguments and standard input.
+  3. Documentation and setup guides provide instructions for all supported platforms.
 
 # Per-artifact rules (optional)
-# Add custom rules for specific artifacts.
-# Example:
-#   rules:
-#     proposal:
-#       - Keep proposals under 500 words
-#       - Always include a "Non-goals" section
-#     tasks:
-#       - Break tasks into chunks of max 2 hours
+rules:
+  proposal:
+    - Ensure the "Capabilities" section explicitly lists support or compatibility for all four AI tools.
+  specs:
+    - Include scenarios for verifying tool-specific environment variables (e.g., CLAUDE_PROJECT_DIR, GEMINI_PROJECT_DIR).
