@@ -6,7 +6,7 @@
 #
 # Example:
 #   wt-done feature_name
-#   wt-done feature_name --base develop
+#   wt-done feature_name --base main
 #
 # Description:
 #   Switches to BASE_BRANCH, merges the feature branch, removes the worktree

@@ -1,47 +1,64 @@
-### 基於 OpenSpec 與 Git Worktree 的多 Agent 協作開發工作流
+# Worktree 自動化腳本手冊 (Technical Reference)
 
-五個腳本（`install.sh`, `wt-new.sh`, `wt-done.sh`, `wt-resume.sh`, `pm-start.sh`）旨在結合 [OpenSpec](https://github.com/Fission-AI/OpenSpec) 與 `git worktree`，打造一套支援多個 AI Agent 同步開發的自動化流程。
+本目錄包含一組輔助 `git worktree` 開發流程的腳本，旨在簡化多 Agent 的開發環境建立、切換與清理。
 
-透過 `git worktree` 的特性，我們可以為每個功能任務建立獨立的工作目錄，有效避免多個 Agent 在實作時互相覆蓋或改動到相同的檔案。
+---
 
-**🔄 核心工作流程 (Workflow)**
+## 🛠️ 安裝
 
-1. **需求規劃 (PM Agent)：**
-   使用 `pm-start` 啟動 PM Master Session，由 PM Agent 透過 OpenSpec 產生各項規格與變更清單（如：`proposal.md`、`design.md`、`tasks.md`）。
-2. **獨立開發 (RD Agent)：**
-   使用 `wt-new <name>` 自動建立專屬的 feature 分支與 worktree 目錄，並開啟新的對話作為 RD Agent 進行實作。若 worktree 已存在，`wt-new <name>` 會自動切換至 **resume 模式**——中途外出後只需再執行一次 `wt-new <name>` 即可繼續。Agent 在獨立環境下開發，互不干擾。
-3. **合併與清理 (Merge & Clean)：**
-   開發完成後，使用 `wt-done <name>` 將 feature 分支合併回 `main` 分支，並自動刪除對應的 worktree 與暫存環境。
-4. **事後回顧 (Post-done Resume)：**
-   若需要在 `wt-done` 刪除 worktree 後重新進入 session（例如：code review），使用 `wt-resume <name>` 以 session 名稱恢復，無需 worktree 目錄存在。
+執行安裝腳本將命令加入您的 Zsh 配置，並啟用 Tab 自動補全：
 
-**🛠️ 腳本功能說明 (Scripts)**
-
-* **`install.sh`**
-  * 安裝初始化環境，將所有腳本配置到系統中，並安裝 zsh tab 補全。
-* **`wt-new.sh`**
-  * **Usage:** `wt-new <feature-name> [--base <branch>] [--agent claude|copilot|codex]`
-  * **自動偵測模式：** 若 worktree 已存在 → RESUME 模式（顯示 `Mode: resume` banner）；否則 → NEW SESSION 模式（顯示 `Mode: new` banner）。
-  * **建立環境（new）：** 從 `BASE_BRANCH`（預設 `main`，可用 `--base develop` 覆寫）建立 feature branch 與 worktree 目錄，複製 `settings.local.json` 與 `.env`。
-  * **恢復環境（resume）：** 進入已有的 worktree，以 `--resume "RD: <name>"` 恢復 Claude session。
-* **`wt-done.sh`**
-  * **Usage:** `wt-done <feature-name> [--base <branch>]`
-  * **合併分支：** 將 feature branch 合併回 `BASE_BRANCH`（預設 `main`，可用 `--base develop` 覆寫）。
-  * **清理環境：** 移除 worktree 目錄、執行 `git worktree prune`、刪除 feature branch、重置 iTerm2 badge。
-  * **衝突處理：** merge 失敗時提示執行 `wt-resume <name>` 以 agent 協助解衝突。
-* **`wt-resume.sh`**
-  * **Usage:** `wt-resume <feature-name>`
-  * 以 session 名稱恢復 Claude agent session。若 worktree 目錄存在則 `cd` 進入後再恢復；若已被 `wt-done` 刪除，則從當前目錄以 `--resume` 恢復。
-* **`pm-start.sh`**
-  * **Usage:** `pm-start`
-  * 從 repo 根目錄啟動（或恢復）名為 `PM: <repo-name>` 的 PM Master Claude session，以 `--permission-mode plan` 開啟（Plan Mode，不自動執行指令）。
-
-**⌨️ Zsh Tab 補全**
-
-安裝後，`wt-new`、`wt-done`、`wt-resume` 支援按 `<TAB>` 自動補全 `.worktrees/` 目錄下的 feature 名稱：
-
-```zsh
-wt-new <TAB>      # 列出現有 worktree 名稱
-wt-done <TAB>     # 列出現有 worktree 名稱
-wt-resume <TAB>   # 列出現有 worktree 名稱
+```bash
+bash scripts/worktree/install.sh
+source ~/.zshrc
 ```
+
+**特性：**
+* **冪等性**：重複安裝不影響現有設定。
+* **補全功能**：支援 `wt-new <TAB>` 列出現有 Feature。
+* **環境檢查**：自動檢查 git 版本與 bash 版本。
+
+---
+
+## ⌨️ 指令手冊 (Command Reference)
+
+### 1. `wt-new <feature-name>`
+**用途**：建立或恢復一個開發環境。
+*   **參數**：
+    *   `--base <branch>`：指定基礎分支（預設 `main`）。
+    *   `--agent <name>`：指定啟動的工具（`claude`|`copilot`|`codex`）。
+*   **模式**：
+    *   **New**：建立 feature 分支與 `.worktrees/` 目錄，並複製 `.env` 與 `settings.local.json`。
+    *   **Resume**：偵測到目錄已存在時，自動 `cd` 並恢復 Agent 會話。
+
+### 2. `wt-done <feature-name>`
+**用途**：合併開發內容並清理 Worktree。
+*   **參數**：
+    *   `--base <branch>`：合併回的目標分支（預設 `main`）。
+*   **動作**：切換至 base branch -> 合併 feature -> 移除 Worktree 目錄 -> `git worktree prune` -> 刪除分支 -> 重置 iTerm2 徽章。
+
+### 3. `wt-resume <feature-name>`
+**用途**：恢復 Agent 會話。
+*   **特性**：即使目錄已被 `wt-done` 刪除，仍可透過此命令恢復該 feature 名稱對應的 Claude 會話。
+
+### 4. `pm-start`
+**用途**：在專案根目錄啟動「規劃大腦」PM Master Session。
+*   **特性**：會話名稱固定為 `PM: <repo-name>`。
+
+---
+
+## ⚙️ 進階配置
+
+*   **Zsh Completion**：安裝後會自動載入 `_wt` 補全函式。
+*   **iTerm2 整合**：腳本執行期間會動態更新 iTerm2 的 Badge（徽章），方便識別目前的 feature 環境。
+*   **環境要求**：
+    *   `git` 2.5+ (必須支援 worktree)
+    *   `bash` 4+
+    *   `rsync` (用於環境變數同步)
+
+---
+
+## 🔗 相關說明
+
+*   **協作流程概覽**：了解如何配合 OpenSpec 進行多 Agent 開發，請看 [多 Agent 協作工作流](../../docs/multi-agent-workflow.md)。
+*   **自動化 Commit**：了解 `/openspec-commit` 的運作原理，請看 [OpenSpec Commit 工作流](../../docs/openspec-commit-workflow.md)。
