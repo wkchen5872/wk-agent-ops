@@ -81,7 +81,7 @@ fix_hooks() {
 
   if [[ ! -f "${DEPLOYED_HOOK}" ]]; then
     echo "ERROR: Deployed hook not found at ${DEPLOYED_HOOK}"
-    echo "Please run install.sh first."
+    echo "Please run scripts/notify/telegram/install.sh first."
     return 1
   fi
 
@@ -121,7 +121,7 @@ register_copilot_hooks() {
 
   if [[ ! -f "${DEPLOYED_HOOK}" ]]; then
     echo "ERROR: Deployed hook not found at ${DEPLOYED_HOOK}"
-    echo "Please run install.sh first."
+    echo "Please run scripts/notify/telegram/install.sh first."
     return 1
   fi
 

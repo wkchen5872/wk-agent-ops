@@ -53,5 +53,5 @@ fi
 
 echo ""
 echo "✓ Telegram Notify uninstalled."
-echo "  To reinstall: bash ${SCRIPT_DIR}/install.sh"
+echo "  To reinstall: bash scripts/notify/telegram/install.sh"
 echo ""

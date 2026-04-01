@@ -1,3 +1,4 @@
+# Workflow 自動化腳本手冊
 # Worktree 自動化腳本手冊 (Technical Reference)
 
 本目錄包含一組輔助 `git worktree` 開發流程的腳本，旨在簡化多 Agent 的開發環境建立、切換與清理。
@@ -9,7 +10,7 @@
 執行安裝腳本將命令加入您的 Zsh 配置，並啟用 Tab 自動補全：
 
 ```bash
-bash scripts/worktree/install.sh
+bash scripts/workflow/install.sh
 source ~/.zshrc
 ```
 

@@ -11,14 +11,14 @@
 
 ## 快速開始
 
-### 安裝 Worktree 腳本（全域）
+### 安裝 Workflow 腳本（全域）
 
 ```bash
-bash scripts/worktree/install.sh
+bash scripts/workflow/install.sh
 source ~/.zshrc
 ```
 
-安裝後可在任何 repo 使用 `wt-new` 和 `wt-done`。
+安裝後可在任何 repo 使用 `wt-new`、`wt-done`、`wt-resume` 與 `pm-start`。
 
 ### 安裝 Agent 擴充套件（到目標專案）
 
@@ -55,16 +55,14 @@ PM Agent（主環境 main）             RD Agent（獨立 Worktree）
                                      └─ archive + docs + commit
                                    wt-done <feature>
                                      └─ merge → main
-
-                                     └─ merge → develop
                                    wt-resume <feature>  ← 事後回顧
 ```
 
-詳細說明：[docs/multi-agent-workflow.md](docs/multi-agent-workflow.md)
+詳細說明：[docs/workflow/guide.md](docs/workflow/guide.md)
 
 ---
 
-## Worktree 指令
+## Workflow 指令
 
 | 指令 | 說明 |
 |---|---|
@@ -123,13 +121,6 @@ wt-done feature123 --base main
 - 優先使用專案 `.venv`，fallback 系統 Python
 - 測試結果寫入 `logs/unit_test_<timestamp>.log`
 
-### Node.js Profile
-
-| 安裝位置 | 用途 |
-|---|---|
-| `.claude/rules/` | Node.js 規範（待補充） |
-| `.git/hooks/pre-commit` | Lint hook（待補充） |
-
 ---
 
 ## 目錄結構
@@ -137,35 +128,15 @@ wt-done feature123 --base main
 ```
 wk-agent-ops/
 ├── template/                   ← 擴充套件來源（單一維護點）
-│   ├── common/                 ← 所有專案
-│   ├── python/                 ← Python 專案
-│   └── node/                   ← Node.js 專案
 ├── scripts/
-│   ├── notify/
-│   │   └── lib/                ← 共用庫（config.sh、registry.sh）
-│   ├── telegram-notify/        ← Telegram 通知 hook 與安裝腳本
-│   │   ├── install.sh          ← 互動式安裝精靈
-│   │   ├── hook.sh             ← AI CLI hook 腳本
-│   │   ├── update.sh           ← 更新設定
-│   │   └── uninstall.sh        ← 移除
-│   ├── line-notify/            ← Line Notify（架構佔位，未實作）
+│   ├── notify/                 ← 通知系統共用庫與 Telegram 實作
 │   ├── skills/
 │   │   └── install.sh          ← 安裝擴充套件到目標專案
-│   └── worktree/
-│       ├── install.sh          ← 安裝 wt-* / pm-start 到全域 + zsh 補全
-│       ├── wt-new.sh
-│       ├── wt-done.sh
-│       ├── wt-resume.sh
-│       ├── pm-start.sh
-│       └── _wt                 ← zsh completion
+│   └── workflow/               ← wt-* / pm-start 等流程管理腳本
 ├── docs/
-│   ├── multi-agent-workflow.md    ← 多 Agent 工作流完整說明
-│   ├── commit-feature-workflow.md ← /opsx:commit 工作流說明
-│   ├── git-commit-writer.md       ← git-commit-writer 使用說明
-│   ├── doc-updater.md             ← doc-updater 使用說明
-│   ├── template-profiles.md       ← Template profile 說明與新增方式
-│   ├── telegram-notify-hook.md    ← Telegram 通知快速安裝說明
-│   └── notify-hooks-architecture.md ← 通知 hook 架構與擴充指南
+│   ├── workflow/               ← 多 Agent 協作與 Commit 流程說明
+│   ├── notify/                 ← 通知系統架構與 Telegram 安裝說明
+│   └── skills/                 ← git-commit-writer, doc-updater 等工具說明
 └── openspec/                   ← 本專案的 OpenSpec 變更記錄
 ```
 
@@ -192,12 +163,7 @@ bash scripts/notify/telegram/update.sh       # 更新 token / chat_id / level
 bash scripts/notify/telegram/uninstall.sh    # 移除 hook 與 config
 ```
 
-| 通知等級 | Stop（任務完成）| Notification（等待授權）|
-|---------|--------------|----------------------|
-| `all`（預設）| ✅ | ✅ |
-| `notify_only` | ❌ | ✅ |
-
-詳細說明：[docs/telegram-notify-hook.md](docs/telegram-notify-hook.md) · [docs/notify-hooks-architecture.md](docs/notify-hooks-architecture.md)
+詳細說明：[docs/notify/telegram.md](docs/notify/telegram.md) · [docs/notify/architecture.md](docs/notify/architecture.md)
 
 ---
 
@@ -210,7 +176,7 @@ mkdir -p template/<profile>/hooks
 
 `install.sh` 自動偵測 `template/` 下的子目錄為可用 profile，不需要修改腳本。
 
-詳細說明：[docs/template-profiles.md](docs/template-profiles.md)
+詳細說明：[docs/skills/template-profiles.md](docs/skills/template-profiles.md)
 
 ---
 

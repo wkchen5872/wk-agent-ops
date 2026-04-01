@@ -56,7 +56,7 @@ git diff HEAD
 | 新增 `.claude/agents/*.md` 或 `template/common/.claude/agents/*.md` | `AGENTS.md`（新增 agent 項目） |
 | 新增 `.claude/skills/*/SKILL.md` 或 `template/common/skills/*/` | `AGENTS.md`（新增 skill 參照） |
 | 新增 `template/<profile>/` 或修改 `install.sh` | `docs/template-profiles.md`、`README.md` |
-| 修改 `scripts/worktree/` | `docs/multi-agent-workflow.md`、`README.md` |
+| 修改 `scripts/workflow/` | `docs/workflow/guide.md`、`README.md` |
 | 新增 env var 或新外部相依套件 | `README.md`（相依套件區段） |
 | 重大新功能或新使用者可見能力 | `README.md` 及/或 `docs/<feature>.md` |
 | 純內部實作、無使用者可見影響 | 無需更新 → 輸出原因並停止 |
