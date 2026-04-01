@@ -4,11 +4,11 @@
 The system SHALL provide a `wt-resume <feature-name>` command that resumes a Claude agent session regardless of whether the local worktree directory still exists.
 
 #### Scenario: Resume with worktree present
-- **WHEN** user runs `wt-resume etf-nav-fetcher`
-- **AND** `$REPO/.worktrees/etf-nav-fetcher` directory exists
+- **WHEN** user runs `wt-resume feature123`
+- **AND** `$REPO/.worktrees/feature123` directory exists
 - **THEN** system SHALL print a "Resuming in worktree…" message
 - **AND** change directory to the worktree
-- **AND** execute `claude --resume "RD: etf-nav-fetcher"`
+- **AND** execute `claude --resume "RD: feature123"`
 
 #### Scenario: Resume without worktree (after wt-done)
 - **WHEN** user runs `wt-resume feature123`
