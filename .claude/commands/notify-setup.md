@@ -30,12 +30,13 @@ When invoked without arguments, present an interactive menu. When invoked with a
 
    Wait for the user to choose, then proceed with the selected action.
 
-2. **setup**: Run `bash scripts/telegram-notify/install.sh` in the terminal. Show all output to the user.
+2. **setup**: Run `bash scripts/notify/telegram/install.sh` in the terminal. Show all output to the user.
 
-3. **update**: Run `bash scripts/telegram-notify/update.sh` interactively. If the user specified what to update (e.g., "update my token"), pass the argument directly:
-   - token → `bash scripts/telegram-notify/update.sh token`
-   - chat_id → `bash scripts/telegram-notify/update.sh chat_id`
-   - notify_level → `bash scripts/telegram-notify/update.sh notify_level`
+3. **update**: Run `bash scripts/notify/telegram/update.sh` interactively. If the user specified what to update (e.g., "update my token"), pass the argument directly:
+   - token → `bash scripts/notify/telegram/update.sh token`
+   - chat_id → `bash scripts/notify/telegram/update.sh chat_id`
+   - notify_level → `bash scripts/notify/telegram/update.sh notify_level`
+   - copilot hooks → `bash scripts/notify/telegram/update.sh copilot-hooks`
 
 4. **test**: Send a test notification by running:
    ```bash
@@ -52,10 +53,10 @@ When invoked without arguments, present an interactive menu. When invoked with a
    
    If the config file does not exist, tell the user that Telegram Notify is not installed and suggest running `/notify-setup setup`.
 
-6. **uninstall**: Run `bash scripts/telegram-notify/uninstall.sh`. Show all output.
+6. **uninstall**: Run `bash scripts/notify/telegram/uninstall.sh`. Show all output.
 
 ## Notes
 
-- All scripts are in `scripts/telegram-notify/` relative to the project root.
+- All scripts are in `scripts/notify/telegram/` relative to the project root.
 - If the user is not in the project root, adjust the path accordingly or `cd` to it first.
 - After `setup` or `update`, always suggest running `test` to verify.

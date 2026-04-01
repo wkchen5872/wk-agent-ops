@@ -179,7 +179,7 @@ wk-agent-ops/
 
 ```bash
 # 互動式安裝精靈
-bash scripts/telegram-notify/install.sh
+bash scripts/notify/telegram/install.sh
 
 # 或在 Claude Code 內
 /notify-setup
@@ -188,8 +188,8 @@ bash scripts/telegram-notify/install.sh
 ### 管理設定
 
 ```bash
-bash scripts/telegram-notify/update.sh       # 更新 token / chat_id / level
-bash scripts/telegram-notify/uninstall.sh    # 移除 hook 與 config
+bash scripts/notify/telegram/update.sh       # 更新 token / chat_id / level
+bash scripts/notify/telegram/uninstall.sh    # 移除 hook 與 config
 ```
 
 | 通知等級 | Stop（任務完成）| Notification（等待授權）|
