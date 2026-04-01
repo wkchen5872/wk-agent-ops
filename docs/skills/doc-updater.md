@@ -103,8 +103,8 @@ git commit -m "docs: update documentation"
 | 偵測到的變更 | 更新哪些文件 |
 |------------|------------|
 | 新增 agent 或 skill | `AGENTS.md` |
-| 新增 template profile 或修改 install.sh | `docs/template-profiles.md`、`README.md` |
-| 修改 worktree scripts | `docs/multi-agent-workflow.md`、`README.md` |
+| 新增 template profile 或修改 install.sh | `template-profiles.md`、`../../README.md` |
+| 修改 workflow scripts | `../workflow/guide.md`、`../../README.md` |
 | 新增相依套件或 env var | `README.md`（相依套件區段） |
 | 重大新功能或使用者可見能力 | `README.md` 及/或 `docs/<feature>.md` |
 | 純內部實作、無使用者影響 | 不更新 |
@@ -156,5 +156,5 @@ A: 不會。skill 指令中明確規定更新 README.md 時必須使用繁體中
 - `.claude/skills/doc-updater/SKILL.md` — Skill 定義
 - `template/common/.claude/agents/doc-updater.md` — Template 來源（agent）
 - `template/common/skills/doc-updater/SKILL.md` — Template 來源（skill）
-- `docs/git-commit-writer.md` — 相關工具說明
-- `docs/commit-feature-workflow.md` — OpenSpec commit 工作流程
+- `git-commit-writer.md` — 相關工具說明
+- `../workflow/commit.md` — OpenSpec commit 工作流程

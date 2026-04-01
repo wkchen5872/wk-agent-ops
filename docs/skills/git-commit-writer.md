@@ -94,4 +94,4 @@ Co-Authored-By: <Model Name> <noreply@anthropic.com>
 
 - **Skill**: `template/common/skills/git-commit-writer/SKILL.md`
 - **Agent**: `template/common/.claude/agents/git-commit-writer.md`
-- **Workflow**: `openspec-commit-workflow.md`
+- **Workflow**: [../workflow/commit.md](../workflow/commit.md)

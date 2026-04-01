@@ -57,6 +57,6 @@ wt-done FEATURE_NAME    # 合併分支、刪除 Worktree 並清理環境
 
 ## 📚 延伸閱讀
 
-*   **腳本手冊與安裝**：關於 `wt-new`、`wt-done` 的詳細參數、補全機制與安裝方法，請參閱 [Worktree 腳本參考](../../scripts/worktree/README.md)。
-*   **自動化收尾機制**：了解 `/openspec-commit` 如何自動分析變更並更新說明文件，請參閱 [OpenSpec Commit 工作流](openspec-commit-workflow.md)。
-*   **多工具相容性**：本流程同時支援 Claude Code, Github Copilot, Gemini CLI 與 Codex，詳見 [AGENTS.md](../AGENTS.md)。
+*   **腳本手冊與安裝**：關於 `wt-new`、`wt-done` 的詳細參數、補全機制與安裝方法，請參閱 [Worktree 腳本參考](../../scripts/workflow/README.md)。
+*   **自動化收尾機制**：了解 `/openspec-commit` 如何自動分析變更並更新說明文件，請參閱 [OpenSpec Commit 工作流](commit.md)。
+*   **多工具相容性**：本流程同時支援 Claude Code, Github Copilot, Gemini CLI 與 Codex，詳見 [AGENTS.md](../../AGENTS.md)。

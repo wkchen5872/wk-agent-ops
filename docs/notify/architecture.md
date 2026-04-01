@@ -218,10 +218,10 @@ bash scripts/notify/telegram/update.sh copilot-hooks
 
 ## How to Add a New Provider
 
-See `scripts/notify/README.md` for the step-by-step provider extension guide.
+See [../../scripts/notify/README.md](../../scripts/notify/README.md) for the step-by-step provider extension guide.
 
 Summary:
-1. Copy `scripts/notify/telegram/` to `scripts/<provider-name>/`
+1. Copy `scripts/notify/telegram/` to `scripts/notify/<provider-name>/`
 2. Implement `hook.sh` with the standard interface
 3. Use `{PROVIDER}_ENABLED` config key prefix
 4. Deploy hook to `~/.config/ai-notify/hooks/<provider-name>.sh` from `install.sh`
