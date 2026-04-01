@@ -10,7 +10,7 @@
 ```
 Terminal                        Claude (in worktree)
 ─────────────────────────────────────────────────────────────────
-wt-new <feature-name>
+wt-work <feature-name>
   ├── git checkout main
   ├── git worktree add .worktrees/<name> -b feature/<name>
   └── cd .worktrees/<name> && claude ──────► /opsx:apply <name>
@@ -151,5 +151,5 @@ skills/openspec-commit/SKILL.md      ← 專案原始檔（版本控制）
 ## 相關文件
 
 *   **多 Agent 協作工作流**：了解整體開發流程，請看 [Master Guide](guide.md)。
-*   **Worktree 腳本參考**：了解 `wt-new`、`wt-done` 的詳細參數與安裝，請看 [Technical Reference](../../scripts/workflow/README.md)。
+*   **Worktree 腳本參考**：了解 `wt-work`、`wt-done` 的詳細參數與安裝，請看 [Technical Reference](../../scripts/workflow/README.md)。
 *   **Git Commit Writer**：了解獨立呼叫 commit 生成工具的方式，請看 [../skills/git-commit-writer.md](../skills/git-commit-writer.md)。
