@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionEnd": [
+      {
+        "type": "command",
+        "bash": "bash \"/Users/chenwenkai/.config/ai-notify/hooks/telegram-notify.sh\" sessionEnd"
+      }
+    ]
+  }
+}

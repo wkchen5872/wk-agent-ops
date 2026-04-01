@@ -161,7 +161,7 @@ register_hook() {
 }
 
 # Public: register the telegram-notify hook in Copilot CLI (.github/hooks/hooks.json).
-# Writes sessionEnd (task complete) and userPromptSubmitted (action required) entries.
+# Writes sessionEnd (task complete) entry only.
 # Usage: register_hook_copilot <deployed_hook_path>
 register_hook_copilot() {
   local hook_path="$1"
@@ -183,28 +183,21 @@ register_hook_copilot() {
   fi
 
   local session_end_cmd="bash \"${hook_path}\" sessionEnd"
-  local prompt_cmd="bash \"${hook_path}\" userPromptSubmitted"
 
   local tmp
   tmp="$(mktemp)"
 
   if jq \
     --arg session_end_cmd "${session_end_cmd}" \
-    --arg prompt_cmd "${prompt_cmd}" \
     '
     def has_bash_cmd(arr; cmd):
       if arr == null then false
-      else (arr | map(select(.type == "bash" and .command == cmd)) | length) > 0
+      else (arr | map(select(.type == "command" and .bash == cmd)) | length) > 0
       end;
 
     .hooks.sessionEnd = (
       if has_bash_cmd(.hooks.sessionEnd; $session_end_cmd) then .hooks.sessionEnd
-      else ((.hooks.sessionEnd // []) + [{"type":"bash","command":$session_end_cmd}])
-      end
-    ) |
-    .hooks.userPromptSubmitted = (
-      if has_bash_cmd(.hooks.userPromptSubmitted; $prompt_cmd) then .hooks.userPromptSubmitted
-      else ((.hooks.userPromptSubmitted // []) + [{"type":"bash","command":$prompt_cmd}])
+      else ((.hooks.sessionEnd // []) + [{"type":"command","bash":$session_end_cmd}])
       end
     )
     ' "${hooks_file}" > "${tmp}"; then
@@ -235,24 +228,20 @@ unregister_hook_copilot() {
   fi
 
   local session_end_cmd="bash \"${hook_path}\" sessionEnd"
-  local prompt_cmd="bash \"${hook_path}\" userPromptSubmitted"
 
   local tmp
   tmp="$(mktemp)"
 
   if jq \
     --arg session_end_cmd "${session_end_cmd}" \
-    --arg prompt_cmd "${prompt_cmd}" \
     '
     def remove_bash_cmd(arr; cmd):
       if arr == null then []
-      else arr | map(select((.type == "bash" and .command == cmd) | not))
+      else arr | map(select((.type == "command" and .bash == cmd) | not))
       end;
 
-    .hooks.sessionEnd         = remove_bash_cmd(.hooks.sessionEnd;         $session_end_cmd) |
-    .hooks.userPromptSubmitted = remove_bash_cmd(.hooks.userPromptSubmitted; $prompt_cmd) |
-    if (.hooks.sessionEnd         | length) == 0 then del(.hooks.sessionEnd)         else . end |
-    if (.hooks.userPromptSubmitted | length) == 0 then del(.hooks.userPromptSubmitted) else . end
+    .hooks.sessionEnd = remove_bash_cmd(.hooks.sessionEnd; $session_end_cmd) |
+    if (.hooks.sessionEnd | length) == 0 then del(.hooks.sessionEnd) else . end
     ' "${hooks_file}" > "${tmp}"; then
     mv "${tmp}" "${hooks_file}"
     echo "  ✓ Unregistered Copilot hooks from ${hooks_file}"
