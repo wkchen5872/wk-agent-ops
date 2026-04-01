@@ -153,7 +153,7 @@ diff template/common/.claude/agents/my-agent.md \
 **特性：**
 - 自動判斷 commit type（feat/fix/chore/docs 等）
 - 支援 openspec 上下文（有 change 時加 scope）
-- Haiku 4.5 model，省省費用
+- 支援多模型（Claude Haiku 4.5 / Gemini Flash 等），兼顧效能與費用
 - 不需要確認，直接執行
 - Archive guard：若傳入 `archive_path`，在 commit 前驗證目錄存在；archive 未完成則停止
 
@@ -176,7 +176,7 @@ diff template/common/.claude/agents/my-agent.md \
 - 只改相關 section，不重寫無關段落
 - 支援新 agent/skill、workflow 變更、新 profile 等多種情境
 - **不自動建立 commit**——文件更新永遠留在工作區
-- 使用 Sonnet 模型確保文件理解與撰寫品質
+- 支援高品質模型（Claude Sonnet / Gemini Pro），確保文件理解與撰寫品質
 
 **觸發方式：**
 ```

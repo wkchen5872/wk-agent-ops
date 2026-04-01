@@ -12,11 +12,16 @@ _wt() {
     features=("${(@f)$(ls "$repo/.worktrees/" 2>/dev/null)}")
   fi
 
-  local -a agents
-  agents=(claude copilot gemini codex)
-
   case "$service" in
-    wt-work|wt-resume)
+    wt-work)
+      _arguments \
+        '1:feature name:((${(q)features[@]}))' \
+        {--agent,-a}'[agent to use]:agent:(claude copilot gemini codex)' \
+        {--base,-b}'[base branch]:branch: ' \
+        {--session,-s}'[session ID or name]:session ID or name: ' \
+        && return 0
+      ;;
+    wt-resume)
       _arguments \
         '1:feature name:((${(q)features[@]}))' \
         {--agent,-a}'[agent to use]:agent:(claude copilot gemini codex)' \
