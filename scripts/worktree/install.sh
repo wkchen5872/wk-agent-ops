@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# install.sh — Install wt-new / wt-done globally
+# install.sh — Install wt-new / wt-done / wt-resume / pm-start globally
 #
 # Usage:
 #   bash scripts/worktree/install.sh
 #
 # Description:
-#   Copies the worktree helpers to ~/.local/bin and ensures
-#   the directory is in the user's PATH.
+#   Copies the worktree helpers to ~/.local/bin, installs the _wt zsh
+#   completion to ~/.local/share/zsh/site-functions/, and ensures the
+#   directories are in the user's PATH / fpath.
 
 set -euo pipefail
 
@@ -18,14 +19,21 @@ fi
 
 # 1. 配置目標安裝路徑
 INSTALL_DIR="$HOME/.local/bin"
-mkdir -p "$INSTALL_DIR"
+ZSH_FUNC_DIR="$HOME/.local/share/zsh/site-functions"
+mkdir -p "$INSTALL_DIR" "$ZSH_FUNC_DIR"
 
 # 2. 複製執行檔並賦予執行權限
-cp -f "$REPO/scripts/worktree/wt-new.sh" "$INSTALL_DIR/wt-new"
-cp -f "$REPO/scripts/worktree/wt-done.sh" "$INSTALL_DIR/wt-done"
-chmod +x "$INSTALL_DIR/wt-new" "$INSTALL_DIR/wt-done"
+cp -f "$REPO/scripts/worktree/wt-new.sh"    "$INSTALL_DIR/wt-new"
+cp -f "$REPO/scripts/worktree/wt-done.sh"   "$INSTALL_DIR/wt-done"
+cp -f "$REPO/scripts/worktree/wt-resume.sh" "$INSTALL_DIR/wt-resume"
+cp -f "$REPO/scripts/worktree/pm-start.sh"  "$INSTALL_DIR/pm-start"
+chmod +x "$INSTALL_DIR/wt-new" "$INSTALL_DIR/wt-done" \
+         "$INSTALL_DIR/wt-resume" "$INSTALL_DIR/pm-start"
 
-# 3. 偵測使用者的 Shell 設定檔
+# 3. 安裝 zsh completion
+cp -f "$REPO/scripts/worktree/_wt" "$ZSH_FUNC_DIR/_wt"
+
+# 4. 偵測使用者的 Shell 設定檔
 SHELL_RC=""
 if [[ "$SHELL" == *"zsh"* ]]; then
   SHELL_RC="$HOME/.zshrc"
@@ -36,20 +44,32 @@ else
   exit 0
 fi
 
-# 4. 檢查並更新 PATH (Idempotent)
+# 5. 檢查並更新 PATH + fpath (Idempotent)
 PATH_MARKER="# invest-data-fetcher worktree helpers PATH"
 if grep -q "$PATH_MARKER" "$SHELL_RC" 2>/dev/null; then
   echo "⏭️  PATH 已配置於 ${SHELL_RC}。腳本已更新至最新版本。"
-  exit 0
-fi
-
-cat >> "$SHELL_RC" <<EOF
+else
+  cat >> "$SHELL_RC" <<EOF
 
 $PATH_MARKER
 export PATH="\$PATH:$INSTALL_DIR"
+fpath=($ZSH_FUNC_DIR \$fpath)
+autoload -Uz compinit && compinit
 EOF
+fi
+
+# 6. 重新整理指令快取
+hash -r
 
 echo "✅ 安裝完成。執行檔已部署至 $INSTALL_DIR"
+echo ""
+echo "已安裝指令："
+echo "  wt-new      建立或恢復 worktree RD session"
+echo "  wt-done     合併 feature 分支並清理 worktree"
+echo "  wt-resume   以 session 名稱恢復 Claude agent（worktree 刪除後也可用）"
+echo "  pm-start    啟動或恢復 PM Master Claude session"
+echo ""
+echo "Zsh 補全已安裝至 $ZSH_FUNC_DIR/_wt"
 echo ""
 echo "請執行以下指令以套用環境變數："
 echo "source $SHELL_RC"
