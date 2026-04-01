@@ -44,17 +44,18 @@ bash /path/to/wk-agent-ops/scripts/skills/install.sh python node
 ## 多 Agent 開發流程
 
 ```
-PM Agent（主環境 develop）          RD Agent（獨立 Worktree）
+PM Agent（主環境 main）             RD Agent（獨立 Worktree）
 ────────────────────────────────    ──────────────────────────
-pm-start  → 啟動 PM Master Session
 /opsx:ff  → 建立規格                wt-new <feature>
-/opsx:new                             └─ 自動建立 worktree（或 resume）
+/opsx:new                             └─ 自動建立 worktree
 /opsx:continue ×4                     └─ 自動啟動 Agent
    proposal → specs                /opsx:apply <feature>
    design → tasks                    └─ 依規格實作
                                    /opsx:commit
                                      └─ archive + docs + commit
                                    wt-done <feature>
+                                     └─ merge → main
+
                                      └─ merge → develop
                                    wt-resume <feature>  ← 事後回顧
 ```
@@ -85,8 +86,8 @@ wt-resume feature123 --agent copilot
 支援指定 base branch（預設 `main`）：
 
 ```bash
-wt-new feature123 --base develop
-wt-done feature123 --base develop
+wt-new feature123 --base main
+wt-done feature123 --base main
 ```
 
 ---

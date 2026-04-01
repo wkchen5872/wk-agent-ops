@@ -3,7 +3,7 @@ name: openspec-commit
 description: >
   Archive the current openspec change, update docs/ documentation, and create
   a conventional git commit. Use at the end of feature development inside a
-  git worktree (after /opsx:apply), before running wt-done to merge to develop.
+  git worktree (after /opsx:apply), before running wt-done to merge to main.
 license: MIT
 compatibility: Requires openspec CLI and git.
 metadata:
@@ -151,7 +151,7 @@ Capture the commit hash output for Step 6.
 💾 Commit:  <short-hash> <type>(<change-id>): <subject>
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Next step → merge to develop:
+Next step → merge to main:
 
   wt-done <feature-name>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
