@@ -18,6 +18,10 @@
 
 set -euo pipefail
 
+usage() {
+  echo "Usage: wt-done <feature-name> [--base <branch>]"
+}
+
 NAME=""
 BASE_BRANCH="main"
 
@@ -29,7 +33,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     -*)
       echo "Unknown option: $1"
-      echo "Usage: wt-done <feature-name> [--base <branch>]"
+      usage
       exit 1
       ;;
     *)
@@ -37,7 +41,7 @@ while [[ $# -gt 0 ]]; do
         NAME="$1"
       else
         echo "Unexpected argument: $1"
-        echo "Usage: wt-done <feature-name> [--base <branch>]"
+        usage
         exit 1
       fi
       shift
@@ -46,7 +50,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$NAME" ]]; then
-  echo "Usage: wt-done <feature-name> [--base <branch>]"
+  usage
   echo "Example: wt-done feature_name"
   exit 1
 fi
