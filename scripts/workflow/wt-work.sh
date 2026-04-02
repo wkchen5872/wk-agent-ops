@@ -157,16 +157,22 @@ if [[ -d "$WORKTREE_DIR" ]]; then
 else
   # ── NEW SESSION PATH ──────────────────────────────────────────────────────
   if git -C "$REPO" show-ref --quiet "refs/heads/$BRANCH"; then
-    echo "Error: branch already exists but directory is missing: $BRANCH"
-    echo "Check worktree status: git worktree list"
-    exit 1
+    # Path 1: local branch already exists (e.g., created by PM's hook on same machine).
+    echo "Creating worktree from existing local branch: $BRANCH"
+    git -C "$REPO" worktree add "$WORKTREE_DIR" "$BRANCH"
+  elif git -C "$REPO" ls-remote --exit-code origin "$BRANCH" &>/dev/null 2>&1; then
+    # Path 2: branch exists on remote only (cross-machine: PM on another computer).
+    echo "Fetching remote branch: $BRANCH"
+    git -C "$REPO" fetch origin "$BRANCH"
+    echo "Creating worktree from remote branch: $BRANCH"
+    git -C "$REPO" worktree add "$WORKTREE_DIR" -b "$BRANCH" "origin/$BRANCH"
+  else
+    # Path 3: no local or remote branch — create a new one from BASE_BRANCH.
+    echo "Switching to $BASE_BRANCH..."
+    git -C "$REPO" checkout "$BASE_BRANCH"
+    echo "Creating worktree: $WORKTREE_DIR (branch: $BRANCH)"
+    git -C "$REPO" worktree add "$WORKTREE_DIR" -b "$BRANCH"
   fi
-
-  echo "Switching to $BASE_BRANCH..."
-  git -C "$REPO" checkout "$BASE_BRANCH"
-
-  echo "Creating worktree: $WORKTREE_DIR (branch: $BRANCH)"
-  git -C "$REPO" worktree add "$WORKTREE_DIR" -b "$BRANCH"
   echo "✅ Worktree created"
 
   LOCAL_SETTINGS="$REPO/.claude/settings.local.json"

@@ -19,6 +19,7 @@ source ~/.zshrc
 ```
 
 安裝後可在任何 repo 使用 `wt-work`、`wt-done`、`wt-resume` 與 `pm-start`。
+同時安裝 `openspec-branch-creator` PostToolUse hook — PM agent 執行 `openspec new change <name>` 時自動建立 `feature/<name>` 分支。
 
 ### 安裝 Agent 擴充套件（到目標專案）
 
@@ -66,8 +67,8 @@ PM Agent（主環境 main）             RD Agent（獨立 Worktree）
 
 | 指令 | 說明 |
 |---|---|
-| `wt-work <feature>` | 建立 `feature/<name>` worktree 並啟動 Agent；worktree 已存在則自動 resume，均帶入 `/opsx:apply` |
-| `wt-done <feature>` | 合併回 base branch，刪除 worktree 與 branch |
+| `wt-work <feature>` | 建立 `feature/<name>` worktree 並啟動 Agent；本地/遠端分支已存在時自動銜接（跨機器支援）；worktree 已存在則自動 resume，均帶入 `/opsx:apply` |
+| `wt-done <feature>` | 合併回 base branch，刪除 worktree 與 branch（⚠️ local-only，不含 push / PR）|
 | `wt-resume <feature>` | 恢復 Agent session（無 `--session` 時顯示互動選單；worktree 已刪除也可用）|
 | `pm-start` | 啟動或恢復 PM Master Claude session（Plan Mode）|
 
