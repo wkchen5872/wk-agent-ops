@@ -68,6 +68,9 @@ fi
 # 7. 重新整理指令快取
 hash -r
 
+# 8. 安裝 openspec-branch-creator hook（PostToolUse 自動建立 feature branch）
+bash "$REPO/scripts/workflow/openspec-branch-creator/install.sh"
+
 echo "✅ 安裝完成。執行檔已部署至 $INSTALL_DIR"
 echo ""
 echo "已安裝指令："
