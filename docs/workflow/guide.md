@@ -74,6 +74,8 @@ wt-work FEATURE_NAME --agent codex     # Codex
 wt-done FEATURE_NAME    # 合併分支、刪除 Worktree 並清理環境
 ```
 
+> ⚠️ **TODO**: `wt-done` 目前為 **local-only**，僅執行本地 merge 與 worktree 清理。不包含 `git push`、PR 建立、遠端分支刪除等團隊協作流程。遠端/團隊工作流程（push、PR、code review gate）尚未實作。
+
 ---
 
 ## 🔁 wt-work vs wt-resume 語意對比
