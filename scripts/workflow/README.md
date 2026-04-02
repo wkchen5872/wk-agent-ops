@@ -16,6 +16,8 @@ source ~/.zshrc
 
 **特性：**
 * **冪等性**：重複安裝不影響現有設定。
+* **自動分枝建立**：安裝 `openspec-branch-creator` PostToolUse hook，當 PM agent 建立新 change 時，自動切換至 `feature/<name>` 分支。
+* **跨機器協作**：`wt-work` 支援自動偵測並銜接遠端分支。
 * **補全功能**：支援 `wt-work <TAB>` 列出現有 Feature，`--agent <TAB>` 列出工具選項。
 * **自動清理**：若 `wt-new` 舊版本仍存在，安裝時自動移除。
 
@@ -30,7 +32,10 @@ source ~/.zshrc
     *   `--agent <name>`：指定啟動的工具（`claude`|`copilot`|`gemini`|`codex`）。
     *   `--session <id|name>`：指定要恢復的 AI CLI session ID 或名稱（選填）。
 *   **模式**：
-    *   **New**：建立 feature 分支與 `.worktrees/` 目錄，並複製 `.env` 與 `settings.local.json`，然後啟動 agent。
+    *   **New**：
+        1.  偵測本地分支 `feature/<name>` 是否已存在。
+        2.  偵測遠端分支 `origin/feature/<name>` 是否已存在（跨機器協作）。
+        3.  根據偵測結果建立或銜接分支，建立 `.worktrees/` 目錄，並啟動 agent。
     *   **Resume**：偵測到目錄已存在時，自動 `cd` 並以 `"RD: FEATURE"` 恢復 Claude session（或顯示選單）。
 *   **注意**：無論新建或恢復，均自動傳入 `/opsx:apply FEATURE` 作為初始 prompt。
 

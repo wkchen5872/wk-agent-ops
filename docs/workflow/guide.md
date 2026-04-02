@@ -28,7 +28,11 @@
 pm-start    # 啟動 PM Master Session
 ```
 
-在會話中透過 `/opsx:new` 或 `/opsx:ff` 產出規格文件（`proposal.md`、`design.md`、`tasks.md`）。這些文件會 Commit 至開發主分支。
+在會話中透過 `/opsx:new` 或 `/opsx:ff` 產出規格文件（`proposal.md`、`design.md`、`tasks.md`）。
+安裝本專案的 `openspec-branch-creator` 擴充後，當 PM 執行 `openspec new change <name>` 時，系統會**自動建立並切換至 `feature/<name>` 分支**。這些規格文件會直接 Commit 至該功能分支，而非 `main` 分支。
+
+> [!TIP]
+> **跨機器協作**：若 RD 在不同機器上開發，PM 規劃完後可手動執行 `git push origin feature/<name>` 將分支推送到遠端。
 
 ### 步驟二：獨立開發 (RD Agent)
 
@@ -39,8 +43,11 @@ wt-work FEATURE_NAME    # 建立獨立環境並自動啟動 RD Agent
 ```
 
 **自動偵測模式：**
-- **新建**：若是第一次執行，會建立分支與 Worktree 目錄，並啟動新 Agent session。
+- **銜接本地/遠端分支**：若 `feature/FEATURE_NAME` 分支已存在（本地或遠端），`wt-work` 會自動偵測並以該分支建立工作區，確保 RD 接續 PM 的規劃內容。
+- **新建**：若分支不存在，會建立新分支與 Worktree 目錄，並啟動新 Agent session。
 - **恢復**：若目錄已存在，會自動進入並以 `"RD: FEATURE_NAME"` 恢復上次的 Agent 會話。
+
+詳細的分支解析邏輯請參考 [wt-work 分支解析流程](wt-work-flow.md)。
 
 兩種模式均自動帶入 `/opsx:apply FEATURE_NAME` 作為初始 prompt，讓 Agent 對齊任務狀態繼續實作。
 
