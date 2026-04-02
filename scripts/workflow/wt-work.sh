@@ -93,6 +93,12 @@ fi
 WORKTREE_DIR="$REPO/.worktrees/$NAME"
 BRANCH="feature/$NAME"
 
+set_iterm_badge() {
+  if [[ "${TERM_PROGRAM:-}" == "iTerm.app" ]]; then
+    printf "\033]1337;SetBadgeFormat=%s\a" "$(echo -n "RD: $NAME" | base64)"
+  fi
+}
+
 print_banner() {
   local title="$1" mode_label="$2" color="$3"
   local session_label="${SESSION:-RD: ${NAME}}"
@@ -148,9 +154,7 @@ launch_agent() {
 
 if [[ -d "$WORKTREE_DIR" ]]; then
   # ── RESUME PATH ──────────────────────────────────────────────────────────
-  if [[ "${TERM_PROGRAM:-}" == "iTerm.app" ]]; then
-    printf "\033]1337;SetBadgeFormat=%s\a" "$(echo -n "RD: $NAME" | base64)"
-  fi
+  set_iterm_badge
   print_banner "🔄 RESUMING" "resume" "\033[1;33m"
   cd "$WORKTREE_DIR"
   launch_agent "false"
@@ -188,9 +192,7 @@ else
     echo "✅ Copied .env to worktree"
   fi
 
-  if [[ "${TERM_PROGRAM:-}" == "iTerm.app" ]]; then
-    printf "\033]1337;SetBadgeFormat=%s\a" "$(echo -n "RD: $NAME" | base64)"
-  fi
+  set_iterm_badge
 
   print_banner "🚀 NEW SESSION" "new" "\033[1;32m"
   cd "$WORKTREE_DIR"

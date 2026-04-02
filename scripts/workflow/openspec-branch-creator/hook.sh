@@ -11,17 +11,21 @@ STDIN_JSON=$(cat)
 # Fast exit on empty input.
 [[ -z "$STDIN_JSON" ]] && exit 0
 
-# Extract tool_input.command from stdin JSON.
-# Try jq first; fall back to grep for environments without jq.
-COMMAND=""
-if command -v jq &>/dev/null; then
-  COMMAND=$(printf '%s' "$STDIN_JSON" | jq -r '.tool_input.command // empty' 2>/dev/null || true)
-else
-  COMMAND=$(printf '%s' "$STDIN_JSON" \
-    | grep -o '"command"[[:space:]]*:[[:space:]]*"[^"]*"' \
-    | head -1 \
-    | sed 's/.*: *"//; s/"$//' || true)
-fi
+# Extract a string field from JSON. Uses jq when available, falls back to grep.
+# Usage: json_field <json> <jq_path> <grep_key>
+json_field() {
+  local json="$1" jq_path="$2" grep_key="$3"
+  if command -v jq &>/dev/null; then
+    printf '%s' "$json" | jq -r "${jq_path} // empty" 2>/dev/null || true
+  else
+    printf '%s' "$json" \
+      | grep -o "\"${grep_key}\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" \
+      | head -1 \
+      | sed 's/.*: *"//; s/"$//' || true
+  fi
+}
+
+COMMAND=$(json_field "$STDIN_JSON" '.tool_input.command' 'command')
 
 [[ -z "$COMMAND" ]] && exit 0
 
@@ -39,14 +43,7 @@ CHANGE_NAME=$(printf '%s' "$COMMAND" \
 # Resolve project directory: env var → JSON field → PWD.
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-}"
 if [[ -z "$PROJECT_DIR" ]]; then
-  if command -v jq &>/dev/null; then
-    PROJECT_DIR=$(printf '%s' "$STDIN_JSON" | jq -r '.project_dir // empty' 2>/dev/null || true)
-  else
-    PROJECT_DIR=$(printf '%s' "$STDIN_JSON" \
-      | grep -o '"project_dir"[[:space:]]*:[[:space:]]*"[^"]*"' \
-      | head -1 \
-      | sed 's/.*: *"//; s/"$//' || true)
-  fi
+  PROJECT_DIR=$(json_field "$STDIN_JSON" '.project_dir' 'project_dir')
 fi
 PROJECT_DIR="${PROJECT_DIR:-$PWD}"
 
