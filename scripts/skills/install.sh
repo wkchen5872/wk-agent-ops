@@ -55,9 +55,9 @@ for d in "$TEMPLATE"/*/; do
 done
 
 # Validate requested profiles
-for profile in "${PROFILES[@]}"; do
+for profile in "${PROFILES[@]+"${PROFILES[@]}"}"; do
   valid=false
-  for avail in "${AVAILABLE_PROFILES[@]}"; do
+  for avail in "${AVAILABLE_PROFILES[@]+"${AVAILABLE_PROFILES[@]}"}"; do
     [[ "$profile" == "$avail" ]] && valid=true && break
   done
   if [[ "$valid" == false ]]; then
@@ -95,7 +95,7 @@ sync_dir "$COMMON/.github" "$TARGET/.github"
 
 # --- Install requested profiles ---
 
-for profile in "${PROFILES[@]}"; do
+for profile in "${PROFILES[@]+"${PROFILES[@]}"}"; do
   PROFILE_DIR="$TEMPLATE/$profile"
   sync_dir "$PROFILE_DIR/.claude/rules"        "$TARGET/.claude/rules"
   sync_dir "$PROFILE_DIR/.github/instructions" "$TARGET/.github/instructions"
