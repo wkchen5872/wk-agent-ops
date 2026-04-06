@@ -93,6 +93,18 @@ rsync -a --itemize-changes --exclude 'skills/' "$COMMON/.claude/" "$TARGET/.clau
 sync_dir "$COMMON/.agent"  "$TARGET/.agent"
 sync_dir "$COMMON/.github" "$TARGET/.github"
 
+# --- AGENTS.md: copy only if not present in target ---
+if [[ -f "$COMMON/AGENTS.md" && ! -f "$TARGET/AGENTS.md" ]]; then
+  cp "$COMMON/AGENTS.md" "$TARGET/AGENTS.md"
+  echo ">f+++++++ AGENTS.md"
+fi
+
+# --- docs/: copy files only if not present in target (no overwrite) ---
+if [[ -d "$COMMON/docs" ]]; then
+  mkdir -p "$TARGET/docs"
+  rsync -a --ignore-existing --itemize-changes "$COMMON/docs/" "$TARGET/docs/"
+fi
+
 # --- Install requested profiles ---
 
 for profile in "${PROFILES[@]+"${PROFILES[@]}"}"; do
