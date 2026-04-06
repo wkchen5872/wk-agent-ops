@@ -49,13 +49,32 @@ PROJECT_DIR="${PROJECT_DIR:-$PWD}"
 
 BRANCH="feature/$CHANGE_NAME"
 
-# Create or switch to the branch; log errors to stderr but always exit 0.
+# ── Trigger notice ───────────────────────────────────────────────────────────
+printf '\n┌─────────────────────────────────────────────┐\n'
+printf   '│  openspec-branch-creator                    │\n'
+printf   '│  Triggered by: openspec new change          │\n'
+printf   "│  Change : %-33s│\n" "$CHANGE_NAME"
+printf   '└─────────────────────────────────────────────┘\n'
+
+# ── Create or switch to the branch; log errors to stderr but always exit 0. ──
 if git -C "$PROJECT_DIR" show-ref --quiet "refs/heads/$BRANCH" 2>/dev/null; then
+  printf '🔀 Switching to existing branch: %s\n' "$BRANCH"
   git -C "$PROJECT_DIR" checkout "$BRANCH" 2>/dev/null \
-    || echo "openspec-branch-creator: warning: could not checkout existing branch $BRANCH" >&2
+    || { printf 'openspec-branch-creator: warning: could not checkout %s\n' "$BRANCH" >&2; exit 0; }
+  BRANCH_STATUS="Already existed, switched"
 else
+  printf '🌿 Creating new branch: %s\n' "$BRANCH"
   git -C "$PROJECT_DIR" checkout -b "$BRANCH" 2>/dev/null \
-    || echo "openspec-branch-creator: warning: could not create branch $BRANCH" >&2
+    || { printf 'openspec-branch-creator: warning: could not create %s\n' "$BRANCH" >&2; exit 0; }
+  BRANCH_STATUS="Created"
 fi
+
+# ── Summary ───────────────────────────────────────────────────────────────────
+printf '\n════════════════════════════════════════════════\n'
+printf '✅ openspec-branch-creator complete\n'
+printf '   Change : %s\n' "$CHANGE_NAME"
+printf '   Branch : %s\n' "$BRANCH"
+printf '   Status : %s\n' "$BRANCH_STATUS"
+printf '════════════════════════════════════════════════\n\n'
 
 exit 0
