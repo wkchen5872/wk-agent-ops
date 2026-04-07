@@ -1,0 +1,372 @@
+{
+  "directed": false,
+  "multigraph": false,
+  "graph": {
+    "hyperedges": [
+      {
+        "id": "hyperedge_entropy_audits",
+        "nodes": [
+          "D1_audit",
+          "C1_audit",
+          "O1_audit"
+        ],
+        "label": "Core Entropy Check Audits",
+        "relation": "component_of",
+        "source_file": "openspec/specs/entropy-check/spec.md",
+        "source_location": null,
+        "weight": 1.0
+      },
+      {
+        "id": "hyperedge_rules",
+        "nodes": [
+          "multitool_compat_rule",
+          "openspec_commit_rules",
+          "tdd_enforcement_rule"
+        ],
+        "label": "Project Rules & Standards",
+        "relation": "component_of",
+        "source_file": ".claude/rules/",
+        "source_location": null,
+        "weight": 1.0
+      }
+    ]
+  },
+  "nodes": [
+    {
+      "label": "entropy-check-drop-d1 Change",
+      "file_type": "document",
+      "source_file": "openspec/changes/entropy-check-drop-d1",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "entropy-check-drop-d1_change"
+    },
+    {
+      "label": "D1 \u2014 AGENTS.md Coverage Audit",
+      "file_type": "document",
+      "source_file": "openspec/changes/entropy-check-drop-d1/proposal.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "D1_audit"
+    },
+    {
+      "label": "C1 \u2014 Unused Code Audit",
+      "file_type": "document",
+      "source_file": "openspec/changes/entropy-check-drop-d1/proposal.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "C1_audit"
+    },
+    {
+      "label": "O1 \u2014 Stale OpenSpec Changes Audit",
+      "file_type": "document",
+      "source_file": "openspec/specs/entropy-check/spec.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "O1_audit"
+    },
+    {
+      "label": "entropy-counter PostToolUse Hook",
+      "file_type": "document",
+      "source_file": "openspec/changes/archive/2026-04-07-entropy-management/proposal.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "entropy-counter-hook"
+    },
+    {
+      "label": "wk-agent-ops Project Overview",
+      "file_type": "document",
+      "source_file": "README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "readme_wk_agent_ops"
+    },
+    {
+      "label": "Template Propagation System",
+      "file_type": "document",
+      "source_file": "docs/architecture.md",
+      "source_location": "## 1. Core Concept: Template Propagation",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "architecture_template_propagation"
+    },
+    {
+      "label": "PM/RD Two-Phase Workflow Separation",
+      "file_type": "document",
+      "source_file": "docs/architecture.md",
+      "source_location": "## 3. Two-Phase Workflow Separation",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "architecture_pm_rd_separation"
+    },
+    {
+      "label": "OpenSpec (Spec-Driven Development)",
+      "file_type": "document",
+      "source_file": "README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "concept_openspec"
+    },
+    {
+      "label": "Git Worktree Isolation",
+      "file_type": "document",
+      "source_file": "docs/workflow/concepts.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "concept_git_worktree"
+    },
+    {
+      "label": "PM Agent",
+      "file_type": "document",
+      "source_file": "docs/workflow/guide.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "component_pm_agent"
+    },
+    {
+      "label": "RD Agent",
+      "file_type": "document",
+      "source_file": "docs/workflow/guide.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "component_rd_agent"
+    },
+    {
+      "label": "Multi-Tool Compatibility Rules",
+      "file_type": "document",
+      "source_file": ".claude/rules/multi-tool-compatibility.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "multitool_compat_rule"
+    },
+    {
+      "label": "Claude Code",
+      "file_type": "document",
+      "source_file": ".claude/rules/multi-tool-compatibility.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "claude_code_tool"
+    },
+    {
+      "label": "Gemini CLI",
+      "file_type": "document",
+      "source_file": ".claude/rules/multi-tool-compatibility.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "gemini_cli_tool"
+    },
+    {
+      "label": "OpenSpec Commit \u898f\u7bc4",
+      "file_type": "document",
+      "source_file": ".claude/rules/openspec-commits.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "openspec_commit_rules"
+    },
+    {
+      "label": "TDD \u57f7\u884c\u898f\u7bc4",
+      "file_type": "document",
+      "source_file": ".claude/rules/tdd-enforcement.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "tdd_enforcement_rule"
+    },
+    {
+      "label": "Agents Configuration Guide",
+      "file_type": "document",
+      "source_file": "AGENTS.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "agents_guide_doc"
+    },
+    {
+      "label": "Harness Engineering Protocol",
+      "file_type": "document",
+      "source_file": "AGENTS.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "harness_protocol"
+    }
+  ],
+  "links": [
+    {
+      "relation": "cites",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "README.md",
+      "source_location": null,
+      "weight": 1.0,
+      "_src": "readme_wk_agent_ops",
+      "_tgt": "concept_openspec",
+      "source": "readme_wk_agent_ops",
+      "target": "concept_openspec"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/architecture.md",
+      "source_location": null,
+      "weight": 1.0,
+      "_src": "architecture_pm_rd_separation",
+      "_tgt": "component_pm_agent",
+      "source": "architecture_pm_rd_separation",
+      "target": "component_pm_agent"
+    },
+    {
+      "relation": "cites",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": ".claude/rules/multi-tool-compatibility.md",
+      "source_location": null,
+      "weight": 1.0,
+      "_src": "multitool_compat_rule",
+      "_tgt": "claude_code_tool",
+      "source": "multitool_compat_rule",
+      "target": "claude_code_tool"
+    },
+    {
+      "relation": "cites",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": ".claude/rules/multi-tool-compatibility.md",
+      "source_location": null,
+      "weight": 1.0,
+      "_src": "multitool_compat_rule",
+      "_tgt": "gemini_cli_tool",
+      "source": "multitool_compat_rule",
+      "target": "gemini_cli_tool"
+    },
+    {
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": ".claude/rules/tdd-enforcement.md",
+      "source_location": null,
+      "weight": 1.0,
+      "_src": "tdd_enforcement_rule",
+      "_tgt": "harness_protocol",
+      "source": "tdd_enforcement_rule",
+      "target": "harness_protocol"
+    }
+  ],
+  "communities": {
+    "0": [
+      "claude_code_tool",
+      "gemini_cli_tool",
+      "multitool_compat_rule"
+    ],
+    "1": [
+      "harness_protocol",
+      "tdd_enforcement_rule"
+    ],
+    "2": [
+      "concept_openspec",
+      "readme_wk_agent_ops"
+    ],
+    "3": [
+      "architecture_pm_rd_separation",
+      "component_pm_agent"
+    ],
+    "4": [
+      "entropy-check-drop-d1_change"
+    ],
+    "5": [
+      "D1_audit"
+    ],
+    "6": [
+      "C1_audit"
+    ],
+    "7": [
+      "O1_audit"
+    ],
+    "8": [
+      "entropy-counter-hook"
+    ],
+    "9": [
+      "architecture_template_propagation"
+    ],
+    "10": [
+      "concept_git_worktree"
+    ],
+    "11": [
+      "component_rd_agent"
+    ],
+    "12": [
+      "openspec_commit_rules"
+    ],
+    "13": [
+      "agents_guide_doc"
+    ]
+  },
+  "cohesion": {
+    "0": 0.67,
+    "1": 1.0,
+    "2": 1.0,
+    "3": 1.0,
+    "4": 1.0,
+    "5": 1.0,
+    "6": 1.0,
+    "7": 1.0,
+    "8": 1.0,
+    "9": 1.0,
+    "10": 1.0,
+    "11": 1.0,
+    "12": 1.0,
+    "13": 1.0
+  }
+}
