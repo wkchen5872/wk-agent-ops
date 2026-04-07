@@ -1,5 +1,7 @@
 # 🏗️ wk-agent-ops Architecture Guide
 
+> **Project Core Mission**: `wk-agent-ops` is a centralized repository for individuals or teams to develop, manage, and maintain AI Agent enhancements (including Skills, Rules, Workflows, and Git Hooks). The output of this project aims to seamlessly deploy these standardized Agent configurations to other development projects via installation scripts, ensuring consistent, efficient, and highly automated Agent behavior across all projects.
+
 *This file defines the structural integrity of this project. AI agents must respect these boundaries.*
 
 ## 1. Core Concept: Template Propagation
