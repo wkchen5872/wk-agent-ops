@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>wk-agent-ops Knowledge Graph</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.css" rel="stylesheet" type="text/css">
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 10px; }
+        #network { width: 100%; height: calc(100vh - 80px); border: 1px solid #ddd; }
+        #info { padding: 10px; background: #f5f5f5; border: 1px solid #ddd; }
+        .node-label { font-size: 12px; color: #333; }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <h2>wk-agent-ops Knowledge Graph</h2>
+        <p>19 nodes | 5 edges | 14 communities</p>
+        <p>Click nodes to explore | Drag to pan | Scroll to zoom</p>
+    </div>
+    <div id="network"></div>
+    <script>
+        var nodes_data = [
+            { id: "entropy-check-drop-d1_change", label: "entropy-check-drop-d1 Change", color: "#98D8C8", title: "entropy-check-drop-d1 Change<br>openspec/changes/entropy-check-drop-d1" },
+            { id: "D1_audit", label: "D1 — AGENTS.md Coverage Audit", color: "#F7DC6F", title: "D1 — AGENTS.md Coverage Audit<br>openspec/changes/entropy-check-drop-d1/proposal.md" },
+            { id: "C1_audit", label: "C1 — Unused Code Audit", color: "#BB8FCE", title: "C1 — Unused Code Audit<br>openspec/changes/entropy-check-drop-d1/proposal.md" },
+            { id: "O1_audit", label: "O1 — Stale OpenSpec Changes Audit", color: "#85C1E2", title: "O1 — Stale OpenSpec Changes Audit<br>openspec/specs/entropy-check/spec.md" },
+            { id: "entropy-counter-hook", label: "entropy-counter PostToolUse Hook", color: "#F8B739", title: "entropy-counter PostToolUse Hook<br>openspec/changes/archive/2026-04-07-entropy-management/proposal.md" },
+            { id: "readme_wk_agent_ops", label: "wk-agent-ops Project Overview", color: "#45B7D1", title: "wk-agent-ops Project Overview<br>README.md" },
+            { id: "architecture_template_propagation", label: "Template Propagation System", color: "#52C9A7", title: "Template Propagation System<br>docs/architecture.md" },
+            { id: "architecture_pm_rd_separation", label: "PM/RD Two-Phase Workflow Separation", color: "#FFA07A", title: "PM/RD Two-Phase Workflow Separation<br>docs/architecture.md" },
+            { id: "concept_openspec", label: "OpenSpec (Spec-Driven Development)", color: "#45B7D1", title: "OpenSpec (Spec-Driven Development)<br>README.md" },
+            { id: "concept_git_worktree", label: "Git Worktree Isolation", color: "#FF6B6B", title: "Git Worktree Isolation<br>docs/workflow/concepts.md" },
+            { id: "component_pm_agent", label: "PM Agent", color: "#FFA07A", title: "PM Agent<br>docs/workflow/guide.md" },
+            { id: "component_rd_agent", label: "RD Agent", color: "#4ECDC4", title: "RD Agent<br>docs/workflow/guide.md" },
+            { id: "multitool_compat_rule", label: "Multi-Tool Compatibility Rules", color: "#FF6B6B", title: "Multi-Tool Compatibility Rules<br>.claude/rules/multi-tool-compatibility.md" },
+            { id: "claude_code_tool", label: "Claude Code", color: "#FF6B6B", title: "Claude Code<br>.claude/rules/multi-tool-compatibility.md" },
+            { id: "gemini_cli_tool", label: "Gemini CLI", color: "#FF6B6B", title: "Gemini CLI<br>.claude/rules/multi-tool-compatibility.md" },
+            { id: "openspec_commit_rules", label: "OpenSpec Commit 規範", color: "#45B7D1", title: "OpenSpec Commit 規範<br>.claude/rules/openspec-commits.md" },
+            { id: "tdd_enforcement_rule", label: "TDD 執行規範", color: "#4ECDC4", title: "TDD 執行規範<br>.claude/rules/tdd-enforcement.md" },
+            { id: "agents_guide_doc", label: "Agents Configuration Guide", color: "#FFA07A", title: "Agents Configuration Guide<br>AGENTS.md" },
+            { id: "harness_protocol", label: "Harness Engineering Protocol", color: "#4ECDC4", title: "Harness Engineering Protocol<br>AGENTS.md" },
+        ];
+        
+        var edges_data = [
+            { from: "readme_wk_agent_ops", to: "concept_openspec", label: "cites", title: "cites (EXTRACTED)" },
+            { from: "architecture_pm_rd_separation", to: "component_pm_agent", label: "references", title: "references (EXTRACTED)" },
+            { from: "multitool_compat_rule", to: "claude_code_tool", label: "cites", title: "cites (EXTRACTED)" },
+            { from: "multitool_compat_rule", to: "gemini_cli_tool", label: "cites", title: "cites (EXTRACTED)" },
+            { from: "tdd_enforcement_rule", to: "harness_protocol", label: "references", title: "references (INFERRED)" },
+        ];
+        
+        var container = document.getElementById('network');
+        var data = { nodes: new vis.DataSet(nodes_data), edges: new vis.DataSet(edges_data) };
+        var options = {
+            physics: { enabled: true },
+            interaction: { hover: true },
+            nodes: { font: { size: 14 }, shape: 'box', margin: 10 }
+        };
+        var network = new vis.Network(container, data, options);
+    </script>
+</body>
+</html>
