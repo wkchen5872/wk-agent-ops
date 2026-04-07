@@ -71,6 +71,9 @@ hash -r
 # 8. 安裝 openspec-branch-creator hook（PostToolUse 自動建立 feature branch）
 bash "$REPO/scripts/workflow/openspec-branch-creator/install.sh"
 
+# 9. 安裝 entropy-counter hook（PostToolUse 計數閘，觸發 entropy-check 提示）
+bash "$REPO/scripts/workflow/entropy-counter/install.sh"
+
 echo "✅ 安裝完成。執行檔已部署至 $INSTALL_DIR"
 echo ""
 echo "已安裝指令："

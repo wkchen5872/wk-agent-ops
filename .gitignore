@@ -3,3 +3,5 @@
 
 # Claude settings
 .claude/settings.local.json
+# OpenSpec runtime state
+openspec/.entropy-state
