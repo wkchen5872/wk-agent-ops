@@ -3,12 +3,12 @@ name: entropy-check
 description: >
   Periodic health audit for AI agent projects. Detects documentation drift,
   dead references, unused code, and over-complex files.
-  Auto-fixes AGENTS.md coverage gaps and broken doc links; reports other findings for human review.
+  Auto-fixes broken doc links; reports other findings for human review.
 license: MIT
 compatibility: Requires bash, git. Optional: jq, openspec CLI.
 metadata:
   author: wk-agent-ops
-  version: "2.0"
+  version: "2.1"
 ---
 
 # entropy-check
@@ -45,7 +45,6 @@ Determine which audits to run:
 
 | Audit | standard | openspec |
 |-------|----------|----------|
-| D1 — AGENTS.md coverage   | ✓ | ✓ |
 | D2 — Docs completeness    | ✓ | ✓ |
 | D3 — Dead references      | ✓ | ✓ |
 | C1 — Unused code          | ✓ | ✓ |
@@ -57,34 +56,6 @@ Determine which audits to run:
 ## Step 3 — Run audits
 
 Execute each applicable audit and collect findings.
-
-### D1 — AGENTS.md coverage
-
-Find all installed skills and agents, check each has a `### <name>` section in AGENTS.md.
-
-```bash
-# Skills
-for skill_dir in $PROJECT_ROOT/.claude/skills/*/; do
-  name=$(basename "$skill_dir")
-  if [ -f "$skill_dir/SKILL.md" ]; then
-    if ! grep -q "^### $name" "$PROJECT_ROOT/AGENTS.md" 2>/dev/null; then
-      # FINDING: D1 — missing skill entry for <name>
-    fi
-  fi
-done
-
-# Agents
-for agent_file in $PROJECT_ROOT/.claude/agents/*.md; do
-  name=$(basename "$agent_file" .md)
-  if ! grep -q "^### $name" "$PROJECT_ROOT/AGENTS.md" 2>/dev/null; then
-    # FINDING: D1 — missing agent entry for <name>
-  fi
-done
-```
-
-**Auto-fix available:** Read the SKILL.md or agent.md source and write a
-`### <name>` entry to AGENTS.md. Include: location, purpose, trigger method.
-Do not modify other sections.
 
 ### D2 — Docs completeness
 
@@ -316,7 +287,6 @@ Show a summary table:
 
 | Audit | Status | Findings |
 |-------|--------|----------|
-| D1 — AGENTS.md coverage  | ✓ / ⚠️ N | <description> |
 | D2 — Docs completeness   | ✓ / ⚠️ N | <description> |
 | D3 — Dead references     | ✓ / ⚠️ N | <description> |
 | C1 — Unused code         | ✓ / ⚠️ N | <description> |
@@ -336,7 +306,7 @@ Present the user with:
 
 ```
 What would you like to do?
-  [1] Auto-fix fixable findings (D1, D3)
+  [1] Auto-fix fixable findings (D3)
   [2] Create OpenSpec change to address structural findings
   [3] Skip — update watermark and continue
 ```
@@ -344,20 +314,6 @@ What would you like to do?
 Wait for user response, then execute the chosen action:
 
 - **[1] Auto-fix:**
-  - D1: For each missing entry, read the source SKILL.md or agent.md and append
-    a well-formatted `### <name>` section to AGENTS.md. Format:
-    ```markdown
-    ### <name>
-
-    **位置：** `.claude/skills/<name>/SKILL.md`  (or agents path)
-
-    **用途：** <first sentence of description from SKILL.md>
-
-    **觸發方式：**
-    ```
-    /<name>
-    ```
-    ```
   - D3: For each broken path reference (backtick or MD link):
     - Single match → update path in-place
     - Zero matches → remove link syntax, keep label text
