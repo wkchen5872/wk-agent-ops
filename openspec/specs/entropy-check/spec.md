@@ -2,32 +2,44 @@
 
 ## Purpose
 
-Entropy check is a multi-context audit tool that detects documentation drift, broken references, stale OpenSpec changes, and template sync issues. It runs targeted audits based on the detected project type (harness, openspec, or standard) and provides a structured decision menu for remediation.
+Entropy check is a multi-context audit tool that detects documentation drift, broken references, unused code, stale OpenSpec changes, and complexity debt. It runs targeted audits based on the detected project type (openspec or standard) and provides a structured decision menu for remediation.
 
 ## Requirements
 
 ### Requirement: Context detection
-Entropy check SHALL detect the project type before running any audits.
+The skill SHALL detect the project type using two contexts only: `openspec` and `standard`.
 
-#### Scenario: Harness project detected
-- **WHEN** `template/common/` directory exists in the project root
-- **THEN** context is set to `harness` and audits U1, U2, U3, H1, O1, O2, O3 are run (if openspec/ also present)
+#### Scenario: OpenSpec context detected
+- **WHEN** `openspec/changes/` directory exists in the project root
+- **THEN** context is set to `openspec` and O1 audit is included
 
-#### Scenario: OpenSpec project detected
-- **WHEN** `openspec/changes/` directory exists but `template/common/` does not
-- **THEN** context is set to `openspec` and audits U1, U2, U3, O1, O2, O3 are run
+#### Scenario: Standard context detected
+- **WHEN** `openspec/changes/` does not exist
+- **THEN** context is set to `standard` and only D1/D2/D3/C1/R1 audits run
 
-#### Scenario: Standard project detected
-- **WHEN** neither `template/common/` nor `openspec/changes/` exists
-- **THEN** context is set to `standard` and only audits U1, U2, U3 are run
-
-#### Scenario: Tool environment detected
+#### Scenario: Project root resolved via environment variable
 - **WHEN** `GEMINI_PROJECT_DIR` is set
-- **THEN** project root resolves to `$GEMINI_PROJECT_DIR`
-- **WHEN** `CLAUDE_PROJECT_DIR` is set and `GEMINI_PROJECT_DIR` is not
-- **THEN** project root resolves to `$CLAUDE_PROJECT_DIR`
-- **WHEN** neither env var is set
-- **THEN** project root resolves to `$PWD`
+- **THEN** `PROJECT_ROOT` is set to `$GEMINI_PROJECT_DIR`
+
+#### Scenario: Project root fallback to Claude env
+- **WHEN** `GEMINI_PROJECT_DIR` is not set and `CLAUDE_PROJECT_DIR` is set
+- **THEN** `PROJECT_ROOT` is set to `$CLAUDE_PROJECT_DIR`
+
+#### Scenario: Project root fallback to PWD
+- **WHEN** neither `GEMINI_PROJECT_DIR` nor `CLAUDE_PROJECT_DIR` is set
+- **THEN** `PROJECT_ROOT` is set to `$PWD`
+
+### Requirement: Audit routing table
+The skill SHALL run audits according to the following routing: D1/D2/D3/C1/R1 run for all contexts; O1 runs only when context is `openspec`.
+
+#### Scenario: Standard project audit set
+- **WHEN** context is `standard`
+- **THEN** audits D1, D2, D3, C1, R1 are executed
+- **AND** O1 is skipped
+
+#### Scenario: OpenSpec project audit set
+- **WHEN** context is `openspec`
+- **THEN** audits D1, D2, D3, C1, O1, R1 are all executed
 
 ### Requirement: U1 — AGENTS.md coverage
 Entropy check SHALL verify that all installed skills and agents have entries in AGENTS.md.
@@ -69,43 +81,13 @@ Entropy check SHALL detect broken file references in documentation.
 - **AND** that path does not exist on disk
 - **THEN** the finding is reported as U3
 
-### Requirement: H1 — Template sync (harness only)
-In harness context, entropy check SHALL detect drift between template and installed layers.
-
-#### Scenario: Template drift detected
-- **WHEN** context is `harness`
-- **AND** any file under `template/common/.claude/` differs from its counterpart in `.claude/` (excluding `*.local*` files)
-- **THEN** the finding is reported as H1 with the differing file path
-- **AND** auto-fix suggests running `bash scripts/skills/install.sh`
-
 ### Requirement: O1 — Stale active changes (openspec)
 Entropy check SHALL detect abandoned OpenSpec changes.
 
 #### Scenario: Stale change detected
-- **WHEN** context is `openspec` or `harness`
-- **AND** a directory exists under `openspec/changes/` (not under `archive/`)
+- **WHEN** context is `openspec`
 - **AND** the most recently modified file in that directory is older than 14 days
 - **THEN** the finding is reported as O1 with the change name and last-modified date
-
-### Requirement: O2 — OpenSpec spec sync (openspec)
-Entropy check SHALL detect archived changes whose specs were not synced to canonical location.
-
-#### Scenario: Unsynced spec detected
-- **WHEN** context is `openspec` or `harness`
-- **AND** a directory exists under `openspec/changes/archive/<name>/specs/` containing `.md` files
-- **AND** `openspec/specs/<name>/` does not exist
-- **THEN** the finding is reported as O2 with the change name
-
-### Requirement: O3 — Dead specs (openspec)
-Entropy check SHALL detect spec directories with no corresponding implementation.
-
-#### Scenario: Dead spec detected
-- **WHEN** context is `openspec` or `harness`
-- **AND** a directory exists under `openspec/specs/<name>/`
-- **AND** no corresponding skill exists at `.claude/skills/<name>/` or `template/common/skills/<name>/`
-- **AND** no corresponding agent exists at `.claude/agents/<name>.md`
-- **THEN** the finding is reported as O3 with the spec path
-- **AND** no auto-fix is offered (requires human confirmation before deletion)
 
 ### Requirement: Output format
 Entropy check SHALL present findings in a structured, actionable format.
@@ -125,6 +107,5 @@ Entropy check SHALL update the watermark after every run regardless of outcome.
 
 #### Scenario: Watermark written
 - **WHEN** entropy check completes (any option chosen, including skip)
-- **AND** context is `openspec` or `harness`
-- **THEN** current archive count is written to `openspec/.entropy-state`
+- **AND** context is `openspec`
 - **AND** `openspec/.entropy-state` is added to `.gitignore` if not already present
