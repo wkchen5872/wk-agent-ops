@@ -5,7 +5,7 @@ description: >
   dead references, unused code, and over-complex files.
   Auto-fixes broken doc links; reports other findings for human review.
 license: MIT
-compatibility: Requires bash, git. Optional: jq, openspec CLI.
+compatibility: "Requires bash, git. Optional: jq, openspec CLI."
 metadata:
   author: wk-agent-ops
   version: "2.1"
