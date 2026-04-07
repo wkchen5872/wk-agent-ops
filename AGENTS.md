@@ -190,6 +190,34 @@ diff template/common/.claude/agents/my-agent.md \
 
 ---
 
+## Skills
+
+本專案預定義的 skills：
+
+### entropy-check
+
+**位置：** `template/common/skills/entropy-check/SKILL.md`（安裝後複製到 `.claude/skills/entropy-check/SKILL.md`）
+
+**用途：** 週期性健康審查 skill，偵測文件飄移、廢棄規格、template 與安裝層脫同步等跨功能熵。自動偵測專案類型（harness / openspec / standard），依 context 執行對應的 U1–U3（通用）、H1（harness 專用）、O1–O3（OpenSpec 專用）審查，輸出 findings 摘要表與決策選單。
+
+**特性：**
+- Context 自動偵測：`template/common/` → harness；`openspec/changes/` → openspec；否則 → standard
+- U1：AGENTS.md coverage 檢查，auto-fix 可直接補寫缺少的 skill/agent 條目
+- U2：docs placeholder 文字檢查（僅提示）
+- U3：AGENTS.md 和 docs 中的 dead reference 檢查（僅提示）
+- H1：template 與安裝層 diff（harness only），auto-fix 建議執行 `install.sh`
+- O1：超過 14 天未更新的 active OpenSpec changes（僅提示）
+- O2：已 archive 但 specs 未同步到 canonical 位置（僅提示）
+- O3：有 spec 但無對應 skill/agent 的 dead specs（僅提示）
+- 每次執行後自動更新 `openspec/.entropy-state` watermark
+
+**觸發方式：**
+```
+/entropy-check
+```
+
+---
+
 ## Skill 開發指南
 
 ### Skill 檔案結構

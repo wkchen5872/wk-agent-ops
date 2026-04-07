@@ -39,6 +39,8 @@ wk-agent-ops/
 ├── scripts/
 │   ├── skills/install.sh      ← Propagates template/ to .claude/ and target projects
 │   ├── workflow/              ← wt-work, wt-done, wt-resume, pm-start (global CLI tools)
+│   │   ├── openspec-branch-creator/  ← PostToolUse hook: auto-creates feature branches
+│   │   └── entropy-counter/          ← PostToolUse hook: archive-count threshold banner
 │   └── notify/telegram/       ← Telegram notification hook setup
 │
 ├── openspec/
