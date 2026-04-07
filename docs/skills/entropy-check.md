@@ -69,6 +69,10 @@ invoke entropy-check skill
 
 所有 C1 findings 標記為 **「confirm before removing」**，屬於啟發式偵測，可能有誤報。**不提供 auto-fix**，需人工確認後處理。
 
+**Bash 偵測邏輯：** 統計函式名稱在所有 `.sh` 檔案中的出現次數（含定義檔本身）。若總次數 ≤ 1（僅有定義行），則回報為未使用。同一檔案內定義並呼叫的函式不會被誤報。
+
+**Python 偵測邏輯：** 對 multi-name import（如 `from foo import bar, baz`），提取第一個名稱時去除尾部逗號，避免 `grep -c "bar,"` 僅匹配 import 行本身造成誤報。
+
 ### R1 — Refactor candidates 推薦等級
 
 依 `openspec/.entropy-state` 的 archive 計數決定推薦指令：
