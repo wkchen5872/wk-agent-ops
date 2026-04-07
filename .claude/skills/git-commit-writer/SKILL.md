@@ -37,20 +37,18 @@ git diff --cached
 if [ ! -d "openspec/changes" ]; then
   echo "NO_OPENSPEC"
 else
-  # 1. Archived changes: dirs modified under openspec/changes/archive/
+  all_changes=$(git status --short | awk '{print $NF}')
+
   archived_changes=$(
-    git status --short \
-    | awk '{print $NF}' \
+    echo "$all_changes" \
     | grep '^openspec/changes/archive/' \
     | sed 's|^openspec/changes/archive/||' \
     | cut -d'/' -f1 \
     | sort -u
   )
 
-  # 2. Active changes: dirs modified under openspec/changes/ (excluding archive/)
   active_changes=$(
-    git status --short \
-    | awk '{print $NF}' \
+    echo "$all_changes" \
     | grep '^openspec/changes/' \
     | grep -v '^openspec/changes/archive/' \
     | sed 's|^openspec/changes/||' \
@@ -58,7 +56,6 @@ else
     | sort -u
   )
 
-  # 3. Fallback: Check CLI if no directory changes detected
   cli_active=""
   if [ -z "$archived_changes" ] && [ -z "$active_changes" ] && command -v openspec >/dev/null 2>&1; then
     cli_active=$(openspec list --json | grep -v "\[\]" || echo "")
@@ -140,13 +137,14 @@ Rules:
 Include `Co-Authored-By` using **your own model name** (the model you are currently running on):
 
 ```bash
-git add -A
 git commit -m "<message>
 
 Co-Authored-By: <your model name> <noreply@anthropic.com>"
 ```
 
-Example: if you are Claude Haiku 4.5, write `Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>`.
+Example: 
+- if you are Claude Haiku 4.5, write `Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>`.
+- if you are Gemini 1.5 Flash, write `Co-Authored-By: Gemini 1.5 Flash <noreply@google.com>`.
 
 On pre-commit hook failure: fix the issue and re-run `git commit`. Do NOT use `--no-verify`.
 
@@ -155,5 +153,5 @@ On pre-commit hook failure: fix the issue and re-run `git commit`. Do NOT use `-
 ## Step 6 — Output result
 
 ```
-💾 Commit: <short-hash> <type>[(<change-id>)]: <subject>
+💾 Commit: <short-hash> <type>(<change-id>): <subject>
 ```
