@@ -90,10 +90,7 @@ fix_hooks() {
   chmod +x "${DEPLOYED_HOOK}"
   echo "  ✓ Hook script updated at ${DEPLOYED_HOOK}"
 
-  if ! command -v jq &>/dev/null; then
-    echo "ERROR: jq is required. Please install jq and re-run."
-    return 1
-  fi
+  _require_jq || return 1
 
   # Unregister old/broken entries, then re-register with correct nested format
   unregister_hook "${DEPLOYED_HOOK}"

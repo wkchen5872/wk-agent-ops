@@ -58,47 +58,47 @@ def parse_session(jsonl_path, is_subagent=False):
     subagent_sessions = []
 
     try:
-        with open(jsonl_path) as f:
-            lines = f.readlines()
+        fobj = open(jsonl_path)
     except Exception:
         return None
 
-    for line in lines:
-        try:
-            obj = json.loads(line)
-        except json.JSONDecodeError:
-            continue
+    with fobj:
+        for line in fobj:
+            try:
+                obj = json.loads(line)
+            except json.JSONDecodeError:
+                continue
 
-        msg_type = obj.get("type")
-        ts = obj.get("timestamp")
-        if ts and not timestamp_start:
-            timestamp_start = ts
+            msg_type = obj.get("type")
+            ts = obj.get("timestamp")
+            if ts and not timestamp_start:
+                timestamp_start = ts
 
-        if not agent_id:
-            agent_id = obj.get("agentId")
-        if not session_id:
-            session_id = obj.get("sessionId")
+            if not agent_id:
+                agent_id = obj.get("agentId")
+            if not session_id:
+                session_id = obj.get("sessionId")
 
-        if msg_type == "assistant":
-            usage = obj.get("message", {}).get("usage", {})
-            usage_total["input_tokens"] += usage.get("input_tokens", 0)
-            usage_total["cache_creation_input_tokens"] += usage.get("cache_creation_input_tokens", 0)
-            usage_total["cache_read_input_tokens"] += usage.get("cache_read_input_tokens", 0)
-            usage_total["output_tokens"] += usage.get("output_tokens", 0)
+            if msg_type == "assistant":
+                usage = obj.get("message", {}).get("usage", {})
+                usage_total["input_tokens"] += usage.get("input_tokens", 0)
+                usage_total["cache_creation_input_tokens"] += usage.get("cache_creation_input_tokens", 0)
+                usage_total["cache_read_input_tokens"] += usage.get("cache_read_input_tokens", 0)
+                usage_total["output_tokens"] += usage.get("output_tokens", 0)
 
-        elif msg_type == "user":
-            user_type = obj.get("userType", "")
-            is_sidechain = obj.get("isSidechain", False)
-            content = obj.get("message", {}).get("content", "")
-            text = extract_text_content(content)
+            elif msg_type == "user":
+                user_type = obj.get("userType", "")
+                is_sidechain = obj.get("isSidechain", False)
+                content = obj.get("message", {}).get("content", "")
+                text = extract_text_content(content)
 
-            # Only capture actual human prompts (not tool results, not sidechain)
-            if text and not is_sidechain and is_human_prompt(obj) and user_type != "tool":
-                prompts.append({
-                    "text": text,
-                    "timestamp": obj.get("timestamp"),
-                    "entrypoint": obj.get("entrypoint", ""),
-                })
+                # Only capture actual human prompts (not tool results, not sidechain)
+                if text and not is_sidechain and is_human_prompt(obj) and user_type != "tool":
+                    prompts.append({
+                        "text": text,
+                        "timestamp": obj.get("timestamp"),
+                        "entrypoint": obj.get("entrypoint", ""),
+                    })
 
     # Check for subagent sessions
     session_dir = jsonl_path.parent / jsonl_path.stem
@@ -133,10 +133,9 @@ def parse_session(jsonl_path, is_subagent=False):
 
 def get_project_name(project_dir_name):
     """Convert directory name to readable project name."""
-    # Strip leading -Users-kieranklaassen-
     name = project_dir_name
-    prefixes = ["-Users-kieranklaassen-", "Users-kieranklaassen-"]
-    for p in prefixes:
+    home_prefix = str(Path.home()).replace("/", "-").lstrip("-")
+    for p in [f"-{home_prefix}-", f"{home_prefix}-"]:
         if name.startswith(p):
             name = name[len(p):]
             break
