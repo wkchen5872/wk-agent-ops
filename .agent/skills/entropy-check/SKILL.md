@@ -155,9 +155,8 @@ find "$PROJECT_ROOT" -name "*.sh" -not -path "*/\.*" | while read -r sh_file; do
   grep -oE '^[a-zA-Z_][a-zA-Z0-9_]*[[:space:]]*\(\)' "$sh_file" \
     | sed 's/[[:space:]]*()//' \
     | while read -r fn_name; do
-        count=$(grep -rl "$fn_name" "$PROJECT_ROOT" --include="*.sh" \
-          | grep -v "^$sh_file$" | wc -l)
-        if [ "$count" -eq 0 ]; then
+        total=$(grep -rn "$fn_name" "$PROJECT_ROOT" --include="*.sh" | wc -l)
+        if [ "$total" -le 1 ]; then
           # FINDING: C1 — $sh_file: function '$fn_name' appears unused (confirm before removing)
         fi
       done
@@ -172,13 +171,8 @@ For each `.py` file, extract imported names and check if each appears in the fil
 find "$PROJECT_ROOT" -name "*.py" -not -path "*/\.*" | while read -r py_file; do
   grep -E '^(import |from .+ import )' "$py_file" \
     | while read -r import_line; do
-        if [[ "$import_line" =~ ^import[[:space:]]+([a-zA-Z0-9_]+) ]]; then
-          name="${BASH_REMATCH[1]}"
-        elif [[ "$import_line" =~ from[[:space:]].+[[:space:]]import[[:space:]]+([a-zA-Z0-9_]+) ]]; then
-          name="${BASH_REMATCH[1]}"
-        else
-          continue
-        fi
+        name=$(echo "$import_line" | sed 's/^.*import[[:space:]]*//' | awk '{print $1}' | tr -d ',')
+        [ -z "$name" ] && continue
         # Skip re-exports: name in __all__ counts as used
         occurrences=$(grep -c "$name" "$py_file" 2>/dev/null || echo 0)
         if [ "$occurrences" -le 1 ]; then
