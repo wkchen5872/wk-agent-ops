@@ -162,6 +162,12 @@ else
   # ── NEW SESSION PATH ──────────────────────────────────────────────────────
   if git -C "$REPO" show-ref --quiet "refs/heads/$BRANCH"; then
     # Path 1: local branch already exists (e.g., created by PM's hook on same machine).
+    # If the branch is currently checked out in the main worktree, switch away first.
+    CURRENT_BRANCH=$(git -C "$REPO" rev-parse --abbrev-ref HEAD)
+    if [[ "$CURRENT_BRANCH" == "$BRANCH" ]]; then
+      echo "Switching main worktree to $BASE_BRANCH (branch is currently active here)..."
+      git -C "$REPO" checkout "$BASE_BRANCH"
+    fi
     echo "Creating worktree from existing local branch: $BRANCH"
     git -C "$REPO" worktree add "$WORKTREE_DIR" "$BRANCH"
   elif git -C "$REPO" ls-remote --exit-code origin "$BRANCH" &>/dev/null 2>&1; then
