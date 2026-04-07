@@ -1,5 +1,7 @@
 # Agents Configuration Guide
 
+> **專案核心使命**：`wk-agent-ops` 是一個專門為個人或團隊開發、管理與維護 AI Agent 擴充元件（包括 Skills、Rules、Workflows 與 Git Hooks）的中央倉儲。本專案的產出旨在透過安裝腳本，將這些標準化的 Agent 配置無縫部署到其他各個開發專案中，確保跨專案的 Agent 行為一致、高效且具備高度自動化能力。
+
 本文件說明如何在本專案中定義與管理 Claude Code sub-agents、skills、rules 等配置。
 
 ---

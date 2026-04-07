@@ -1,9 +1,11 @@
 # wk-agent-ops
 
-個人 AI Agent 開發工具集，提供兩件事：
+> **專案定位**：`wk-agent-ops` 是 AI Agent 增強套件（Skills, Rules, Workflows, Hooks）的開發與分發中心。我們在這裡開發高品質的 Agent 配置，並將其「外掛」到任何一個專案中，使 Agent 成為真正理解團隊規範並自動化處理重複任務的得力助手。
 
-1. **Worktree 工作流** — 讓多個 Agent 同時開發不同功能，互不干擾
-2. **Agent 擴充套件** — 可安裝到任何專案的 skills、rules、git hooks
+主要提供兩大核心價值：
+
+1. **Agent 擴充套件（Harness System）** — 統一開發可安裝到任何專案的 skills、rules、git hooks，確保跨專案的 Agent 行為具備一致的高標準。
+2. **Worktree 工作流（Concurrent Workflow）** — 透過 Git Worktree 讓多個 Agent 同時開發多個 Feature，徹底實現並行開發。
 
 以 [OpenSpec](https://github.com/Fission-AI/OpenSpec)（Spec-Driven Development）為核心流程。
 
