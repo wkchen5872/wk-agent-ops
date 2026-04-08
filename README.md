@@ -148,7 +148,8 @@ wk-agent-ops/
 ├── docs/
 │   ├── workflow/               ← 多 Agent 協作與 Commit 流程說明
 │   ├── notify/                 ← 通知系統架構與 Telegram 安裝說明
-│   └── skills/                 ← git-commit-writer, doc-updater 等工具說明
+│   ├── skills/                 ← git-commit-writer, doc-updater 等工具說明
+│   └── hooks/                  ← Gemini / Claude / Copilot Hooks 指南與開發參考
 └── openspec/                   ← 本專案的 OpenSpec 變更記錄
 ```
 
