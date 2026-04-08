@@ -1,6 +1,6 @@
 ## 1. 重組 template/ 目錄結構
 
-- [x] 1.1 建立 `template/common/` 目錄，將現有 `template/skills/`、`template/.claude/`、`template/.agent/`、`template/.github/` 移至 `template/common/` 下
+- [x] 1.1 建立 `template/common/` 目錄，將現有 `template/skills/`、`template/.claude/`、`template/.agents/`、`template/.github/` 移至 `template/common/` 下
 - [x] 1.2 建立 `template/python/.claude/rules/`（空目錄，加 `.gitkeep`）
 - [x] 1.3 建立 `template/python/hooks/pre-commit`（佔位腳本，內容說明待後續 change 實作）
 - [x] 1.4 建立 `template/node/.claude/rules/`（空目錄，加 `.gitkeep`）
@@ -9,8 +9,8 @@
 ## 2. 改寫 install.sh
 
 - [x] 2.1 解析位置參數為 profile 清單（預設空 = common only）
-- [x] 2.2 安裝 `common/skills/` → `.claude/skills/` 和 `.agent/skills/`
-- [x] 2.3 安裝 `common/` 其餘內容（.claude/、.agent/、.github/，排除 skills/）到目標根目錄
+- [x] 2.2 安裝 `common/skills/` → `.claude/skills/` 和 `.agents/skills/`
+- [x] 2.3 安裝 `common/` 其餘內容（.claude/、.agents/、.github/，排除 skills/）到目標根目錄
 - [x] 2.4 對每個指定 profile，安裝 `.claude/rules/` 到目標 `.claude/rules/`
 - [x] 2.5 對每個指定 profile，安裝 `hooks/` 到目標 `.git/hooks/`，並 chmod +x
 - [x] 2.6 加入未知 profile 的錯誤檢查（列出可用 profile，exit 1）

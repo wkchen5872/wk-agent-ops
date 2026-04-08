@@ -23,11 +23,11 @@
 - **THEN** 印出錯誤訊息，列出可用 profile，exit code 非零
 
 ### Requirement: skills 複製到兩個目的地
-`common/skills/` 的內容必須同時複製到 `.claude/skills/` 和 `.agent/skills/`。
+`common/skills/` 的內容必須同時複製到 `.claude/skills/` 和 `.agents/skills/`。
 
 #### Scenario: skills 安裝
 - **WHEN** 安裝任何 profile
-- **THEN** `common/skills/<name>/` 出現在目標的 `.claude/skills/<name>/` 和 `.agent/skills/<name>/`
+- **THEN** `common/skills/<name>/` 出現在目標的 `.claude/skills/<name>/` 和 `.agents/skills/<name>/`
 
 ### Requirement: hooks 安裝到 .git/hooks/ 並設定執行權限
 語言 profile 的 `hooks/` 腳本複製到目標專案的 `.git/hooks/`。

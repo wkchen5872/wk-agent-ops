@@ -107,7 +107,7 @@ for item in "${MY_ARRAY[@]+"${MY_ARRAY[@]}"}"; do ...
 ## 5. Prohibited Patterns
 
 - ❌ **No hardcoded absolute paths** — use `PROJECT_ROOT`, `SOURCE_REPO`, or relative paths
-- ❌ **No direct edits to `.claude/`, `.agent/`** — these are install targets; edit `template/` instead
+- ❌ **No direct edits to `.claude/`, `.agents/`** — these are install targets; edit `template/` instead
 - ❌ **No modifying third-party skills** — put overrides in `template/common/.claude/rules/`
 - ❌ **No `echo` to stdout in background hooks** — use log files or stderr only
 - ❌ **No `curl` or network calls in pre-commit hooks** — hooks must be fast and offline

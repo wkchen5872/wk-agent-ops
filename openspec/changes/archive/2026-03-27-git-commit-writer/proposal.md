@@ -22,8 +22,8 @@
 
 - `template/common/skills/git-commit-writer/SKILL.md`（新建）
 - `.claude/skills/git-commit-writer/SKILL.md`（新建）
-- `.agent/skills/git-commit-writer/SKILL.md`（新建）
+- `.agents/skills/git-commit-writer/SKILL.md`（新建）
 - `template/common/skills/openspec-commit/SKILL.md`（修改 Step 5）
 - `.claude/skills/openspec-commit/SKILL.md`（修改 Step 5）
-- `.agent/skills/openspec-commit/SKILL.md`（修改 Step 5）
+- `.agents/skills/openspec-commit/SKILL.md`（修改 Step 5）
 - `docs/commit-feature-workflow.md`（更新）
