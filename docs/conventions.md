@@ -39,6 +39,11 @@ SOURCE_REPO="$(cd "$(dirname "$0")/../.." && pwd)"  # for install.sh-style scrip
 
 ## 3. Hook Script Patterns
 
+*For the definitive technical specifications, see:*
+- [Gemini CLI Hooks Guide](hooks/gemini-hooks.md)
+- [Claude Code Hooks Guide](hooks/claude-hooks.md)
+- [GitHub Copilot Hooks Guide](hooks/copilot-hooks.md)
+
 ### Background hooks (notification, logging) — Silent Fail
 ```bash
 # MUST exit 0 even on failure — never block the AI CLI main flow
