@@ -1,0 +1,16 @@
+wing: wk_agent_ops
+rooms:
+- name: template
+  description: Files from template/
+- name: documentation
+  description: Files from docs/
+- name: graphify_out
+  description: Files from graphify-out/
+- name: scripts
+  description: Files from scripts/
+- name: openspec
+  description: Files from openspec/
+- name: planning
+  description: Files from specs/
+- name: general
+  description: Files that don't fit other rooms
