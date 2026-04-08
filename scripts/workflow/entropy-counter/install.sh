@@ -39,7 +39,7 @@ _jq_write() {
   fi
 }
 
-_register_hook() {
+_register_claude_hook() {
   local settings_file="$1"
   mkdir -p "$(dirname "$settings_file")"
 
@@ -76,14 +76,77 @@ _register_hook() {
   fi
 }
 
+_register_gemini_hook() {
+  local settings_file="$1"
+  mkdir -p "$(dirname "$settings_file")"
+
+  if [[ ! -f "$settings_file" ]] || ! jq empty "$settings_file" 2>/dev/null; then
+    echo '{}' > "$settings_file"
+  fi
+
+  if _jq_write "$settings_file" \
+    --arg hook_cmd "$HOOK_CMD" \
+    '
+    def already_registered:
+      (.hooks.AfterTool // [])
+      | map(.hooks // [] | map(select(.type == "command" and .command == $hook_cmd)) | length)
+      | add // 0
+      | . > 0;
+
+    if already_registered then .
+    else
+      .hooks.AfterTool = ((.hooks.AfterTool // []) + [
+        {
+          "matcher": "bash",
+          "hooks": [
+            {
+              "type": "command",
+              "command": $hook_cmd,
+              "timeout": 10
+            }
+          ]
+        }
+      ])
+    end
+    '; then
+    echo "  ✓ Registered AfterTool hook in $settings_file"
+  fi
+}
+
+_register_copilot_hook() {
+  local hooks_dir="$1"
+  local hooks_file="$hooks_dir/entropy-counter.json"
+  mkdir -p "$hooks_dir"
+
+  cat > "$hooks_file" <<EOF
+{
+  "version": 1,
+  "hooks": {
+    "postToolUse": [
+      {
+        "type": "command",
+        "bash": "$HOOK_DST",
+        "timeoutSec": 10
+      }
+    ]
+  }
+}
+EOF
+  echo "  ✓ Registered postToolUse hook in $hooks_file"
+}
+
 # 2. Register in Claude Code settings.
 CLAUDE_SETTINGS="$HOME/.claude/settings.json"
-_register_hook "$CLAUDE_SETTINGS"
+_register_claude_hook "$CLAUDE_SETTINGS"
 
 # 3. Register in Gemini CLI settings if present.
 GEMINI_SETTINGS="$HOME/.gemini/settings.json"
 if [[ -f "$GEMINI_SETTINGS" ]]; then
-  _register_hook "$GEMINI_SETTINGS"
+  _register_gemini_hook "$GEMINI_SETTINGS"
 fi
+
+# 4. Register in GitHub Copilot CLI settings (create hooks directory).
+COPILOT_HOOKS_DIR=".github/hooks"
+_register_copilot_hook "$COPILOT_HOOKS_DIR"
 
 echo "✅ entropy-counter installed"
