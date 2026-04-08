@@ -8,13 +8,15 @@
 
 set -euo pipefail
 
-REPO=$(git rev-parse --show-toplevel 2>/dev/null || echo "")
+# shellcheck source=../lib.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../lib.sh"
+
+REPO=$(git rev-parse --show-toplevel 2>/dev/null || true)
 if [[ -z "$REPO" ]]; then
   echo "❌ Error: run this script from inside the repository"
   exit 1
 fi
 
-# 1. Deploy hook script to user config dir.
 HOOK_DIR="$HOME/.config/wk-workflow/hooks"
 mkdir -p "$HOOK_DIR"
 
@@ -25,106 +27,18 @@ cp -f "$HOOK_SRC" "$HOOK_DST"
 chmod +x "$HOOK_DST"
 echo "  ✓ Deployed hook to $HOOK_DST"
 
-# 2–4. Register hook in Claude Code / Gemini CLI / GitHub Copilot CLI.
-CLAUDE_SETTINGS="$HOME/.claude/settings.json"
-mkdir -p "$(dirname "$CLAUDE_SETTINGS")"
-
-if [[ ! -f "$CLAUDE_SETTINGS" ]] || ! jq empty "$CLAUDE_SETTINGS" 2>/dev/null; then
-  echo '{}' > "$CLAUDE_SETTINGS"
-fi
-
 HOOK_CMD="bash \"$HOOK_DST\""
 
-_jq_write() {
-  local file="$1"; shift
-  local tmp
-  tmp="$(mktemp)"
-  if jq "$@" "${file}" > "${tmp}"; then
-    mv "${tmp}" "${file}"
-  else
-    rm -f "${tmp}"
-    return 1
-  fi
-}
+# Claude Code: create settings if missing, then register.
+_register_settings_hook "$HOME/.claude/settings.json" "PostToolUse" "Bash" "$HOOK_CMD"
 
-# 2. Register in Claude Code settings (PostToolUse).
-if _jq_write "$CLAUDE_SETTINGS" \
-  --arg hook_cmd "$HOOK_CMD" \
-  '
-  def already_registered:
-    (.hooks.PostToolUse // [])
-    | map(.hooks // [] | map(select(.type == "command" and .command == $hook_cmd)) | length)
-    | add // 0
-    | . > 0;
-
-  if already_registered then .
-  else
-    .hooks.PostToolUse = ((.hooks.PostToolUse // []) + [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": $hook_cmd,
-            "timeout": 10
-          }
-        ]
-      }
-    ])
-  end
-  '; then
-  echo "  ✓ Registered PostToolUse hook in $CLAUDE_SETTINGS"
-fi
-
-# 3. Register in Gemini CLI settings if present (AfterTool).
+# Gemini CLI: only register if already installed.
 GEMINI_SETTINGS="$HOME/.gemini/settings.json"
 if [[ -f "$GEMINI_SETTINGS" ]] && jq empty "$GEMINI_SETTINGS" 2>/dev/null; then
-  if _jq_write "$GEMINI_SETTINGS" \
-    --arg hook_cmd "$HOOK_CMD" \
-    '
-    def already_registered:
-      (.hooks.AfterTool // [])
-      | map(.hooks // [] | map(select(.type == "command" and .command == $hook_cmd)) | length)
-      | add // 0
-      | . > 0;
-
-    if already_registered then .
-    else
-      .hooks.AfterTool = ((.hooks.AfterTool // []) + [
-        {
-          "matcher": "bash",
-          "hooks": [
-            {
-              "type": "command",
-              "command": $hook_cmd,
-              "timeout": 10
-            }
-          ]
-        }
-      ])
-    end
-    '; then
-    echo "  ✓ Registered AfterTool hook in $GEMINI_SETTINGS"
-  fi
+  _register_settings_hook "$GEMINI_SETTINGS" "AfterTool" "bash" "$HOOK_CMD"
 fi
 
-# 4. Register in GitHub Copilot CLI (.github/hooks/openspec-branch-creator.json).
-COPILOT_HOOKS_DIR=".github/hooks"
-mkdir -p "$COPILOT_HOOKS_DIR"
-cat > "$COPILOT_HOOKS_DIR/openspec-branch-creator.json" <<EOF
-{
-  "version": 1,
-  "hooks": {
-    "postToolUse": [
-      {
-        "type": "command",
-        "bash": "$HOOK_DST",
-        "timeoutSec": 10
-      }
-    ]
-  }
-}
-EOF
-echo "  ✓ Registered postToolUse hook in $COPILOT_HOOKS_DIR/openspec-branch-creator.json"
+# GitHub Copilot CLI.
+_write_copilot_hook ".github/hooks/openspec-branch-creator.json" "$HOOK_DST"
 
 echo "✅ openspec-branch-creator installed"
