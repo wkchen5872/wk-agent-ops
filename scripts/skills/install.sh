@@ -83,11 +83,11 @@ sync_dir() {
 
 # --- Install common ---
 
-# skills/ → .claude/skills/ and .agent/skills/
+# skills/ → .claude/skills/ and .agents/skills/
 sync_dir "$COMMON/skills" "$TARGET/.claude/skills"
-sync_dir "$COMMON/skills" "$TARGET/.agent/skills"
+sync_dir "$COMMON/skills" "$TARGET/.agents/skills"
 
-# .claude/ .agent/ .github/ (excluding skills/)
+# .claude/ .agents/ .github/ (excluding skills/)
 mkdir -p "$TARGET/.claude" "$TARGET/.agent" "$TARGET/.github"
 rsync -a --itemize-changes --exclude 'skills/' "$COMMON/.claude/" "$TARGET/.claude/"
 sync_dir "$COMMON/.agent"  "$TARGET/.agent"

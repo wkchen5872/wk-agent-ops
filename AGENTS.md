@@ -15,12 +15,12 @@
    ↓
 2. 本地確認無誤
    ↓
-3. 執行 scripts/skills/install.sh 安裝到 .claude/ 和 .agent/
+3. 執行 scripts/skills/install.sh 安裝到 .claude/ 和 .agents/
    ↓
 4. 提交 git commit
 ```
 
-**禁止直接編輯 `.claude/`、`.agent/` 下的檔案** — 這些是由 install.sh 生成的安裝目標，不應該手動維護。
+**禁止直接編輯 `.claude/`、`.agents/` 下的檔案** — 這些是由 install.sh 生成的安裝目標，不應該手動維護。
 
 ---
 
@@ -49,7 +49,7 @@ template/common/
 │   ├── agents/           ← Sub-agent 定義（.md）
 │   ├── commands/         ← 自訂斜線命令
 │   └── rules/            ← 編碼規範、git 規則等
-├── .agent/               ← Antigravity agent 設定
+├── .agents/               ← Antigravity agent 設定
 ├── .github/
 │   └── instructions/     ← GitHub instructions
 ├── skills/
@@ -97,9 +97,9 @@ bash scripts/skills/install.sh --target <project-path>
 ```
 
 此腳本會：
-- 複製 `template/common/skills/` → `.claude/skills/` 和 `.agent/skills/`
+- 複製 `template/common/skills/` → `.claude/skills/` 和 `.agents/skills/`
 - 複製 `template/common/.claude/` → `.claude/`（除 skills/）
-- 複製 `template/common/.agent/` → `.agent/`
+- 複製 `template/common/.agents/` → `.agents/`
 - 複製 `template/common/.github/` → `.github/`
 
 ### 4. 本地測試（可選）
@@ -113,10 +113,10 @@ bash scripts/skills/install.sh --target <project-path>
 
 ### 5. 提交 Git
 
-同時提交 template 和安裝目標（`.claude/`, `.agent/`）：
+同時提交 template 和安裝目標（`.claude/`, `.agents/`）：
 
 ```bash
-git add template/common/ .claude/ .agent/
+git add template/common/ .claude/ .agents/
 git commit -m "chore(agents): add/update <agent-name>"
 ```
 
@@ -126,7 +126,7 @@ git commit -m "chore(agents): add/update <agent-name>"
 
 某些檔案需要在三個位置保持同步：
 
-| 檔案類型 | Template | .claude/ | .agent/ | 備註 |
+| 檔案類型 | Template | .claude/ | .agents/ | 備註 |
 |---------|----------|----------|---------|------|
 | Agents | `template/common/.claude/agents/` | ✓ 自動複製 | ✓ 自動複製 | 兩個位置需要相同 |
 | Skills | `template/common/skills/` | ✓ 自動複製 | ✓ 自動複製 | 兩個位置需要相同 |
@@ -287,7 +287,7 @@ A: 分開。Skill 是通用指令集（跨工具），Agent 是 CC 特定設定�
 
 **Q: 可以只在 `.claude/` 編輯，不用 template 嗎？**
 
-A: 不建議。`template/` 是「來源」，`.claude/` 和 `.agent/` 是「安裝」。分離設計是為了支援多個專案共用同套配置。
+A: 不建議。`template/` 是「來源」，`.claude/` 和 `.agents/` 是「安裝」。分離設計是為了支援多個專案共用同套配置。
 
 ---
 
@@ -312,7 +312,7 @@ A: 不建議。`template/` 是「來源」，`.claude/` 和 `.agent/` 是「安�
 
 ### Prohibited Actions
 
-- ❌ **禁止直接編輯 `.claude/`、`.agent/`** — 這是安裝目標，修改會被下次 install.sh 覆蓋
+- ❌ **禁止直接編輯 `.claude/`、`.agents/`** — 這是安裝目標，修改會被下次 install.sh 覆蓋
 - ❌ **禁止修改第三方 skill** — TDD 規則、workflow 規則放 `template/common/.claude/rules/`，不動 opsx skill
 - ❌ **禁止 Hardcode 路徑** — 一律用 `PROJECT_ROOT` 或 `SOURCE_REPO` 變數
 - ❌ **禁止 Silent Fail 在 Gate Hook** — pre-commit hook 必須 exit 1 阻擋；只有背景 notification hook 才 exit 0

@@ -5,10 +5,10 @@
 現行結構：
 ```
 template/
-├── skills/                         ← 複製到 .claude/skills/ 和 .agent/skills/
+├── skills/                         ← 複製到 .claude/skills/ 和 .agents/skills/
 ├── .claude/commands/opsx/
 ├── .claude/rules/
-├── .agent/workflows/
+├── .agents/workflows/
 └── .github/instructions/
 ```
 
@@ -36,7 +36,7 @@ template/
 ├── common/
 │   ├── skills/
 │   ├── .claude/
-│   ├── .agent/
+│   ├── .agents/
 │   └── .github/
 ├── python/
 │   ├── .claude/rules/
@@ -73,7 +73,7 @@ skills 屬於 agent workflow 工具，與程式語言無關，放 common。
 
 ### D5：同步更新此 repo 自身的 template 結構
 
-`wk-agent-ops` 自己也使用 `template/` 下的 common 內容（`.claude/`、`.agent/`），重組後保持一致。
+`wk-agent-ops` 自己也使用 `template/` 下的 common 內容（`.claude/`、`.agents/`），重組後保持一致。
 
 ## Risks / Trade-offs
 

@@ -7,11 +7,11 @@
 ```
 template/
 ├── common/                       ← always installed
-│   ├── skills/                   → .claude/skills/ and .agent/skills/
+│   ├── skills/                   → .claude/skills/ and .agents/skills/
 │   ├── .claude/
 │   │   ├── commands/opsx/        → /opsx:* slash commands
 │   │   └── rules/                → always-on Claude Code rules
-│   ├── .agent/workflows/         → agent workflow definitions
+│   ├── .agents/workflows/         → agent workflow definitions
 │   └── .github/instructions/     → GitHub Copilot instructions
 ├── python/                       ← opt-in: Python projects
 │   ├── .claude/rules/            → Python-specific Claude rules
@@ -51,9 +51,9 @@ bash /path/to/wk-agent-ops/scripts/skills/install.sh --target /path/to/project p
 | Source | Destination | Notes |
 |--------|-------------|-------|
 | `common/skills/` | `.claude/skills/` | agent skills |
-| `common/skills/` | `.agent/skills/` | agent skills (duplicate) |
+| `common/skills/` | `.agents/skills/` | agent skills (duplicate) |
 | `common/.claude/` | `.claude/` | rules, commands |
-| `common/.agent/` | `.agent/` | workflows |
+| `common/.agents/` | `.agents/` | workflows |
 | `common/.github/` | `.github/` | Copilot instructions |
 | `<profile>/.claude/rules/` | `.claude/rules/` | per-profile rules |
 | `<profile>/hooks/` | `.git/hooks/` | git hooks, auto chmod +x |

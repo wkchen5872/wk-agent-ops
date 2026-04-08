@@ -1,6 +1,6 @@
 ## Why
 
-The D1 — AGENTS.md coverage audit scans all skills under `.claude/skills/` and `.agent/skills/` including third-party/superpowers skills, flooding results with noise about entries the user never authored. The audit was designed to help maintain custom project documentation but has the opposite effect in practice.
+The D1 — AGENTS.md coverage audit scans all skills under `.claude/skills/` and `.agents/skills/` including third-party/superpowers skills, flooding results with noise about entries the user never authored. The audit was designed to help maintain custom project documentation but has the opposite effect in practice.
 
 ## What Changes
 
@@ -23,5 +23,5 @@ _None_
 
 - `template/common/skills/entropy-check/SKILL.md` — remove D1 section, update routing table
 - `.claude/skills/entropy-check/SKILL.md` — same
-- `.agent/skills/entropy-check/SKILL.md` — same
+- `.agents/skills/entropy-check/SKILL.md` — same
 - `openspec/specs/entropy-check/spec.md` — remove U1 requirement and audit routing entry for D1

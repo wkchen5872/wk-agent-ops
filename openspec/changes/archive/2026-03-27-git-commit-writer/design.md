@@ -2,7 +2,7 @@
 
 目前 `openspec-commit` skill 是三合一流程（archive → docs → commit），全部跑在主 model（Sonnet）上。git commit 格式化是機械化工作，適合在更便宜的 model 上執行。
 
-現有 skill 架構：每個 skill 部署至三個位置（`template/common/skills/`、`.claude/skills/`、`.agent/skills/`），各工具讀取自己的位置。
+現有 skill 架構：每個 skill 部署至三個位置（`template/common/skills/`、`.claude/skills/`、`.agents/skills/`），各工具讀取自己的位置。
 
 ## Goals / Non-Goals
 
@@ -36,4 +36,4 @@
 ## Risks / Trade-offs
 
 - Haiku 品質 vs Sonnet：commit 訊息可能較不精準 → 使用者可 `git commit --amend` 修正
-- 三個位置需手動同步：template 改完需複製到 `.claude/` 和 `.agent/` → 可接受，現有所有 skill 都這樣
+- 三個位置需手動同步：template 改完需複製到 `.claude/` 和 `.agents/` → 可接受，現有所有 skill 都這樣

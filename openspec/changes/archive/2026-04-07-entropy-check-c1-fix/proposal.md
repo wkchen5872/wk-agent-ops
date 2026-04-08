@@ -24,5 +24,5 @@ _None_
 
 - `template/common/skills/entropy-check/SKILL.md` — fix C1 bash and Python heuristic code
 - `.claude/skills/entropy-check/SKILL.md` — same
-- `.agent/skills/entropy-check/SKILL.md` — same
+- `.agents/skills/entropy-check/SKILL.md` — same
 - `openspec/specs/entropy-check-c1-unused-code/spec.md` — update bash detection requirement to reflect all-files approach

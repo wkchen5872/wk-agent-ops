@@ -112,7 +112,7 @@ wt-done feature123 --base main
 |---|---|
 | `.claude/skills/openspec-commit/` | `/opsx:commit` skill |
 | `.claude/commands/opsx/commit.md` | `/opsx:commit` slash command |
-| `.agent/workflows/opsx-commit.md` | Agent workflow |
+| `.agents/workflows/opsx-commit.md` | Agent workflow |
 | `.claude/rules/openspec-commits.md` | Commit 規範（永遠載入） |
 | `.github/instructions/openspec-commits.md` | GitHub Copilot instructions |
 | `.claude/agents/git-commit-writer.md` | `@"git-commit-writer"` — 自動產生 Conventional Commits |
