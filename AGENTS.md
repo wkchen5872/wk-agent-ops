@@ -291,49 +291,56 @@ A: 不建議。`template/` 是「來源」，`.claude/` 和 `.agents/` 是「安
 
 ---
 
-## AI Coding Principles
 
-> 使用哪套 protocol 取決於任務規模。以下三層框架避免小任務用重流程、大任務缺乏結構。
+## Development Protocol by Task Scale
 
-### Level 1 — 小任務（日常修改、調整單一 skill/rule）
+Which protocol to use depends on task scale.
 
-遵循 **Karpathy Guidelines**：
+### Level 1 — Small Tasks
+
+_Daily edits, single skill/rule adjustments, minor fixes._
+
+Follow **Karpathy Guidelines**:
 
 **Think Before Acting**
-- 動手前明確說明假設。若有多種解讀，列出選項，不要靜默選一個。
-- 不清楚就停下來問，不要猜著寫。
+- State assumptions explicitly before implementing. If multiple interpretations exist, present them — don't pick silently.
+- If something is unclear, stop and ask. Do not guess and code.
 
 **Simplicity First**
-- 不加任何超出明確要求的功能、抽象或可配置性。
-- 不為不可能發生的情況寫 error handling。
-- 如果 50 行能解決，不要寫 200 行。
+- No features, abstractions, or configurability beyond what was explicitly asked.
+- No error handling for impossible scenarios.
+- If a solution can be 50 lines, don't write 200.
 
 **Surgical Changes**
-- 只修改請求直接要求的程式碼。
-- 不改善、重構或格式化鄰近程式碼。
-- 不刪除既有 dead code，除非明確被要求。
-- 每一行改動都必須能直接追溯到使用者的請求。
+- Edit only the code directly required by the request.
+- Do not improve, refactor, or reformat adjacent code.
+- Do not delete pre-existing dead code unless explicitly asked.
+- Every changed line must trace directly to the user's request.
 
-### Level 2 — 中型功能（新 skill、新 agent、新 workflow）
+**Testing for Level 1**
+- Formal TDD (Red → Green → Refactor) is not required.
+- You must still run the existing test suite after changes and confirm no regressions before marking complete.
 
-使用 **ECC Feature-Dev** 流程：
+### Level 2 — Medium Features
 
-1. **Discovery** — 釐清需求、驗收條件
-2. **Codebase Exploration** — 理解相關現有程式碼和整合點
-3. **Clarifying Questions** — 提出針對性問題，等待回應
-4. **Architecture Design** — 提出設計方案，等待核准後再實作
-5. **Implementation** — TDD 優先，commit 保持小而聚焦
-6. **Quality Review** — review 只處理 scope 內的問題（遵循 Surgical Changes 原則）
+_New skill, new agent, new workflow._
 
-### Level 3 — 架構級變更（跨模組設計、多 skill 協作系統）
+Use **Plan Mode + OpenSpec** flow:
 
-使用 **Superpowers** 完整 pipeline：
+1. **Plan Mode** — discuss design, produce a concrete plan
+2. **OpenSpec** — `/opsx:new` to create proposal, design, specs, tasks
+3. **Implementation** — `/opsx:apply` with TDD (see Section 3)
 
-1. **Brainstorming** — 逐一釐清問題，提出 2-3 個方案，取得設計核准
-2. **Writing-Plans** — 產出極細粒度任務計劃（每步驟含測試指令與預期輸出）
-3. **Executing-Plans** — 遵循計劃逐步執行，遇到 blocker 立即停止並詢問
+### Level 3 — Architectural Changes
 
-> **注意**：Level 3 要求的 design doc 和 plan doc 只在架構級任務有長期價值。對 Level 1/2 任務強制套用此 pipeline 本身就是 complexity，違反 Simplicity First 原則。
+_Cross-module design, multi-skill systems._
+
+Use **Plan Mode + OpenSpec** with agent split:
+
+1. **Plan Mode** — brainstorm approaches, get design approval
+2. **OpenSpec** — PM Agent creates change artifacts (`/opsx:ff`)
+3. **Implementation** — RD Agent executes `/opsx:apply`
+
 
 ---
 
