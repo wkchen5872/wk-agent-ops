@@ -142,9 +142,7 @@ git commit -m "<message>
 Co-Authored-By: <your model name> <noreply@anthropic.com>"
 ```
 
-Example: 
-- if you are Claude Haiku 4.5, write `Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>`.
-- if you are Gemini 1.5 Flash, write `Co-Authored-By: Gemini 1.5 Flash <noreply@google.com>`.
+Example: if you are Claude Haiku 4.5, write `Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>`. Always use your own actual model name and version — do not copy this example verbatim.
 
 On pre-commit hook failure: fix the issue and re-run `git commit`. Do NOT use `--no-verify`.
 

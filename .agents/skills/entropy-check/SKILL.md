@@ -23,9 +23,8 @@ weight that accumulates between feature cycles.
 Determine the project root using environment variables:
 
 ```
-if $GEMINI_PROJECT_DIR is set  → PROJECT_ROOT=$GEMINI_PROJECT_DIR
-elif $CLAUDE_PROJECT_DIR is set → PROJECT_ROOT=$CLAUDE_PROJECT_DIR
-else                            → PROJECT_ROOT=$PWD
+if $CLAUDE_PROJECT_DIR is set → PROJECT_ROOT=$CLAUDE_PROJECT_DIR
+else                          → PROJECT_ROOT=$PWD
 ```
 
 ---

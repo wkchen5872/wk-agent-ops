@@ -7,12 +7,11 @@
 Hook 腳本需同時支援以下工具環境：
 
 - **Claude Code** — 主要工具
-- **Gemini CLI** — 高性能模型整合
-- **GitHub Copilot CLI** / **Codex** — 次要環境
+- **Antigravity** — Google agentic IDE（次要環境）
 
 ## 實作準則
 
-1. **環境偵測**：優先檢查 `GEMINI_PROJECT_DIR` → `CLAUDE_PROJECT_DIR` → fallback `PWD`
+1. **環境偵測**：優先檢查 `CLAUDE_PROJECT_DIR` → fallback `PWD`（Antigravity 於 workspace 內執行）
 2. **stdin 優先**：Hook 腳本應支援 stdin 接收 JSON（Claude Code Hook 格式）
 3. **Silent Fail**：背景 Hook 失敗不應阻斷主流程
 4. **Idempotency**：安裝與更新腳本需冪等

@@ -26,17 +26,15 @@
 
 ## 多工具相容性規範 (Multi-Tool Compatibility)
 
-在進行任何功能規劃、Agent 設計或腳本撰寫時，**必須同時考慮並支援**以下 AI CLI 工具：
+在進行任何功能規劃、Agent 設計或腳本撰寫時，**必須同時考慮並支援**以下 AI 開發工具：
 
 - **Claude Code**: 主要研發與執行工具。
-- **GitHub Copilot CLI**: 輔助程式碼生成介面。
-- **Gemini CLI**: 高性能模型整合。
-- **Codex**: 替代執行引擎。
+- **Antigravity**: Google 的 agentic IDE（次要支援目標）。
 
 **具體要求：**
-1. **設定隔離**：確保 `.claude/`、`.gemini/` 等工具特定設定目錄互不干擾。
-2. **環境變數偵測**：腳本必須能根據環境變數（如 `CLAUDE_PROJECT_DIR`、`GEMINI_PROJECT_DIR`）自動偵測當前運作的工具。
-3. **輸入輸出規範**：優先支援 Standard Input (stdin) 與 Command-line Arguments，確保所有工具都能透過管道 (pipe) 呼叫。
+1. **設定隔離**：確保 `.claude/`（Claude Code）與 `.agent/`（Antigravity）等工具特定設定目錄互不干擾；跨工具規則放 `AGENTS.md`。
+2. **環境變數偵測**：腳本必須能根據環境變數（優先 `CLAUDE_PROJECT_DIR`，否則 fallback `PWD`）自動偵測專案根。
+3. **輸入輸出規範**：優先支援 Standard Input (stdin) 與 Command-line Arguments，確保兩工具都能透過管道 (pipe) 呼叫。
 4. **文件一致性**：`README.md` 與 `docs/` 必須包含各工具的安裝與使用說明。
 
 ---
@@ -155,7 +153,7 @@ diff template/common/.claude/agents/my-agent.md \
 **特性：**
 - 自動判斷 commit type（feat/fix/chore/docs 等）
 - 支援 openspec 上下文（有 change 時加 scope）
-- 支援多模型（Claude Haiku 4.5 / Gemini Flash 等），兼顧效能與費用
+- 以輕量模型（如 Claude Haiku）執行，兼顧效能與費用
 - 不需要確認，直接執行
 - Archive guard：若傳入 `archive_path`，在 commit 前驗證目錄存在；archive 未完成則停止
 
@@ -178,7 +176,7 @@ diff template/common/.claude/agents/my-agent.md \
 - 只改相關 section，不重寫無關段落
 - 支援新 agent/skill、workflow 變更、新 profile 等多種情境
 - **不自動建立 commit**——文件更新永遠留在工作區
-- 支援高品質模型（Claude Sonnet / Gemini Pro），確保文件理解與撰寫品質
+- 以高品質模型（如 Claude Sonnet）執行，確保文件理解與撰寫品質
 
 **觸發方式：**
 ```

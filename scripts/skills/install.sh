@@ -82,16 +82,16 @@ sync_dir() {
 }
 
 # --- Install common ---
+# Targets: Claude Code (.claude/) and Antigravity (.agent/, singular — flat rules/workflows).
 
-# skills/ → .claude/skills/ and .agents/skills/
+# skills/ → .claude/skills/ and .agent/skills/
 sync_dir "$COMMON/skills" "$TARGET/.claude/skills"
-sync_dir "$COMMON/skills" "$TARGET/.agents/skills"
+sync_dir "$COMMON/skills" "$TARGET/.agent/skills"
 
-# .claude/ .agents/ .github/ (excluding skills/)
-mkdir -p "$TARGET/.claude" "$TARGET/.agent" "$TARGET/.github"
+# .claude/ and .agent/ (excluding skills/)
+mkdir -p "$TARGET/.claude" "$TARGET/.agent"
 rsync -a --itemize-changes --exclude 'skills/' "$COMMON/.claude/" "$TARGET/.claude/"
-sync_dir "$COMMON/.agent"  "$TARGET/.agent"
-sync_dir "$COMMON/.github" "$TARGET/.github"
+sync_dir "$COMMON/.agent" "$TARGET/.agent"   # Antigravity workflows → .agent/workflows/
 
 # --- AGENTS.md: copy only if not present in target ---
 if [[ -f "$COMMON/AGENTS.md" && ! -f "$TARGET/AGENTS.md" ]]; then
@@ -109,13 +109,17 @@ fi
 
 for profile in "${PROFILES[@]+"${PROFILES[@]}"}"; do
   PROFILE_DIR="$TEMPLATE/$profile"
-  sync_dir "$PROFILE_DIR/.claude/rules"        "$TARGET/.claude/rules"
-  sync_dir "$PROFILE_DIR/.github/instructions" "$TARGET/.github/instructions"
+  sync_dir "$PROFILE_DIR/.claude/rules" "$TARGET/.claude/rules"
   if [[ -d "$PROFILE_DIR/hooks" ]]; then
     sync_dir "$PROFILE_DIR/hooks" "$TARGET/.git/hooks"
     find "$TARGET/.git/hooks" -maxdepth 1 -type f -exec chmod +x {} +
   fi
 done
+
+# --- Mirror all installed rules to Antigravity's flat .agent/rules/ ---
+# Claude Code reads .claude/rules/; Antigravity reads flat .agent/rules/*.md.
+# .claude/rules/ is flat in this template, so a direct copy preserves the flat layout.
+sync_dir "$TARGET/.claude/rules" "$TARGET/.agent/rules"
 
 echo ""
 echo "✅ Done. Installed profiles: ${PROFILES_DISPLAY}"
