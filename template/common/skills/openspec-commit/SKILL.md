@@ -122,7 +122,7 @@ Skip any? (type file names or 'none')
 
 ## Step 5 — Execute git commit via git-commit-writer
 
-**In Claude Code or Copilot CLI:** Use the `git-commit-writer` agent (defined in `.claude/agents/git-commit-writer.md`, runs on Haiku automatically):
+**In Claude Code:** Use the `git-commit-writer` agent (defined in `.claude/agents/git-commit-writer.md`, runs on Haiku automatically):
 
 ```
 Use the git-commit-writer agent.
