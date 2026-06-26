@@ -3,9 +3,7 @@
 ## Purpose
 
 Entropy check is a multi-context audit tool that detects documentation drift, broken references, unused code, stale OpenSpec changes, and complexity debt. It runs targeted audits based on the detected project type (openspec or standard) and provides a structured decision menu for remediation.
-
 ## Requirements
-
 ### Requirement: Context detection
 The skill SHALL detect the project type using two contexts only: `openspec` and `standard`.
 
@@ -15,7 +13,7 @@ The skill SHALL detect the project type using two contexts only: `openspec` and 
 
 #### Scenario: Standard context detected
 - **WHEN** `openspec/changes/` does not exist
-- **THEN** context is set to `standard` and only D1/D2/D3/C1/R1 audits run
+- **THEN** context is set to `standard` and only D2/D3/C1/R1 audits run
 
 #### Scenario: Project root resolved via environment variable
 - **WHEN** `GEMINI_PROJECT_DIR` is set
@@ -30,35 +28,16 @@ The skill SHALL detect the project type using two contexts only: `openspec` and 
 - **THEN** `PROJECT_ROOT` is set to `$PWD`
 
 ### Requirement: Audit routing table
-The skill SHALL run audits according to the following routing: D1/D2/D3/C1/R1 run for all contexts; O1 runs only when context is `openspec`.
+The skill SHALL run audits according to the following routing: D2/D3/C1/R1 run for all contexts; O1 runs only when context is `openspec`.
 
 #### Scenario: Standard project audit set
 - **WHEN** context is `standard`
-- **THEN** audits D1, D2, D3, C1, R1 are executed
+- **THEN** audits D2, D3, C1, R1 are executed
 - **AND** O1 is skipped
 
 #### Scenario: OpenSpec project audit set
 - **WHEN** context is `openspec`
-- **THEN** audits D1, D2, D3, C1, O1, R1 are all executed
-
-### Requirement: U1 — AGENTS.md coverage
-Entropy check SHALL verify that all installed skills and agents have entries in AGENTS.md.
-
-#### Scenario: Missing skill entry detected
-- **WHEN** a directory exists under `.claude/skills/<name>/SKILL.md`
-- **AND** AGENTS.md does not contain a `### <name>` section
-- **THEN** the finding is reported as U1 with the skill name and path
-
-#### Scenario: Missing agent entry detected
-- **WHEN** a file exists at `.claude/agents/<name>.md`
-- **AND** AGENTS.md does not contain a `### <name>` section
-- **THEN** the finding is reported as U1 with the agent name and path
-
-#### Scenario: Auto-fix applied
-- **WHEN** user selects auto-fix for a U1 finding
-- **THEN** entropy check reads the SKILL.md or agent.md source file
-- **AND** writes a correctly-formatted `### <name>` entry to AGENTS.md
-- **AND** does not modify any other sections of AGENTS.md
+- **THEN** audits D2, D3, C1, O1, R1 are all executed
 
 ### Requirement: U2 — Docs completeness
 Entropy check SHALL detect unfilled documentation templates.
@@ -109,3 +88,4 @@ Entropy check SHALL update the watermark after every run regardless of outcome.
 - **WHEN** entropy check completes (any option chosen, including skip)
 - **AND** context is `openspec`
 - **AND** `openspec/.entropy-state` is added to `.gitignore` if not already present
+
