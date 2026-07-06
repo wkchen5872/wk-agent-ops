@@ -82,16 +82,16 @@ sync_dir() {
 }
 
 # --- Install common ---
-# Targets: Claude Code (.claude/) and Antigravity (.agent/, singular — flat rules/workflows).
+# Targets: Claude Code (.claude/) and Antigravity (.agents/ — flat rules/workflows).
 
-# skills/ → .claude/skills/ and .agent/skills/
+# skills/ → .claude/skills/ and .agents/skills/
 sync_dir "$COMMON/skills" "$TARGET/.claude/skills"
-sync_dir "$COMMON/skills" "$TARGET/.agent/skills"
+sync_dir "$COMMON/skills" "$TARGET/.agents/skills"
 
-# .claude/ and .agent/ (excluding skills/)
-mkdir -p "$TARGET/.claude" "$TARGET/.agent"
+# .claude/ and .agents/ (excluding skills/)
+mkdir -p "$TARGET/.claude" "$TARGET/.agents"
 rsync -a --itemize-changes --exclude 'skills/' "$COMMON/.claude/" "$TARGET/.claude/"
-sync_dir "$COMMON/.agent" "$TARGET/.agent"   # Antigravity workflows → .agent/workflows/
+sync_dir "$COMMON/.agents" "$TARGET/.agents"   # agent workflows → .agents/workflows/
 
 # --- AGENTS.md: copy only if not present in target ---
 if [[ -f "$COMMON/AGENTS.md" && ! -f "$TARGET/AGENTS.md" ]]; then
@@ -124,10 +124,10 @@ for profile in "${PROFILES[@]+"${PROFILES[@]}"}"; do
   fi
 done
 
-# --- Mirror all installed rules to Antigravity's flat .agent/rules/ ---
-# Claude Code reads .claude/rules/; Antigravity reads flat .agent/rules/*.md.
+# --- Mirror all installed rules to Antigravity's flat .agents/rules/ ---
+# Claude Code reads .claude/rules/; Antigravity reads flat .agents/rules/*.md.
 # .claude/rules/ is flat in this template, so a direct copy preserves the flat layout.
-sync_dir "$TARGET/.claude/rules" "$TARGET/.agent/rules"
+sync_dir "$TARGET/.claude/rules" "$TARGET/.agents/rules"
 
 echo ""
 echo "✅ Done. Installed profiles: ${PROFILES_DISPLAY}"

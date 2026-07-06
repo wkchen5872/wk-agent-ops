@@ -32,7 +32,8 @@
 - **Antigravity**: Google 的 agentic IDE（次要支援目標）。
 
 **具體要求：**
-1. **設定隔離**：確保 `.claude/`（Claude Code）與 `.agent/`（Antigravity）等工具特定設定目錄互不干擾；跨工具規則放 `AGENTS.md`。
+
+1. **設定隔離**：確保 `.claude/`（Claude Code）與 `.agents/`（Antigravity）等工具特定設定目錄互不干擾；跨工具規則放 `AGENTS.md`。
 2. **環境變數偵測**：腳本必須能根據環境變數（優先 `CLAUDE_PROJECT_DIR`，否則 fallback `PWD`）自動偵測專案根。
 3. **輸入輸出規範**：優先支援 Standard Input (stdin) 與 Command-line Arguments，確保兩工具都能透過管道 (pipe) 呼叫。
 4. **文件一致性**：`README.md` 與 `docs/` 必須包含各工具的安裝與使用說明。
@@ -65,17 +66,20 @@ template/common/
 所有修改都在 `template/common/` 下進行：
 
 **新增 agent：**
+
 ```bash
 touch template/common/.claude/agents/<agent-name>.md
 # 編輯 frontmatter + system prompt
 ```
 
 **修改 skill：**
+
 ```bash
 vim template/common/skills/<skill-name>/SKILL.md
 ```
 
 **新增 rule：**
+
 ```bash
 touch template/common/.claude/rules/<rule-topic>.md
 ```
@@ -95,6 +99,7 @@ bash scripts/skills/install.sh --target <project-path>
 ```
 
 此腳本會：
+
 - 複製 `template/common/skills/` → `.claude/skills/` 和 `.agents/skills/`
 - 複製 `template/common/.claude/` → `.claude/`（除 skills/）
 - 複製 `template/common/.agents/` → `.agents/`
@@ -103,6 +108,7 @@ bash scripts/skills/install.sh --target <project-path>
 ### 4. 本地測試（可選）
 
 在 Claude Code 中測試新 agent：
+
 ```
 /agents           # 檢查 agent 列表
 @"<agent-name>"   # 測試 agent 功能
@@ -151,6 +157,7 @@ diff template/common/.claude/agents/my-agent.md \
 **用途：** 生成並執行 Conventional Commits 格式的 git commit
 
 **特性：**
+
 - 自動判斷 commit type（feat/fix/chore/docs 等）
 - 支援 openspec 上下文（有 change 時加 scope）
 - 以輕量模型（如 Claude Haiku）執行，兼顧效能與費用
@@ -158,6 +165,7 @@ diff template/common/.claude/agents/my-agent.md \
 - Archive guard：若傳入 `archive_path`，在 commit 前驗證目錄存在；archive 未完成則停止
 
 **觸發方式：**
+
 ```
 @"git-commit-writer (agent)"
 
@@ -171,6 +179,7 @@ diff template/common/.claude/agents/my-agent.md \
 **用途：** 偵測 git 狀態，自動選擇模式，對 `docs/`、`README.md`、`AGENTS.md` 做最小化更新，並將變更留在工作區由使用者 review 後自行 commit
 
 **特性：**
+
 - **Mode A**（有未 commit 的變更）：掃描 `git diff HEAD`，更新文件並留在工作區，與 feature 一起 commit
 - **Mode B**（工作區乾淨）：掃描最近 N 個 commit（詢問使用者，預設 1），更新文件留在工作區
 - 只改相關 section，不重寫無關段落
@@ -179,6 +188,7 @@ diff template/common/.claude/agents/my-agent.md \
 - 以高品質模型（如 Claude Sonnet）執行，確保文件理解與撰寫品質
 
 **觸發方式：**
+
 ```
 @"doc-updater (agent)"
 
@@ -199,6 +209,7 @@ diff template/common/.claude/agents/my-agent.md \
 **用途：** 週期性健康審查 skill（v2.1），偵測文件飄移、dead references、未使用程式碼與重構候選。自動偵測專案類型（openspec / standard），依 context 執行 D2–D3、C1、O1、R1 審查，輸出 findings 摘要表與決策選單。
 
 **特性：**
+
 - Context 自動偵測：`openspec/changes/` → openspec；否則 → standard（已移除 harness context）
 - D2：docs placeholder 文字檢查（僅提示）
 - D3：AGENTS.md 和 `docs/*.md` 中的 dead reference 檢查（backtick 路徑 + Markdown `[text](link)` + anchor），auto-fix 可修正路徑或移除無效連結
@@ -209,6 +220,7 @@ diff template/common/.claude/agents/my-agent.md \
 - 每次執行後自動更新 `openspec/.entropy-state` watermark
 
 **觸發方式：**
+
 ```
 /entropy-check
 ```
@@ -253,6 +265,7 @@ Skill 和 Agent 應該遵循相同的邏輯和步驟，差異只在：
 - **Skill** 是通用指令集，需要更詳細的解釋
 
 例：`git-commit-writer`
+
 - Skill 中：「Step 6 — Execute」包含 `Co-Authored-By: <current model name>`（動態）
 - Agent 中：「Step 6 — Execute」同樣動態寫入 `Co-Authored-By: <your own model name>`（執行時自填）
 - 兩者在 Step 5 均加入 archive guard：archive 目錄不存在則停止
@@ -289,92 +302,14 @@ A: 不建議。`template/` 是「來源」，`.claude/` 和 `.agents/` 是「安
 
 ---
 
+## Agent Operating Protocol
 
-## Development Protocol by Task Scale
+This project follows the shared agent operating protocol. **Before any task, read
+`docs/agent-protocol.md`** — it defines what to read first, the hard prohibitions,
+the task-scale protocol, and the done criteria.
 
-Which protocol to use depends on task scale.
-
-### Level 1 — Small Tasks
-
-_Daily edits, single skill/rule adjustments, minor fixes._
-
-Follow **Karpathy Guidelines**:
-
-**Think Before Acting**
-- State assumptions explicitly before implementing. If multiple interpretations exist, present them — don't pick silently.
-- If something is unclear, stop and ask. Do not guess and code.
-
-**Simplicity First**
-- No features, abstractions, or configurability beyond what was explicitly asked.
-- No error handling for impossible scenarios.
-- If a solution can be 50 lines, don't write 200.
-
-**Surgical Changes**
-- Edit only the code directly required by the request.
-- Do not improve, refactor, or reformat adjacent code.
-- Do not delete pre-existing dead code unless explicitly asked.
-- Every changed line must trace directly to the user's request.
-
-**Testing for Level 1**
-- Formal TDD (Red → Green → Refactor) is not required.
-- You must still run the existing test suite after changes and confirm no regressions before marking complete.
-
-### Level 2 — Medium Features
-
-_New skill, new agent, new workflow._
-
-Use **Plan Mode + OpenSpec** flow:
-
-1. **Plan Mode** — discuss design, produce a concrete plan
-2. **OpenSpec** — `/opsx:new` to create proposal, design, specs, tasks
-3. **Implementation** — `/opsx:apply` with TDD (see Section 3)
-
-### Level 3 — Architectural Changes
-
-_Cross-module design, multi-skill systems._
-
-Use **Plan Mode + OpenSpec** with agent split:
-
-1. **Plan Mode** — brainstorm approaches, get design approval
-2. **OpenSpec** — PM Agent creates change artifacts (`/opsx:ff`)
-3. **Implementation** — RD Agent executes `/opsx:apply`
-
-
----
-
-## Harness Engineering Protocol
-
-本節定義 AI agent 在 wk-agent-ops 執行任何修改時的強制操作框架。
-
-### Execution Prerequisites
-
-開始任何 task 前，必須同時讀取：
-- **`docs/architecture.md`** — 目錄邊界與模組職責
-- **`docs/conventions.md`** — Bash 腳本規範與禁止模式
-- **`openspec/specs/`** — 需求的唯一真實來源
-
-### The Autonomous Loop (SOP)
-
-1. **Spec-First：** 讀取 openspec/changes/<name>/tasks.md，確認 task 的測試要求
-2. **TDD：** 先寫失敗的驗證腳本或測試（例如：`install.sh` 安裝後驗證 hook 存在）
-3. **Implement：** 修改 `template/` 下的來源，不直接改 `.claude/`
-4. **Verify：** 執行 `/opsx:verify` 或手動安裝測試（見下方 DoD）
-5. **Self-Heal：** 若驗證失敗，分析 log、修正來源，重複直到綠燈
-
-### Prohibited Actions
-
-- ❌ **禁止直接編輯 `.claude/`、`.agents/`** — 這是安裝目標，修改會被下次 install.sh 覆蓋
-- ❌ **禁止修改第三方 skill** — TDD 規則、workflow 規則放 `template/common/.claude/rules/`，不動 opsx skill
-- ❌ **禁止 Hardcode 路徑** — 一律用 `PROJECT_ROOT` 或 `SOURCE_REPO` 變數
-- ❌ **禁止 Silent Fail 在 Gate Hook** — pre-commit hook 必須 exit 1 阻擋；只有背景 notification hook 才 exit 0
-
-### Definition of Done (DoD)
-
-- [ ] 修改來源在 `template/` 下，而非安裝目標
-- [ ] `bash scripts/skills/install.sh` 在全新 git repo 執行成功
-- [ ] 相關功能在安裝後行為符合 spec 的 scenario
-- [ ] Aim for 80%+ scenario coverage（bash script 邏輯用臨時 repo 驗證）；若未達到，在 summary 說明原因
-- [ ] `git diff template/common/... .claude/...` 確認安裝目標與來源一致
+That file is managed by wk-agent-ops and refreshed by re-running the installer; do
+not edit it here. Keep project-specific rules in this file or under `docs/`.
 
 ---
 
