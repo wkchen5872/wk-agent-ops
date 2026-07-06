@@ -1,15 +1,4 @@
-# portable-agents-md Specification
-
-## Purpose
-
-Define what makes the installable `template/common/AGENTS.md` a portable, tool-invariant
-operating map: it names Claude Code as the primary tool while remaining usable by any
-AGENTS.md-aware tool, states prohibitions as principles rather than directory lists, describes
-workflow stages by intent with tool-specific commands only as examples, avoids dangling
-references, and keeps its Definition of Done aligned to the enforcing mechanism rather than
-over-claiming.
-
-## Requirements
+## ADDED Requirements
 
 ### Requirement: AGENTS.md is a thin project-owned pointer
 The installable `template/common/AGENTS.md` SHALL be a thin, project-owned map that carries
@@ -27,6 +16,8 @@ independently.
 #### Scenario: Protocol invariants do not need to hold on the pointer file
 - **WHEN** the tool-invariant checks run
 - **THEN** they target `docs/agent-protocol.md` (the protocol), not the thin `AGENTS.md` pointer
+
+## MODIFIED Requirements
 
 ### Requirement: No named secondary tool binding
 The installed operating protocol (the managed `docs/agent-protocol.md`, which `AGENTS.md`

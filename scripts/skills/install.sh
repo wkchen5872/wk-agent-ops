@@ -99,9 +99,17 @@ if [[ -f "$COMMON/AGENTS.md" && ! -f "$TARGET/AGENTS.md" ]]; then
   echo ">f+++++++ AGENTS.md"
 fi
 
-# --- docs/: copy files only if not present in target (no overwrite) ---
+# --- docs/: managed vs seed ---
+# Managed docs are shared upstream standards: always overwritten so a re-run of
+# install.sh propagates updates to already-installed repos. Add new shared
+# standards to MANAGED_DOCS. Everything else in docs/ is seed (project-fill):
+# copied only if absent, never overwritten.
 if [[ -d "$COMMON/docs" ]]; then
   mkdir -p "$TARGET/docs"
+  MANAGED_DOCS=(agent-protocol.md okf-conventions.md)
+  for d in "${MANAGED_DOCS[@]}"; do
+    [[ -f "$COMMON/docs/$d" ]] && rsync -a --itemize-changes "$COMMON/docs/$d" "$TARGET/docs/$d"
+  done
   rsync -a --ignore-existing --itemize-changes "$COMMON/docs/" "$TARGET/docs/"
 fi
 

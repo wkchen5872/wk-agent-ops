@@ -31,8 +31,8 @@ wk-agent-ops/
 │   │   ├── .claude/rules/     ← Rules auto-loaded by Claude Code each session
 │   │   ├── .github/instructions/  ← Same rules for Copilot CLI
 │   │   ├── skills/            ← Shared skills (opsx-commit, doc-updater, etc.)
-│   │   ├── AGENTS.md          ← Harness protocol template (no-overwrite on install)
-│   │   └── docs/              ← architecture.md, conventions.md starters (no-overwrite)
+│   │   ├── AGENTS.md          ← Thin pointer to docs/agent-protocol.md (seed, no-overwrite)
+│   │   └── docs/              ← agent-protocol.md, okf-conventions.md (managed, overwrite) + architecture/conventions starters (seed)
 │   ├── python/                ← Python-specific: pytest hook, style guide
 │   └── node/                  ← Node-specific: npm test hook
 │

@@ -84,12 +84,12 @@ fi
 # Always safe: rsync overwrites with identical content
 rsync -a --itemize-changes "$SRC/" "$DST/"
 
-# No-overwrite: only on first install (AGENTS.md, docs/)
+# Seed (no-overwrite): only on first install (AGENTS.md, project-fill docs)
 if [[ ! -f "$TARGET/AGENTS.md" ]]; then
     cp "$COMMON/AGENTS.md" "$TARGET/AGENTS.md"
 fi
 
-# No-overwrite via rsync flag
+# Seed docs via rsync flag; managed docs (shared standards) are overwritten separately
 rsync -a --ignore-existing "$COMMON/docs/" "$TARGET/docs/"
 ```
 
