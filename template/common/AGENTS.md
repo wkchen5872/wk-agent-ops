@@ -1,119 +1,100 @@
-# Harness Engineering Protocol
+# Agent Operating Protocol
 
-| Field   | Value                                                   |
-| ------- | ------------------------------------------------------- |
-| Version | 1.0.0                                                   |
-| Role    | Mandatory operational framework for all AI agent tasks. |
+> This file is the **map, not the manual**. Claude Code is the primary tool, but
+> the protocol is portable to any AGENTS.md-aware tool — every rule here holds
+> regardless of which tool reads it. Tool-specific commands appear only as
+> parenthetical examples; detailed standards live in `docs/` and load on demand.
 
----
-
-## 1. Core Mandates
-
-As an AI developer agent, you must operate within the "Verification Boundary" defined by this project's Harness. All changes MUST be verified before completion.
-
-## 2. Execution Prerequisites
-
-Before performing any task, concurrently analyze:
-
-- **Architecture Guide:** `docs/architecture.md` — module boundaries and data flow
-- **Coding Conventions:** `docs/conventions.md` — style, naming, and prohibited patterns
-- **OpenSpec Specs:** `openspec/specs/` — source of truth for requirements (Level 2+ only)
-- **Docs Standards:** `docs/okf-conventions.md` — OKF v0.1 authoring rules for all `docs/` files
-
-## 3. The Autonomous Loop (SOP)
-
-> Applies to Level 2+ tasks. Level 1 tasks follow a lighter flow — see Section 6.
-
-1. **Assertive TDD:** Write or update tests based on the Spec *before* implementation.
-2. **Compliant Implementation:** Write code adhering to `architecture.md` and `conventions.md`.
-3. **Automated Scan:** Execute `/opsx:verify` (Claude Code) or `/openspec-verify-change` (other AI CLI tools), plus native project tools (Linter, Type Check, Tests).
-4. **Self-Healing:** If verification fails, analyze logs, fix the implementation, and repeat until green.
-
-## 4. Prohibited Actions
-
-- ❌ **No Warning Suppression:** Never use `// @ts-ignore`, `any`, or skip lint errors.
-- ❌ **No Scope Creep:** Do not implement features outside the OpenSpec definition.
-- ❌ **No Structural Breach:** Do not violate the dependency rules in `architecture.md`.
-
-## 5. Definition of Done (DoD)
-
-- [ ] `/opsx:verify` (or equivalent) returns success — Exit Code 0 (Level 2+ only).
-- [ ] All existing tests pass; no regressions.
-- [ ] Aim for 80%+ test coverage for the modified logic path. If not met, highlight in summary and explain why.
-- [ ] Documentation (README/Docs) is synced with changes.
+| Field   | Value                                                     |
+| ------- | --------------------------------------------------------- |
+| Version | 2.0.0                                                     |
+| Scope   | Operational framework for all AI agent tasks in this repo |
 
 ---
 
-## 6. Development Protocol by Task Scale
+## 1. Before You Start (read only what the task needs)
 
-Which protocol to use depends on task scale.
+- **Always:** `docs/architecture.md` (module boundaries, data flow) and
+  `docs/conventions.md` (style, naming, prohibited patterns).
+- **When the task touches `openspec/`:** the relevant specs in
+  `openspec/specs/` — source of truth for requirements.
+- **When the task touches `docs/`:** `docs/okf-conventions.md` — doc authoring
+  rules. (Not needed for code-only tasks.)
 
-### Level 1 — Small Tasks
+## 2. Hard Prohibitions (apply to every task, no exceptions)
 
-*Daily edits, single skill/rule adjustments, minor fixes.*
+- ❌ **Never touch vendored / generated agent config.** Do not create, edit, or
+  delete generated agent-config directories (skills, rules, instructions
+  installed by tooling). Much of it is third-party and unverified; edits cause
+  silent downstream breakage. If a change there seems required, **stop and ask
+  the human.** The authoritative list of protected directories lives in the
+  enforcement hook, not here.
+- ❌ **No warning suppression:** never use `// @ts-ignore`, `any`, or skip lint
+  errors to force a pass.
+- ❌ **No scope creep:** implement only what the active OpenSpec change (or the
+  explicit request) defines.
+- ❌ **No structural breach:** never violate the dependency rules in
+  `docs/architecture.md`.
 
-Follow **Karpathy Guidelines**:
+> **Enforcement note:** the vendored-config prohibition is backed mechanically
+> (a permission deny rule + a PreToolUse hook). Prose here is advisory; the hook
+> is the real boundary.
 
-**Think Before Acting**
+## 3. Protocol by Task Scale
 
-- State assumptions explicitly before implementing. If multiple interpretations exist, present them — don't pick silently.
-- If something is unclear, stop and ask. Do not guess and code.
+**Level 1 — Small tasks** *(doc edits, config/setting tweaks, minor fixes)*
+No formal spec. Apply these rules:
+- State assumptions before acting; if the request is ambiguous, stop and ask —
+  do not guess and code.
+- Surgical changes only: edit only what the request requires. Do not refactor
+  or reformat adjacent code, and do not delete existing dead code unless asked.
+- No abstractions or configurability beyond what was asked.
+- Formal TDD not required, but run the existing test suite and confirm no
+  regressions before marking done.
 
-**Simplicity First**
+**Level 2 — Spec-driven tasks** *(new skill, agent, workflow, or cross-module change)*
+Everything beyond a Level 1 tweak runs the full OpenSpec flow, regardless of scale.
+Each stage below states its intent; the parenthetical is the Claude Code example —
+on any other tool, use that tool's equivalent for the same stage.
 
-- No features, abstractions, or configurability beyond what was explicitly asked.
-- No error handling for impossible scenarios.
-- If a solution can be 50 lines, don't write 200.
+1. **Plan** — explore the problem and produce a concrete design.
+   *(Claude Code: Plan Mode + `/opsx:explore`)*
+2. **Spec** — create the change artifacts (proposal, design, specs, tasks), then
+   **get human review of the design** before coding.
+   *(Claude Code: `/opsx:new`, or `/opsx:ff` to scaffold all at once)*
+3. **Implement** — build against the spec using the loop in §4.
+   *(Claude Code: `/opsx:apply`)*
+4. **Seal** — archive the change and commit.
+   *(Claude Code: `/opsx:archive` or `/opsx:commit`)*
 
-**Surgical Changes**
+## 4. Implementation Loop (Level 2)
 
-- Edit only the code directly required by the request.
-- Do not improve, refactor, or reformat adjacent code.
-- Do not delete pre-existing dead code unless explicitly asked.
-- Every changed line must trace directly to the user's request.
+1. **Test first** — write/update tests from the spec before implementation.
+2. **Implement** — adhere to `docs/architecture.md` and `docs/conventions.md`.
+3. **Verify** — run the OpenSpec verify stage against the spec, plus the native
+   linter, type check, and tests. *(Claude Code: `/opsx:verify`)*
+4. **Self-heal** — on failure, read logs, fix, repeat until green.
 
-**Testing for Level 1**
+## 5. Definition of Done (Level 2)
 
-- Formal TDD (Red → Green → Refactor) is not required.
-- You must still run the existing test suite after changes and confirm no regressions before marking complete.
+> "Done" means the mechanical gates below pass — not the agent's self-assessment.
 
-### Level 2 — Medium Features
+- [ ] The OpenSpec verify stage passes. *(Claude Code: `/opsx:verify`)*
+- [ ] The pre-commit gate passes (tests plus any coverage gate the project
+      configures). Never bypass it with `git commit --no-verify`.
+- [ ] Change archived and committed per the OpenSpec commit convention.
+- [ ] Docs synced with changes. If any file under `docs/` was touched, it
+      conforms to the rules in `docs/okf-conventions.md`.
 
-*New skill, new agent, new workflow.*
+> **Enforcement scales with the project.** The pre-commit hook is the boundary
+> for small/solo projects; projects with CI run the same checks server-side on
+> push. Only what the configured gate actually enforces is guaranteed here.
 
-Use **Plan Mode + OpenSpec** flow:
+## 6. Cross-Tool Notes
 
-1. **Plan Mode** — discuss design, produce a concrete plan
-2. **OpenSpec** — `/opsx:new` to create proposal, design, specs, tasks
-3. **Implementation** — `/opsx:apply` with TDD (see Section 3)
-
-### Level 3 — Architectural Changes
-
-*Cross-module design, multi-skill systems.*
-
-Use **Plan Mode + OpenSpec** with agent split:
-
-1. **Plan Mode** — brainstorm approaches, get design approval
-2. **OpenSpec** — PM Agent creates change artifacts (`/opsx:ff`)
-3. **Implementation** — RD Agent executes `/opsx:apply`
-
-## 7. Documentation Standards (OKF v0.1)
-
-All `.md` files under `docs/` are part of an OKF v0.1 knowledge bundle.
-When **creating or editing** any doc file, enforce:
-
-**Conformance rules (§9 — mandatory):**
-
-- Every `.md` file except `index.md` and `log.md` MUST have a YAML frontmatter block.
-- Frontmatter MUST contain a non-empty `type` field (see `docs/okf-conventions.md` for valid values).
-
-**Soft guidance (apply where applicable):**
-
-- Recommended fields: `title`, `description`, `tags`, `timestamp` (ISO 8601).
-- Cross-links: prefer bundle-relative form — `/docs/<file>.md`.
-- External citations → `# Citations` section at document bottom.
-- Directory changes → update `docs/index.md` listing.
-- Significant updates → append entry to `docs/log.md`.
-
-Non-conformant docs found during a task SHOULD be flagged in the task summary,
-but fixing them is NOT in scope unless explicitly requested (Level 1 surgical change rule applies).
+- `AGENTS.md` is the single shared source of truth. If a tool-specific config
+  file exists (e.g. a Claude-only `CLAUDE.md`), keep it lean and have it
+  **import** this file rather than duplicating it.
+- Commands in parentheses above are Claude Code examples. On any other tool, map
+  each **stage** (plan → spec → review → implement → verify → seal) to that
+  tool's equivalent — the sequence is the invariant; the command names are not.
