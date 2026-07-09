@@ -227,6 +227,41 @@ diff template/common/.claude/agents/my-agent.md \
 
 ---
 
+### mutation-setup + mutation-check
+
+**位置：** `template/common/skills/mutation-setup/SKILL.md`、`template/common/skills/mutation-check/SKILL.md`（安裝後複製到 `.claude/skills/` 與 `.agents/skills/`）
+
+**用途：** diff-based 變異測試整合（v1.0），量測「測試是否真能抓到程式缺陷」而非只有 line coverage。Python 走 mutmut、TS/JS 走 Stryker。刻意拆成兩個 skill：**設定**與**執行**分離以利維護。
+
+**`mutation-setup`（冪等設定）：**
+
+- 語言偵測：`pyproject.toml`/`setup.py` → mutmut；`package.json` → Stryker；皆無則中止
+- 詢問後 install/upgrade 套件（`uv add --dev mutmut` / `npx stryker init`）、收集設定值（mutmut source 目錄 / Stryker init）、gitignore 狀態檔
+- 冪等：重跑偵測既有設定，顯示現值供 keep/update，不覆蓋。升級或改設定時才需再跑
+- **installer 不碰目標專案的 manifest / 設定**——所有安裝副作用集中於此
+
+**`mutation-check`（零設定執行）：**
+
+- 開頭 setup gate：偵測未安裝/未設定 → 提示先跑 `/mutation-setup`（可詢問是否現在執行）
+- diff scope：未 commit → `git diff HEAD`；乾淨 feature branch → 與 default branch 的 merge-base；default branch → 上次 watermark
+- findings 依風險類別排序（conditional → boundary → return-value → other），附三選項決策選單（補測試 / equivalent / skip）
+- watermark 存於 `openspec/.mutation-state`（或 `.mutation-state`），記錄 commit 與 equivalent 標記
+- 搭配 `.claude/rules/tdd-enforcement.md` 的 Red 失敗證據、revert-check 與 mutant triage 規則
+
+**參考資料**（設計靈感來源，吸收/未採用詳見 change `design.md` D8）：
+
+- [test-architect agent](https://github.com/rohitg00/awesome-claude-code-toolkit/blob/main/agents/quality-assurance/test-architect.md) — 吸收其 revert-check 與 surviving-mutant 風險分類；**未採用**其寫死的 `score < 80%` 閾值
+- [add-mutation-testing command](https://github.com/davepoon/buildwithclaude/blob/main/plugins/all-commands/commands/add-mutation-testing.md) — 一次性 setup 大綱，**未採用**其形狀（無 diff scope 主軸、重 CI gate、無 triage 循環）
+
+**觸發方式：**
+
+```
+/mutation-setup     # 初次 / 升級 / 改設定
+/mutation-check     # 每次要稽核測試強度時
+```
+
+---
+
 ## Skill 開發指南
 
 ### Skill 檔案結構
