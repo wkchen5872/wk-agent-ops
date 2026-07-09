@@ -28,6 +28,19 @@ done
 # (d) protocol doc references /mutation-check
 grep -q '/mutation-check' "$PROTO" 2>/dev/null && ok "agent-protocol.md references /mutation-check" || bad "agent-protocol.md references /mutation-check"
 
+# (f) mutation-testing playbook ships as a managed doc with tool + design references
+DOC="$COMMON/docs/mutation-testing.md"
+if [[ -f "$DOC" ]]; then
+  ok "mutation-testing.md ships"
+  grep -q 'Managed by wk-agent-ops' "$DOC" && ok "playbook has managed banner" || bad "playbook has managed banner"
+  for url in 'stryker-mutator.io' 'mutmut.readthedocs.io' 'stryker-js' 'add-mutation-testing.md' 'test-architect.md'; do
+    grep -q "$url" "$DOC" && ok "playbook cites $url" || bad "playbook cites $url"
+  done
+  grep -q 'mutation-testing.md' "$ROOT/scripts/skills/install.sh" && ok "playbook is a MANAGED_DOC" || bad "playbook is a MANAGED_DOC"
+else
+  bad "mutation-testing.md ships ($DOC)"
+fi
+
 # Install into a scratch target, with pre-existing project manifests we expect UNTOUCHED.
 T="$(mktemp -d)"; ( cd "$T" && git init -q )
 printf '[project]\nname="x"\n' > "$T/pyproject.toml"
@@ -42,6 +55,10 @@ for name in mutation-setup mutation-check; do
   [[ -f "$cs" && -f "$as" ]] && ok "$name installed to .claude/ and .agents/" || bad "$name installed to .claude/ and .agents/"
   [[ -f "$cs" && -f "$as" ]] && { diff -q "$cs" "$as" >/dev/null && ok "$name copies identical" || bad "$name copies identical"; }
 done
+
+# (f) managed playbook propagates to target docs/, identical to template
+td="$T/docs/mutation-testing.md"
+[[ -f "$td" ]] && { diff -q "$COMMON/docs/mutation-testing.md" "$td" >/dev/null && ok "playbook propagated to docs/" || bad "playbook propagated to docs/"; } || bad "playbook propagated to docs/"
 
 # (b) tdd-enforcement rule auto-mirrored .claude/rules/ -> .agents/rules/
 cr="$T/.claude/rules/tdd-enforcement.md"; ar="$T/.agents/rules/tdd-enforcement.md"

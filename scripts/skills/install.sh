@@ -106,7 +106,7 @@ fi
 # copied only if absent, never overwritten.
 if [[ -d "$COMMON/docs" ]]; then
   mkdir -p "$TARGET/docs"
-  MANAGED_DOCS=(agent-protocol.md okf-conventions.md)
+  MANAGED_DOCS=(agent-protocol.md okf-conventions.md mutation-testing.md)
   for d in "${MANAGED_DOCS[@]}"; do
     [[ -f "$COMMON/docs/$d" ]] && rsync -a --itemize-changes "$COMMON/docs/$d" "$TARGET/docs/$d"
   done

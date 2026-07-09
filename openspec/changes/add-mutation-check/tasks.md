@@ -27,5 +27,5 @@
   - 測試要求：`bash tests/test_mutation_check.sh` 與既有 `tests/*.sh` 全部 PASS
 - [ ] 4.2 Dogfood：在一個真實 Python 或 TS 專案安裝後執行 `/mutation-check` 完整跑一輪（bootstrap → diff run → findings → 決策選單 → watermark），把發現的問題修回 template
   - 測試要求：手動驗收；記錄一份實際輸出摘要於 change 目錄（如 `dogfood-notes.md`）
-- [ ] 4.3 更新 `AGENTS.md` Skills 章節與 `docs/`（可用 doc-updater）。docs 中 mutation-check 段落的「參考資料」需列入兩個靈感來源連結：test-architect agent（https://github.com/rohitg00/awesome-claude-code-toolkit/blob/main/agents/quality-assurance/test-architect.md）與 add-mutation-testing command（https://github.com/davepoon/buildwithclaude/blob/main/plugins/all-commands/commands/add-mutation-testing.md），並註明我們吸收/未採用的部分（見 design D8）。歸檔 change 並依 openspec-commits 規範提交
+- [ ] 4.3 更新 `AGENTS.md` Skills 章節與 `docs/`（可用 doc-updater）。docs 中 mutation-check 段落的「參考資料」需列入兩個靈感來源連結：test-architect agent（<https://github.com/rohitg00/awesome-claude-code-toolkit/blob/main/agents/quality-assurance/test-architect.md）與> add-mutation-testing command（<https://github.com/davepoon/buildwithclaude/blob/main/plugins/all-commands/commands/add-mutation-testing.md），並註明我們吸收/未採用的部分（見> design D8）。歸檔 change 並依 openspec-commits 規範提交
   - 測試要求：pre-commit gate 通過；`openspec` 驗證通過

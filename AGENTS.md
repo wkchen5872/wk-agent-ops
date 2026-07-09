@@ -248,10 +248,7 @@ diff template/common/.claude/agents/my-agent.md \
 - watermark 存於 `openspec/.mutation-state`（或 `.mutation-state`），記錄 commit 與 equivalent 標記
 - 搭配 `.claude/rules/tdd-enforcement.md` 的 Red 失敗證據、revert-check 與 mutant triage 規則
 
-**參考資料**（設計靈感來源，吸收/未採用詳見 change `design.md` D8）：
-
-- [test-architect agent](https://github.com/rohitg00/awesome-claude-code-toolkit/blob/main/agents/quality-assurance/test-architect.md) — 吸收其 revert-check 與 surviving-mutant 風險分類；**未採用**其寫死的 `score < 80%` 閾值
-- [add-mutation-testing command](https://github.com/davepoon/buildwithclaude/blob/main/plugins/all-commands/commands/add-mutation-testing.md) — 一次性 setup 大綱，**未採用**其形狀（無 diff scope 主軸、重 CI gate、無 triage 循環）
+**完整說明與參考連結：** 見 `docs/mutation-testing.md`（工具官方文件 mutmut / Stryker，以及設計靈感來源 test-architect agent、add-mutation-testing command，吸收/未採用詳見 change `design.md` D8）。
 
 **觸發方式：**
 
@@ -356,5 +353,6 @@ not edit it here. Keep project-specific rules in this file or under `docs/`.
 - `docs/architecture.md` — 專案架構與模組邊界
 - `docs/conventions.md` — Bash 腳本規範
 - `docs/workflow/guide.md` — PM/RD 協作完整指南
+- `docs/mutation-testing.md` — 變異測試 playbook（setup/check skills、工具與參考連結）
 - `CLAUDE.md` — Claude Code 相關規範
 - `.openspec.yaml` — OpenSpec 配置
