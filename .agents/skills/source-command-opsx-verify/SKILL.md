@@ -1,17 +1,17 @@
 ---
-name: openspec-verify-change
-description: Verify implementation matches change artifacts. Use when the user wants to validate that implementation is complete, correct, and coherent before archiving.
-license: MIT
-compatibility: Requires openspec CLI.
-metadata:
-  author: openspec
-  version: "1.0"
-  generatedBy: "1.4.1"
+name: "source-command-opsx-verify"
+description: "Verify implementation matches change artifacts before archiving"
 ---
+
+# source-command-opsx-verify
+
+Use this skill when the user asks to run the migrated source command `opsx-verify`.
+
+## Command Template
 
 Verify that an implementation matches the change artifacts (specs, tasks, design).
 
-**Input**: Optionally specify a change name. If omitted, check if it can be inferred from conversation context. If vague or ambiguous you MUST prompt for available changes.
+**Input**: Optionally specify a change name after `/opsx:verify` (e.g., `/opsx:verify add-auth`). If omitted, check if it can be inferred from conversation context. If vague or ambiguous you MUST prompt for available changes.
 
 **Steps**
 
@@ -31,18 +31,15 @@ Verify that an implementation matches the change artifacts (specs, tasks, design
    ```
    Parse the JSON to understand:
    - `schemaName`: The workflow being used (e.g., "spec-driven")
-   - `planningHome`, `changeRoot`, `artifactPaths`, and `actionContext`: path and scope context
    - Which artifacts exist for this change
 
-   If status reports `actionContext.mode: "workspace-planning"`, explain that full workspace implementation verification is not supported in this slice and STOP. Do not infer repo-local implementation ownership or edit linked repos.
-
-3. **Get planning context and load artifacts**
+3. **Get the change directory and load artifacts**
 
    ```bash
    openspec instructions apply --change "<name>" --json
    ```
 
-   This returns the change directory and `contextFiles` (artifact ID -> array of concrete file paths). Read all available artifacts from `contextFiles`.
+   This returns the change directory and context files. Read all available artifacts from `contextFiles`.
 
 4. **Initialize verification report structure**
 
@@ -56,7 +53,7 @@ Verify that an implementation matches the change artifacts (specs, tasks, design
 5. **Verify Completeness**
 
    **Task Completion**:
-   - If `contextFiles.tasks` exists, read every file path in it
+   - If tasks.md exists in contextFiles, read it
    - Parse checkboxes: `- [ ]` (incomplete) vs `- [x]` (complete)
    - Count complete vs total tasks
    - If incomplete tasks exist:
@@ -64,7 +61,7 @@ Verify that an implementation matches the change artifacts (specs, tasks, design
      - Recommendation: "Complete task: <description>" or "Mark as done if already implemented"
 
    **Spec Coverage**:
-   - If delta specs exist in `contextFiles.specs`:
+   - If delta specs exist in `openspec/changes/<name>/specs/`:
      - Extract all requirements (marked with "### Requirement:")
      - For each requirement:
        - Search codebase for keywords related to the requirement
@@ -95,7 +92,7 @@ Verify that an implementation matches the change artifacts (specs, tasks, design
 7. **Verify Coherence**
 
    **Design Adherence**:
-   - If `contextFiles.design` exists:
+   - If design.md exists in contextFiles:
      - Extract key decisions (look for sections like "Decision:", "Approach:", "Architecture:")
      - Verify implementation follows those decisions
      - If contradiction detected:
