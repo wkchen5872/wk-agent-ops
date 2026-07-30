@@ -129,6 +129,10 @@ done
 # .claude/rules/ is flat in this template, so a direct copy preserves the flat layout.
 sync_dir "$TARGET/.claude/rules" "$TARGET/.agents/rules"
 
+# Remove the retired OpenSpec commit rule from existing installations.
+rm -f "$TARGET/.claude/rules/openspec-commits.md" \
+      "$TARGET/.agents/rules/openspec-commits.md"
+
 echo ""
 echo "✅ Done. Installed profiles: ${PROFILES_DISPLAY}"
 echo "   Target: $TARGET"

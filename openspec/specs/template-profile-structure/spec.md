@@ -52,4 +52,4 @@ Defines the directory layout of the `template/` folder and the conventions for o
 
 #### Scenario: TDD 規則檔與 multi-tool-compatibility.md 並列
 - **WHEN** 列出目標專案的 `.claude/rules/`
-- **THEN** 包含 `tdd-enforcement.md`、`multi-tool-compatibility.md`、`openspec-commits.md`
+- **THEN** 包含 `tdd-enforcement.md`、`multi-tool-compatibility.md`
