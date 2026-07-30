@@ -7,7 +7,7 @@ Defines the TDD enforcement rules that AI agents must follow, and how these rule
 ## Requirements
 
 ### Requirement: TDD 規則在 Claude Code session 自動載入
-`template/common/.claude/rules/tdd-enforcement.md` 必須存在，讓 Claude Code 在每個 session 自動讀取 TDD 強制規則，不依賴任何 skill。
+`template/common/.claude/rules/tdd-enforcement.md` SHALL 存在，讓 Claude Code 在每個 session 自動讀取 TDD 強制規則，不依賴任何 skill。
 
 #### Scenario: Claude Code 自動載入 TDD 規則
 - **WHEN** Claude Code 啟動新 session
@@ -22,7 +22,7 @@ Defines the TDD enforcement rules that AI agents must follow, and how these rule
 - **THEN** 必須執行測試並確認全部通過，才能標記 task 完成或進行下一個 task
 
 ### Requirement: TDD 規則在 GitHub Copilot CLI 可見
-`template/common/.github/instructions/tdd-enforcement.md` 必須存在，內容與 `.claude/rules/tdd-enforcement.md` 相同，讓 Copilot CLI 也能讀取。
+`template/common/.github/instructions/tdd-enforcement.md` SHALL 存在，內容與 `.claude/rules/tdd-enforcement.md` 相同，讓 Copilot CLI 也能讀取。
 
 #### Scenario: Copilot CLI 讀取 TDD 規則
 - **WHEN** GitHub Copilot CLI 啟動新 session（project dir 包含 `.github/instructions/`）

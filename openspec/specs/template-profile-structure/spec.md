@@ -7,7 +7,7 @@ Defines the directory layout of the `template/` folder and the conventions for o
 ## Requirements
 
 ### Requirement: Profile directory layout
-`template/` 必須包含 `common/`、`python/`、`node/` 三個子目錄作為 profile。
+`template/` SHALL 包含 `common/`、`python/`、`node/` 三個子目錄作為 profile。
 
 #### Scenario: common profile 存在且包含 language-agnostic 內容
 - **WHEN** 列出 `template/common/` 目錄
@@ -22,14 +22,14 @@ Defines the directory layout of the `template/` folder and the conventions for o
 - **THEN** 包含 `.claude/rules/` 和 `hooks/` 子目錄
 
 ### Requirement: skills 只在 common 下維護
-`template/skills/` 移至 `template/common/skills/`，不在 python / node profile 下重複。
+`skills/` SHALL 只在 `template/common/skills/` 維護，不在 python / node profile 下重複。
 
 #### Scenario: skills 安裝路徑不因 profile 改變
 - **WHEN** 執行任何 profile 的安裝
 - **THEN** `common/skills/` 的內容永遠複製到 `.claude/skills/` 和 `.agents/skills/`
 
 ### Requirement: profile 目錄的 hooks 子目錄
-每個語言 profile 的 `hooks/` 存放該語言的 git hook 腳本。Node pre-commit hook 必須實際執行測試，而非 placeholder。
+每個語言 profile 的 `hooks/` SHALL 存放該語言的 git hook 腳本。Node pre-commit hook 必須實際執行測試，而非 placeholder。
 
 #### Scenario: hooks 目錄結構正確
 - **WHEN** 列出 `template/python/hooks/` 或 `template/node/hooks/`
@@ -44,7 +44,7 @@ Defines the directory layout of the `template/` folder and the conventions for o
 - **THEN** `.git/hooks/pre-commit` 執行 `npm test`，測試失敗擋住 commit（非 placeholder）
 
 ### Requirement: common profile 包含 TDD 規則檔
-`template/common/` 必須包含 `.claude/rules/tdd-enforcement.md` 和 `.github/instructions/tdd-enforcement.md`，讓安裝 common profile 的專案自動獲得 TDD 強制規則。
+`template/common/` SHALL 包含 `.claude/rules/tdd-enforcement.md` 和 `.github/instructions/tdd-enforcement.md`，讓安裝 common profile 的專案自動獲得 TDD 強制規則。
 
 #### Scenario: 安裝 common profile 後 TDD 規則存在
 - **WHEN** 執行 `bash install.sh`（common only）

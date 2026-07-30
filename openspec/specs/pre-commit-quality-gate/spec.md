@@ -7,7 +7,7 @@ Defines the pre-commit hooks that enforce test execution before each commit, ens
 ## Requirements
 
 ### Requirement: Python 專案的 pre-commit 測試關卡
-`template/python/hooks/pre-commit` 必須在有 `.py` 檔案變更時執行 pytest，測試失敗則擋住 commit。
+`template/python/hooks/pre-commit` SHALL 在有 `.py` 檔案變更時執行 pytest，測試失敗則擋住 commit。
 
 #### Scenario: Python 檔案有變更時執行 pytest
 - **WHEN** git commit 觸發 pre-commit hook，且有 `.py` 檔案在 staged changes 中
@@ -22,7 +22,7 @@ Defines the pre-commit hooks that enforce test execution before each commit, ens
 - **THEN** hook 顯示提示訊息並允許 commit（exit 0）
 
 ### Requirement: Node 專案的 pre-commit 測試關卡
-`template/node/hooks/pre-commit` 必須在有 `.js`、`.ts`、`.jsx`、`.tsx` 檔案變更時執行 `npm test`，測試失敗則擋住 commit。
+`template/node/hooks/pre-commit` SHALL 在有 `.js`、`.ts`、`.jsx`、`.tsx` 檔案變更時執行 `npm test`，測試失敗則擋住 commit。
 
 #### Scenario: Node 檔案有變更時執行 npm test
 - **WHEN** git commit 觸發 pre-commit hook，且有 `.js`、`.ts`、`.jsx`、`.tsx` 檔案在 staged changes 中

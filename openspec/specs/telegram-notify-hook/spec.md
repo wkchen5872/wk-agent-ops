@@ -91,6 +91,10 @@
 ### Requirement: hook.sh — 通知腳本
 `~/.config/ai-notify/hooks/telegram-notify.sh`（從 `scripts/notify/telegram/hook.sh` 複製）SHALL source `~/.config/ai-notify/config`，依 TELEGRAM_ENABLED 與 NOTIFY_LEVEL 決定是否傳送 Telegram 通知。
 
+#### Scenario: 啟用所有通知時傳送 Telegram 訊息
+- **WHEN** hook.sh 讀取的 config 包含 `TELEGRAM_ENABLED=true` 與 `NOTIFY_LEVEL=all`，並收到支援的完成事件
+- **THEN** hook.sh 傳送 Telegram 通知
+
 ### Requirement: 工具偵測以 CLI 參數為主、環境變數為輔
 hook.sh SHALL 優先以 `$2` 參數取得 TOOL_NAME；`$2` 為空時才 fallback 到環境變數偵測（`GEMINI_PROJECT_DIR` → `GITHUB_COPILOT_SESSION_ID` / event name → `CLAUDE_PROJECT_DIR` → "AI CLI"）。`PROJECT_DIR` 取對應的 project dir 變數（Copilot 無 project dir 環境變數，取 `PWD`）。
 
@@ -178,8 +182,16 @@ hook.sh SHALL 將 Copilot CLI 的 hook 事件名稱映射到既有的通知類�
 ### Requirement: Line Notify 架構佔位
 `scripts/notify/line/` 目錄 SHALL 存在，包含 `.placeholder` 檔案，說明實作時應參考 `scripts/notify/README.md` 的 Provider 擴充指南。
 
+#### Scenario: Line provider 目錄保留擴充指引
+- **WHEN** 列出 `scripts/notify/line/` 目錄
+- **THEN** `.placeholder` 存在，且內容指向 `scripts/notify/README.md` 的 Provider 擴充指南
+
 ---
 
 ### Requirement: 說明文件
 `docs/notify/architecture.md` SHALL 說明整體架構（目錄結構、config 格式、hook 生命週期、如何新增 provider）。
 `docs/notify/telegram.md` SHALL 提供 Telegram 快速安裝說明（含 `/notify-setup` 指令用法與手動方式）。
+
+#### Scenario: 通知文件涵蓋架構與 Telegram 安裝
+- **WHEN** 讀取 `docs/notify/architecture.md` 與 `docs/notify/telegram.md`
+- **THEN** 文件分別包含通知架構與 Telegram 快速安裝、`/notify-setup`、手動設定說明
