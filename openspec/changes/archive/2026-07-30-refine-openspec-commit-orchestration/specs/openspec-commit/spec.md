@@ -1,10 +1,4 @@
-# Spec: openspec-commit
-
-## Purpose
-
-TBD — A skill that finalizes an openspec change by archiving it and committing all related changes with a properly formatted Conventional Commits message.
-
-## Requirements
+## ADDED Requirements
 
 ### Requirement: Coordinate the completion workflow in order
 `openspec-commit` SHALL invoke exactly one archive action, followed by
@@ -76,6 +70,8 @@ archived content.
 - **WHEN** archive completes and the feature includes a new untracked file
 - **THEN** the coordinator stages the worktree before documentation analysis
 - **AND** `doc-updater` can inspect the new file through `git diff HEAD`
+
+## MODIFIED Requirements
 
 ### Requirement: Execute git commit step
 After archiving the change and updating docs, `openspec-commit` SHALL delegate

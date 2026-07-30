@@ -1,15 +1,9 @@
-# Spec: git-commit-writer
-
-## Purpose
-
-A skill that generates and executes Conventional Commits messages, optionally using openspec change context to derive the scope and subject.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Generate commit message from openspec change context
 `git-commit-writer` SHALL validate and directly use explicit `archive_path` and
-`change_id` inputs when they are supplied. Standalone auto-detection SHALL be
-used only when explicit context is absent.
+`change_id` inputs when they are supplied. Standalone
+auto-detection SHALL be used only when explicit context is absent.
 
 #### Scenario: Archive path provided explicitly
 - **WHEN** `archive_path` and `change_id` are passed by `openspec-commit`
@@ -32,24 +26,6 @@ used only when explicit context is absent.
   interactive questions
 - **AND** otherwise stops and returns the candidates to its caller
 - **AND** MUST NOT choose the first
-
-### Requirement: Generate commit message without openspec context
-When no openspec change is available, the skill SHALL generate a Conventional Commits message without scope, derived from `git diff --cached`.
-
-#### Scenario: No active change
-- **WHEN** `openspec list --json` returns no active changes
-- **THEN** the skill formats `<type>: <subject>` using git diff content as context
-
-### Requirement: Infer commit type
-The skill SHALL infer the correct Conventional Commits type from the nature of the staged changes.
-
-#### Scenario: Type inference from proposal
-- **WHEN** proposal.md is available
-- **THEN** type is derived from the "What Changes" section (feat/fix/refactor/docs/chore/test)
-
-#### Scenario: Type inference from diff only
-- **WHEN** no proposal is available
-- **THEN** type is inferred from file paths and diff content
 
 ### Requirement: Execute commit without confirmation
 The skill SHALL execute `git add -A` immediately before reading the cached diff

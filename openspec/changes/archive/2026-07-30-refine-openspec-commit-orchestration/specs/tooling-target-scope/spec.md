@@ -1,14 +1,4 @@
-# tooling-target-scope Specification
-
-## Purpose
-
-Define the supported AI tooling scope for this project and its `template/` deliverables:
-Claude Code, Codex, and Antigravity are the primary consumers of project-owned
-portable skills. The installer continues to own only `.claude/` and plural
-`.agents/` targets, while provider-native OpenSpec artifacts remain outside its
-scope.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: 工具範圍涵蓋 Claude Code、Codex 與 Antigravity
 
@@ -49,3 +39,8 @@ generator，且 MUST NOT 由 wk-agent-ops installer 產生。
 - **WHEN** 安裝 common
 - **THEN** `template/common/.agents/workflows/*.md` 被複製到
   `.agents/workflows/`
+
+## RENAMED Requirements
+
+- FROM: `### Requirement: 工具範圍限定 Claude Code 與 Antigravity`
+- TO: `### Requirement: 工具範圍涵蓋 Claude Code、Codex 與 Antigravity`

@@ -111,6 +111,7 @@ wt-done feature123 --base main
 | 安裝位置 | 用途 |
 |---|---|
 | `.claude/skills/openspec-commit/` | `/opsx:commit` skill |
+| `.agents/skills/openspec-commit/` | 跨 Provider 的 `openspec-commit` skill |
 | `.claude/commands/opsx/commit.md` | `/opsx:commit` slash command |
 | `.agents/workflows/opsx-commit.md` | Agent workflow |
 | `.claude/rules/openspec-commits.md` | Commit 規範（永遠載入） |
@@ -119,6 +120,13 @@ wt-done feature123 --base main
 | `.claude/skills/git-commit-writer/` | `/git-commit-writer` skill |
 | `.claude/agents/doc-updater.md` | `@"doc-updater"` — 分析 git 變更並同步更新說明文件 |
 | `.claude/skills/doc-updater/` | `/doc-updater` skill |
+| `.agents/skills/doc-updater/` | 跨 Provider 的 `doc-updater` skill |
+| `.agents/skills/git-commit-writer/` | 跨 Provider 的 `git-commit-writer` skill |
+
+`scripts/skills/install.sh` 只管理 `.claude/` 與複數的 `.agents/`。OpenSpec
+CLI 針對 Claude、Codex、Antigravity 產生的 `.claude/`、`.codex/`、單數
+`.agent/` 原生檔案屬於另一個分發邊界；完整路徑與呼叫規則見
+[OpenSpec Commit 工作流](docs/workflow/commit.md)。
 
 ### Python Profile
 

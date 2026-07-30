@@ -10,7 +10,7 @@ license: MIT
 compatibility: Requires git.
 metadata:
   author: wkchen
-  version: "1.0"
+  version: "1.1"
 ---
 
 # Doc Updater
@@ -20,9 +20,29 @@ metadata:
 不依賴 OpenSpec 工作流程，適用於所有類型的變更。根據 git 狀態自動選擇運作模式：
 
 - **Mode A**（有未 commit 的變更）：掃描當前變更，文件更新加入工作區，與 feature 一起 commit
-- **Mode B**（工作區乾淨）：掃描最近 N 個 commit，建立獨立的 `docs:` commit
+- **Mode B**（工作區乾淨）：掃描最近 N 個 commit，將文件更新留在工作區供 review
 
 **立即執行，不需確認。**
+
+---
+
+## Optional input
+
+由 `openspec-commit` 呼叫時，可傳入：
+
+```text
+change_id=<archived change id>
+archive_path=<exact archived change directory>
+```
+
+若提供 `archive_path`：
+
+1. 驗證目錄存在；不存在就停止，且不修改文件。
+2. 讀取 `<archive_path>/proposal.md`。
+3. 讀取存在的 `<archive_path>/specs/**/*.md`。
+
+Archived change 表示原始意圖，Git diff 表示實際完成內容。若兩者不同，以
+實際 diff 為準，不把未實作的 proposal 內容寫成已完成能力。
 
 ---
 
@@ -42,10 +62,15 @@ git status --short
 ### Step A1 — Read the diff
 
 ```bash
+git status --short
 git diff HEAD
 ```
 
-同時讀取 staged 和 unstaged 的所有變更。
+讀取 staged 和 unstaged 的所有變更。由 `openspec-commit` 呼叫時，該
+coordinator 會先 staging，讓新檔案也包含在此 diff。
+
+若收到 `archive_path`，將 archived proposal/specs 與 diff 一起作為分析
+context；OpenSpec context 只協助判斷文件範圍，不取代實際檔案證據。
 
 ### Step A2 — Analyze diff for documentation impact
 
@@ -90,12 +115,12 @@ Reason: <reason>
 
 ## Mode B — 工作區乾淨（post-commit）
 
-### Step B1 — Ask how many commits to scan
+### Step B1 — Resolve how many commits to scan
 
-使用 AskUserQuestion 詢問：
+優先使用 caller 提供的 N。若未提供且 host 支援互動提問，詢問：
 > "要掃描最近幾個 commit 來更新文件？（1-10，預設 1）"
 
-將答案作為 N 使用（若接受預設則 N=1）。
+若 host 無互動提問能力，使用 N=1。N 必須限制在 1–10。
 
 ### Step B2 — Read the commits
 

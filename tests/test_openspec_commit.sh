@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+# Contract test for the project-owned archive -> docs -> commit workflow.
+set -u
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ORCHESTRATOR="$ROOT/template/common/skills/openspec-commit/SKILL.md"
+DOC_SKILL="$ROOT/template/common/skills/doc-updater/SKILL.md"
+DOC_AGENT="$ROOT/template/common/.claude/agents/doc-updater.md"
+COMMIT_SKILL="$ROOT/template/common/skills/git-commit-writer/SKILL.md"
+COMMIT_AGENT="$ROOT/template/common/.claude/agents/git-commit-writer.md"
+fail=0
+section="${1:-all}"
+
+ok() { printf '  ok   %s\n' "$1"; }
+bad() { printf '  FAIL %s\n' "$1"; fail=1; }
+
+require_text() {
+  local file="$1" text="$2" label="$3"
+  grep -Fq "$text" "$file" && ok "$label" || bad "$label"
+}
+
+forbid_text() {
+  local file="$1" text="$2" label="$3"
+  grep -Fq "$text" "$file" && bad "$label" || ok "$label"
+}
+
+line_of() {
+  grep -nF "$2" "$1" | head -1 | cut -d: -f1
+}
+
+run_section() {
+  [[ "$section" == "all" || "$section" == "$1" ]]
+}
+
+if run_section orchestrator; then
+printf 'openspec-commit orchestration\n'
+archive_line="$(line_of "$ORCHESTRATOR" '## Step 2 — Archive or resume')"
+stage_line="$(line_of "$ORCHESTRATOR" '## Step 3 — Prepare the complete diff')"
+docs_line="$(line_of "$ORCHESTRATOR" '## Step 4 — Invoke doc-updater')"
+commit_line="$(line_of "$ORCHESTRATOR" '## Step 5 — Invoke git-commit-writer')"
+if [[ -n "$archive_line" && -n "$stage_line" && -n "$docs_line" && -n "$commit_line" ]] \
+  && (( archive_line < stage_line && stage_line < docs_line && docs_line < commit_line )); then
+  ok "archive -> stage -> docs -> commit order"
+else
+  bad "archive -> stage -> docs -> commit order"
+fi
+require_text "$ORCHESTRATOR" 'openspec-archive-change' "portable archive capability named"
+require_text "$ORCHESTRATOR" 'git status --short' "resume state comes from Git"
+require_text "$ORCHESTRATOR" 'archive_path' "exact archive path retained"
+require_text "$ORCHESTRATOR" 'git add -A' "new files prepared before doc-updater"
+forbid_text "$ORCHESTRATOR" 'ls -t openspec/changes/archive/' "no newest-archive rediscovery"
+
+printf '\nprovider boundaries\n'
+require_text "$ORCHESTRATOR" '.claude/commands/opsx/archive.md' "Claude native alias documented"
+require_text "$ORCHESTRATOR" '.codex/skills/openspec-archive-change/' "Codex skill path documented"
+require_text "$ORCHESTRATOR" '.agent/workflows/opsx-archive.md' "Antigravity native alias documented"
+require_text "$ORCHESTRATOR" '.agents/skills/' "project-owned shared skill root documented"
+require_text "$ORCHESTRATOR" 'Do not invoke both' "provider aliases cannot double-run an action"
+fi
+
+if run_section doc-updater; then
+printf '\ndoc-updater context\n'
+for file in "$DOC_SKILL" "$DOC_AGENT"; do
+  require_text "$file" 'archive_path' "$(basename "$file") accepts archive_path"
+  require_text "$file" '<archive_path>/proposal.md' "$(basename "$file") reads proposal"
+  require_text "$file" '<archive_path>/specs/**/*.md' "$(basename "$file") reads delta specs"
+  require_text "$file" 'git status --short' "$(basename "$file") reads status"
+  require_text "$file" 'git diff HEAD' "$(basename "$file") reads actual diff"
+  forbid_text "$file" '建立獨立的 `docs:` commit' "$(basename "$file") Mode B does not claim auto-commit"
+done
+fi
+
+if run_section commit-writer; then
+printf '\ngit-commit-writer boundary\n'
+for file in "$COMMIT_SKILL" "$COMMIT_AGENT"; do
+  require_text "$file" 'archive_path and change_id are provided' "$(basename "$file") explicit context is primary"
+  require_text "$file" 'git add -A' "$(basename "$file") stages changes"
+  require_text "$file" 'git diff --cached --quiet' "$(basename "$file") guards empty staged diff"
+  require_text "$file" 'Re-run `git add -A`' "$(basename "$file") restages on retry"
+  add_line="$(line_of "$file" 'git add -A')"
+  diff_line="$(line_of "$file" 'git diff --cached --stat')"
+  if [[ -n "$add_line" && -n "$diff_line" ]] && (( add_line < diff_line )); then
+    ok "$(basename "$file") stages before reading cached diff"
+  else
+    bad "$(basename "$file") stages before reading cached diff"
+  fi
+done
+fi
+
+printf '\n'
+[[ $fail -eq 0 ]] && { echo "PASS"; exit 0; } || { echo "FAIL"; exit 1; }

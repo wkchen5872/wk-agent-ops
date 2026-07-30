@@ -1,155 +1,146 @@
-# /openspec-commit Workflow
-
-`/openspec-commit` 是 `/opsx:apply` 之後、`wt-done` 之前的最後一個 Claude 操作，
-負責將一個 feature 的開發收尾：archive → docs 更新 → git commit。
-
+---
+type: Playbook
+title: OpenSpec Commit Workflow
+description: Archive, documentation, and commit orchestration across Claude, Codex, and Antigravity.
+tags: [workflow, openspec, agents]
+timestamp: 2026-07-30T00:00:00+08:00
 ---
 
-## 完整開發流程
+# OpenSpec Commit Workflow
 
-```
-Terminal                        Claude (in worktree)
-─────────────────────────────────────────────────────────────────
-wt-work <feature-name>
-  ├── git checkout main
-  ├── git worktree add .worktrees/<name> -b feature/<name>
-  └── cd .worktrees/<name> && claude ──────► /opsx:apply <name>
-                                                    │
-                                              實作 feature
-                                            （改 src/、tests/…）
-                                                    │
-                                             /openspec-commit
-                                            ┌───────┴────────┐
-                                            │  ① archive     │
-                                            │  ② docs 更新   │
-                                            │  ③ git commit  │
-                                            └───────┬────────┘
-                                                    │
-wt-done <feature-name>
-  ├── git checkout main
-  ├── git merge feature/<name>
-  ├── git worktree remove .worktrees/<name>
-  └── git branch -d feature/<name>
-```
+`openspec-commit` 是 `/opsx:apply` 之後、`wt-done` 之前的薄協調層。它不重做
+archive、文件判斷或 commit 邏輯，只依序呼叫三個能力：
 
----
+1. `openspec-archive-change`
+2. `doc-updater`
+3. `git-commit-writer`
 
-## Skill 執行步驟
+Claude Code 可透過 `/opsx:commit` 進入；其他支援 project skill 的 host 可直接
+呼叫 `openspec-commit`。
 
-```
-/openspec-commit 呼叫
-        │
-        ▼
-① 找 active change
-   ┌─────────────────────────────────────────┐
-   │ openspec list --json                    │
-   │  1 個  → 直接使用                       │
-   │  多個  → AskUserQuestion 選擇           │
-   │  0 個  → 警告，詢問是否只做 docs+commit │
-   └─────────────────────────────────────────┘
-        │
-        ▼
-② opsx:archive（完整流程）
-   ┌─────────────────────────────────────────┐
-   │ ● 檢查 artifact completion              │
-   │ ● 檢查 tasks completion                 │
-   │ ● sync 決策：                           │
-   │     Sync now（建議）                    │
-   │     Archive without syncing            │
-   │ ● mv change → archive/YYYY-MM-DD-name/ │
-   │ ← 等待完全結束才繼續 →                  │
-   └─────────────────────────────────────────┘
-        │
-        ▼
-③ 讀取 archived proposal + specs
-   ┌─────────────────────────────────────────┐
-   │ openspec/changes/archive/               │
-   │   YYYY-MM-DD-<name>/                    │
-   │     proposal.md   ← What Changes       │
-   │     specs/**/*.md ← 能力範圍            │
-   └─────────────────────────────────────────┘
-        │
-        ▼
-④ 推斷並更新 docs/
-   ┌─────────────────────────────────────────────────────────┐
-   │ feature 影響              更新目標                       │
-   │ ─────────────────────────────────────────────────────  │
-   │ API（api-a/b…）           docs/api/{source}.md         │
-   │ runner 核心異動           docs/runner.md                │
-   │ 架構分層異動              docs/architecture.md          │
-   │ 新資料來源/重大功能        README.md（支援來源段落）      │
-   │ 純 skill/工具             通常不需更新 README            │
-   └─────────────────────────────────────────────────────────┘
-   ● 顯示「即將更新的文件清單」讓使用者確認
-   ● 只改相關 section，不重寫無關段落
-        │
-        ▼
-⑤ git-commit-writer
-   ┌─────────────────────────────────────────┐
-   │ Conventional Commits 格式               │
-   │                                         │
-   │ 偵測優先序：                             │
-   │ 1. git status (archived)                │
-   │ 2. git status (active changes)          │
-   │ 3. CLI保底 (openspec list)              │
-   │                                         │
-   │ type 推斷：                             │
-   │   feat     新功能/新資料來源             │
-   │   fix       修正錯誤行為                │
-   │   docs      文件異動                    │
-   │   refactor  重構（無行為改變）           │
-   │   chore     工具/設定/維護              │
-   │   test      新增/修正測試              │
-   │                                         │
-   │ Claude Code: Haiku subagent 執行        │
-   │ 其他工具: 工具層 model 決定              │
-   └─────────────────────────────────────────┘
-        │
-        ▼
-⑥ 完成摘要
-   ┌─────────────────────────────────────────┐
-   │ Archive:  openspec/changes/archive/...  │
-   │ Docs:     docs/<feature>.md（更新 X section） │
-   │ Commit:   abc1234 feat: add feature…    │
-   │                                         │
-   │ 下一步：wt-done <feature-name>          │
-   └─────────────────────────────────────────┘
+## 執行順序
+
+```text
+active change / resumable archive
+               |
+               v
+openspec-archive-change
+  -> change_id
+  -> archive_path
+  -> spec_sync_status
+  -> warnings
+               |
+               v
+git add -A
+  -> 新檔、spec sync、archive move 都進入 git diff HEAD
+               |
+               v
+doc-updater(change_id, archive_path)
+  -> archived proposal/specs + git status + git diff HEAD
+               |
+               v
+git-commit-writer(change_id, archive_path)
+  -> final staging + empty-diff guard + commit
 ```
 
----
+### 1. 找出 active 或 resumable context
 
-## 設計決策
+協調層同時讀取：
 
-### `/openspec-commit` 包含 archive
-
-選擇讓 `/openspec-commit` 作為唯一的收尾指令，內含完整 archive 流程。
-使用者不需要分別執行 `/opsx:archive` 再 `/openspec-commit`。
-
-`/opsx:archive` 本身保留，供只需要 archive 而不 commit 的場合使用。
-
-### Sync 決策不阻斷流程
-
-archive 過程中的 sync 決策（sync now / archive without syncing）無論使用者選哪個，
-都算 archive 完成。`/openspec-commit` 在 archive **完全結束後**才繼續，不跳過 sync 流程。
-
-### docs 更新只改相關 section
-
-不重寫整份文件，只改 feature 直接影響的段落。
-更新前顯示清單讓使用者確認，避免誤改。
-
-### 兩份 Skill 檔案
-
-```
-skills/openspec-commit/SKILL.md      ← 專案原始檔（版本控制）
-.claude/skills/openspec-commit/SKILL.md  ← 安裝位置（Claude Code 讀取）
+```bash
+openspec list --json
+git status --short
 ```
 
-更新 skill 時需同步兩個位置。
+Git status 中尚未 commit 的 `openspec/changes/archive/<date>-<change>/`
+可作為中斷後的 resume 起點。多個候選時必須由使用者選擇，不可用目錄時間或
+第一筆結果猜測。
 
----
+### 2. Archive 或 resume
+
+Active change 只呼叫一個 provider entry point 執行
+`openspec-archive-change`，並等待 spec sync 決策與 archive 完成。下游收到
+精確 hand-off：
+
+```text
+change_id=<change name>
+archive_path=<exact archived directory>
+spec_sync_status=<synced|skipped|no_delta_specs>
+warnings=<list>
+```
+
+若 archive 已存在於未 commit 的 Git 狀態，直接沿用精確 `archive_path`，不再
+執行 archive。路徑不存在時立即停止。
+
+### 3. 文件更新
+
+Archive 後先執行 `git add -A`，再把同一組 `change_id` 與 `archive_path`
+交給 `doc-updater`。它會讀取：
+
+- `<archive_path>/proposal.md`
+- `<archive_path>/specs/**/*.md`
+- `git status --short`
+- `git diff HEAD`
+
+Archive 檔案描述意圖，Git diff 描述實際完成內容；兩者不一致時，以 diff
+作為文件聲明的依據。文件只留在工作區，交由同一次 feature commit 收納。
+
+### 4. Commit
+
+`git-commit-writer` 接收相同的精確 context，驗證 archive 後執行 final
+`git add -A`。若 staged diff 為空則停止；pre-commit hook 修正檔案後必須
+重新 staging，再重試 commit。
+
+## Provider 邊界
+
+OpenSpec CLI 產生的原生 action 與 wk-agent-ops 安裝的 portable workflow 是
+兩個不同邊界。
+
+### OpenSpec CLI 原生 archive action
+
+| Provider | 通用 skill | OPSX alias |
+|---|---|---|
+| Claude Code | `.claude/skills/openspec-archive-change/` | `.claude/commands/opsx/archive.md` |
+| Codex | `.codex/skills/openspec-archive-change/` | 無 project command file |
+| Antigravity | `.agent/skills/openspec-archive-change/` | `.agent/workflows/opsx-archive.md` |
+
+`apply`、`archive`、`bulk-archive`、`continue` 是 OPSX action 名稱；對應的
+通用 skill 名稱維持 `openspec-apply-change`、
+`openspec-archive-change`、`openspec-bulk-archive-change`、
+`openspec-continue-change`。同一個 action 只能選 skill 或 alias 其中一個，
+不可兩邊都執行。
+
+### wk-agent-ops portable workflow
+
+`scripts/skills/install.sh` 只產生：
+
+| Template source | Installed target |
+|---|---|
+| `template/common/skills/*` | `.claude/skills/*`、`.agents/skills/*` |
+| `template/common/.claude/commands/opsx/commit.md` | `.claude/commands/opsx/commit.md` |
+| `template/common/.agents/workflows/opsx-commit.md` | `.agents/workflows/opsx-commit.md` |
+
+Installer 不產生 `.codex/` 或單數 `.agent/`；這兩個目錄由 OpenSpec 的
+provider setup 管理。
+
+## 失敗與續跑
+
+| 狀況 | 行為 |
+|---|---|
+| 多個 active / archive 候選 | 詢問使用者，不猜測 |
+| Archive 失敗或回傳路徑不存在 | 停在 docs 與 commit 之前 |
+| Archive 已完成、docs 或 commit 中斷 | 從 Git status 的精確 archive path resume |
+| Doc update 衝突 | 顯示衝突檔案並停止 |
+| Commit hook 失敗 | 修正、重新 `git add -A`、檢查 cached diff、重試 |
 
 ## 相關文件
 
-*   **多 Agent 協作工作流**：了解整體開發流程，請看 [Master Guide](guide.md)。
-*   **Worktree 腳本參考**：了解 `wt-work`、`wt-done` 的詳細參數與安裝，請看 [Technical Reference](../../scripts/workflow/README.md)。
-*   **Git Commit Writer**：了解獨立呼叫 commit 生成工具的方式，請看 [../skills/git-commit-writer.md](../skills/git-commit-writer.md)。
+- [多 Agent 協作工作流](/docs/workflow/guide.md)
+- [Doc Updater](/docs/skills/doc-updater.md)
+- [Git Commit Writer](/docs/skills/git-commit-writer.md)
+
+# Citations
+
+[1] [OpenSpec supported tools](https://github.com/Fission-AI/OpenSpec/blob/main/docs/supported-tools.md)
+
+[2] [How OpenSpec commands work](https://github.com/Fission-AI/OpenSpec/blob/main/docs/how-commands-work.md)

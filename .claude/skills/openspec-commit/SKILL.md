@@ -1,169 +1,230 @@
 ---
 name: openspec-commit
 description: >
-  Archive the current openspec change, update docs/ documentation, and create
-  a conventional git commit. Use at the end of feature development inside a
-  git worktree (after /opsx:apply), before running wt-done to merge to main.
+  Finish an OpenSpec change by coordinating archive, documentation update, and
+  a conventional git commit. Supports Claude Code, Codex, and Antigravity.
 license: MIT
 compatibility: Requires openspec CLI and git.
 metadata:
   author: wkchen
-  version: "1.2"
+  version: "2.0"
 ---
 
 # OpenSpec Commit
 
-Complete the feature development cycle inside a git worktree:
-1. Archive the openspec change (full flow, including sync decision)
-2. Update `docs/` files relevant to the feature
-3. Create a conventional git commit
+Complete a feature inside its isolated worktree after implementation and
+verification:
 
-**Prerequisite:** `/opsx:apply` is complete and the feature is implemented.
+1. `openspec-archive-change`
+2. `doc-updater`
+3. `git-commit-writer`
 
----
+This skill coordinates those capabilities; it does not duplicate their logic.
 
-## Step 1 — Find the active change
-
-Run `openspec list --json` to find active changes.
-
-- **Exactly one active change** → use it directly, no prompt needed
-- **Multiple active changes** → use AskUserQuestion to let the user select
-- **No active changes** → display WARNING:
-  ```
-  ⚠️ No active openspec change found.
-  Archive step will be skipped.
-  Continue with docs update + commit only?
-  ```
-  If user confirms: skip to Step 3 and ask user to describe the feature.
-  If user cancels: stop.
+**Input:** An optional active change name. If omitted, resolve it from the
+current OpenSpec and Git state. Never guess when multiple candidates exist.
 
 ---
 
-## Step 2 — Run opsx:archive (full flow)
+## Provider action routing
 
-Use the **Skill tool** to invoke `openspec-archive-change` for the identified change.
+Invoke capabilities by name. Provider-native OPSX files are aliases for the
+same OpenSpec action, not additional workflow steps.
 
-```
-Skill tool → openspec-archive-change → <change-name>
-```
+| Provider | OpenSpec capability source | Native alias |
+|---|---|---|
+| Claude Code | `.claude/skills/openspec-archive-change/` | `.claude/commands/opsx/archive.md` |
+| Codex | `.codex/skills/openspec-archive-change/` | skill invocation; no project command file |
+| Antigravity | `.agent/skills/openspec-archive-change/` | `.agent/workflows/opsx-archive.md` |
 
-**IMPORTANT:** Wait for the archive to **fully complete**, including the sync
-decision prompt (Sync now / Archive without syncing). Both choices are valid
-completions — do NOT skip or shortcut the sync prompt.
+The same OpenSpec naming pattern applies to
+`openspec-apply-change`, `openspec-bulk-archive-change`, and
+`openspec-continue-change`; their native OPSX action IDs are `apply`,
+`bulk-archive`, and `continue`.
 
-After archive completes, capture:
-- The change name
-- Whether specs were synced
-- The archive directory path (will be `openspec/changes/archive/YYYY-MM-DD-<name>/`)
+Project-owned portable skills from wk-agent-ops are installed separately to
+`.claude/skills/` and the plural shared root `.agents/skills/`.
+
+**Do not invoke both** an `openspec-*` capability and its OPSX alias. Invoke
+exactly one provider entry point for the capability. If the host cannot nest a
+skill call, follow the named capability's instructions in the current context.
 
 ---
 
-## Step 3 — Read archived change for feature context
+## Step 1 — Resolve active or resumable context
 
-Find the most recently modified directory under `openspec/changes/archive/`:
+Inspect both sources:
 
 ```bash
-ls -t openspec/changes/archive/ | head -1
+openspec list --json
+git status --short
 ```
 
-Read the following files:
-- `openspec/changes/archive/<archive-dir>/proposal.md` — focus on **Why** and **What Changes**
-- `openspec/changes/archive/<archive-dir>/specs/**/*.md` — focus on capability scope
+From Git status, collect top-level directories changed under
+`openspec/changes/archive/`. These are resumable archives from an earlier run
+whose archive step completed but docs or commit did not.
 
-Display to the user:
-```
-📦 Reading context from: openspec/changes/archive/<archive-dir>/
+Resolution rules:
+
+1. **Explicit change name**
+   - Matching active change → select it for archive.
+   - Otherwise, matching uncommitted archive (after stripping its date prefix)
+     → select it and resume.
+   - No match → stop and report the missing change.
+2. **No explicit name**
+   - Exactly one candidate across active changes and resumable archives → use it.
+   - Multiple candidates → ask the user to select; do not guess.
+   - No candidates → ask whether to run docs + commit without OpenSpec context.
+     If declined, stop.
+
+Record:
+
+```text
+change_id=<selected change, if any>
+archive_path=<exact resumable archive path, if already archived>
+resume=<true|false>
 ```
 
 ---
 
-## Step 4 — Determine and update docs/
+## Step 2 — Archive or resume
 
-Based on the archived proposal and specs, infer which documentation files need updating.
+### Active change
 
-**Discovery process:**
+Invoke exactly one provider entry point for the capability
+`openspec-archive-change`, passing `change_id`.
 
-1. Scan the `docs/` directory to understand what documentation exists:
-   ```bash
-   ls docs/
-   ```
+Wait for its full flow, including artifact/task warnings and the spec-sync
+decision. Both "sync" and an explicitly chosen "skip sync" are valid archive
+outcomes.
 
-2. Read the proposal's **What Changes** and **Why** sections to identify:
-   - Which modules, components, or subsystems are affected
-   - Whether this is a new capability or a modification of existing behavior
+Capture its result:
 
-3. Match affected areas to existing doc files by content relevance, not by name convention. For each candidate doc file, read its heading structure (first ~20 lines) to confirm it covers the affected area.
-
-4. Also consider `README.md` if the change introduces a new capability visible to end users.
-
-**Decision rule:**
-
-- Include a doc file only if the change **directly affects** what that file documents
-- If no existing doc file covers the affected area, note it but do not create new docs unless the user requests it
-- If the change only affects internal tooling or skills, `README.md` is usually not needed
-
-**Before updating:**
-
-Display the planned update list and ask for confirmation:
-```
-📝 Documents to update:
-  - docs/<file>.md  (<reason>)
-  - README.md       (<reason>)
-Skip any? (type file names or 'none')
+```text
+change_id
+archive_path
+spec_sync_status=<synced|skipped|no_delta_specs>
+warnings=<list, possibly empty>
 ```
 
-**Update rules:**
-- Only modify sections **directly related** to this feature
-- Do NOT rewrite unrelated sections
-- If a relevant section doesn't exist, append it at an appropriate location
-- If no update is needed for a file, skip and briefly explain why
+Validate that the returned `archive_path` exists. If archive failed or the path
+is absent, stop without invoking downstream capabilities.
+
+### Resumable archive
+
+Do not invoke archive again. Reuse the exact `archive_path` selected from Git
+status, validate it exists, and set:
+
+```text
+spec_sync_status=already_archived
+warnings=<preserved warning if sync status cannot be reconstructed>
+```
+
+### No OpenSpec context
+
+Skip archive and leave `change_id` and `archive_path` empty.
 
 ---
 
-## Step 5 — Execute git commit via git-commit-writer
+## Step 3 — Prepare the complete diff
 
-**In Claude Code:** Use the `git-commit-writer` agent (defined in `.claude/agents/git-commit-writer.md`, runs on Haiku automatically):
+This workflow is an explicit request to commit all changes in the isolated
+feature worktree. Stage them once so new files, spec sync, and the archive move
+are visible to `doc-updater` through `git diff HEAD`:
 
+```bash
+git add -A
+git diff --cached --stat
 ```
-Use the git-commit-writer agent.
-```
 
-**In other tools (Antigravity):** Invoke the `git-commit-writer` skill directly.
-
-The agent/skill will automatically detect the archived change from `git status` output — no parameters needed.
-
-Capture the commit hash output for Step 6.
+If the staged diff is empty, stop and report that there is nothing to document
+or commit.
 
 ---
 
-## Step 6 — Display completion summary
+## Step 4 — Invoke doc-updater
 
+Invoke the project-owned `doc-updater` capability with:
+
+```text
+change_id=<change_id, when available>
+archive_path=<exact archive_path, when available>
 ```
+
+`doc-updater` must combine archived proposal/spec intent with `git status` and
+`git diff HEAD` evidence. Wait for it to complete, then capture:
+
+```text
+docs_updated=<list>
+docs_skipped_reason=<reason, when no update was needed>
+```
+
+If an explicit archive path is invalid or documentation editing reports a
+conflict, stop before commit.
+
+---
+
+## Step 5 — Invoke git-commit-writer
+
+Pass the same exact context:
+
+```text
+change_id=<change_id, when available>
+archive_path=<archive_path, when available>
+```
+
+- **Claude Code:** invoke the `git-commit-writer` agent with these values in its
+  task prompt.
+- **Codex and Antigravity:** invoke the project-owned `git-commit-writer` skill
+  with these values.
+
+The writer owns final staging, empty-diff validation, commit execution, and
+restaging before a pre-commit retry. Wait for and capture `commit_hash`.
+
+---
+
+## Step 6 — Verify and summarize
+
+Inspect the result:
+
+```bash
+git show --stat --oneline HEAD
+git status --short
+```
+
+Report:
+
+```text
 ✅ Feature committed
 
-📦 Archive:  openspec/changes/archive/YYYY-MM-DD-<name>/
-             Specs: ✓ Synced  (or: Sync skipped)
+📦 Archive: <archive_path or "No OpenSpec context">
+   Specs:   <spec_sync_status>
+   Warnings: <warnings or "None">
 
-📝 Docs updated:
-   - docs/feature.md — updated section: fetch_agent_list.py usage
-   - README.md   — updated: 支援的資料來源
+📝 Docs:
+   <docs_updated or docs_skipped_reason>
 
-💾 Commit:  <short-hash> <type>(<change-id>): <subject>
+💾 Commit: <commit_hash and subject>
+```
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Next step → merge to main:
+If Git status still contains changes, list them and do not claim the worktree is
+clean.
 
-  wt-done <feature-name>
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Next step for the documented worktree flow:
+
+```text
+wt-done <feature-name>
 ```
 
 ---
 
-## Error Handling
+## Error handling
 
 | Situation | Action |
-|-----------|--------|
-| Archive fails | Stop and display error; do not proceed to docs/commit |
-| Archive dir not found after archive | Warn user, ask if they want to describe feature manually |
-| git commit fails (pre-commit hook) | Fix the issue and re-run `git commit` (do NOT use `--no-verify`) |
-| docs update conflict with existing content | Show the conflict and ask user how to resolve |
+|---|---|
+| Multiple active/resume candidates | Ask the user; never select the first |
+| Archive fails or path is absent | Stop before docs and commit |
+| Explicit archive context is invalid | Stop; do not fall back to newest archive |
+| Doc update conflicts | Stop and show the conflicting files |
+| Commit hook fails | Let `git-commit-writer` fix, restage, and retry without `--no-verify` |
+| Workflow is rerun after archive | Resume from the exact uncommitted archive |

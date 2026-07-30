@@ -1,155 +1,163 @@
 ---
 name: git-commit-writer
 description: >
-  Generate and execute a Conventional Commits-formatted git commit. Works
-  standalone or when called from openspec-commit. Adds scope when an openspec
-  change is present; omits scope otherwise. Executes without confirmation.
+  Stage the completed worktree, generate a Conventional Commits message, and
+  execute the commit. Uses explicit OpenSpec archive context when supplied and
+  auto-detects context only for standalone use.
 license: MIT
 compatibility: "Requires git. Optional: openspec CLI."
 metadata:
   author: wkchen
-  version: "1.2"
+  version: "1.3"
 ---
 
 # Git Commit Writer
 
-Generate and execute a conventional git commit from staged changes.
+Create one conventional commit from the completed worktree.
 
-Two modes:
-- **With openspec change**: reads `proposal.md`, adds `(<change-id>)` scope
-- **Without openspec change**: derives message from `git diff --cached` only, no scope
+**No confirmation prompt — invocation authorizes final staging and commit.**
 
-**No confirmation prompt — commits immediately.**
+## Optional input
+
+The caller may provide:
+
+```text
+archive_path=<exact archived change directory>
+change_id=<OpenSpec change id without date prefix>
+```
+
+When archive_path and change_id are provided, use them directly. They are a
+pair: if only one is provided, stop and report the invalid input.
 
 ---
 
-## Step 1 — Gather context (run in parallel)
+## Step 1 — Resolve OpenSpec context
 
-### A. Code Changes (for writing the message)
+### Explicit context
+
+Verify the exact archive before staging:
+
 ```bash
-git diff --cached --stat
-git diff --cached
-```
-
-### B. OpenSpec Context (for determining the scope)
-```bash
-# Detect openspec changes from git working tree
-if [ ! -d "openspec/changes" ]; then
-  echo "NO_OPENSPEC"
-else
-  all_changes=$(git status --short | awk '{print $NF}')
-
-  archived_changes=$(
-    echo "$all_changes" \
-    | grep '^openspec/changes/archive/' \
-    | sed 's|^openspec/changes/archive/||' \
-    | cut -d'/' -f1 \
-    | sort -u
-  )
-
-  active_changes=$(
-    echo "$all_changes" \
-    | grep '^openspec/changes/' \
-    | grep -v '^openspec/changes/archive/' \
-    | sed 's|^openspec/changes/||' \
-    | cut -d'/' -f1 \
-    | sort -u
-  )
-
-  cli_active=""
-  if [ -z "$archived_changes" ] && [ -z "$active_changes" ] && command -v openspec >/dev/null 2>&1; then
-    cli_active=$(openspec list --json | grep -v "\[\]" || echo "")
-  fi
-
-  # Strip YYYY-MM-DD- prefix to get change_id
-  archived_ids=$(echo "$archived_changes" | sed 's/^[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}-//')
-
-  echo "archived_changes: $archived_changes"
-  echo "archived_ids: $archived_ids"
-  echo "active_changes: $active_changes"
-  echo "cli_fallback: $cli_active"
+if [ ! -d "$archive_path" ]; then
+  echo "❌ Archive not found: $archive_path"
+  exit 1
 fi
 ```
 
+Read `<archive_path>/proposal.md`, focusing on **Why** and **What Changes**.
+Never replace an invalid explicit path with an auto-detected archive.
+
+### Standalone fallback
+
+Only when explicit context is absent:
+
+```bash
+git status --short
+openspec list --json
+```
+
+Resolution priority:
+
+1. Exactly one uncommitted directory under `openspec/changes/archive/`
+2. Exactly one active OpenSpec change
+3. No OpenSpec context → use the Git diff without a scope
+
+If a level contains multiple candidates, ask the user to select when the host
+supports interaction. Otherwise stop and list the candidates for the caller.
+Never choose the first candidate.
+
 ---
 
-## Step 2 — Determine openspec context
+## Step 2 — Stage and gather the final diff
 
-Based on the detection script output from Step 1:
+Stage all changes before inspecting the commit content:
 
-**Priority 1 — Archived changes** (`archived_changes` not empty):
-- **Exactly one** → use it directly
-  - `archive_path = openspec/changes/archive/<archived_changes>`
-  - `change_id = <archived_ids>` (already stripped of date prefix)
-  - Read `<archive_path>/proposal.md` — focus on **Why** and **What Changes**
-- **Multiple** → ask the user to select one (show `archived_ids` list); use the chosen `archived_changes` entry to build `archive_path` and `archived_ids` entry as `change_id`
+```bash
+git add -A
 
-**Priority 2 — Active changes** (`archived_changes` empty, `active_changes` or `cli_fallback` not empty):
-- **Exactly one** → read `openspec/changes/<name>/proposal.md`
-- **Multiple** → use the first one from `active_changes` or the CLI output
+if git diff --cached --quiet; then
+  echo "ℹ️ Nothing to commit"
+  exit 0
+fi
 
-**Priority 3 — No openspec context**:
-- `NO_OPENSPEC` output or all lists empty → use git diff only, no scope
+git diff --cached --stat
+git diff --cached
+```
 
 ---
 
 ## Step 3 — Infer commit type
 
-| Code nature | type |
-|-------------|------|
-| New feature / new capability | `feat` |
-| Bug fix / correcting behavior | `fix` |
+| Change nature | type |
+|---|---|
+| New feature or capability | `feat` |
+| Bug fix | `fix` |
 | Restructuring without behavior change | `refactor` |
 | Documentation only | `docs` |
 | Scripts, config, tooling, maintenance | `chore` |
-| Adding or fixing tests | `test` |
+| Tests | `test` |
+
+Use both the staged diff and proposal when archive context exists. The staged
+diff is authoritative for what the commit actually contains.
 
 ---
 
-## Step 4 — Format commit message
+## Step 4 — Format the message
 
-**With openspec change:**
-```
-<type>(<change-id>): <subject>
+With OpenSpec context:
+
+```text
+<type>(<change_id>): <subject>
 
 <body>
 ```
 
-**Without openspec change:**
-```
+Without OpenSpec context:
+
+```text
 <type>: <subject>
 
 <body>
 ```
 
 Rules:
-- `<subject>`: imperative mood, max 72 chars, no trailing period
-  - With proposal: derived from **What Changes** section
-  - Without proposal: derived from `git diff --cached --stat` summary
-- `<body>`: 2–5 lines, what + why
-  - With proposal: derived from **Why** + **What Changes**
-  - Without proposal: summarized from diff content
+
+- Subject uses imperative mood, has at most 72 characters, and no trailing
+  period.
+- Body is 2–5 lines explaining what changed and why.
+- Never claim a proposal item that is absent from the staged diff.
 
 ---
 
-## Step 5 — Execute
+## Step 5 — Commit
 
-Include `Co-Authored-By` using **your own model name** (the model you are currently running on):
+Include `Co-Authored-By` using the current model's actual name:
 
 ```bash
 git commit -m "<message>
 
-Co-Authored-By: <your model name> <noreply@anthropic.com>"
+Co-Authored-By: <current model name> <noreply@anthropic.com>"
 ```
 
-Example: if you are Claude Haiku 4.5, write `Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>`. Always use your own actual model name and version — do not copy this example verbatim.
+If a pre-commit hook fails:
 
-On pre-commit hook failure: fix the issue and re-run `git commit`. Do NOT use `--no-verify`.
+1. Read the failure output and fix the in-scope issue.
+2. **Re-run `git add -A`** so hook or formatter changes enter the commit.
+3. Confirm `git diff --cached` still contains the intended change.
+4. Retry `git commit` without `--no-verify`.
 
 ---
 
-## Step 6 — Output result
+## Step 6 — Output
 
+```bash
+git log -1 --format='%h %s'
 ```
-💾 Commit: <short-hash> <type>(<change-id>): <subject>
+
+Report:
+
+```text
+💾 Commit: <short-hash> <type>(<change_id>): <subject>
 ```
+
+Omit `(<change_id>)` when no OpenSpec context exists.

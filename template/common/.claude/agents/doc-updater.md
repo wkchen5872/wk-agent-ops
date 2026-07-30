@@ -1,6 +1,6 @@
 ---
 name: doc-updater
-description: Update docs/, README.md, and AGENTS.md based on current changes. If there are uncommitted changes, scans those and updates docs in-place (Mode A). If working tree is clean, scans the last N commits (asks user, default 1) and leaves doc changes in working tree for review (Mode B). Never commits automatically.
+description: Update docs/, README.md, and AGENTS.md based on current changes. If there are uncommitted changes, scans those and updates docs in-place (Mode A). If working tree is clean, scans caller-provided N commits or defaults to 1 and leaves doc changes in working tree for review (Mode B). Never commits automatically.
 model: sonnet
 tools: Read, Bash, Edit, Write, Glob, Grep
 ---
@@ -8,6 +8,21 @@ tools: Read, Bash, Edit, Write, Glob, Grep
 Update documentation based on current changes or recent commits.
 
 **Execute immediately — no confirmation prompt before making edits.**
+
+## Optional input
+
+The caller may provide:
+
+```text
+change_id=<archived change id>
+archive_path=<exact archived change directory>
+N=<Mode B commit count, 1-10>
+```
+
+When `archive_path` is provided, verify it exists before editing, then read
+`<archive_path>/proposal.md` and any `<archive_path>/specs/**/*.md`. Treat those
+files as intent and the Git diff as implementation evidence. If they conflict,
+document only what the diff establishes.
 
 ## Step 1 — Detect mode
 
@@ -25,8 +40,13 @@ git status --short
 ### Step A1 — Read the diff
 
 ```bash
+git status --short
 git diff HEAD
 ```
+
+When archive context was supplied, analyze it together with this diff. The
+coordinating workflow stages first so newly created files appear in
+`git diff HEAD`.
 
 ### Step A2 — Analyze diff for documentation impact
 
@@ -37,7 +57,7 @@ Apply the decision table:
 | New `.claude/agents/*.md` or `template/common/.claude/agents/*.md` | `AGENTS.md` (add agent entry) |
 | New `.claude/skills/*/SKILL.md` or `template/common/skills/*/` | `AGENTS.md` (add skill reference) |
 | New `template/<profile>/` or changes to `install.sh` | `docs/template-profiles.md`, `README.md` |
-| Changes to `scripts/worktree/` | `docs/multi-agent-workflow.md`, `README.md` |
+| Changes to `scripts/workflow/` | `docs/workflow/guide.md`, `README.md` |
 | New env var or new external dependency | `README.md` (相依套件 section) |
 | Substantive new capability files | `README.md` and/or `docs/<feature>.md` |
 | Only internal implementation, no user-facing change | No update needed — output reason and stop |
@@ -69,12 +89,10 @@ Reason: <reason>
 
 ## Mode B — Clean working tree (post-commit)
 
-### Step B1 — Ask how many commits to scan
+### Step B1 — Resolve how many commits to scan
 
-Use AskUserQuestion:
-> "How many recent commits should I scan for documentation updates? (1-10, default: 1)"
-
-Use the answer as N (default 1 if no answer or accepted default).
+Use caller-provided N when present. This subagent has no interactive question
+tool, so default to N=1 otherwise. Reject values outside 1-10.
 
 ### Step B2 — Read the commits
 
