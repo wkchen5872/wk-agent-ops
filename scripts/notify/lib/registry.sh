@@ -53,46 +53,26 @@ _ensure_json_object_file() {
     return 1
   fi
 }
-# Register the telegram-notify hook into a settings.json file (idempotent).
-# Supports two modes via $3:
-#   "claude" (default) — registers Stop + Notification (Claude Code event names)
-#   "gemini"           — registers AfterAgent + Notification (Gemini CLI event names)
-# Arguments: $1 = settings file path, $2 = deployed hook path, $3 = mode (claude|gemini)
+# Register the telegram-notify hook into Claude settings (idempotent).
+# Arguments: $1 = settings file path, $2 = deployed hook path
 _register_hooks_in_file() {
   local settings_file="$1"
   local hook_path="$2"
-  local mode="${3:-claude}"
 
   _ensure_settings_file "${settings_file}"
 
-  local stop_event="Stop"
-  [[ "${mode}" == "gemini" ]] && stop_event="AfterAgent"
-
   # Commands include the tool name so hook.sh can identify the caller reliably.
   local stop_cmd notify_cmd base_stop_cmd base_notify_cmd
-  if [[ "${mode}" == "gemini" ]]; then
-    stop_cmd="bash \"${hook_path}\" AfterAgent \"Gemini CLI\""
-    notify_cmd="bash \"${hook_path}\" notification \"Gemini CLI\""
-    base_stop_cmd="bash \"${hook_path}\" AfterAgent"
-  else
-    stop_cmd="bash \"${hook_path}\" stop \"Claude Code\""
-    notify_cmd="bash \"${hook_path}\" notification \"Claude Code\""
-    base_stop_cmd="bash \"${hook_path}\" stop"
-  fi
+  stop_cmd="bash \"${hook_path}\" stop \"Claude Code\""
+  notify_cmd="bash \"${hook_path}\" notification \"Claude Code\""
+  base_stop_cmd="bash \"${hook_path}\" stop"
   base_notify_cmd="bash \"${hook_path}\" notification"
 
   local stop_group notify_group
-  if [[ "${mode}" == "gemini" ]]; then
-    stop_group=$(jq -n --arg cmd "${stop_cmd}" \
-      '{"hooks":[{"type":"command","command":$cmd,"timeout":15000}]}')
-    notify_group=$(jq -n --arg cmd "${notify_cmd}" \
-      '{"hooks":[{"type":"command","command":$cmd,"timeout":15000}]}')
-  else
-    stop_group=$(jq -n --arg cmd "${stop_cmd}" \
-      '{"hooks":[{"type":"command","command":$cmd,"async":true,"timeout":15}]}')
-    notify_group=$(jq -n --arg cmd "${notify_cmd}" \
-      '{"hooks":[{"type":"command","command":$cmd,"async":true,"timeout":15}]}')
-  fi
+  stop_group=$(jq -n --arg cmd "${stop_cmd}" \
+    '{"hooks":[{"type":"command","command":$cmd,"async":true,"timeout":15}]}')
+  notify_group=$(jq -n --arg cmd "${notify_cmd}" \
+    '{"hooks":[{"type":"command","command":$cmd,"async":true,"timeout":15}]}')
 
   # Idempotent merge: only add group if no existing group already contains this command.
   # Checks both new format (with tool name) and old format (base cmd only) for migration.
@@ -103,7 +83,6 @@ _register_hooks_in_file() {
     --arg notify_cmd "${notify_cmd}" \
     --arg base_stop_cmd "${base_stop_cmd}" \
     --arg base_notify_cmd "${base_notify_cmd}" \
-    --arg stop_event "${stop_event}" \
     '
     # Returns true if the array already has an entry matching cmd or base_cmd
     # (base_cmd matches old format without tool name, preventing double-registration).
@@ -117,9 +96,9 @@ _register_hooks_in_file() {
       ) | length) > 0
       end;
 
-    .hooks[$stop_event] = (
-      if has_command(.hooks[$stop_event]; $stop_cmd; $base_stop_cmd) then .hooks[$stop_event]
-      else ((.hooks[$stop_event] // []) + [$stop_group])
+    .hooks.Stop = (
+      if has_command(.hooks.Stop; $stop_cmd; $base_stop_cmd) then .hooks.Stop
+      else ((.hooks.Stop // []) + [$stop_group])
       end
     ) |
     .hooks.Notification = (
@@ -150,25 +129,24 @@ _unregister_hooks_in_file() {
     --arg base_afteragent_cmd "${base_afteragent_cmd}" \
     --arg base_notify_cmd "${base_notify_cmd}" \
     '
-    # Remove entries where the command starts with any of the given base_cmds —
-    # matches both old format (no tool name) and new format (with tool name appended).
+    # Remove only matching nested commands or direct entries, preserving siblings.
     def remove_cmd(arr; base_cmd):
-      if arr == null then []
-      else arr | map(select(
-        ((.command? // "") | startswith(base_cmd) | not) and
-        (.hooks? == null or (.hooks | map(select((.command // "") | startswith(base_cmd))) | length) == 0)
-      ))
-      end;
+      (arr // [])
+      | map(
+          if .hooks? != null then
+            .hooks |= map(select((((.command? // "") | startswith(base_cmd))) | not))
+          else .
+          end
+        )
+      | map(select(
+          ((((.command? // "") | startswith(base_cmd))) | not) and
+          (.hooks? == null or (.hooks | length) > 0)
+        ));
 
-    # Remove entries matching either of two base commands (handles format migration).
-    def remove_cmd2(arr; base_cmd1; base_cmd2):
-      remove_cmd(remove_cmd(arr; base_cmd1); base_cmd2);
-
-    # Remove from Stop (Claude Code), AfterAgent (Gemini CLI), and Notification.
-    # AfterAgent uses remove_cmd2 because old Gemini entries used "stop" as the command.
-    .hooks.Stop         = remove_cmd(.hooks.Stop;         $base_stop_cmd)                              |
-    .hooks.AfterAgent   = remove_cmd2(.hooks.AfterAgent;  $base_afteragent_cmd; $base_stop_cmd)        |
-    .hooks.Notification = remove_cmd(.hooks.Notification; $base_notify_cmd)                            |
+    # AfterAgent also checks the oldest deployment form, which used "stop".
+    .hooks.Stop         = remove_cmd(.hooks.Stop; $base_stop_cmd) |
+    .hooks.AfterAgent   = remove_cmd(remove_cmd(.hooks.AfterAgent; $base_afteragent_cmd); $base_stop_cmd) |
+    .hooks.Notification = remove_cmd(.hooks.Notification; $base_notify_cmd) |
     if (.hooks.Stop         | length) == 0 then del(.hooks.Stop)         else . end |
     if (.hooks.AfterAgent   | length) == 0 then del(.hooks.AfterAgent)   else . end |
     if (.hooks.Notification | length) == 0 then del(.hooks.Notification) else . end
@@ -297,7 +275,7 @@ unregister_hook_antigravity() {
   echo "  ✓ Unregistered Antigravity hooks from ${ANTIGRAVITY_HOOKS}"
 }
 
-# Public: opt in to Antigravity approval observation through statusLine.
+# Public: register Antigravity approval observation through statusLine when free.
 register_hook_antigravity_statusline() {
   local hook_path="$1"
   _require_jq || return 1
@@ -373,8 +351,6 @@ show_hook_status() {
 
   _has_command_prefix "${CLAUDE_SETTINGS}" "bash \"${hook_path}\" stop" &&
     echo "Claude Code: registered" || echo "Claude Code: not registered"
-  _has_command_prefix "${GEMINI_SETTINGS}" "bash \"${hook_path}\" AfterAgent" &&
-    echo "Gemini CLI: registered" || echo "Gemini CLI: not registered"
 
   if _has_command_prefix "${CODEX_HOOKS}" "${codex_stop}" &&
      _has_command_prefix "${CODEX_HOOKS}" "${codex_permission}"; then
@@ -389,9 +365,13 @@ show_hook_status() {
   _has_command_prefix "${ANTIGRAVITY_HOOKS}" "${agy_stop}" &&
     echo "Antigravity completion: registered" || echo "Antigravity completion: not registered"
 
-  if [[ -f "${ANTIGRAVITY_SETTINGS}" ]] &&
-     [[ "$(jq -r '.statusLine.command // empty' "${ANTIGRAVITY_SETTINGS}" 2>/dev/null)" == "${agy_status}" ]]; then
+  local existing_agy_status=""
+  [[ -f "${ANTIGRAVITY_SETTINGS}" ]] &&
+    existing_agy_status="$(jq -r '.statusLine.command // empty' "${ANTIGRAVITY_SETTINGS}" 2>/dev/null)"
+  if [[ "${existing_agy_status}" == "${agy_status}" ]]; then
     echo "Antigravity approval: registered"
+  elif [[ -n "${existing_agy_status}" ]]; then
+    echo "Antigravity approval: unavailable (statusLine conflict)"
   else
     echo "Antigravity approval: not registered"
   fi
@@ -410,13 +390,13 @@ register_hook() {
   local hook_path="$1"
   _require_jq || return 1
 
-  _register_hooks_in_file "${CLAUDE_SETTINGS}" "${hook_path}" "claude"
+  _register_hooks_in_file "${CLAUDE_SETTINGS}" "${hook_path}"
   echo "  ✓ Registered hooks in ${CLAUDE_SETTINGS}"
 
-  # Register in Gemini settings using AfterAgent (Gemini's equivalent of Stop)
-  if [[ -f "${GEMINI_SETTINGS}" ]] || command -v gemini &>/dev/null; then
-    _register_hooks_in_file "${GEMINI_SETTINGS}" "${hook_path}" "gemini"
-    echo "  ✓ Registered hooks in ${GEMINI_SETTINGS}"
+  # Migration only: remove commands deployed by older Gemini CLI integrations.
+  if [[ -f "${GEMINI_SETTINGS}" ]]; then
+    _unregister_hooks_in_file "${GEMINI_SETTINGS}" "${hook_path}"
+    echo "  ✓ Removed legacy notification hooks from ${GEMINI_SETTINGS}"
   fi
 
   if [[ -d "${HOME}/.codex" ]] || command -v codex &>/dev/null; then
@@ -425,6 +405,9 @@ register_hook() {
 
   if [[ -d "${HOME}/.gemini/antigravity-cli" ]] || command -v agy &>/dev/null; then
     register_hook_antigravity "${hook_path}"
+    if ! register_hook_antigravity_statusline "${hook_path}"; then
+      echo "  ⚠ Antigravity approval observation unavailable; existing statusLine was preserved." >&2
+    fi
   fi
 }
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Update individual Telegram Notify config settings.
-# Usage: bash scripts/notify/telegram/update.sh [token|chat_id|notify_level|fix-hooks]
+# Usage: bash scripts/notify/telegram/update.sh [token|chat_id|notify_level|fix-hooks|copilot-hooks|status]
 # fix-hooks: re-registers hooks with the correct format (use to fix format issues).
 set -euo pipefail
 
@@ -14,6 +14,7 @@ source "${LIB_DIR}/registry.sh"
 
 # Load existing config for current-value hints
 read_config 2>/dev/null || true
+NOTIFY_LEVEL="$(normalize_notify_level "${NOTIFY_LEVEL:-all}" 2>/dev/null || printf '%s' 'all')"
 
 KEY="${1:-}"
 DEPLOYED_HOOK="${HOME}/.config/ai-notify/hooks/telegram-notify.sh"
@@ -27,8 +28,7 @@ show_menu() {
   echo "  3) Notification Level (current: ${NOTIFY_LEVEL:-all})"
   echo "  4) Fix hook registration (re-register with correct format)"
   echo "  5) Register Copilot CLI hooks"
-  echo "  6) Enable Antigravity approval notifications"
-  echo "  7) Show provider status"
+  echo "  6) Show provider status"
   echo "  q) Quit"
   echo ""
 }
@@ -59,17 +59,18 @@ update_chat_id() {
 
 update_notify_level() {
   echo ""
-  echo "  all         — Stop + Notification events"
-  echo "  notify_only — Notification events only (suppress Stop)"
+  echo "  all                — completion + action required + failure"
+  echo "  attention_required — action required + failure; suppress successful completion"
   echo ""
   echo "Current level: ${NOTIFY_LEVEL:-all}"
   local new_level=""
   while true; do
-    read -rp "New level (all / notify_only): " new_level
-    if [[ "${new_level}" == "all" || "${new_level}" == "notify_only" ]]; then
+    read -rp "New level (all / attention_required) [${NOTIFY_LEVEL:-all}]: " new_level
+    new_level="${new_level:-${NOTIFY_LEVEL:-all}}"
+    if [[ "${new_level}" == "all" || "${new_level}" == "attention_required" ]]; then
       break
     fi
-    echo "Invalid. Please enter 'all' or 'notify_only'."
+    echo "Invalid. Please enter 'all' or 'attention_required'."
   done
   update_config_key "NOTIFY_LEVEL" "${new_level}"
   echo "✓ NOTIFY_LEVEL updated to ${new_level}."
@@ -91,19 +92,9 @@ fix_hooks() {
   chmod +x "${DEPLOYED_HOOK}"
   echo "  ✓ Hook script updated at ${DEPLOYED_HOOK}"
 
-  _require_jq || return 1
-
-  local agy_status_cmd="bash \"${DEPLOYED_HOOK}\" antigravity-statusline \"Antigravity CLI\""
-  local had_agy_approval=false
-  if [[ -f "${ANTIGRAVITY_SETTINGS}" ]] &&
-     [[ "$(jq -r '.statusLine.command // empty' "${ANTIGRAVITY_SETTINGS}" 2>/dev/null)" == "${agy_status_cmd}" ]]; then
-    had_agy_approval=true
-  fi
-
   # Unregister old/broken entries, then re-register with correct native formats.
   unregister_hook "${DEPLOYED_HOOK}"
   register_hook "${DEPLOYED_HOOK}"
-  [[ "${had_agy_approval}" == "true" ]] && register_hook_antigravity_statusline "${DEPLOYED_HOOK}"
 
   # Re-register Copilot hooks if hooks.json already exists
   local repo_root
@@ -135,17 +126,6 @@ register_copilot_hooks() {
   echo "✓ Copilot CLI hooks registered."
 }
 
-register_antigravity_approval() {
-  if [[ ! -f "${DEPLOYED_HOOK}" ]]; then
-    echo "ERROR: Deployed hook not found at ${DEPLOYED_HOOK}"
-    echo "Please run scripts/notify/telegram/install.sh first."
-    return 1
-  fi
-
-  register_hook_antigravity_statusline "${DEPLOYED_HOOK}"
-  echo "✓ Antigravity approval notifications enabled."
-}
-
 show_status() {
   echo ""
   echo "── Telegram Notify — Provider Status ──"
@@ -160,7 +140,6 @@ case "${KEY}" in
   notify_level)   update_notify_level;   exit 0 ;;
   fix-hooks)      fix_hooks;             exit 0 ;;
   copilot-hooks)  register_copilot_hooks; exit 0 ;;
-  antigravity-approval) register_antigravity_approval; exit 0 ;;
   status)         show_status;            exit 0 ;;
   "")
     # Interactive menu
@@ -173,8 +152,7 @@ case "${KEY}" in
         3) update_notify_level ;;
         4) fix_hooks ;;
         5) register_copilot_hooks ;;
-        6) register_antigravity_approval ;;
-        7) show_status ;;
+        6) show_status ;;
         q|Q) echo ""; echo "Done."; exit 0 ;;
         *) echo "Invalid choice." ;;
       esac
@@ -182,7 +160,7 @@ case "${KEY}" in
     ;;
   *)
     echo "Unknown key: ${KEY}"
-    echo "Usage: $0 [token|chat_id|notify_level|fix-hooks|copilot-hooks|antigravity-approval|status]"
+    echo "Usage: $0 [token|chat_id|notify_level|fix-hooks|copilot-hooks|status]"
     exit 1
     ;;
 esac

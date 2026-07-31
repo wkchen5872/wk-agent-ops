@@ -4,6 +4,15 @@
 
 AI_NOTIFY_CONFIG="${HOME}/.config/ai-notify/config"
 
+# Return a canonical notification level; keep the old value as a read-time alias.
+normalize_notify_level() {
+  case "${1:-all}" in
+    all|attention_required) printf '%s\n' "${1:-all}" ;;
+    notify_only) printf '%s\n' "attention_required" ;;
+    *) return 1 ;;
+  esac
+}
+
 # Read (source) the config file into the current shell environment.
 # Usage: read_config
 read_config() {

@@ -77,22 +77,10 @@ finish_hook() {
   exit 0
 }
 
-# ── Guard: skip if disabled or credentials missing ─────────────────────────────
-# Bypass credential guard in dry-run mode — no HTTP request will be made.
-if [[ "${TELEGRAM_DRY_RUN:-}" != "true" ]]; then
-  [[ "${TELEGRAM_ENABLED:-}" != "true" ]] && finish_hook
-  [[ -z "${TELEGRAM_BOT_TOKEN:-}" ]] && finish_hook
-  [[ -z "${TELEGRAM_CHAT_ID:-}" ]] && finish_hook
-fi
-
-# ── NOTIFY_LEVEL gate ──────────────────────────────────────────────────────────
+# ── Notification level ─────────────────────────────────────────────────────────
 NOTIFY_LEVEL="${NOTIFY_LEVEL:-all}"
-# Suppress stop and sessionEnd (Copilot's equivalent of stop) when notify_only
-if [[ "${NOTIFY_LEVEL}" == "notify_only" &&
-      ("${EVENT_TYPE}" == "stop" || "${EVENT_TYPE}" == "sessionend" ||
-       "${EVENT_TYPE}" == "codex-stop" || "${EVENT_TYPE}" == "antigravity-stop") ]]; then
-  finish_hook
-fi
+[[ "${NOTIFY_LEVEL}" == "notify_only" ]] && NOTIFY_LEVEL="attention_required"
+[[ "${NOTIFY_LEVEL}" != "all" && "${NOTIFY_LEVEL}" != "attention_required" ]] && NOTIFY_LEVEL="all"
 
 # ── Detect AI CLI tool and project ────────────────────────────────────────────
 # TOOL_NAME is supplied by the caller via $2 (hardcoded in registry.sh per tool).
@@ -102,7 +90,7 @@ PAYLOAD_CWD=""
 [[ -n "${STDIN_JSON}" ]] && PAYLOAD_CWD="$(_json_str "${STDIN_JSON}" "cwd")"
 PAYLOAD_WORKSPACE=""
 [[ -n "${STDIN_JSON}" ]] && PAYLOAD_WORKSPACE="$(_json_query "${STDIN_JSON}" '.workspacePaths[0] // .workspace.project_dir // .workspace.current_dir')"
-PROJECT_DIR="${PAYLOAD_CWD:-${PAYLOAD_WORKSPACE:-${GEMINI_PROJECT_DIR:-${CLAUDE_PROJECT_DIR:-${PWD}}}}}"
+PROJECT_DIR="${PAYLOAD_CWD:-${PAYLOAD_WORKSPACE:-${CLAUDE_PROJECT_DIR:-${PWD}}}}"
 
 PROJECT_NAME="${PROJECT_DIR:+$(basename "${PROJECT_DIR}")}"
 
@@ -152,12 +140,7 @@ if [[ "${EVENT_TYPE}" == "antigravity-statusline" ]]; then
   chmod 600 "${AGY_STATE_FILE}" 2>/dev/null || true
 fi
 
-# ── Hook event tag (appended to message line) ─────────────────────────────────
-EVENT_TAG="#${HOOK_EVENT_NAME:-${EVENT_TYPE:-unknown}}"
-
-# ── Build message ──────────────────────────────────────────────────────────────
-MESSAGE=""
-
+# Antigravity Stop is meaningful only after all background work is idle.
 AGY_TERMINATION_REASON=""
 if [[ "${EVENT_TYPE}" == "antigravity-stop" ]]; then
   AGY_FULLY_IDLE="$(_json_query "${STDIN_JSON}" 'if .fullyIdle == true then "true" else "false" end')"
@@ -165,8 +148,42 @@ if [[ "${EVENT_TYPE}" == "antigravity-stop" ]]; then
   AGY_TERMINATION_REASON="$(_json_str "${STDIN_JSON}" "terminationReason")"
 fi
 
+# Classify provider spellings once, then apply one semantic policy gate.
+EVENT_CATEGORY="unknown"
 case "${EVENT_TYPE}" in
-  stop|afteragent|sessionend|codex-stop)
+  stop|sessionend|codex-stop) EVENT_CATEGORY="completion" ;;
+  notification|userpromptsubmitted|codex-permission|antigravity-statusline) EVENT_CATEGORY="action_required" ;;
+  antigravity-stop)
+    if [[ "${AGY_TERMINATION_REASON}" == "model_stop" ]]; then
+      EVENT_CATEGORY="completion"
+    else
+      EVENT_CATEGORY="failure"
+    fi
+    ;;
+esac
+
+if [[ "${NOTIFY_LEVEL}" == "attention_required" &&
+      "${EVENT_CATEGORY}" != "action_required" &&
+      "${EVENT_CATEGORY}" != "failure" ]]; then
+  finish_hook
+fi
+
+# ── Guard: skip if disabled or credentials missing ─────────────────────────────
+# State transitions and native event classification happen before this guard.
+if [[ "${TELEGRAM_DRY_RUN:-}" != "true" ]]; then
+  [[ "${TELEGRAM_ENABLED:-}" != "true" ]] && finish_hook
+  [[ -z "${TELEGRAM_BOT_TOKEN:-}" ]] && finish_hook
+  [[ -z "${TELEGRAM_CHAT_ID:-}" ]] && finish_hook
+fi
+
+# ── Hook event tag (appended to message line) ─────────────────────────────────
+EVENT_TAG="#${HOOK_EVENT_NAME:-${EVENT_TYPE:-unknown}}"
+
+# ── Build message ──────────────────────────────────────────────────────────────
+MESSAGE=""
+
+case "${EVENT_TYPE}" in
+  stop|sessionend|codex-stop)
     MESSAGE="🟢 **Task Complete**${TITLE_SUFFIX}
 
 🤖 ${TOOL_NAME}

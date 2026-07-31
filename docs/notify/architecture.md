@@ -3,7 +3,7 @@ type: Architecture
 title: AI CLI Notification Hooks Architecture
 description: Native host hook registration and Telegram notification data flow.
 tags: [notifications, hooks, codex, antigravity, telegram]
-timestamp: 2026-07-31T15:57:50+08:00
+timestamp: 2026-07-31T17:43:42+08:00
 ---
 
 # Notify Hooks — Architecture
@@ -14,9 +14,9 @@ This document describes the architecture of the AI CLI notification hook system.
 
 ## Overview
 
-The notification system allows Claude Code, Gemini CLI, Codex, Antigravity CLI,
-and Copilot CLI to send Telegram notifications when an agent turn finishes or
-requires user attention.
+The notification system allows Claude Code, Codex, Antigravity CLI, and Copilot
+CLI to send Telegram notifications when an agent turn finishes, requires user
+attention, or stops abnormally.
 
 **Design principle:** The repository contains only scripts. All machine state (config files, deployed hooks, settings.json entries) is created exclusively by running `install.sh` — never at repository checkout time.
 
@@ -60,8 +60,11 @@ scripts/
 # Native user-level host configuration:
 ~/.codex/hooks.json                         # Codex Stop + PermissionRequest
 ~/.gemini/config/hooks.json                 # Antigravity named Stop hook
-~/.gemini/antigravity-cli/settings.json     # Optional approval observer
+~/.gemini/antigravity-cli/settings.json     # Approval observer when statusLine is free
 ```
+
+`~/.gemini/settings.json` is cleanup-only: setup, repair, and uninstall remove
+notification-owned legacy Gemini commands but never register new ones.
 
 ---
 
@@ -73,7 +76,7 @@ scripts/
 TELEGRAM_ENABLED=true
 TELEGRAM_BOT_TOKEN="7123456789:ABCdef..."
 TELEGRAM_CHAT_ID="987654321"
-NOTIFY_LEVEL=all           # all | notify_only
+NOTIFY_LEVEL=all           # all | attention_required
 # LINE_ENABLED=false       # Future extension
 ```
 
@@ -82,8 +85,11 @@ NOTIFY_LEVEL=all           # all | notify_only
 **NOTIFY_LEVEL values:**
 | Value | Behaviour |
 |-------|-----------|
-| `all` (default) | Notify on Stop (task complete) AND Notification (action required) |
-| `notify_only` | Notify only on Notification events; Stop events are suppressed |
+| `all` (default) | Send completion, action-required, and failure events |
+| `attention_required` | Send action-required and failure events; suppress successful completion |
+
+The legacy `notify_only` value is read as `attention_required` and normalized
+when setup or update next writes the config.
 
 ---
 
@@ -99,10 +105,9 @@ Step 3  Auto-detect Chat ID (getUpdates API call)
 Step 4  Choose NOTIFY_LEVEL
 Step 5  Write ~/.config/ai-notify/config (chmod 600)
 Step 6  Deploy hook: copy hook.sh → ~/.config/ai-notify/hooks/telegram-notify.sh
-Step 7  Register completion hooks for detected Claude, Gemini, Codex, and Antigravity CLIs
-Step 8  Optionally register the Antigravity approval observer [y/N]
-Step 9  Optionally register Copilot CLI hooks in .github/hooks/hooks.json [y/N]
-Step 10 Send test notification to confirm end-to-end
+Step 7  Register Claude plus detected Codex and Antigravity hooks; attempt approval observation safely
+Step 8  Optionally register Copilot CLI hooks in .github/hooks/hooks.json [y/N]
+Step 9  Send test notification to confirm end-to-end
 ```
 
 **Idempotent:** Running `install.sh` multiple times is safe. Existing config values are preserved unless overwritten, and `registry.sh` prevents duplicate hook entries.
@@ -122,11 +127,13 @@ bash ~/.config/ai-notify/hooks/telegram-notify.sh <event-type> [tool-name]
   (stdin: JSON payload from AI CLI)
         │
         ├─ source ~/.config/ai-notify/config
-        ├─ check TELEGRAM_ENABLED, credentials (skipped in dry-run)
-        ├─ check NOTIFY_LEVEL gate
         ├─ TOOL_NAME = $2 arg (set by registry.sh) or "AI CLI"
-        ├─ PROJECT_DIR from payload cwd/workspace, provider env, or PWD
+        ├─ PROJECT_DIR from payload cwd/workspace, CLAUDE_PROJECT_DIR, or PWD
         ├─ SESSION_LABEL from session/conversation payload or Copilot env
+        ├─ update Antigravity approval state and parse terminal reason
+        ├─ classify completion / action_required / failure
+        ├─ apply the semantic NOTIFY_LEVEL gate
+        ├─ check TELEGRAM_ENABLED and credentials (skipped in dry-run)
         ├─ return the provider-neutral control response
         ├─ build message (title includes session label when available)
         └─ curl --silent --max-time 4 Telegram API || true
@@ -145,16 +152,15 @@ AI CLI 工具透過 `stdin` 將 JSON payload 傳遞給 Hook 腳本。
 {
   "hook_event_name": "Stop",     // 事件類型：Stop | Notification | sessionEnd | ...
   "message": "...",              // (選填) 通知詳細訊息，如等待授權的內容
-  "project_dir": "/path/to/proj" // (選填) 專案路徑
+  "cwd": "/path/to/proj"         // (選填) 專案路徑
 }
 ```
 
 *   **Claude Code**: 傳送 `Stop` 與 `Notification` 事件。
-*   **Gemini CLI**: 傳送 `AfterAgent` 與 `Notification` 事件。
 *   **Codex**: 傳送 `Stop` 與 `PermissionRequest`；notification hook 回傳
     neutral `{}`，不代替使用者決定。
 *   **Antigravity CLI**: `Stop` 提供 `fullyIdle` 與
-    `terminationReason`；opt-in status line 提供
+    `terminationReason`；managed status line 提供
     `tool_confirmation_pending`。
 *   **Copilot CLI**: 傳送 `sessionEnd` 與 `userPromptSubmitted` 事件。
 
@@ -166,6 +172,7 @@ AI CLI 工具透過 `stdin` 將 JSON payload 傳遞給 Hook 腳本。
 
 | Function | Description |
 |----------|-------------|
+| `normalize_notify_level VALUE` | Return `all` or `attention_required`, including the legacy alias |
 | `read_config` | Source the config file into current shell |
 | `write_config KEY=VAL ...` | Create/overwrite config with given pairs (chmod 600) |
 | `update_config_key KEY VAL` | Update a single key; leave others intact |
@@ -175,13 +182,13 @@ AI CLI 工具透過 `stdin` 將 JSON payload 傳遞給 Hook 腳本。
 
 | Function | Description |
 |----------|-------------|
-| `register_hook <hook_path>` | Register detected Claude, Gemini, Codex, and Antigravity completion hooks |
+| `register_hook <hook_path>` | Register Claude plus detected Codex and Antigravity hooks; clean owned legacy Gemini entries |
 | `unregister_hook <hook_path>` | Remove owned global hook entries without affecting other hooks |
 | `register_hook_copilot <hook_path>` | Write `sessionEnd` + `userPromptSubmitted` entries to `.github/hooks/hooks.json` (idempotent) |
 | `unregister_hook_copilot <hook_path>` | Remove Copilot hook entries from `.github/hooks/hooks.json` |
 | `register_hook_codex <hook_path>` | Add neutral `Stop` + `PermissionRequest` hooks to `~/.codex/hooks.json` |
 | `register_hook_antigravity <hook_path>` | Add the named global Antigravity `Stop` hook |
-| `register_hook_antigravity_statusline <hook_path>` | Opt in to approval-state observation without overwriting another command |
+| `register_hook_antigravity_statusline <hook_path>` | Add approval-state observation without overwriting another command |
 | `show_hook_status <hook_path>` | Report provider registration without reading credentials |
 
 All functions require `jq`.
@@ -221,9 +228,9 @@ owned `telegram-notify` definition. `Stop` emits a completion only when
 successful. The hook returns `{"decision":"stop"}`, which permits the documented
 stop instead of re-entering the execution loop.
 
-Antigravity has no documented `PermissionRequest` event. Approval observation is
-therefore a separate opt-in integration using
-`~/.gemini/antigravity-cli/settings.json`:
+Antigravity approval observation uses
+`~/.gemini/antigravity-cli/settings.json`. Setup and `fix-hooks` attempt it
+automatically whenever Antigravity is detected:
 
 ```json
 {
@@ -235,16 +242,16 @@ therefore a separate opt-in integration using
 ```
 
 The observer notifies on the first `tool_confirmation_pending=true`, suppresses
-repeated true states for that conversation, and resets after false. It prints a
-compact agent-state value so it remains a valid status-line command. Because
-Antigravity supports one custom status-line command, registration refuses to
-overwrite a different existing command.
+repeated true states for that conversation, and resets after false even when
+Telegram delivery is disabled. It prints a compact agent-state value so it
+remains a valid status-line command. A different existing command is preserved
+and reported as `Antigravity approval: unavailable (statusLine conflict)`.
 
 ---
 
 ## Copilot CLI Integration
 
-Copilot CLI uses a different hook mechanism from Claude Code and Gemini CLI. Hooks are stored in a per-repo file rather than a global settings file.
+Copilot CLI uses a repository-local hook file rather than global host settings.
 
 ### Hook file: `.github/hooks/hooks.json`
 
@@ -276,7 +283,6 @@ Copilot CLI uses a different hook mechanism from Claude Code and Gemini CLI. Hoo
 | Caller | `$1` (event) | `$2` (tool name) |
 |--------|-------------|-----------------|
 | Claude Code | `stop` / `notification` | `"Claude Code"` |
-| Gemini CLI | `AfterAgent` / `notification` | `"Gemini CLI"` |
 | Codex | `codex-stop` / `codex-permission` | `"Codex"` |
 | Antigravity CLI | `antigravity-stop` / `antigravity-statusline` | `"Antigravity CLI"` |
 | Copilot CLI | `sessionEnd` / `userPromptSubmitted` | `"Copilot CLI"` |
@@ -289,7 +295,7 @@ bash scripts/notify/telegram/update.sh fix-hooks
 
 ### Setup
 
-Copilot hook registration is **opt-in** during `install.sh` (step 9). The resulting `.github/hooks/hooks.json` can be committed to the repository so all machines with the notify hook installed benefit automatically.
+Copilot hook registration is **opt-in** during `install.sh` (step 8). The resulting `.github/hooks/hooks.json` can be committed to the repository so all machines with the notify hook installed benefit automatically.
 
 To register after install:
 ```bash
@@ -321,10 +327,14 @@ bash scripts/notify/telegram/uninstall.sh
 /notify-setup → uninstall
 ```
 
-Uninstall removes owned Claude, Gemini, Codex, and Antigravity hook entries,
-Antigravity notification state, `TELEGRAM_*` keys, and the deployed hook. It
-removes repository-local Copilot entries only after separate confirmation.
-Unrelated hooks and settings remain unchanged.
+Uninstall removes owned Claude, Codex, and Antigravity hook entries, any
+notification-owned legacy Gemini commands, Antigravity notification state,
+`TELEGRAM_*` keys, and the deployed hook. It removes repository-local Copilot
+entries only after separate confirmation. Unrelated hooks and settings remain
+unchanged.
+
+Before rolling back to a hook release that predates `attention_required`, set
+the config value back to its legacy spelling, `notify_only`.
 
 # Citations
 

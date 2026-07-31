@@ -72,6 +72,7 @@ get_chat_id() {
 # ── Idempotency check ──────────────────────────────────────────────────────────
 # Source existing config to detect previously installed values
 read_config 2>/dev/null || true
+NOTIFY_LEVEL="$(normalize_notify_level "${NOTIFY_LEVEL:-all}" 2>/dev/null || printf '%s' 'all')"
 
 print_header
 
@@ -80,9 +81,9 @@ echo "  1. Guide you through creating a Telegram Bot"
 echo "  2. Validate your Bot Token"
 echo "  3. Auto-detect your Chat ID"
 echo "  4. Set your notification level"
-echo "  5. Deploy the hook to ~/.config/ai-notify/"
-echo "  6. Register completion hooks for detected AI CLIs"
-echo "  7. Optionally observe Antigravity approval prompts"
+echo "  5. Write the notification config"
+echo "  6. Deploy the hook to ~/.config/ai-notify/"
+echo "  7. Register supported hooks, including Antigravity approval when available"
 echo "  8. Optionally register Copilot CLI hooks"
 echo "  9. Send a test notification"
 echo ""
@@ -155,18 +156,18 @@ fi
 # ── Step 4: Notify Level ───────────────────────────────────────────────────────
 print_step 4 "Choose Notification Level"
 echo ""
-echo "  all         — notify on task complete (Stop) AND action required (Notification)"
-echo "  notify_only — notify only on action required (Notification); suppress Stop"
+echo "  all                — completion + action required + failure"
+echo "  attention_required — action required + failure; suppress successful completion"
 echo ""
 
 CURRENT_LEVEL="${NOTIFY_LEVEL:-all}"
 NEW_LEVEL=""
 while true; do
-  prompt NEW_LEVEL "Notification level (all / notify_only)" "${CURRENT_LEVEL}"
-  if [[ "${NEW_LEVEL}" == "all" || "${NEW_LEVEL}" == "notify_only" ]]; then
+  prompt NEW_LEVEL "Notification level (all / attention_required)" "${CURRENT_LEVEL}"
+  if [[ "${NEW_LEVEL}" == "all" || "${NEW_LEVEL}" == "attention_required" ]]; then
     break
   fi
-  echo "  Invalid choice. Please enter 'all' or 'notify_only'."
+  echo "  Invalid choice. Please enter 'all' or 'attention_required'."
   NEW_LEVEL=""
 done
 
@@ -198,25 +199,8 @@ if [[ -f "${CODEX_HOOKS}" ]]; then
   echo "  ℹ Review and trust Codex hooks with /hooks before they can run."
 fi
 
-# ── Step 8: Observe Antigravity approvals (opt-in) ─────────────────────────────
-print_step 8 "Observe Antigravity Approval Prompts (optional)"
-if [[ -d "${HOME}/.gemini/antigravity-cli" ]] || command -v agy &>/dev/null; then
-  echo ""
-  echo "  Antigravity exposes approval state through one custom statusLine command."
-  echo "  Existing custom statusLine commands are never overwritten."
-  echo ""
-  read -rp "  Enable Antigravity approval notifications? [y/N]: " _agy_approval_choice
-  if [[ "${_agy_approval_choice}" =~ ^[Yy]$ ]]; then
-    if ! register_hook_antigravity_statusline "${DEPLOYED_HOOK}"; then
-      echo "  ⚠ Antigravity approval observer was not installed; existing statusLine was preserved."
-    fi
-  fi
-else
-  echo "  ℹ Antigravity CLI not detected; skipped."
-fi
-
-# ── Step 9: Register Copilot CLI hooks (opt-in) ────────────────────────────────
-print_step 9 "Register Copilot CLI Hooks (optional)"
+# ── Step 8: Register Copilot CLI hooks (opt-in) ────────────────────────────────
+print_step 8 "Register Copilot CLI Hooks (optional)"
 echo ""
 echo "  Copilot CLI hooks are stored in .github/hooks/hooks.json inside your repo."
 echo "  This file can be committed so all machines benefit automatically."
@@ -227,8 +211,8 @@ if [[ "${_copilot_choice}" =~ ^[Yy]$ ]]; then
   echo "  ℹ You may want to commit .github/hooks/hooks.json to your repository."
 fi
 
-# ── Step 10: Test notification ─────────────────────────────────────────────────
-print_step 10 "Send Test Notification"
+# ── Step 9: Test notification ──────────────────────────────────────────────────
+print_step 9 "Send Test Notification"
 
 echo -n "  Sending test message to Telegram... "
 TEST_RESPONSE="$(curl \

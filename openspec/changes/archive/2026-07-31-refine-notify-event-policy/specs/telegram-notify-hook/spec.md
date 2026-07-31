@@ -1,11 +1,4 @@
-# Spec: telegram-notify-hook
-
-## Purpose
-
-提供 Claude Code、Codex、Antigravity CLI 與 Copilot CLI 的 Telegram 通知
-hook 整合，讓 AI 任務完成、需要使用者操作或異常停止時自動發送訊息。
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: 共用基礎庫 — config.sh
 `scripts/notify/lib/config.sh` SHALL provide shell functions for reading and
@@ -24,8 +17,6 @@ legacy `notify_only` value as equivalent to `attention_required`.
 #### Scenario: 舊設定仍保持低噪音行為
 - **WHEN** the hook reads an existing config containing `NOTIFY_LEVEL=notify_only`
 - **THEN** it applies `attention_required` behavior instead of falling back to `all`
-
----
 
 ### Requirement: 共用基礎庫 — registry.sh (idempotent hook 註冊)
 `scripts/notify/lib/registry.sh` SHALL register notification hooks
@@ -84,8 +75,6 @@ legacy environment variables.
 - **WHEN** Copilot hooks are registered
 - **THEN** their commands invoke the deployed hook with `"Copilot CLI"` as the second argument
 
----
-
 ### Requirement: install.sh 互動式安裝精靈
 `scripts/notify/telegram/install.sh` SHALL guide the user through credential
 setup, canonical notification-level selection, hook deployment, supported-host
@@ -124,8 +113,6 @@ registration or a separate Antigravity approval-notification preference.
 #### Scenario: 跳過 Copilot CLI hook 註冊
 - **WHEN** the user declines Copilot registration
 - **THEN** `.github/hooks/hooks.json` is not created or changed
-
----
 
 ### Requirement: hook.sh — 通知腳本
 The deployed Telegram hook SHALL normalize recognized provider events into
@@ -182,25 +169,6 @@ workspace fields, then `CLAUDE_PROJECT_DIR`, then `PWD`.
 - **WHEN** neither payload nor Claude project path is available
 - **THEN** the project is derived from `PWD`
 
-### Requirement: hook.sh 通知標題帶入 session 識別
-hook.sh SHALL 在 Task Complete 與 Action Required 的標題行帶入 session 識別。Session 識別來源依序為：stdin JSON `.session_id`、stdin JSON `.sessionId`、env var `GITHUB_COPILOT_SESSION_ID` 前 8 字元。若為 UUID 格式（含 `-`），顯示前 8 字元加 `#` 前綴；否則直接顯示。無 session 資訊時標題不附加括號。
-
-#### Scenario: Claude session_id 顯示
-- **WHEN** stdin JSON 包含 `"session_id": "abc123def456"`, TOOL_NAME=Claude Code, EVENT_TYPE=stop
-- **THEN** 標題行為 `🟢 **Task Complete** (#abc123de)`
-
-#### Scenario: Copilot sessionId 顯示
-- **WHEN** stdin JSON 包含 `"sessionId": "copilot-xyz"`, TOOL_NAME=Copilot CLI
-- **THEN** 標題行為 `🟢 **Task Complete** (copilot-xyz)`（非 UUID 格式，直接顯示）
-
-#### Scenario: 無 session 資訊
-- **WHEN** stdin JSON 無 session 欄位，env var 亦無
-- **THEN** 標題行為 `🟢 **Task Complete**`（無括號）
-
-#### Scenario: GITHUB_COPILOT_SESSION_ID fallback
-- **WHEN** stdin JSON 無 session 欄位，`GITHUB_COPILOT_SESSION_ID=abc12345xyz` 存在
-- **THEN** 標題行包含 `(#abc12345)`（取前 8 字元）
-
 ### Requirement: Copilot CLI 事件映射
 The hook SHALL map Copilot `sessionEnd` to `completion` and
 `userPromptSubmitted` to `action_required`, then apply the same semantic policy
@@ -217,98 +185,6 @@ used for every supported host.
 #### Scenario: Copilot sessionEnd under attention_required
 - **WHEN** `sessionEnd` is received with `NOTIFY_LEVEL=attention_required`
 - **THEN** the completion notification is suppressed
-
----
-
-### Requirement: /notify-setup Claude Code 指令
-`.claude/commands/notify-setup.md` SHALL 定義 `/notify-setup` 指令，使使用者能在 Claude Code 內完成 Telegram 通知的設定、更新、測試與移除。
-
-#### Scenario: 無參數呼叫
-- **WHEN** 使用者輸入 `/notify-setup`（無額外參數）
-- **THEN** Claude 呈現選單：setup / update / test / status / uninstall，並根據選擇執行對應腳本
-
-#### Scenario: 顯示目前設定（status）
-- **WHEN** 使用者選擇 status
-- **THEN** Claude 讀取 `~/.config/ai-notify/config`，顯示 NOTIFY_LEVEL、TELEGRAM_ENABLED，Bot Token 僅顯示末 4 碼
-
----
-
-### Requirement: Line Notify 架構佔位
-`scripts/notify/line/` 目錄 SHALL 存在，包含 `.placeholder` 檔案，說明實作時應參考 `scripts/notify/README.md` 的 Provider 擴充指南。
-
-#### Scenario: Line provider 目錄保留擴充指引
-- **WHEN** 列出 `scripts/notify/line/` 目錄
-- **THEN** `.placeholder` 存在，且內容指向 `scripts/notify/README.md` 的 Provider 擴充指南
-
----
-
-### Requirement: 說明文件
-`docs/notify/architecture.md` SHALL 說明整體架構（目錄結構、config 格式、hook 生命週期、如何新增 provider）。
-`docs/notify/telegram.md` SHALL 提供 Telegram 快速安裝說明（含 `/notify-setup` 指令用法與手動方式）。
-
-#### Scenario: 通知文件涵蓋架構與 Telegram 安裝
-- **WHEN** 讀取 `docs/notify/architecture.md` 與 `docs/notify/telegram.md`
-- **THEN** 文件分別包含通知架構與 Telegram 快速安裝、`/notify-setup`、手動設定說明
-
----
-
-### Requirement: Codex native lifecycle notifications
-The notification installer SHALL register idempotent Codex `Stop` and
-`PermissionRequest` command hooks in the user Codex hook configuration when
-Codex is detected. The hooks SHALL preserve unrelated configuration and SHALL
-not allow, deny, continue, or stop Codex on the user's behalf.
-
-#### Scenario: Codex hooks are registered once
-- **WHEN** Codex hook registration runs twice for the same deployed notification hook
-- **THEN** `Stop` and `PermissionRequest` each contain one matching command while unrelated hooks remain unchanged
-
-#### Scenario: Codex completion keeps the native stop decision
-- **WHEN** the notification hook receives a Codex `Stop` payload
-- **THEN** it emits a completion notification and returns neutral JSON that does not continue or stop Codex
-
-#### Scenario: Codex approval keeps the native prompt
-- **WHEN** the notification hook receives a Codex `PermissionRequest` payload
-- **THEN** it emits an action-required notification and returns no allow or deny decision so the normal Codex approval prompt continues
-
-### Requirement: Antigravity completion notifications
-The notification installer SHALL register an idempotent named Antigravity
-`Stop` command hook in the global Antigravity hook configuration when
-Antigravity CLI is detected. The hook SHALL return a non-continue decision and
-SHALL notify only after `fullyIdle` is true.
-
-#### Scenario: Fully idle model stop is complete
-- **WHEN** Antigravity sends `fullyIdle=true` and `terminationReason=model_stop`
-- **THEN** the hook emits a task-complete notification and returns a decision that allows Antigravity to stop
-
-#### Scenario: Background work remains active
-- **WHEN** Antigravity sends `fullyIdle=false`
-- **THEN** the hook emits no Telegram notification and still returns a decision that allows the current stop transition
-
-#### Scenario: Error termination is not reported as success
-- **WHEN** Antigravity sends `fullyIdle=true` with `terminationReason=error` or `max_steps_exceeded`
-- **THEN** the hook reports a stopped execution without including the raw error or claiming successful completion
-
-### Requirement: Automatic Antigravity approval observer
-When Antigravity is detected, global registration SHALL attempt to install the
-notification-owned custom status-line observer. It SHALL preserve a different
-existing command, deduplicate pending confirmations by conversation, and route
-the resulting `action_required` event through the shared notification policy.
-
-#### Scenario: First pending confirmation notifies
-- **WHEN** an installed observer sees `tool_confirmation_pending` transition from false to true
-- **THEN** one Action Required notification is sent under either supported notification level
-
-#### Scenario: Repeated pending confirmation is deduplicated
-- **WHEN** the observer receives repeated true states for the same still-pending conversation
-- **THEN** no duplicate notification is sent
-
-#### Scenario: False state resets the conversation
-- **WHEN** the observer receives a false state
-- **THEN** its pending marker is cleared even when Telegram delivery is disabled
-
-#### Scenario: Observer remains a valid status line
-- **WHEN** Antigravity invokes the installed observer
-- **THEN** it always returns a compact agent-state value without Telegram delivery details
 
 ### Requirement: Cross-provider lifecycle preservation
 Setup, repair, status, and uninstall SHALL manage only notification-owned
@@ -333,17 +209,37 @@ supported host or exposing credentials.
 - **WHEN** notification uninstall runs
 - **THEN** owned commands and state are removed while unrelated provider settings remain unchanged
 
-### Requirement: Notification privacy and bounded failure
-Codex and Antigravity notifications SHALL include only the CLI name, project,
-session label, event type, and a generic tool or termination label. They SHALL
-exclude raw commands, prompts, transcripts, tool arguments, and raw error text.
-Telegram delivery failure SHALL not block the invoking CLI beyond the configured
-short timeout.
+## REMOVED Requirements
 
-#### Scenario: Codex approval payload contains a command
-- **WHEN** a Codex approval payload includes a raw command or other tool arguments
-- **THEN** the Telegram message identifies the requesting tool but does not contain those arguments
+### Requirement: Opt-in Antigravity approval observer
+**Reason**: Approval delivery is part of both supported notification levels, so
+a second notification preference creates conflicting policy. The status-line
+integration still preserves a non-owned command.
 
-#### Scenario: Telegram is unavailable
-- **WHEN** Telegram delivery times out or fails
-- **THEN** the hook returns the provider's neutral control response and the AI CLI continues its native flow
+**Migration**: Existing owned observers remain managed. New setup and repair
+attempt registration automatically; the standalone install/update preference is
+removed.
+
+## ADDED Requirements
+
+### Requirement: Automatic Antigravity approval observer
+When Antigravity is detected, global registration SHALL attempt to install the
+notification-owned custom status-line observer. It SHALL preserve a different
+existing command, deduplicate pending confirmations by conversation, and route
+the resulting `action_required` event through the shared notification policy.
+
+#### Scenario: First pending confirmation notifies
+- **WHEN** an installed observer sees `tool_confirmation_pending` transition from false to true
+- **THEN** one Action Required notification is sent under either supported notification level
+
+#### Scenario: Repeated pending confirmation is deduplicated
+- **WHEN** the observer receives repeated true states for the same still-pending conversation
+- **THEN** no duplicate notification is sent
+
+#### Scenario: False state resets the conversation
+- **WHEN** the observer receives a false state
+- **THEN** its pending marker is cleared even when Telegram delivery is disabled
+
+#### Scenario: Observer remains a valid status line
+- **WHEN** Antigravity invokes the installed observer
+- **THEN** it always returns a compact agent-state value without Telegram delivery details

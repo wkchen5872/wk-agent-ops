@@ -3,13 +3,13 @@ type: Playbook
 title: Telegram Notify Hook Setup
 description: Install and operate Telegram notifications across supported AI CLIs.
 tags: [telegram, notifications, hooks, codex, antigravity]
-timestamp: 2026-07-31T15:57:50+08:00
+timestamp: 2026-07-31T17:43:42+08:00
 ---
 
 # Telegram Notify Hook — Quick Setup
 
-Get Telegram notifications when Claude Code, Gemini CLI, Codex, Antigravity
-CLI, or Copilot CLI finishes a turn or needs your attention.
+Get Telegram notifications when Claude Code, Codex, Antigravity CLI, or
+Copilot CLI finishes a turn, needs your attention, or stops abnormally.
 
 ---
 
@@ -35,7 +35,7 @@ The wizard guides you through:
 3. Auto-detecting your Chat ID
 4. Choosing a notification level
 5. Deploying the hook and registering detected AI CLIs
-6. Optionally observing Antigravity approval prompts
+6. Observing Antigravity approval prompts when its status-line slot is available
 7. Optionally registering repository-local Copilot hooks
 
 ---
@@ -47,11 +47,13 @@ The wizard guides you through:
 | Config (credentials) | `~/.config/ai-notify/config` (chmod 600) |
 | Deployed hook script | `~/.config/ai-notify/hooks/telegram-notify.sh` |
 | Claude Code hooks | `~/.claude/settings.json` → `hooks.Stop`, `hooks.Notification` |
-| Gemini CLI hooks | `~/.gemini/settings.json` → `hooks.AfterAgent`, `hooks.Notification` |
 | Codex hooks | `~/.codex/hooks.json` → `hooks.Stop`, `hooks.PermissionRequest` |
 | Antigravity completion | `~/.gemini/config/hooks.json` → `telegram-notify.Stop` |
-| Antigravity approval (opt-in) | `~/.gemini/antigravity-cli/settings.json` → `statusLine` |
+| Antigravity approval (automatic when available) | `~/.gemini/antigravity-cli/settings.json` → `statusLine` |
 | Copilot CLI hooks (opt-in) | `.github/hooks/hooks.json` → `sessionEnd`, `userPromptSubmitted` |
+
+Setup and `fix-hooks` remove only notification-owned legacy Gemini hook
+commands if they still exist. Gemini CLI is not an active notification host.
 
 ### Codex requires configuration, trust, and enablement
 
@@ -73,12 +75,16 @@ commands are configured. It cannot inspect Codex's trust or enabled state.
 
 ## NOTIFY_LEVEL
 
-Control which events trigger a notification:
+Control which semantic event categories trigger a notification:
 
-| Level | Stop event (task complete) | Notification event (action required) |
-|-------|---------------------------|--------------------------------------|
-| `all` (default) | ✅ Sends notification | ✅ Sends notification |
-| `notify_only` | ❌ Silent | ✅ Sends notification |
+| Level | Completion | Action required | Failure |
+|-------|------------|-----------------|---------|
+| `all` (default) | ✅ Sends | ✅ Sends | ✅ Sends |
+| `attention_required` | ❌ Silent | ✅ Sends | ✅ Sends |
+
+Legacy `NOTIFY_LEVEL=notify_only` remains equivalent to
+`attention_required`. The next setup or level update writes the canonical
+value; invalid new values are rejected.
 
 **Change level after install:**
 
@@ -182,7 +188,7 @@ bash scripts/notify/telegram/update.sh token
 bash scripts/notify/telegram/update.sh chat_id
 bash scripts/notify/telegram/update.sh notify_level
 bash scripts/notify/telegram/update.sh fix-hooks
-bash scripts/notify/telegram/update.sh antigravity-approval
+bash scripts/notify/telegram/update.sh copilot-hooks
 bash scripts/notify/telegram/update.sh status
 
 # Or in Claude Code
@@ -233,12 +239,17 @@ Removes:
 - `TELEGRAM_*` entries from `~/.config/ai-notify/config`
 - Hook entries from `~/.claude/settings.json`
 - Owned hook entries from `~/.codex/hooks.json` and `~/.gemini/config/hooks.json`
+- Notification-owned legacy hook entries from `~/.gemini/settings.json`
 - The Antigravity `statusLine` only when it is notification-owned
 - Antigravity notification state markers
 - `~/.config/ai-notify/hooks/telegram-notify.sh`
 
 Does **not** touch other config keys or unrelated hooks. Repository-local
 Copilot hooks are changed only when the uninstall prompt is confirmed.
+
+To roll back to a release that predates `attention_required`, first set
+`NOTIFY_LEVEL=notify_only` in `~/.config/ai-notify/config`; older hooks do not
+recognize the canonical replacement.
 
 ---
 
@@ -248,7 +259,7 @@ Copilot hooks are changed only when the uninstall prompt is confirmed.
 
 1. Check registration: `bash scripts/notify/telegram/update.sh status`
 2. Check `TELEGRAM_ENABLED=true`
-3. Check `NOTIFY_LEVEL` — if `notify_only`, Stop events are suppressed
+3. Check `NOTIFY_LEVEL` — `attention_required` suppresses successful completion
 4. Test manually with the curl command above
 5. Verify Bot Token: `curl https://api.telegram.org/bot<TOKEN>/getMe`
 
@@ -290,12 +301,14 @@ If missing, re-run `bash scripts/notify/telegram/install.sh` (idempotent).
 Run:
 
 ```bash
-bash scripts/notify/telegram/update.sh antigravity-approval
+bash scripts/notify/telegram/update.sh fix-hooks
+bash scripts/notify/telegram/update.sh status
 ```
 
-If a different `statusLine.command` already exists, setup leaves it unchanged.
-Choose which status-line command to keep; the installer does not chain unknown
-commands.
+Setup and `fix-hooks` attempt approval observation automatically. If status says
+`Antigravity approval: unavailable (statusLine conflict)`, a different
+`statusLine.command` already exists and remains unchanged. Choose which command
+to keep; the installer does not chain unknown commands.
 
 ---
 

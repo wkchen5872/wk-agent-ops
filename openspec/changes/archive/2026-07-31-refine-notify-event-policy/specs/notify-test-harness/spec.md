@@ -1,10 +1,4 @@
-# Spec: notify-test-harness
-
-## Purpose
-
-提供自動化測試框架，驗證 hook.sh 在各種情境下的行為正確性，無需真實 Telegram 連線。利用 dry-run 模式捕捉輸出並與期望值比對。
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: hook.sh dry-run 模式
 The hook SHALL support `TELEGRAM_DRY_RUN=true`, skipping Telegram HTTP delivery
@@ -24,25 +18,6 @@ transitions.
 #### Scenario: Dry-run keeps attention events
 - **WHEN** dry-run receives an action-required or failure event with `NOTIFY_LEVEL=attention_required`
 - **THEN** the corresponding Action Required or Task Stopped message is rendered
-
----
-
-### Requirement: test.sh — hook 行為測試腳本
-`scripts/notify/telegram/test.sh` SHALL 提供自動化測試，利用 `TELEGRAM_DRY_RUN=true` 驗證 hook.sh 在各種情境下的輸出，無需真實 Telegram 連線。測試結果以 PASS / FAIL 顯示，所有 PASS 時 exit 0，有任何 FAIL 時 exit 1。
-
-#### Scenario: 執行所有測試並顯示結果
-- **WHEN** `bash scripts/notify/telegram/test.sh` 執行
-- **THEN** 每個測試案例顯示 `✓ PASS: <name>` 或 `✗ FAIL: <name>` 及期望 vs 實際內容，最後顯示總結（N passed, M failed）
-
-#### Scenario: 全部通過時 exit 0
-- **WHEN** 所有測試案例通過
-- **THEN** 腳本 exit 0
-
-#### Scenario: 有失敗時 exit 1
-- **WHEN** 至少一個測試案例失敗
-- **THEN** 腳本 exit 1（方便 CI 整合）
-
----
 
 ### Requirement: 測試覆蓋已知問題情境
 `test.sh` SHALL cover the supported host mappings, semantic notification policy,
@@ -89,24 +64,6 @@ provider regressions. It SHALL NOT retain active Gemini CLI behavior tests.
 - **WHEN** the same fixtures run with `notify_only` and `attention_required`
 - **THEN** their delivery decisions are identical
 
----
-
-### Requirement: Codex notification contract tests
-The dry-run harness SHALL verify Codex completion and approval messages as well
-as native control responses without contacting Telegram.
-
-#### Scenario: Codex Stop dry-run
-- **WHEN** the harness replays a Codex `Stop` payload
-- **THEN** it verifies the task-complete message, Codex identity, session label, and absence of control-changing output
-
-#### Scenario: Codex PermissionRequest dry-run
-- **WHEN** the harness replays a permission payload containing a tool name and raw command
-- **THEN** it verifies an action-required message containing the tool name but not the raw command
-
-#### Scenario: Codex native response
-- **WHEN** the hook runs outside dry-run with notifications disabled
-- **THEN** it returns valid neutral JSON and exits zero for both Codex events
-
 ### Requirement: Antigravity notification contract tests
 The harness SHALL verify Antigravity completion, failure, native stop output,
 automatic approval registration, status-line conflict preservation, approval
@@ -150,6 +107,8 @@ ownership-scoped uninstall without changing developer settings.
 #### Scenario: Copilot regression
 - **WHEN** Copilot registration runs in an isolated repository
 - **THEN** completion and action-required entries exist once and uninstall removes both
+
+## ADDED Requirements
 
 ### Requirement: Notification level migration tests
 The harness SHALL verify that setup and update accept only canonical level names

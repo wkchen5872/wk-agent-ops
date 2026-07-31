@@ -1,9 +1,8 @@
 # Provider Extension Guide — scripts/notify/
 
 This directory contains the shared infrastructure for notification destinations.
-Telegram is a destination provider; Claude Code, Gemini CLI, Codex,
-Antigravity CLI, and Copilot CLI are host runtimes registered by
-`lib/registry.sh`.
+Telegram is a destination provider; Claude Code, Codex, Antigravity CLI, and
+Copilot CLI are host runtimes registered by `lib/registry.sh`.
 
 ---
 
@@ -61,7 +60,7 @@ All provider keys in `~/.config/ai-notify/config` must follow:
 |-----|-------------|
 | `{PROVIDER}_ENABLED` | `true` / `false` master switch |
 | `{PROVIDER}_<CREDENTIAL>` | Provider-specific credential (e.g., `TELEGRAM_BOT_TOKEN`) |
-| `NOTIFY_LEVEL` | Shared: `all` (default) or `notify_only` |
+| `NOTIFY_LEVEL` | Shared: `all` (default) or `attention_required` |
 
 Examples:
 - `TELEGRAM_ENABLED=true`
@@ -70,8 +69,11 @@ Examples:
 - `LINE_NOTIFY_TOKEN="..."`
 
 `NOTIFY_LEVEL` is global and shared across all providers:
-- `all` — send both Stop (task complete) and Notification (action required) events
-- `notify_only` — send only Notification events (suppress Stop)
+- `all` — send completion, action-required, and failure events
+- `attention_required` — send action-required and failure events; suppress successful completion
+
+Existing `notify_only` configs remain a read-time alias for
+`attention_required`. Setup and update persist only canonical values.
 
 ### 4. Use shared libraries
 
@@ -97,10 +99,11 @@ And call `register_hook` with that deployed path:
 register_hook "${HOME}/.config/ai-notify/hooks/<provider-name>.sh"
 ```
 
-`register_hook` covers detected Claude Code, Gemini CLI, Codex, and Antigravity
-completion hooks. Antigravity approval observation remains a separate opt-in
-because it owns the single custom `statusLine.command`. Copilot remains
-repository-local and opt-in.
+`register_hook` covers Claude Code plus detected Codex and Antigravity hooks.
+For Antigravity it also attempts approval observation automatically, but never
+overwrites a different custom `statusLine.command`. Notification-owned legacy
+Gemini entries are removed when found; no new Gemini hooks are registered.
+Copilot remains repository-local and opt-in.
 
 Codex registration only writes `~/.codex/hooks.json`. Users must also open
 `/hooks`, trust both owned definitions, and enable both checkboxes before the

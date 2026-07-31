@@ -167,8 +167,8 @@ wk-agent-ops/
 
 ## Telegram 通知
 
-支援 Claude Code、Gemini CLI、Codex、Antigravity CLI 與 Copilot CLI，在 AI
-任務完成或等待授權時透過 Telegram 通知。
+支援 Claude Code、Codex、Antigravity CLI 與 Copilot CLI，在 AI 任務完成、
+等待授權或異常停止時透過 Telegram 通知。
 
 ### 快速安裝
 
