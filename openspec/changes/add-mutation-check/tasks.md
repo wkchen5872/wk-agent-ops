@@ -16,14 +16,14 @@
 
 ## 3. 規則與文件
 
-- [x] 3.1 擴充 `template/common/.claude/rules/tdd-enforcement.md`（單一來源）：Red 需原始失敗輸出、revert-check、存活 mutant triage 規則（advisory、不設 gate）。不建立 `.github/` 檔——install.sh 自動 mirror 到 `.agents/rules/`
-  - 測試要求：`tests/test_mutation_check.sh` 的 (b) 轉綠
+- [x] 3.1 在共用 TDD policy 保留 `/mutation-check` optional/advisory 入口；核心 TDD 流程與 Provider entrypoints 後續由 `refine-tdd-enforcement-rules` 統一維護，不在本 change 保留重疊 delta
+  - 測試要求：`tests/test_mutation_check.sh` 的 protocol reference 與 rule mirror assertions 轉綠
 - [x] 3.2 在 `template/common/docs/agent-protocol.md` §4（Implementation Loop）verify 步驟加一行 `/mutation-check` advisory 參照
   - 測試要求：`tests/test_mutation_check.sh` 的 (d) 轉綠
 
 ## 4. 安裝、驗證與收尾
 
-- [x] 4.1 執行 `bash scripts/skills/install.sh` 安裝到本 repo，`git diff` 確認 template 與安裝目標（`.claude/`、`.agents/`、`.github/`、`docs/`）一致
+- [x] 4.1 執行 `bash scripts/skills/install.sh` 安裝到本 repo，`git diff` 確認 template 與安裝目標（`.claude/`、`.agents/`、`docs/`）一致
   - 測試要求：`bash tests/test_mutation_check.sh` 與既有 `tests/*.sh` 全部 PASS
 - [ ] 4.2 Dogfood：在一個真實 Python 或 TS 專案安裝後執行 `/mutation-check` 完整跑一輪（bootstrap → diff run → findings → 決策選單 → watermark），把發現的問題修回 template
   - 測試要求：手動驗收；記錄一份實際輸出摘要於 change 目錄（如 `dogfood-notes.md`）

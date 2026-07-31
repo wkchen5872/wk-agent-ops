@@ -29,11 +29,12 @@
 在進行任何功能規劃、Agent 設計或腳本撰寫時，**必須同時考慮並支援**以下 AI 開發工具：
 
 - **Claude Code**: 主要研發與執行工具。
+- **Codex**: 透過 `AGENTS.md` 與 managed `docs/agent-protocol.md` 取得共用規範。
 - **Antigravity**: Google 的 agentic IDE（次要支援目標）。
 
 **具體要求：**
 
-1. **設定隔離**：確保 `.claude/`（Claude Code）與 `.agents/`（Antigravity）等工具特定設定目錄互不干擾；跨工具規則放 `AGENTS.md`。
+1. **設定隔離**：確保 `.claude/`（Claude Code）與 `.agents/`（Antigravity）等工具特定設定目錄互不干擾；跨工具規範由 `AGENTS.md` 指向 managed `docs/agent-protocol.md`。
 2. **環境變數偵測**：腳本必須能根據環境變數（優先 `CLAUDE_PROJECT_DIR`，否則 fallback `PWD`）自動偵測專案根。
 3. **輸入輸出規範**：優先支援 Standard Input (stdin) 與 Command-line Arguments，確保兩工具都能透過管道 (pipe) 呼叫。
 4. **文件一致性**：`README.md` 與 `docs/` 必須包含各工具的安裝與使用說明。
@@ -48,9 +49,11 @@ template/common/
 │   ├── agents/           ← Sub-agent 定義（.md）
 │   ├── commands/         ← 自訂斜線命令
 │   └── rules/            ← 編碼規範、git 規則等
-├── .agents/               ← Antigravity agent 設定
-├── .github/
-│   └── instructions/     ← GitHub instructions
+├── .agents/
+│   └── workflows/        ← Antigravity workflows
+├── AGENTS.md             ← 跨工具 managed protocol 入口
+├── docs/
+│   └── agent-protocol.md ← 跨工具共用規範
 ├── skills/
 │   └── <skill-name>/
 │       └── SKILL.md      ← Skill 定義
@@ -103,7 +106,8 @@ bash scripts/skills/install.sh --target <project-path>
 - 複製 `template/common/skills/` → `.claude/skills/` 和 `.agents/skills/`
 - 複製 `template/common/.claude/` → `.claude/`（除 skills/）
 - 複製 `template/common/.agents/` → `.agents/`
-- 複製 `template/common/.github/` → `.github/`
+- Mirror `.claude/rules/` → `.agents/rules/`
+- 更新 managed `docs/agent-protocol.md`
 
 ### 4. 本地測試（可選）
 
@@ -134,7 +138,7 @@ git commit -m "chore(agents): add/update <agent-name>"
 |---------|----------|----------|---------|------|
 | Agents | `template/common/.claude/agents/` | ✓ 自動複製 | ✓ 自動複製 | 兩個位置需要相同 |
 | Skills | `template/common/skills/` | ✓ 自動複製 | ✓ 自動複製 | 兩個位置需要相同 |
-| Rules | `template/common/.claude/rules/` | ✓ 自動複製 | ✗ 不複製 | CC 專用 |
+| Rules | `template/common/.claude/rules/` | ✓ 自動複製 | ✓ 自動 mirror | 單一 template source |
 | Commands | `template/common/.claude/commands/` | ✓ 自動複製 | ✗ 不複製 | CC 專用 |
 
 **重要：** 修改後務必確認三個位置內容一致。使用 `diff` 或 `git diff` 檢查：
@@ -246,7 +250,7 @@ diff template/common/.claude/agents/my-agent.md \
 - diff scope：未 commit → `git diff HEAD`；乾淨 feature branch → 與 default branch 的 merge-base；default branch → 上次 watermark
 - findings 依風險類別排序（conditional → boundary → return-value → other），附三選項決策選單（補測試 / equivalent / skip）
 - watermark 存於 `openspec/.mutation-state`（或 `.mutation-state`），記錄 commit 與 equivalent 標記
-- 搭配 `.claude/rules/tdd-enforcement.md` 的 Red 失敗證據、revert-check 與 mutant triage 規則
+- 搭配 `docs/agent-protocol.md` §4 的 test-first 與分層驗證；mutation audit 維持 optional/advisory，不是完成或 commit gate
 
 **完整說明與參考連結：** 見 `docs/mutation-testing.md`（工具官方文件 mutmut / Stryker，以及設計靈感來源 test-architect agent、add-mutation-testing command，吸收/未採用詳見 change `design.md` D8）。
 

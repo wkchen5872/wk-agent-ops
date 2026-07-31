@@ -4,7 +4,7 @@
 
 本 repo（wk-agent-ops）透過 `scripts/skills/install.sh` 將 skills / rules / docs 安裝到目標專案。現有 `entropy-check` skill 已建立「週期性健檢 skill」的形狀：偵測 context → 執行檢查 → findings 摘要表 → 決策選單 → 更新 watermark。mutation-check 是同型的 skill，檢查對象從「文件與程式碼熵」換成「測試強度」。
 
-現況痛點：TDD 規則（`.claude/rules/tdd-enforcement.md`）只靠 prose 要求 Red-Green-Refactor，無法驗證 agent 是否真的執行了失敗的 Red，也無法量測測試是否能抓到程式碼缺陷。
+現況痛點：TDD 的流程證據無法量測測試是否真的能抓到程式碼缺陷。
 
 ## Goals / Non-Goals
 
@@ -12,7 +12,7 @@
 
 - 提供 `/mutation-check` skill：diff-based mutation testing，支援 Python（mutmut）與 TS/JS（Stryker）
 - 存活 mutant 以 findings 表呈現，附決策選單（補測試 / equivalent / skip）
-- 強化 TDD 規則：Red 需機械化失敗證據；存活 mutant 需 triage
+- 在共用 TDD policy 中將 mutation testing 保持為 optional/advisory audit
 - 安裝面零改動：沿用 install.sh 既有複製路徑
 
 **Non-Goals:**
@@ -79,23 +79,18 @@ findings 表逐條列出存活 mutant（檔案:行、mutation 內容、殺死它
 2. 標記 equivalent mutant（記入 watermark，之後不再報）
 3. skip 並更新 watermark（記錄理由）
 
-### D6: TDD 規則擴充（單一來源，install.sh 自動鏡像）
+### D6: TDD policy integration 不由 mutation capability 擁有
 
-規則**只編輯一處**：`template/common/.claude/rules/tdd-enforcement.md`。install.sh 已自動把 `.claude/rules/` mirror 到 Antigravity 的 `.agents/rules/`（install.sh:130），無需手動維護第二份。
-
-> 查證發現：template 中並無 `.github/instructions/`，install.sh 也不複製 `.github/`；既有 `tdd-enforcement-rules` spec 的一條 Copilot 需求指向此不存在路徑，屬 drift，本 change 一併以 REMOVED 清除（符合「不 hard-bind 具名次要工具」的收斂方向）。
-
-加入以下規則：
-
-- Red 階段必須實際執行測試並在對話中呈現失敗輸出（測試名 + 錯誤訊息或 exit code），禁止以「測試已確認失敗」自述帶過
-- **revert-check**（借鑑 test-architect agent 的 "Before Completing a Task"）：標記 task 完成前，暫時 revert 該 task 的實作（stash / 註解），確認相關測試由綠轉紅，證明測試確實在守護該行為；確認後還原實作
-- `/mutation-check` 報告的存活 mutant 必須 triage（補測試 / equivalent / 記錄理由的 skip）後，該範圍的實作才算完成
+本 change 只提供 mutation audit，並在共用 policy 中保留 optional/advisory
+入口。TDD 適用範圍、Red 證據、conditional causal checks 與 Provider routing
+由 `refine-tdd-enforcement-rules` 統一維護，避免兩個 active changes 以不同
+archive 順序產生互斥主規格。
 
 ### D8: 靈感來源與定位差異
 
 本 change 參考了兩份社群現成方案，但定位不同（詳見將寫入 `docs/` 的參考連結）：
 
-- **test-architect agent**：通用測試策略知識庫，mutation testing 僅一節，且用寫死的 `score < 80%` 硬閾值。我們**只吸收其 revert-check 與 surviving-mutant 分類**，不採用固定 score 閾值（與本 repo no-coverage-gate 決策一致）。
+- **test-architect agent**：通用測試策略知識庫，mutation testing 僅一節，且用寫死的 `score < 80%` 硬閾值。我們只吸收 surviving-mutant 分類；固定 revert-check 經後續 TDD policy refactor 改為條件式，不採用固定 score 閾值（與本 repo no-coverage-gate 決策一致）。
 - **add-mutation-testing command**：一次性 setup 大綱（10 步 × 名詞式 bullet），無實際指令、無 diff scope 主軸、重 CI gate、無 triage 循環。我們**不採用**其形狀。
 
 我們的定位是**可重複執行、有 watermark 狀態、diff-based 預設、advisory 不設 gate 的稽核工具**，這三點是與上述兩者的根本分野。
@@ -124,7 +119,7 @@ findings 表逐條列出存活 mutant（檔案:行、mutation 內容、殺死它
 本 change 的產出是 markdown（skill + rules + docs），可機械驗證的邊界在「安裝正確性與鏡像一致性」，比照 `tests/test_agents_dir.sh` 的風格新增 `tests/test_mutation_check.sh`：
 
 - install.sh 執行後，`.claude/skills/mutation-check/SKILL.md` 與 `.agents/skills/mutation-check/SKILL.md` 皆存在且相同
-- `template/common/.claude/rules/tdd-enforcement.md` 與 `template/common/.github/instructions/tdd-enforcement.md` 內容一致
+- install 後 `.claude/rules/tdd-enforcement.md` 與 `.agents/rules/tdd-enforcement.md` 內容一致
 - SKILL.md frontmatter 欄位齊全（name / description / compatibility / version）
 - `docs/agent-protocol.md` 含 `/mutation-check` 參照
 
@@ -135,7 +130,7 @@ SKILL.md 的行為本身（agent 解讀執行）無法單元測試——驗收�
 - [mutmut / Stryker 介面再變動] → SKILL.md 指令寫成「意圖 + 現行指令」，並在 skill 內註明版本假設；entropy-check 週期時可順檢
 - [mutation run 在大 diff 上仍很慢] → skill 開頭先估算 mutant 數量（變更行數 × 經驗係數），超過門檻時警告並讓使用者縮小範圍
 - [equivalent mutant 誤標導致漏洞] → watermark 記錄標記理由與日期，決策選單顯示既有標記供翻案
-- [agent 假造 Red 失敗輸出] → 規則要求貼原始輸出降低門檻，但無法完全杜絕；mutation-check 本身就是事後稽核這件事的第二道防線
+- [agent 提供合規但守護力不足的測試] → mutation-check 作為事後稽核測試有效性的第二道防線
 
 ## Open Questions
 

@@ -1,10 +1,4 @@
-# Spec: tdd-enforcement-rules
-
-## Purpose
-
-Defines the TDD enforcement rules that AI agents must follow, and how these rules are made available to different AI CLI tools via the template profile.
-
-## Requirements
+## ADDED Requirements
 
 ### Requirement: Provider-neutral TDD policy 為單一規範來源
 共用的 TDD policy SHALL 維護於 installer 會覆寫更新的 managed operating protocol。各 Provider 的原生入口 MUST 載入或指向該 policy，而不是各自維護完整副本。
@@ -88,6 +82,8 @@ Agent SHALL 在 Red/Green iteration 執行 focused test，在 task 邊界執行 
 - **WHEN** 使用者選擇執行 mutation audit 並發現 survivor
 - **THEN** agent 報告 survivor 與 triage 選項，但不以固定 score 或未完成 triage 阻擋 commit
 
+## MODIFIED Requirements
+
 ### Requirement: TDD 規則在 Claude Code session 自動載入
 `template/common/.claude/rules/tdd-enforcement.md` SHALL 作為 Claude Code 的薄入口，在 session 中要求實作工作讀取 managed operating protocol 的 TDD policy，而不複製完整政策內容。
 
@@ -103,5 +99,11 @@ Agent SHALL 在 Red/Green iteration 執行 focused test，在 task 邊界執行 
 TDD policy SHALL 存在於 project-owned 或 managed operating instructions，不得放入會被第三方升級替換的 skill。Provider-specific rule 只能作為載入該 policy 的薄入口。
 
 #### Scenario: 第三方 skill 升級後規範仍存在
-- **WHEN** opsx 相關 skill 被重新安裝或升級
+- **WHEN** opsx 或其他第三方 skill 被重新安裝或升級
 - **THEN** managed TDD policy 與 Provider 入口不受該 skill 內容變動影響
+
+## REMOVED Requirements
+
+### Requirement: TDD 規則在 GitHub Copilot CLI 可見
+**Reason**: 此 repository 沒有對應 template 或 installer 路徑，且跨工具政策已改由 `AGENTS.md` 與 managed operating protocol 提供。
+**Migration**: AGENTS.md-aware 工具讀取 managed policy；Claude 與 Antigravity 另外透過各自的原生 rule 入口載入相同政策。

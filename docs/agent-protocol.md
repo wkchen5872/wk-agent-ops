@@ -2,14 +2,14 @@
 
 # Agent Operating Protocol
 
-> This file is the **map, not the manual**. Claude Code is the primary tool, but
-> the protocol is portable to any AGENTS.md-aware tool — every rule here holds
-> regardless of which tool reads it. Tool-specific commands appear only as
-> parenthetical examples; detailed standards live in `docs/` and load on demand.
+> This file is the **portable operating contract**. Claude Code is the primary
+> tool, but every rule here holds for any AGENTS.md-aware tool. Tool-specific
+> commands appear only as parenthetical examples; specialized playbooks remain
+> separate and load on demand.
 
 | Field   | Value                                                     |
 | ------- | --------------------------------------------------------- |
-| Version | 2.0.0                                                     |
+| Version | 2.1.0                                                     |
 | Scope   | Operational framework for all AI agent tasks in this repo |
 
 ---
@@ -44,20 +44,25 @@
 
 ## 3. Protocol by Task Scale
 
-**Level 1 — Small tasks** *(doc edits, config/setting tweaks, minor fixes)*
-No formal spec. Apply these rules:
+**Level 1 — Non-behavioral tasks** *(documentation, generated files, formatting,
+or configuration synchronization that does not change observable behavior)*
+No formal spec or test-first cycle is required. Apply these rules:
 - State assumptions before acting; if the request is ambiguous, stop and ask —
   do not guess and code.
 - Surgical changes only: edit only what the request requires. Do not refactor
   or reformat adjacent code, and do not delete existing dead code unless asked.
 - No abstractions or configurability beyond what was asked.
-- Formal TDD not required, but run the existing test suite and confirm no
-  regressions before marking done.
+- Run the validation relevant to the changed artifact and report the result
+  before marking done.
 
-**Level 2 — Spec-driven tasks** *(new skill, agent, workflow, or cross-module change)*
-Everything beyond a Level 1 tweak runs the full OpenSpec flow, regardless of scale.
-Each stage below states its intent; the parenthetical is the Claude Code example —
-on any other tool, use that tool's equivalent for the same stage.
+**Level 2 — Behavior-changing work and bug fixes** *(including new skills,
+agents, workflows, and cross-module changes)*
+Every observable behavior change or bug fix uses test-first and the full OpenSpec
+flow, regardless of diff size. If automated testing is not reasonably possible
+(for example, some UI, external-integration, or nondeterministic behavior), record
+the reason and replayable acceptance evidence before implementation. Each stage
+below states its intent; the parenthetical is the Claude Code example — on any
+other tool, use that tool's equivalent for the same stage.
 
 1. **Plan** — explore the problem and produce a concrete design.
    *(Claude Code: Plan Mode + `/opsx:explore`)*
@@ -69,21 +74,47 @@ on any other tool, use that tool's equivalent for the same stage.
 4. **Seal** — archive the change and commit.
    *(Claude Code: `/opsx:archive` or `/opsx:commit`)*
 
-## 4. Implementation Loop (Level 2)
+## 4. TDD Implementation Loop (Level 2)
 
-1. **Test first** — write/update tests from the spec before implementation.
-2. **Implement** — adhere to `docs/architecture.md` and `docs/conventions.md`.
-3. **Verify** — run the OpenSpec verify stage against the spec, plus the native
-   linter, type check, and tests. *(Claude Code: `/opsx:verify`)* Optionally audit
-   test strength on the changed files with diff-based mutation testing — advisory,
-   never a gate. *(Claude Code: `/mutation-check`)*
-4. **Self-heal** — on failure, read logs, fix, repeat until green.
+1. **Define observable behavior** — derive the test from the approved spec or
+   acceptance criteria, not from implementation details.
+2. **Red — Expected Red evidence** — write and run the smallest focused test
+   before production code. Record the command, failing test name, non-zero exit
+   code, expected behavioral reason, and a sanitized minimal output excerpt.
+   Syntax, fixture, dependency, setup, or unrelated failures are not a valid
+   Red. A test that passes immediately also is not Red: confirm the behavior
+   already exists or correct the test.
+3. **Green — Test integrity** — implement the minimum behavior needed to pass.
+   Do not weaken assertions or skip, delete, or rewrite requirement tests to
+   manufacture Green. If a test conflicts with the approved spec, update the
+   artifact or obtain human confirmation before changing the test.
+4. **Refactor** — improve structure only while the focused test remains green;
+   do not add unrequested behavior.
+5. **Layered verification** —
+   - each Red/Green iteration: run the focused test;
+   - each task boundary: run the focused test and affected suite;
+   - seal or commit: run the project's full required checks from AGENTS.md, CI,
+     or its native manifest.
+6. **Conditional causal checks** — a trustworthy test-first Red already proves
+   the basic causal link, so do not require a revert-check for every task. When
+   Red evidence is missing, risk is high, or causality is unclear, use a safe
+   revert-check or equivalent check that preserves unrelated worktree changes.
+   Mutation testing is advisory, never a score, completion, or commit gate;
+   report survivors and triage options when the audit is requested.
+   *(Claude Code: `/mutation-check`)*
+7. **Verify and self-heal** — run the OpenSpec verify stage, plus the native
+   linter, type check, and required tests. On failure, read logs, fix, and repeat
+   until green. *(Claude Code: `/opsx:verify`)*
 
 ## 5. Definition of Done (Level 2)
 
 > "Done" means the mechanical gates below pass — not the agent's self-assessment.
 
 - [ ] The OpenSpec verify stage passes. *(Claude Code: `/opsx:verify`)*
+- [ ] Each behavior-changing task has valid Red evidence, or a documented
+      reason plus replayable acceptance evidence when automation is impractical.
+- [ ] Focused tests and affected suites pass; the project-defined full required
+      checks pass before seal or commit.
 - [ ] The pre-commit gate passes (tests plus any coverage gate the project
       configures). Never bypass it with `git commit --no-verify`.
 - [ ] Change archived and committed per the OpenSpec commit convention.
@@ -96,9 +127,11 @@ on any other tool, use that tool's equivalent for the same stage.
 
 ## 6. Cross-Tool Notes
 
-- `AGENTS.md` is the single shared source of truth. If a tool-specific config
-  file exists (e.g. a Claude-only `CLAUDE.md`), keep it lean and have it
-  **import** this file rather than duplicating it.
+- This managed document is the shared operational policy. `AGENTS.md` is the
+  tool-neutral entrypoint that requires agents to read it.
+- If a tool-specific config file exists (e.g. a Claude-only `CLAUDE.md`), keep
+  it lean and have it **import or point to** the shared entrypoint or this
+  document rather than duplicating policy.
 - Commands in parentheses above are Claude Code examples. On any other tool, map
   each **stage** (plan → spec → review → implement → verify → seal) to that
   tool's equivalent — the sequence is the invariant; the command names are not.
