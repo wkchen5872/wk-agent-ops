@@ -29,8 +29,7 @@
   delete generated agent-config directories (skills, rules, instructions
   installed by tooling). Much of it is third-party and unverified; edits cause
   silent downstream breakage. If a change there seems required, **stop and ask
-  the human.** The authoritative list of protected directories lives in the
-  enforcement hook, not here.
+  the human.**
 - ❌ **No warning suppression:** never use `// @ts-ignore`, `any`, or skip lint
   errors to force a pass.
 - ❌ **No scope creep:** implement only what the active OpenSpec change (or the
@@ -38,9 +37,10 @@
 - ❌ **No structural breach:** never violate the dependency rules in
   `docs/architecture.md`.
 
-> **Enforcement note:** the vendored-config prohibition is backed mechanically
-> (a permission deny rule + a PreToolUse hook). Prose here is advisory; the hook
-> is the real boundary.
+> **Enforcement note:** this prohibition is normative policy. A target project
+> may back it with provider-specific permission controls or pre-tool hooks.
+> When configured, that mechanism owns the authoritative protected-directory
+> list; this portable document does not.
 
 ## 3. Protocol by Task Scale
 
