@@ -3,7 +3,7 @@ type: Playbook
 title: OpenSpec Commit Workflow
 description: Archive, documentation, and commit orchestration across Claude, Codex, and Antigravity.
 tags: [workflow, openspec, agents]
-timestamp: 2026-07-30T00:00:00+08:00
+timestamp: 2026-07-31T00:00:00+08:00
 ---
 
 # OpenSpec Commit Workflow
@@ -15,8 +15,19 @@ archive、文件判斷或 commit 邏輯，只依序呼叫三個能力：
 2. `doc-updater`
 3. `git-commit-writer`
 
-Claude Code 可透過 `/opsx:commit` 進入；其他支援 project skill 的 host 可直接
-呼叫 `openspec-commit`。
+## 進入方式
+
+三個 provider 共用同一份 project-owned `openspec-commit` skill，但入口保持
+provider-specific：
+
+| Provider | 入口 | Adapter 行為 |
+|---|---|---|
+| Claude Code | `/opsx:commit [change-name]` | `.claude/commands/opsx/commit.md` 透過 Skill tool 委派一次 |
+| Antigravity | `/opsx-commit [change-name]` | `.agents/workflows/opsx-commit.md` 啟用 skill 一次；host 不支援 nested activation 時，在目前 context 讀取已安裝的 `SKILL.md` |
+| Codex | 直接呼叫 `openspec-commit` | 使用已安裝的 project skill，不建立 command alias |
+
+兩個 adapter 都只傳遞可選的 change name，不自行執行 archive、文件更新或
+commit。這些步驟仍由 canonical skill 擁有。
 
 ## 執行順序
 

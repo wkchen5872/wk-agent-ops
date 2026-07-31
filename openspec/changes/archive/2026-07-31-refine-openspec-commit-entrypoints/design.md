@@ -22,6 +22,8 @@ The entrypoints have different command surfaces:
 - Make one delegation the only executable action described by each adapter.
 - Preserve an optional change name across the adapter boundary.
 - Prove template-to-target propagation and provider wording mechanically.
+- Keep installation usable from a linked worktree without weakening the
+  repository-root guard.
 
 **Non-Goals:**
 
@@ -80,6 +82,25 @@ missing exactly-once/input language, Claude terminology in Antigravity, and the
 missing tracked Antigravity installed target. Only after observing those
 failures will the templates and documentation be changed and the installer run.
 
+### 5. Git plumbing defines repository and hooks paths
+
+The installer will validate a target by asking Git for its top-level path and
+requiring its physical path to equal the physical target path. This accepts both
+primary checkouts, where `.git` is a directory, and linked worktrees, where
+`.git` is a file, while continuing to reject arbitrary repository
+subdirectories and avoiding false mismatches through macOS `/var` and `/tmp`
+path aliases.
+
+Profile hooks will be installed at the path returned by
+`git rev-parse --git-path hooks`. This preserves the existing shared-hooks
+behavior in a linked worktree instead of incorrectly appending `/hooks` to the
+worktree's `.git` file or to its private metadata directory.
+
+Checking only for either a `.git` directory or a `.git` path was rejected:
+the former excludes linked worktrees, while the latter does not prove that the
+target is the repository root. Using `--git-dir` for hooks was also rejected
+because linked worktree private metadata is not the repository's hooks path.
+
 ## Risks / Trade-offs
 
 - **[Risk] Antigravity nested skill activation varies by host version.** →
@@ -90,6 +111,9 @@ failures will the templates and documentation be changed and the installer run.
 - **[Risk] Exact byte comparisons are stricter than semantic comparisons.** →
   Accept the strictness because `rsync` is expected to preserve these managed
   files exactly and drift is the failure being prevented.
+- **[Risk] Linked worktree installs can accidentally target private Git
+  metadata.** → Resolve hooks through `git rev-parse --git-path hooks` and cover
+  a profiled linked-worktree install with a regression test.
 - **[Risk] Upstream OpenSpec paths remain inconsistent with current Antigravity
   documentation.** → Keep that investigation separate so this change does not
   blur project-owned and provider-native ownership.
@@ -98,9 +122,11 @@ failures will the templates and documentation be changed and the installer run.
 
 1. Add failing contract assertions.
 2. Update the two template entrypoints.
-3. Run `scripts/skills/install.sh` to refresh generated targets.
-4. Update the workflow documentation.
-5. Run focused shell tests, strict OpenSpec validation, and diff checks.
+3. Add a linked-worktree installer regression and replace directory-only Git
+   path assumptions with Git plumbing.
+4. Run `scripts/skills/install.sh` to refresh generated targets.
+5. Update the workflow documentation.
+6. Run focused shell tests, strict OpenSpec validation, and diff checks.
 
 Rollback is a normal Git revert of the project-owned template, test, doc, and
 OpenSpec artifact changes, followed by rerunning the installer.

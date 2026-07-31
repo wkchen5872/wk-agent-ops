@@ -39,10 +39,16 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-TARGET="$(cd "${TARGET:-$(pwd)}" && pwd)"
+TARGET="$(cd "${TARGET:-$(pwd)}" && pwd -P)"
 
-# Validate target is a git repo
-if [[ ! -d "$TARGET/.git" ]]; then
+# Validate target is a git repository root. Linked worktrees have a .git file,
+# so ask Git for the canonical top-level instead of assuming .git is a directory.
+if ! GIT_TOPLEVEL="$(git -C "$TARGET" rev-parse --show-toplevel 2>/dev/null)"; then
+  echo "❌ Error: $TARGET is not a git repository root"
+  exit 1
+fi
+GIT_TOPLEVEL="$(cd "$GIT_TOPLEVEL" && pwd -P)"
+if [[ "$GIT_TOPLEVEL" != "$TARGET" ]]; then
   echo "❌ Error: $TARGET is not a git repository root"
   exit 1
 fi
@@ -119,8 +125,12 @@ for profile in "${PROFILES[@]+"${PROFILES[@]}"}"; do
   PROFILE_DIR="$TEMPLATE/$profile"
   sync_dir "$PROFILE_DIR/.claude/rules" "$TARGET/.claude/rules"
   if [[ -d "$PROFILE_DIR/hooks" ]]; then
-    sync_dir "$PROFILE_DIR/hooks" "$TARGET/.git/hooks"
-    find "$TARGET/.git/hooks" -maxdepth 1 -type f -exec chmod +x {} +
+    GIT_HOOKS_DIR="$(git -C "$TARGET" rev-parse --git-path hooks)"
+    if [[ "$GIT_HOOKS_DIR" != /* ]]; then
+      GIT_HOOKS_DIR="$TARGET/$GIT_HOOKS_DIR"
+    fi
+    sync_dir "$PROFILE_DIR/hooks" "$GIT_HOOKS_DIR"
+    find "$GIT_HOOKS_DIR" -maxdepth 1 -type f -exec chmod +x {} +
   fi
 done
 

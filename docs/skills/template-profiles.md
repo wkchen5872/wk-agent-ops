@@ -46,6 +46,11 @@ bash /path/to/wk-agent-ops/scripts/skills/install.sh --target /path/to/project p
 
 `common` is always installed and does not need to be specified.
 
+The target must be the Git repository top-level. Both a primary checkout and a
+linked worktree root are valid; a subdirectory inside either one is rejected.
+For linked worktrees, `.git` is a file, so the installer resolves repository and
+hook paths through Git instead of assuming `<target>/.git` is a directory.
+
 ## What Gets Installed
 
 | Source | Destination | Notes |
@@ -56,7 +61,7 @@ bash /path/to/wk-agent-ops/scripts/skills/install.sh --target /path/to/project p
 | `common/.agents/` | `.agents/` | workflows |
 | `common/.github/` | `.github/` | Copilot instructions |
 | `<profile>/.claude/rules/` | `.claude/rules/` | per-profile rules |
-| `<profile>/hooks/` | `.git/hooks/` | git hooks, auto chmod +x |
+| `<profile>/hooks/` | Git-resolved hooks path | shared git hooks, auto chmod +x |
 
 ## Adding a New Profile
 
@@ -74,5 +79,7 @@ bash /path/to/wk-agent-ops/scripts/skills/install.sh --target /path/to/project p
 ## Notes
 
 - Installing does **not** remove previously installed files. If you switch profiles, manually clean up obsolete files.
-- Hook scripts are automatically made executable (`chmod +x`) during install.
+- Hook scripts are installed at `git rev-parse --git-path hooks` and made
+  executable (`chmod +x`). Linked worktrees therefore use the repository's
+  shared hooks directory.
 - `common` is always required; there is no way to skip it.

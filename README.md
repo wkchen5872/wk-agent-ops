@@ -42,6 +42,10 @@ bash /path/to/wk-agent-ops/scripts/skills/install.sh node
 bash /path/to/wk-agent-ops/scripts/skills/install.sh python node
 ```
 
+安裝目標必須是 Git repository root，可使用 primary checkout 或 linked
+worktree。語言 profile 的 hooks 會安裝到 Git 回報的共用 hooks path；repository
+內部的子目錄不會被當成有效 target。
+
 ---
 
 ## 多 Agent 開發流程
@@ -131,8 +135,8 @@ CLI 針對 Claude、Codex、Antigravity 產生的 `.claude/`、`.codex/`、單�
 | 安裝位置 | 用途 |
 |---|---|
 | `.claude/rules/pytest_testing_style_guide.md` | Pytest 測試風格規範 |
-| `.git/hooks/pre-commit` | 執行 `tests/` unit tests，阻止失敗的 commit |
-| `.git/hooks/post-merge` | 偵測 `pyproject.toml` 變動，自動 `pip install -e .` |
+| Git hooks path 的 `pre-commit` | 執行 `tests/` unit tests，阻止失敗的 commit |
+| Git hooks path 的 `post-merge` | 偵測 `pyproject.toml` 變動，自動 `pip install -e .` |
 
 `pre-commit` hook 特性：
 - 自動從 `pyproject.toml` 讀取 source 目錄（支援 setuptools / poetry / pdm / hatch）

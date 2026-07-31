@@ -1,13 +1,17 @@
 ---
 name: "OPSX: Commit"
-description: Archive the current openspec change, update docs, and create a conventional git commit
+description: Finish an OpenSpec change through the project-owned openspec-commit skill
+argument-hint: "[change-name]"
 category: Workflow
 tags: [workflow, commit, openspec]
 ---
 
-Complete the feature development cycle inside a git worktree (after `/opsx:apply`):
-1. Archive the openspec change (full flow, including sync decision)
-2. Update `docs/` files relevant to the feature
-3. Create a conventional git commit
+Delegate this command to the project-owned `openspec-commit` skill.
 
-Use the **Skill tool** to invoke `openspec-commit`.
+**Input:** Forward `$ARGUMENTS` unchanged as the optional OpenSpec change name.
+
+Use the **Skill tool** to invoke `openspec-commit` exactly once with
+`$ARGUMENTS`.
+
+Do not run archive, documentation update, or commit as separate actions. The
+skill owns the complete workflow, resume logic, and context hand-offs.

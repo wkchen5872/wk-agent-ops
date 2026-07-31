@@ -4,6 +4,8 @@ set -u
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ORCHESTRATOR="$ROOT/template/common/skills/openspec-commit/SKILL.md"
+CLAUDE_ENTRYPOINT="$ROOT/template/common/.claude/commands/opsx/commit.md"
+ANTIGRAVITY_ENTRYPOINT="$ROOT/template/common/.agents/workflows/opsx-commit.md"
 DOC_SKILL="$ROOT/template/common/skills/doc-updater/SKILL.md"
 DOC_AGENT="$ROOT/template/common/.claude/agents/doc-updater.md"
 COMMIT_SKILL="$ROOT/template/common/skills/git-commit-writer/SKILL.md"
@@ -56,6 +58,22 @@ require_text "$ORCHESTRATOR" '.codex/skills/openspec-archive-change/' "Codex ski
 require_text "$ORCHESTRATOR" '.agent/workflows/opsx-archive.md' "Antigravity native alias documented"
 require_text "$ORCHESTRATOR" '.agents/skills/' "project-owned shared skill root documented"
 require_text "$ORCHESTRATOR" 'Do not invoke both' "provider aliases cannot double-run an action"
+
+printf '\nprovider entrypoints\n'
+require_text "$CLAUDE_ENTRYPOINT" 'argument-hint: "[change-name]"' "Claude advertises optional change name"
+require_text "$CLAUDE_ENTRYPOINT" '$ARGUMENTS' "Claude forwards command arguments"
+require_text "$CLAUDE_ENTRYPOINT" 'unchanged' "Claude preserves command arguments"
+require_text "$CLAUDE_ENTRYPOINT" 'exactly once' "Claude delegates exactly once"
+require_text "$CLAUDE_ENTRYPOINT" 'Do not run archive' "Claude forbids duplicate completion actions"
+
+require_text "$ANTIGRAVITY_ENTRYPOINT" '/opsx-commit' "Antigravity uses its flat command name"
+require_text "$ANTIGRAVITY_ENTRYPOINT" 'pass it unchanged' "Antigravity preserves optional change name"
+require_text "$ANTIGRAVITY_ENTRYPOINT" 'exactly once' "Antigravity delegates exactly once"
+require_text "$ANTIGRAVITY_ENTRYPOINT" 'Do not run archive' "Antigravity forbids duplicate completion actions"
+require_text "$ANTIGRAVITY_ENTRYPOINT" '.agents/skills/openspec-commit/SKILL.md' "Antigravity names the project skill fallback"
+require_text "$ANTIGRAVITY_ENTRYPOINT" 'current context' "Antigravity fallback stays in context"
+forbid_text "$ANTIGRAVITY_ENTRYPOINT" 'Skill tool' "Antigravity avoids Claude Skill tool terminology"
+forbid_text "$ANTIGRAVITY_ENTRYPOINT" 'opsx:apply' "Antigravity avoids Claude command syntax"
 fi
 
 if run_section doc-updater; then
