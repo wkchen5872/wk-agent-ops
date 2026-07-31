@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Telegram notification hook for AI CLI (Claude Code / Gemini CLI / Copilot CLI).
+# Telegram notification hook for AI CLI.
 # Deployed to: ~/.config/ai-notify/hooks/telegram-notify.sh
-# Called with: $1 = event type (stop | notification | sessionEnd | AfterAgent),
-#              $2 = tool name (optional; "Claude Code" | "Gemini CLI" | "Copilot CLI"),
+# Called with: $1 = provider event type,
+#              $2 = tool name (optional),
 #              JSON on stdin.
 # Always exits 0 — never blocks the calling AI CLI.
 
@@ -13,14 +13,6 @@ _SAVED_NOTIFY_LEVEL="${NOTIFY_LEVEL:-}"
 source "${HOME}/.config/ai-notify/config" 2>/dev/null || true
 # Restore explicitly-set env vars (env var > config file, following Unix convention).
 [[ -n "${_SAVED_NOTIFY_LEVEL}" ]] && NOTIFY_LEVEL="${_SAVED_NOTIFY_LEVEL}"
-
-# ── Guard: skip if disabled or credentials missing ─────────────────────────────
-# Bypass credential guard in dry-run mode — no HTTP request will be made.
-if [[ "${TELEGRAM_DRY_RUN:-}" != "true" ]]; then
-  [[ "${TELEGRAM_ENABLED}" != "true" ]] && exit 0
-  [[ -z "${TELEGRAM_BOT_TOKEN}" ]] && exit 0
-  [[ -z "${TELEGRAM_CHAT_ID}" ]] && exit 0
-fi
 
 # ── Read stdin ─────────────────────────────────────────────────────────────────
 STDIN_JSON=""
@@ -45,6 +37,14 @@ _json_str() {
   fi
 }
 
+# Extract a jq expression when jq is available; callers provide safe constants.
+_json_query() {
+  local json="$1"
+  local expression="$2"
+  command -v jq &>/dev/null || return 0
+  echo "${json}" | jq -r "${expression} // empty" 2>/dev/null
+}
+
 # ── Detect event type ──────────────────────────────────────────────────────────
 # Primary source: $1 argument (stop | notification)
 # Fallback: parse stdin JSON hook_event_name
@@ -55,29 +55,65 @@ HOOK_EVENT_NAME=""
 # Normalised lowercase for branching
 EVENT_TYPE="$(echo "${EVENT_ARG:-${HOOK_EVENT_NAME}}" | tr '[:upper:]' '[:lower:]')"
 
+AGY_AGENT_STATE=""
+if [[ "${EVENT_TYPE}" == "antigravity-statusline" ]]; then
+  AGY_AGENT_STATE="$(_json_str "${STDIN_JSON}" "agent_state")"
+  [[ -z "${AGY_AGENT_STATE}" ]] && AGY_AGENT_STATE="antigravity"
+fi
+
+# Return control output required by native providers without changing their
+# approval or stop decisions. Dry-run reserves stdout for the Telegram message.
+finish_hook() {
+  if [[ "${EVENT_TYPE}" == "antigravity-statusline" ]]; then
+    printf '%s\n' "${AGY_AGENT_STATE}"
+    exit 0
+  fi
+  if [[ "${TELEGRAM_DRY_RUN:-}" != "true" ]]; then
+    case "${EVENT_TYPE}" in
+      codex-stop|codex-permission) printf '{}\n' ;;
+      antigravity-stop) printf '{"decision":"stop"}\n' ;;
+    esac
+  fi
+  exit 0
+}
+
+# ── Guard: skip if disabled or credentials missing ─────────────────────────────
+# Bypass credential guard in dry-run mode — no HTTP request will be made.
+if [[ "${TELEGRAM_DRY_RUN:-}" != "true" ]]; then
+  [[ "${TELEGRAM_ENABLED:-}" != "true" ]] && finish_hook
+  [[ -z "${TELEGRAM_BOT_TOKEN:-}" ]] && finish_hook
+  [[ -z "${TELEGRAM_CHAT_ID:-}" ]] && finish_hook
+fi
+
 # ── NOTIFY_LEVEL gate ──────────────────────────────────────────────────────────
 NOTIFY_LEVEL="${NOTIFY_LEVEL:-all}"
 # Suppress stop and sessionEnd (Copilot's equivalent of stop) when notify_only
-if [[ "${NOTIFY_LEVEL}" == "notify_only" && ("${EVENT_TYPE}" == "stop" || "${EVENT_TYPE}" == "sessionend") ]]; then
-  exit 0
+if [[ "${NOTIFY_LEVEL}" == "notify_only" &&
+      ("${EVENT_TYPE}" == "stop" || "${EVENT_TYPE}" == "sessionend" ||
+       "${EVENT_TYPE}" == "codex-stop" || "${EVENT_TYPE}" == "antigravity-stop") ]]; then
+  finish_hook
 fi
 
 # ── Detect AI CLI tool and project ────────────────────────────────────────────
 # TOOL_NAME is supplied by the caller via $2 (hardcoded in registry.sh per tool).
-# PROJECT_DIR resolves from env vars set by each AI CLI, falling back to PWD.
+# PROJECT_DIR prefers a documented payload cwd, then provider env vars and PWD.
 TOOL_NAME="${2:-AI CLI}"
-PROJECT_DIR="${GEMINI_PROJECT_DIR:-${CLAUDE_PROJECT_DIR:-${PWD}}}"
+PAYLOAD_CWD=""
+[[ -n "${STDIN_JSON}" ]] && PAYLOAD_CWD="$(_json_str "${STDIN_JSON}" "cwd")"
+PAYLOAD_WORKSPACE=""
+[[ -n "${STDIN_JSON}" ]] && PAYLOAD_WORKSPACE="$(_json_query "${STDIN_JSON}" '.workspacePaths[0] // .workspace.project_dir // .workspace.current_dir')"
+PROJECT_DIR="${PAYLOAD_CWD:-${PAYLOAD_WORKSPACE:-${GEMINI_PROJECT_DIR:-${CLAUDE_PROJECT_DIR:-${PWD}}}}}"
 
 PROJECT_NAME="${PROJECT_DIR:+$(basename "${PROJECT_DIR}")}"
 
 TIMESTAMP="$(date '+%Y-%m-%d %H:%M:%S')"
 
 # ── Session identification ─────────────────────────────────────────────────────
-# Source priority: stdin JSON .session_id (Claude) → stdin JSON .sessionId (Copilot)
+# Source priority: provider payload session/conversation fields
 # → env var GITHUB_COPILOT_SESSION_ID (first 8 chars, always prefixed with #)
 SESSION_LABEL=""
 SESSION_ID=""
-[[ -n "${STDIN_JSON}" ]] && SESSION_ID="$(_json_str "${STDIN_JSON}" "session_id" "sessionId")"
+[[ -n "${STDIN_JSON}" ]] && SESSION_ID="$(_json_str "${STDIN_JSON}" "session_id" "sessionId" "conversation_id" "conversationId")"
 
 # Format stdin-sourced session: UUID (standard 8-4-4-4-12 format) → #<first8>; else direct
 if [[ -n "${SESSION_ID}" ]]; then
@@ -96,14 +132,41 @@ fi
 TITLE_SUFFIX=""
 [[ -n "${SESSION_LABEL}" ]] && TITLE_SUFFIX=" (${SESSION_LABEL})"
 
+# ── Antigravity approval transition ───────────────────────────────────────────
+if [[ "${EVENT_TYPE}" == "antigravity-statusline" ]]; then
+  AGY_CONFIRMATION_PENDING="$(_json_query "${STDIN_JSON}" 'if .tool_confirmation_pending == true then "true" else "false" end')"
+  AGY_STATE_KEY="$(printf '%s' "${SESSION_ID:-default}" | tr -cd '[:alnum:]_.-')"
+  [[ -z "${AGY_STATE_KEY}" ]] && AGY_STATE_KEY="default"
+  AGY_STATE_DIR="${HOME}/.config/ai-notify/state"
+  AGY_STATE_FILE="${AGY_STATE_DIR}/antigravity-${AGY_STATE_KEY}.pending"
+
+  if [[ "${AGY_CONFIRMATION_PENDING}" != "true" ]]; then
+    rm -f -- "${AGY_STATE_FILE}"
+    finish_hook
+  fi
+
+  [[ -f "${AGY_STATE_FILE}" ]] && finish_hook
+  mkdir -p "${AGY_STATE_DIR}"
+  chmod 700 "${AGY_STATE_DIR}" 2>/dev/null || true
+  : > "${AGY_STATE_FILE}"
+  chmod 600 "${AGY_STATE_FILE}" 2>/dev/null || true
+fi
+
 # ── Hook event tag (appended to message line) ─────────────────────────────────
 EVENT_TAG="#${HOOK_EVENT_NAME:-${EVENT_TYPE:-unknown}}"
 
 # ── Build message ──────────────────────────────────────────────────────────────
 MESSAGE=""
 
+AGY_TERMINATION_REASON=""
+if [[ "${EVENT_TYPE}" == "antigravity-stop" ]]; then
+  AGY_FULLY_IDLE="$(_json_query "${STDIN_JSON}" 'if .fullyIdle == true then "true" else "false" end')"
+  [[ "${AGY_FULLY_IDLE}" != "true" ]] && finish_hook
+  AGY_TERMINATION_REASON="$(_json_str "${STDIN_JSON}" "terminationReason")"
+fi
+
 case "${EVENT_TYPE}" in
-  stop|afteragent|sessionend)
+  stop|afteragent|sessionend|codex-stop)
     MESSAGE="🟢 **Task Complete**${TITLE_SUFFIX}
 
 🤖 ${TOOL_NAME}
@@ -111,6 +174,55 @@ case "${EVENT_TYPE}" in
 ⏰ ${TIMESTAMP}
 
 Process finished successfully ${EVENT_TAG}"
+    ;;
+
+  antigravity-stop)
+    if [[ "${AGY_TERMINATION_REASON}" == "model_stop" ]]; then
+      MESSAGE="🟢 **Task Complete**${TITLE_SUFFIX}
+
+🤖 ${TOOL_NAME}
+📂 ${PROJECT_NAME}
+⏰ ${TIMESTAMP}
+
+Process finished successfully ${EVENT_TAG}"
+    else
+      case "${AGY_TERMINATION_REASON}" in
+        error) STOP_REASON="error" ;;
+        max_steps_exceeded) STOP_REASON="max steps exceeded" ;;
+        *) STOP_REASON="execution stopped" ;;
+      esac
+      MESSAGE="🔴 **Task Stopped**${TITLE_SUFFIX}
+
+🤖 ${TOOL_NAME}
+📂 ${PROJECT_NAME}
+⏰ ${TIMESTAMP}
+
+Execution ended: ${STOP_REASON} ${EVENT_TAG}"
+    fi
+    ;;
+
+  codex-permission)
+    REQUEST_TOOL=""
+    [[ -n "${STDIN_JSON}" ]] && REQUEST_TOOL="$(_json_str "${STDIN_JSON}" "tool_name")"
+    [[ -z "${REQUEST_TOOL}" ]] && REQUEST_TOOL="a tool"
+
+    MESSAGE="🟠 **Action Required**${TITLE_SUFFIX}
+
+🤖 ${TOOL_NAME}
+📂 ${PROJECT_NAME}
+⏰ ${TIMESTAMP}
+
+Approval requested for ${REQUEST_TOOL} ${EVENT_TAG}"
+    ;;
+
+  antigravity-statusline)
+    MESSAGE="🟠 **Action Required**${TITLE_SUFFIX}
+
+🤖 ${TOOL_NAME}
+📂 ${PROJECT_NAME}
+⏰ ${TIMESTAMP}
+
+Tool confirmation is waiting ${EVENT_TAG}"
     ;;
 
   notification|userpromptsubmitted)
@@ -142,14 +254,14 @@ esac
 # ── Send via Telegram Bot API (or dry-run) ─────────────────────────────────────
 if [[ "${TELEGRAM_DRY_RUN:-}" == "true" ]]; then
   echo "${MESSAGE}"
-  exit 0
+  finish_hook
 fi
 
 TELEGRAM_API="https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage"
 
 curl \
   --silent \
-  --max-time 10 \
+  --max-time 4 \
   --output /dev/null \
   -X POST "${TELEGRAM_API}" \
   -d "chat_id=${TELEGRAM_CHAT_ID}" \
@@ -157,4 +269,4 @@ curl \
   --data-urlencode "text=${MESSAGE}" \
   || true
 
-exit 0
+finish_hook

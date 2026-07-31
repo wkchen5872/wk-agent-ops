@@ -1,6 +1,9 @@
 # Provider Extension Guide — scripts/notify/
 
-This directory contains the shared infrastructure for all AI CLI notification providers.
+This directory contains the shared infrastructure for notification destinations.
+Telegram is a destination provider; Claude Code, Gemini CLI, Codex,
+Antigravity CLI, and Copilot CLI are host runtimes registered by
+`lib/registry.sh`.
 
 ---
 
@@ -12,11 +15,12 @@ To add a new notification provider (e.g., Line Notify, Slack), follow these step
 
 ```
 scripts/
-  <provider-name>/
-    hook.sh       # The notification hook called by AI CLI
-    install.sh    # Interactive install wizard
-    update.sh     # Update individual config keys
-    uninstall.sh  # Remove hook and config entries
+  notify/
+    <provider-name>/
+      hook.sh       # The notification hook called by AI CLI
+      install.sh    # Interactive install wizard
+      update.sh     # Update individual config keys
+      uninstall.sh  # Remove hook and config entries
 ```
 
 Use `scripts/notify/telegram/` as your reference implementation.
@@ -29,7 +33,7 @@ The hook script is called by AI CLI with the event type as `$1` and a JSON paylo
 
 ```bash
 #!/usr/bin/env bash
-# $1 = event type: "stop" | "notification"
+# $1 = normalized or native provider event type
 # stdin = JSON payload from AI CLI
 
 # 1. Source shared config
@@ -40,12 +44,14 @@ source ~/.config/ai-notify/config 2>/dev/null || true
 
 # 3. Read event type from $1 (with jq fallback for stdin)
 # 4. Apply NOTIFY_LEVEL logic
-# 5. Call your provider API silently (curl --silent --max-time 10 ... || true)
+# 5. Call your provider API silently (curl --silent --max-time 4 ... || true)
 ```
 
 **Exit rules:**
 - Always exit 0 (silent failure — never block AI CLI)
-- No stdout/stderr unless debugging
+- Return the native host's required neutral stdout contract
+- Never return an approval or continuation decision from a notification hook
+- No other stdout/stderr unless debugging
 
 ### 3. Config key naming convention
 
@@ -73,7 +79,7 @@ Source these helpers in your scripts:
 
 ```bash
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-LIB_DIR="${SCRIPT_DIR}/../notify/lib"
+LIB_DIR="${SCRIPT_DIR}/../lib"
 
 source "${LIB_DIR}/config.sh"   # read_config, write_config, update_config_key
 source "${LIB_DIR}/registry.sh" # register_hook, unregister_hook
@@ -90,6 +96,18 @@ And call `register_hook` with that deployed path:
 ```bash
 register_hook "${HOME}/.config/ai-notify/hooks/<provider-name>.sh"
 ```
+
+`register_hook` covers detected Claude Code, Gemini CLI, Codex, and Antigravity
+completion hooks. Antigravity approval observation remains a separate opt-in
+because it owns the single custom `statusLine.command`. Copilot remains
+repository-local and opt-in.
+
+Codex registration only writes `~/.codex/hooks.json`. Users must also open
+`/hooks`, trust both owned definitions, and enable both checkboxes before the
+commands run. Registry status cannot verify those Codex-managed runtime states.
+
+Host event mappings belong in the existing deployed hook and registry. Do not
+create a second destination directory merely to support another CLI.
 
 ---
 

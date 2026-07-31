@@ -9,6 +9,8 @@ LIB_DIR="${SCRIPT_DIR}/../lib"
 
 # shellcheck source=../notify/lib/config.sh
 source "${LIB_DIR}/config.sh"
+# shellcheck source=../notify/lib/registry.sh
+source "${LIB_DIR}/registry.sh"
 
 # Load existing config for current-value hints
 read_config 2>/dev/null || true
@@ -25,6 +27,8 @@ show_menu() {
   echo "  3) Notification Level (current: ${NOTIFY_LEVEL:-all})"
   echo "  4) Fix hook registration (re-register with correct format)"
   echo "  5) Register Copilot CLI hooks"
+  echo "  6) Enable Antigravity approval notifications"
+  echo "  7) Show provider status"
   echo "  q) Quit"
   echo ""
 }
@@ -72,9 +76,6 @@ update_notify_level() {
 }
 
 fix_hooks() {
-  # shellcheck source=../notify/lib/registry.sh
-  source "${LIB_DIR}/registry.sh"
-
   echo ""
   echo "── Re-registering hooks with correct format ──"
   echo ""
@@ -92,9 +93,17 @@ fix_hooks() {
 
   _require_jq || return 1
 
-  # Unregister old/broken entries, then re-register with correct nested format
+  local agy_status_cmd="bash \"${DEPLOYED_HOOK}\" antigravity-statusline \"Antigravity CLI\""
+  local had_agy_approval=false
+  if [[ -f "${ANTIGRAVITY_SETTINGS}" ]] &&
+     [[ "$(jq -r '.statusLine.command // empty' "${ANTIGRAVITY_SETTINGS}" 2>/dev/null)" == "${agy_status_cmd}" ]]; then
+    had_agy_approval=true
+  fi
+
+  # Unregister old/broken entries, then re-register with correct native formats.
   unregister_hook "${DEPLOYED_HOOK}"
   register_hook "${DEPLOYED_HOOK}"
+  [[ "${had_agy_approval}" == "true" ]] && register_hook_antigravity_statusline "${DEPLOYED_HOOK}"
 
   # Re-register Copilot hooks if hooks.json already exists
   local repo_root
@@ -105,13 +114,11 @@ fix_hooks() {
   fi
 
   echo ""
-  echo "✓ Hooks re-registered. Restart Claude Code to apply changes."
+  echo "✓ Hooks re-registered. Restart active AI CLIs to apply changes."
+  [[ -f "${CODEX_HOOKS}" ]] && echo "  ℹ Review and trust Codex hooks with /hooks."
 }
 
 register_copilot_hooks() {
-  # shellcheck source=../notify/lib/registry.sh
-  source "${LIB_DIR}/registry.sh"
-
   echo ""
   echo "── Register Copilot CLI Hooks ──"
   echo ""
@@ -128,6 +135,24 @@ register_copilot_hooks() {
   echo "✓ Copilot CLI hooks registered."
 }
 
+register_antigravity_approval() {
+  if [[ ! -f "${DEPLOYED_HOOK}" ]]; then
+    echo "ERROR: Deployed hook not found at ${DEPLOYED_HOOK}"
+    echo "Please run scripts/notify/telegram/install.sh first."
+    return 1
+  fi
+
+  register_hook_antigravity_statusline "${DEPLOYED_HOOK}"
+  echo "✓ Antigravity approval notifications enabled."
+}
+
+show_status() {
+  echo ""
+  echo "── Telegram Notify — Provider Status ──"
+  echo ""
+  show_hook_status "${DEPLOYED_HOOK}"
+}
+
 # Handle direct key argument
 case "${KEY}" in
   token)          update_token;          exit 0 ;;
@@ -135,6 +160,8 @@ case "${KEY}" in
   notify_level)   update_notify_level;   exit 0 ;;
   fix-hooks)      fix_hooks;             exit 0 ;;
   copilot-hooks)  register_copilot_hooks; exit 0 ;;
+  antigravity-approval) register_antigravity_approval; exit 0 ;;
+  status)         show_status;            exit 0 ;;
   "")
     # Interactive menu
     while true; do
@@ -146,6 +173,8 @@ case "${KEY}" in
         3) update_notify_level ;;
         4) fix_hooks ;;
         5) register_copilot_hooks ;;
+        6) register_antigravity_approval ;;
+        7) show_status ;;
         q|Q) echo ""; echo "Done."; exit 0 ;;
         *) echo "Invalid choice." ;;
       esac
@@ -153,7 +182,7 @@ case "${KEY}" in
     ;;
   *)
     echo "Unknown key: ${KEY}"
-    echo "Usage: $0 [token|chat_id|notify_level|fix-hooks|copilot-hooks]"
+    echo "Usage: $0 [token|chat_id|notify_level|fix-hooks|copilot-hooks|antigravity-approval|status]"
     exit 1
     ;;
 esac

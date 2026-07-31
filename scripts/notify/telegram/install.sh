@@ -81,9 +81,10 @@ echo "  2. Validate your Bot Token"
 echo "  3. Auto-detect your Chat ID"
 echo "  4. Set your notification level"
 echo "  5. Deploy the hook to ~/.config/ai-notify/"
-echo "  6. Register hooks in ~/.claude/settings.json"
-echo "  7. Optionally register Copilot CLI hooks"
-echo "  8. Send a test notification"
+echo "  6. Register completion hooks for detected AI CLIs"
+echo "  7. Optionally observe Antigravity approval prompts"
+echo "  8. Optionally register Copilot CLI hooks"
+echo "  9. Send a test notification"
 echo ""
 echo "Press Ctrl+C at any time to cancel."
 
@@ -193,8 +194,29 @@ print_step 7 "Register Hooks in AI CLI Settings"
 
 register_hook "${DEPLOYED_HOOK}"
 
-# ── Step 8: Register Copilot CLI hooks (opt-in) ────────────────────────────────
-print_step 8 "Register Copilot CLI Hooks (optional)"
+if [[ -f "${CODEX_HOOKS}" ]]; then
+  echo "  ℹ Review and trust Codex hooks with /hooks before they can run."
+fi
+
+# ── Step 8: Observe Antigravity approvals (opt-in) ─────────────────────────────
+print_step 8 "Observe Antigravity Approval Prompts (optional)"
+if [[ -d "${HOME}/.gemini/antigravity-cli" ]] || command -v agy &>/dev/null; then
+  echo ""
+  echo "  Antigravity exposes approval state through one custom statusLine command."
+  echo "  Existing custom statusLine commands are never overwritten."
+  echo ""
+  read -rp "  Enable Antigravity approval notifications? [y/N]: " _agy_approval_choice
+  if [[ "${_agy_approval_choice}" =~ ^[Yy]$ ]]; then
+    if ! register_hook_antigravity_statusline "${DEPLOYED_HOOK}"; then
+      echo "  ⚠ Antigravity approval observer was not installed; existing statusLine was preserved."
+    fi
+  fi
+else
+  echo "  ℹ Antigravity CLI not detected; skipped."
+fi
+
+# ── Step 9: Register Copilot CLI hooks (opt-in) ────────────────────────────────
+print_step 9 "Register Copilot CLI Hooks (optional)"
 echo ""
 echo "  Copilot CLI hooks are stored in .github/hooks/hooks.json inside your repo."
 echo "  This file can be committed so all machines benefit automatically."
@@ -205,8 +227,8 @@ if [[ "${_copilot_choice}" =~ ^[Yy]$ ]]; then
   echo "  ℹ You may want to commit .github/hooks/hooks.json to your repository."
 fi
 
-# ── Step 9: Test notification ──────────────────────────────────────────────────
-print_step 9 "Send Test Notification"
+# ── Step 10: Test notification ─────────────────────────────────────────────────
+print_step 10 "Send Test Notification"
 
 echo -n "  Sending test message to Telegram... "
 TEST_RESPONSE="$(curl \
@@ -236,8 +258,9 @@ echo "╚═══════════════════════�
 echo ""
 echo "  Config:       ${AI_NOTIFY_CONFIG}"
 echo "  Hook:         ${DEPLOYED_HOOK}"
-echo "  Claude hooks: ${HOME}/.claude/settings.json"
 echo "  Level:        ${NEW_LEVEL}"
+echo ""
+show_hook_status "${DEPLOYED_HOOK}"
 echo ""
 echo "  To update settings: bash scripts/notify/telegram/update.sh"
 echo "  To uninstall:       bash scripts/notify/telegram/uninstall.sh"

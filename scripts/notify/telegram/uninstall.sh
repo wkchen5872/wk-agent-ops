@@ -19,6 +19,7 @@ echo "── Telegram Notify — Uninstall ──"
 echo ""
 echo "This will:"
 echo "  • Remove hook entries from ~/.claude/settings.json"
+echo "  • Remove owned Codex and Antigravity hook entries"
 echo "  • Remove TELEGRAM_* keys from ~/.config/ai-notify/config"
 echo "  • Delete ${DEPLOYED_HOOK}"
 echo ""
@@ -39,11 +40,15 @@ if [[ -f "${_repo_root}/.github/hooks/hooks.json" ]]; then
   fi
 fi
 
-# 3. Remove TELEGRAM_* config keys
+# 3. Remove owned Antigravity approval state
+clear_antigravity_notify_state
+echo "✓ Removed Antigravity notification state"
+
+# 4. Remove TELEGRAM_* config keys
 remove_config_keys_by_prefix "TELEGRAM_"
 echo "✓ Removed TELEGRAM_* keys from ${AI_NOTIFY_CONFIG}"
 
-# 4. Remove deployed hook script
+# 5. Remove deployed hook script
 if [[ -f "${DEPLOYED_HOOK}" ]]; then
   rm -f "${DEPLOYED_HOOK}"
   echo "✓ Removed ${DEPLOYED_HOOK}"

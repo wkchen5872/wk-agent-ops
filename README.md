@@ -159,7 +159,7 @@ wk-agent-ops/
 │   ├── workflow/               ← 多 Agent 協作與 Commit 流程說明
 │   ├── notify/                 ← 通知系統架構與 Telegram 安裝說明
 │   ├── skills/                 ← git-commit-writer, doc-updater 等工具說明
-│   └── hooks/                  ← Gemini / Claude / Copilot Hooks 指南與開發參考
+│   └── hooks/                  ← Claude / Gemini / Codex / Antigravity / Copilot Hooks 指南
 └── openspec/                   ← 本專案的 OpenSpec 變更記錄
 ```
 
@@ -167,7 +167,8 @@ wk-agent-ops/
 
 ## Telegram 通知
 
-當 AI CLI 在背景執行長時間任務時，透過 Telegram 接收任務完成或等待授權的通知。
+支援 Claude Code、Gemini CLI、Codex、Antigravity CLI 與 Copilot CLI，在 AI
+任務完成或等待授權時透過 Telegram 通知。
 
 ### 快速安裝
 
@@ -183,8 +184,12 @@ bash scripts/notify/telegram/install.sh
 
 ```bash
 bash scripts/notify/telegram/update.sh       # 更新 token / chat_id / level
+bash scripts/notify/telegram/update.sh status # 檢查各 CLI 是否已註冊
 bash scripts/notify/telegram/uninstall.sh    # 移除 hook 與 config
 ```
+
+Codex 顯示 `registered` 只代表設定已寫入；還需要在 `/hooks` 將 `Stop` 與
+`PermissionRequest` 兩個 hook 設為 `Trusted` 並勾選 `[x]` 啟用。
 
 詳細說明：[docs/notify/telegram.md](docs/notify/telegram.md) · [docs/notify/architecture.md](docs/notify/architecture.md)
 
