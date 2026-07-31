@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Provides a zsh completion script (`_wt`) that tab-completes feature names for `wt-work`, `wt-done`, and `wt-resume` commands, and is installed by `install.sh`. Also completes `--agent` and `--session` flags.
+Provides an installed zsh completion script (`_wt`) for the workflow command matrix, deriving change IDs from Git's Worktree registry and completing the current Providers plus `--session`, `--path`, and `--base` options.
 
 ## Requirements
 

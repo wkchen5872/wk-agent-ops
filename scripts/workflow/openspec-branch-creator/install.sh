@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
-# install.sh — Deploy openspec-branch-creator hook and register in all supported
-#              AI CLI tools: Claude Code (PostToolUse), Gemini CLI (AfterTool),
-#              GitHub Copilot CLI (.github/hooks/). Idempotent.
+# install.sh — Deploy the compatibility hook for Claude Code and Copilot CLI.
 #
 # Usage:
 #   bash scripts/workflow/openspec-branch-creator/install.sh
@@ -31,12 +29,6 @@ HOOK_CMD="bash \"$HOOK_DST\""
 
 # Claude Code: create settings if missing, then register.
 _register_settings_hook "$HOME/.claude/settings.json" "PostToolUse" "Bash" "$HOOK_CMD"
-
-# Gemini CLI: only register if already installed.
-GEMINI_SETTINGS="$HOME/.gemini/settings.json"
-if [[ -f "$GEMINI_SETTINGS" ]] && jq empty "$GEMINI_SETTINGS" 2>/dev/null; then
-  _register_settings_hook "$GEMINI_SETTINGS" "AfterTool" "bash" "$HOOK_CMD"
-fi
 
 # GitHub Copilot CLI.
 _write_copilot_hook ".github/hooks/openspec-branch-creator.json" "$HOOK_DST"

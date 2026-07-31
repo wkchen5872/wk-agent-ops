@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# install.sh — Install wt-work / wt-done / wt-resume / pm-start globally
+# install.sh — Install workflow commands globally
 #
 # Usage:
 #   bash scripts/workflow/install.sh
@@ -34,8 +34,11 @@ cp -f "$REPO/scripts/workflow/wt-work.sh"   "$INSTALL_DIR/wt-work"
 cp -f "$REPO/scripts/workflow/wt-done.sh"   "$INSTALL_DIR/wt-done"
 cp -f "$REPO/scripts/workflow/wt-resume.sh" "$INSTALL_DIR/wt-resume"
 cp -f "$REPO/scripts/workflow/pm-start.sh"  "$INSTALL_DIR/pm-start"
+cp -f "$REPO/scripts/workflow/opsx-branch.sh" "$INSTALL_DIR/opsx-branch"
+cp -f "$REPO/scripts/workflow/runtime.sh" "$INSTALL_DIR/wk-workflow-runtime"
 chmod +x "$INSTALL_DIR/wt-work" "$INSTALL_DIR/wt-done" \
-         "$INSTALL_DIR/wt-resume" "$INSTALL_DIR/pm-start"
+         "$INSTALL_DIR/wt-resume" "$INSTALL_DIR/pm-start" "$INSTALL_DIR/opsx-branch" \
+         "$INSTALL_DIR/wk-workflow-runtime"
 
 # 4. 安裝 zsh completion
 cp -f "$REPO/scripts/workflow/_wt" "$ZSH_FUNC_DIR/_wt"
@@ -77,10 +80,11 @@ bash "$REPO/scripts/workflow/entropy-counter/install.sh"
 echo "✅ 安裝完成。執行檔已部署至 $INSTALL_DIR"
 echo ""
 echo "已安裝指令："
-echo "  wt-work     建立或恢復 worktree 並啟動 coding session（自動帶入 /opsx:apply）"
+echo "  wt-work     建立或附加 worktree，啟動 Provider 並帶入 openspec-apply-change"
 echo "  wt-done     合併 feature 分支並清理 worktree"
-echo "  wt-resume   恢復 agent 對話 session（無 --session 時顯示互動選單）"
-echo "  pm-start    啟動或恢復 PM Master Claude session"
+echo "  wt-resume   在已解析 worktree 恢復所選 Provider session"
+echo "  pm-start    啟動 Provider PM planning session"
+echo "  opsx-branch 在 OpenSpec artifacts 前建立或切換 planning branch"
 echo ""
 echo "Zsh 補全已安裝至 $ZSH_FUNC_DIR/_wt"
 echo ""

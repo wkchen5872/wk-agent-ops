@@ -20,8 +20,9 @@ bash scripts/workflow/install.sh
 source ~/.zshrc
 ```
 
-安裝後可在任何 repo 使用 `wt-work`、`wt-done`、`wt-resume` 與 `pm-start`。
-同時安裝 `openspec-branch-creator` PostToolUse hook — PM agent 執行 `openspec new change <name>` 時自動建立 `feature/<name>` 分支。
+安裝後可在任何 repo 使用 `opsx-branch`、`wt-work`、`wt-done`、`wt-resume` 與
+`pm-start`。正式規劃先執行 `opsx-branch <change-id>`，再建立 OpenSpec artifacts；
+PostToolUse branch hook 僅作相容性 fallback。
 
 ### 安裝 Agent 擴充套件（到目標專案）
 
@@ -51,11 +52,11 @@ worktree。語言 profile 的 hooks 會安裝到 Git 回報的共用 hooks path�
 ## 多 Agent 開發流程
 
 ```
-PM Agent（主環境 main）             RD Agent（獨立 Worktree）
+PM Agent（planning branch）          RD Agent（可選 Worktree）
 ────────────────────────────────    ──────────────────────────
-/opsx:ff  → 建立規格                wt-work <feature>
-/opsx:new                             └─ 自動建立 worktree
-/opsx:continue ×4                     └─ 自動啟動 Agent
+opsx-branch <change-id>              wt-work <change-id> --agent <provider>
+/opsx:ff  → 建立規格                  └─ 解析或建立 Project-managed Worktree
+                                      └─ 啟動新的 Provider apply session
    proposal → specs                /opsx:apply <feature>
    design → tasks                    └─ 依規格實作
                                    /opsx:commit
@@ -73,21 +74,20 @@ PM Agent（主環境 main）             RD Agent（獨立 Worktree）
 
 | 指令 | 說明 |
 |---|---|
-| `wt-work <feature>` | 建立 `feature/<name>` worktree 並啟動 Agent；本地/遠端分支已存在時自動銜接（跨機器支援）；worktree 已存在則自動 resume，均帶入 `/opsx:apply` |
-| `wt-done <feature>` | 合併回 base branch，刪除 worktree 與 branch（⚠️ local-only，不含 push / PR）|
-| `wt-resume <feature>` | 恢復 Agent session（無 `--session` 時顯示互動選單；worktree 已刪除也可用）|
-| `pm-start` | 啟動或恢復 PM Master Claude session（Plan Mode）|
+| `opsx-branch <change-id>` | 在建立 artifacts 前建立或切換 planning branch |
+| `wt-work <change-id>` | 安全解析 registered Worktree；無候選時從 reviewed branch 建立 Project-managed Worktree，並啟動 apply session |
+| `wt-done <change-id>` | Local-only merge；只清理 `.worktrees/<change-id>` |
+| `wt-resume <change-id>` | 在 verified Worktree 恢復所選 Provider，不注入 apply intent |
+| `pm-start [--agent <provider>]` | 從 repo root 啟動 PM planning session |
 
-支援指定 Agent（含 Gemini）：
+支援四個 Provider；Antigravity 同時接受 `antigravity` 與官方 CLI 名稱 `agy`：
 
 ```bash
 wt-work feature123 --agent claude    # 預設
-wt-work feature123 --agent copilot
-wt-work feature123 --agent gemini
 wt-work feature123 --agent codex
-
-wt-resume feature123 --agent copilot
-wt-resume feature123 --agent gemini
+wt-work feature123 --agent antigravity
+wt-work feature123 --agent agy
+wt-work feature123 --agent copilot
 ```
 
 支援指定 session（`--session` / `-s`）：
@@ -95,6 +95,7 @@ wt-resume feature123 --agent gemini
 ```bash
 wt-work feature123 --session a469f20a-a791-4c6f-af7a-5a0e599527f4
 wt-resume feature123 --session "RD: feature123"
+wt-work feature123 --agent codex --path /registered/worktree/path
 ```
 
 支援指定 base branch（預設 `main`）：
@@ -211,5 +212,5 @@ mkdir -p template/<profile>/hooks
 ## 相依
 
 - [OpenSpec CLI](https://github.com/Fission-AI/OpenSpec)：`npm install -g @fission-ai/openspec`
-- Claude Code CLI（`wt-work` 預設 Agent；亦支援 Copilot、Gemini、Codex）
+- Claude Code CLI（`wt-work` 預設 Provider；亦支援 Codex、Antigravity、Copilot）
 - bash 4+、rsync、git 2.5+（worktree 支援）

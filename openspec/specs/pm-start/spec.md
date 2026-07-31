@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Provides a `pm-start` command that creates or resumes a named PM Claude session anchored to the repository root.
+Provides a Provider-selectable `pm-start` command that launches a planning session from the repository root without creating OpenSpec or Git state.
 
 ## Requirements
 

@@ -2,22 +2,20 @@
 # wt-work — Work on a Git worktree: creates if new, resumes if existing
 #
 # Usage:
-#   wt-work <feature-name> [--base <branch>] [--agent claude|copilot|gemini|codex] [--session <id|name>]
+#   wt-work <feature-name> [--base <branch>] [--agent <provider>] [--session <id|name>] [--path <worktree>]
 #
 # Example:
 #   wt-work feature123
 #   wt-work feature123 --base main
 #   wt-work feature123 --agent copilot
-#   wt-work feature123 --agent gemini
+#   wt-work feature123 --agent antigravity
 #   wt-work feature123 -a codex
 #   wt-work feature123 --session a469f20a-a791-4c6f-af7a-5a0e599527f4
 #   wt-work feature123 -s my-session-name
 #
 # Description:
-#   If the worktree already exists → resumes the agent session and passes /opsx:apply.
-#   Otherwise → creates a feature/<name> branch and worktree from BASE_BRANCH,
-#   inheriting openspec/changes/ planning files committed to that branch,
-#   then starts a new agent session and passes /opsx:apply.
+#   Reuses one verified registered worktree or creates .worktrees/<name> from
+#   an existing reviewed feature branch, then starts the selected Provider.
 #
 #   Use --session to specify a particular AI CLI session ID or name to resume.
 #
@@ -29,13 +27,14 @@
 set -euo pipefail
 
 usage() {
-  echo "Usage: wt-work <feature-name> [--base <branch>] [--agent claude|copilot|gemini|codex] [--session <id|name>]"
+  echo "Usage: wt-work <feature-name> [--base <branch>] [--agent claude|codex|antigravity|agy|copilot] [--session <id|name>] [--path <worktree>]"
 }
 
 NAME=""
 AGENT="claude"
 BASE_BRANCH="main"
 SESSION=""
+EXPLICIT_PATH=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -49,6 +48,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --session|-s)
       SESSION="${2:-}"
+      shift 2
+      ;;
+    --path|-p)
+      EXPLICIT_PATH="${2:-}"
       shift 2
       ;;
     -*)
@@ -75,14 +78,6 @@ if [[ -z "$NAME" ]]; then
   exit 1
 fi
 
-case "$AGENT" in
-  claude|copilot|gemini|codex) ;;
-  *)
-    echo "Error: --agent must be one of: claude, copilot, gemini, codex (got: $AGENT)"
-    exit 1
-    ;;
-esac
-
 REPO=$(git rev-parse --show-toplevel 2>/dev/null)
 
 if [[ -z "$REPO" ]]; then
@@ -90,8 +85,23 @@ if [[ -z "$REPO" ]]; then
   exit 1
 fi
 
-WORKTREE_DIR="$REPO/.worktrees/$NAME"
+WORKTREE_DIR=""
 BRANCH="feature/$NAME"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "$SCRIPT_DIR/runtime.sh" ]]; then
+  # shellcheck source=runtime.sh
+  source "$SCRIPT_DIR/runtime.sh"
+elif [[ -f "$SCRIPT_DIR/wk-workflow-runtime" ]]; then
+  # shellcheck source=/dev/null
+  source "$SCRIPT_DIR/wk-workflow-runtime"
+else
+  echo "Error: workflow runtime is not installed" >&2
+  exit 1
+fi
+
+workflow_validate_provider || exit 1
+PROJECT_WORKTREE="$REPO/.worktrees/$NAME"
 
 set_iterm_badge() {
   if [[ "${TERM_PROGRAM:-}" == "iTerm.app" ]]; then
@@ -115,92 +125,90 @@ print_banner() {
   echo ""
 }
 
-# $1 = "true" for new session, "false" for resume
 launch_agent() {
-  local is_new="$1"
-  case "$AGENT" in
-    claude)
-      if [[ -n "$SESSION" ]]; then
-        claude --resume "$SESSION" "/opsx:apply $NAME" --enable-auto-mode
-      elif [[ "$is_new" == "true" ]]; then
-        claude --name "RD: $NAME" "/opsx:apply $NAME" --enable-auto-mode
-      else
-        claude --resume "RD: $NAME" "/opsx:apply $NAME" --enable-auto-mode
-      fi
-      ;;
-    copilot)
-      if [[ -n "$SESSION" ]]; then
-        copilot --resume="$SESSION" --allow-all -i "/openspec-apply-change $NAME"
-      elif [[ "$is_new" == "true" ]]; then
-        copilot --allow-all -i "/openspec-apply-change $NAME"
-      else
-        copilot --resume --allow-all -i "/openspec-apply-change $NAME"
-      fi
-      ;;
-    gemini)
-      if [[ -n "$SESSION" ]]; then
-        gemini --resume "$SESSION" -i "/opsx:apply $NAME"
-      elif [[ "$is_new" == "true" ]]; then
-        gemini -i "/opsx:apply $NAME"
-      else
-        gemini --resume latest -i "/opsx:apply $NAME"
-      fi
-      ;;
-    codex)
-      codex "/opsx:apply $NAME"
-      ;;
-  esac
+  workflow_print_context "$WORKTREE_DIR"
+  workflow_launch_apply "$SESSION"
 }
 
-if [[ -d "$WORKTREE_DIR" ]]; then
+resolve_status=0
+WORKTREE_DIR="$(workflow_resolve_worktree "$EXPLICIT_PATH")" || resolve_status=$?
+if [[ $resolve_status -eq 0 ]]; then
   # ── RESUME PATH ──────────────────────────────────────────────────────────
   set_iterm_badge
   print_banner "🔄 RESUMING" "resume" "\033[1;33m"
   cd "$WORKTREE_DIR"
-  launch_agent "false"
+  launch_agent
 else
+  if [[ $resolve_status -ne 2 || -n "$EXPLICIT_PATH" ]]; then
+    exit "$resolve_status"
+  fi
+  WORKTREE_DIR="$PROJECT_WORKTREE"
   # ── NEW SESSION PATH ──────────────────────────────────────────────────────
   if git -C "$REPO" show-ref --quiet "refs/heads/$BRANCH"; then
-    # Path 1: local branch already exists (e.g., created by PM's hook on same machine).
-    # If the branch is currently checked out in the main worktree, switch away first.
+    if ! git -C "$REPO" cat-file -e "$BRANCH:openspec/changes/$NAME" 2>/dev/null; then
+      echo "Error: reviewed OpenSpec planning artifacts not found on $BRANCH" >&2
+      exit 1
+    fi
     CURRENT_BRANCH=$(git -C "$REPO" rev-parse --abbrev-ref HEAD)
     if [[ "$CURRENT_BRANCH" == "$BRANCH" ]]; then
+      if [[ -n "$(git -C "$REPO" status --porcelain)" ]]; then
+        echo "Error: primary checkout is dirty; commit or preserve it before relocating $BRANCH" >&2
+        exit 1
+      fi
       echo "Switching main worktree to $BASE_BRANCH (branch is currently active here)..."
-      git -C "$REPO" checkout "$BASE_BRANCH"
+      git -C "$REPO" switch "$BASE_BRANCH"
     fi
     echo "Creating worktree from existing local branch: $BRANCH"
     git -C "$REPO" worktree add "$WORKTREE_DIR" "$BRANCH"
-  elif git -C "$REPO" ls-remote --exit-code origin "$BRANCH" &>/dev/null 2>&1; then
-    # Path 2: branch exists on remote only (cross-machine: PM on another computer).
-    echo "Fetching remote branch: $BRANCH"
-    git -C "$REPO" fetch origin "$BRANCH"
-    echo "Creating worktree from remote branch: $BRANCH"
-    git -C "$REPO" worktree add "$WORKTREE_DIR" -b "$BRANCH" "origin/$BRANCH"
   else
-    # Path 3: no local or remote branch — create a new one from BASE_BRANCH.
-    echo "Switching to $BASE_BRANCH..."
-    git -C "$REPO" checkout "$BASE_BRANCH"
-    echo "Creating worktree: $WORKTREE_DIR (branch: $BRANCH)"
-    git -C "$REPO" worktree add "$WORKTREE_DIR" -b "$BRANCH"
+    if ! git -C "$REPO" remote get-url origin >/dev/null 2>&1; then
+      echo "Error: reviewed planning branch not found locally and origin is not configured: $BRANCH" >&2
+      exit 1
+    fi
+    remote_status=0
+    remote_result="$(git -C "$REPO" ls-remote --exit-code origin "refs/heads/$BRANCH" 2>&1)" \
+      || remote_status=$?
+    if [[ $remote_status -eq 0 ]]; then
+      echo "Fetching remote branch: $BRANCH"
+      git -C "$REPO" fetch origin "$BRANCH:refs/remotes/origin/$BRANCH"
+      if ! git -C "$REPO" cat-file -e "origin/$BRANCH:openspec/changes/$NAME" 2>/dev/null; then
+      echo "Error: reviewed planning artifacts are not on origin/$BRANCH; commit/push them or provide an explicit patch hand-off" >&2
+        exit 1
+      fi
+      echo "Creating worktree from remote branch: $BRANCH"
+      git -C "$REPO" worktree add "$WORKTREE_DIR" -b "$BRANCH" "origin/$BRANCH"
+    elif [[ $remote_status -eq 2 ]]; then
+      echo "Error: reviewed planning branch does not exist locally or on origin: $BRANCH" >&2
+      echo "Run opsx-branch $NAME, create and commit the OpenSpec artifacts, then retry." >&2
+      exit 1
+    else
+      echo "Error: could not query origin for $BRANCH" >&2
+      printf '%s\n' "$remote_result" >&2
+      exit 1
+    fi
   fi
   echo "✅ Worktree created"
+  workflow_check_candidate "$WORKTREE_DIR"
 
-  LOCAL_SETTINGS="$REPO/.claude/settings.local.json"
-  if [[ -f "$LOCAL_SETTINGS" ]]; then
-    mkdir -p "$WORKTREE_DIR/.claude"
-    cp "$LOCAL_SETTINGS" "$WORKTREE_DIR/.claude/settings.local.json"
-    echo "✅ Copied .claude/settings.local.json to worktree"
-  fi
+  copy_local_file() {
+    local relative="$1" source="$REPO/$1" target="$WORKTREE_DIR/$1"
+    if [[ -f "$source" && ! -e "$target" ]]; then
+      mkdir -p "$(dirname "$target")"
+      cp "$source" "$target"
+      echo "✅ Copied $relative to worktree"
+    fi
+  }
 
-  ENV_FILE="$REPO/.env"
-  if [[ -f "$ENV_FILE" ]]; then
-    cp "$ENV_FILE" "$WORKTREE_DIR/.env"
-    echo "✅ Copied .env to worktree"
-  fi
+  copy_local_file .env
+  case "$AGENT" in
+    claude) copy_local_file .claude/settings.local.json ;;
+    codex) copy_local_file .codex/config.toml ;;
+    antigravity|copilot) ;;
+  esac
 
   set_iterm_badge
 
   print_banner "🚀 NEW SESSION" "new" "\033[1;32m"
   cd "$WORKTREE_DIR"
-  launch_agent "true"
+  launch_agent
 fi

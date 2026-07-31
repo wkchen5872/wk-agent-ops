@@ -139,15 +139,13 @@ wt-work 建立 .worktrees/<change-id>
 Provider 切換不改變 Git checkout
 ```
 
-`wt-work` 也可以 attach 已存在的 Provider-native Worktree。明確 `--path` 優先；
+`wt-work` 可以 attach 已存在的 Provider-native Worktree。明確 `--path` 優先；
 未提供時從 `git worktree list --porcelain` 搜尋唯一且可驗證的候選。候選不唯一就
 停止並要求 `--path`，不保存額外 mapping。Attach 保留原 cleanup owner，且不得
-建立第二個 Worktree。現行腳本尚未支援此行為。
+建立第二個 Worktree。
 
-跨 Provider 切換的目標語意是新的 `wt-work` 啟動；`wt-resume` 只恢復同一
-Provider 的 session，不能用來搬移對話歷史。現行 `wt-work` 尚未區分既有
-Worktree 的 resume 與 cross-provider new session，因此目前應使用上方的 Provider
-直接啟動命令。
+跨 Provider 切換使用新的 `wt-work` 啟動；`wt-resume` 只恢復同一 Provider 的
+session，不能用來搬移對話歷史。
 
 ## Local Setup 與 Ignore Policy
 
@@ -155,8 +153,9 @@ Project-managed Worktree 採以下最小 policy：
 
 - `.worktrees/` 保持在 `.gitignore`。
 - Core 複製現有 `.env`。
-- Provider adapter 只複製所選 LLM Provider 已知且存在的 local settings；不複製
-  其他 Provider 設定。
+- Claude 只額外複製 `.claude/settings.local.json`；Codex 只額外複製
+  `.codex/config.toml`；Antigravity 與 Copilot 不複製額外 repo-local file。
+- 不複製其他 Provider、global config 或 legacy `.gemini/settings.json`。
 - 不自動安裝 dependencies。
 
 Codex `.worktreeinclude` 只適用於 Codex-managed Worktree，不由 `wt-work` 或

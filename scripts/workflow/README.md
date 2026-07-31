@@ -1,77 +1,93 @@
 # Workflow 自動化腳本手冊
-# Worktree 自動化腳本手冊 (Technical Reference)
 
-本目錄包含一組輔助 `git worktree` 開發流程的腳本，旨在簡化多 Agent 的開發環境建立、切換與清理。
+本目錄提供 OpenSpec branch-first 規劃、Git Worktree hand-off 與多 Provider
+session 啟動工具。Worktree 解析只讀取 Git registry，不保存額外 mapping。
 
----
-
-## 🛠️ 安裝
-
-執行安裝腳本將命令加入您的 Zsh 配置，並啟用 Tab 自動補全：
+## 安裝
 
 ```bash
 bash scripts/workflow/install.sh
 source ~/.zshrc
 ```
 
-**特性：**
-* **冪等性**：重複安裝不影響現有設定。
-* **自動分枝建立**：安裝 `openspec-branch-creator` PostToolUse hook，當 PM agent 建立新 change 時，自動切換至 `feature/<name>` 分支。
-* **跨機器協作**：`wt-work` 支援自動偵測並銜接遠端分支。
-* **補全功能**：支援 `wt-work <TAB>` 列出現有 Feature，`--agent <TAB>` 列出工具選項。
-* **自動清理**：若 `wt-new` 舊版本仍存在，安裝時自動移除。
+安裝程式可重複執行，會部署 `opsx-branch`、`wt-work`、`wt-resume`、
+`wt-done`、`pm-start` 與 zsh completion。PostToolUse branch hook 只是相容性
+fallback；正式流程應在建立 OpenSpec artifacts 前執行 `opsx-branch`。
 
----
+## 指令
 
-## ⌨️ 指令手冊 (Command Reference)
+### `opsx-branch <change-id>`
 
-### 1. `wt-work <feature-name>`
-**用途**：建立或恢復一個 coding 工作環境，並自動帶入 `/opsx:apply` 初始 prompt。
-*   **參數**：
-    *   `--base <branch>`：指定基礎分支（預設 `main`）。
-    *   `--agent <name>`：指定啟動的工具（`claude`|`copilot`|`gemini`|`codex`）。
-    *   `--session <id|name>`：指定要恢復的 AI CLI session ID 或名稱（選填）。
-*   **模式**：
-    *   **New**：
-        1.  偵測本地分支 `feature/<name>` 是否已存在。
-        2.  偵測遠端分支 `origin/feature/<name>` 是否已存在（跨機器協作）。
-        3.  根據偵測結果建立或銜接分支，建立 `.worktrees/` 目錄，並啟動 agent。
-    *   **Resume**：偵測到目錄已存在時，自動 `cd` 並以 `"RD: FEATURE"` 恢復 Claude session（或顯示選單）。
-*   **注意**：無論新建或恢復，均自動傳入 `/opsx:apply FEATURE` 作為初始 prompt。
+驗證 kebab-case change ID，建立或切換 `feature/<change-id>`。若 branch 已由其他
+Worktree checkout，會顯示該 path 並停止。
 
-### 2. `wt-done <feature-name>`
-**用途**：合併開發內容並清理 Worktree。
-*   **參數**：
-    *   `--base <branch>`：合併回的目標分支（預設 `main`）。
-*   **動作**：切換至 base branch -> 合併 feature -> 移除 Worktree 目錄 -> `git worktree prune` -> 刪除分支 -> 重置 iTerm2 徽章。
+### `pm-start [--agent <provider>]`
 
-### 3. `wt-resume <feature-name>`
-**用途**：恢復 Agent 對話 session（不自動帶入 opsx:apply）。
-*   **參數**：
-    *   `--agent <name>`：指定工具（`claude`|`copilot`|`gemini`|`codex`）。
-    *   `--session <id|name>`：指定要恢復的 session ID 或名稱（選填）。
-*   **特性**：
-    *   無 `--session` 時：Claude/Copilot 顯示互動選單，Gemini 自動恢復最新 session。
-    *   有 `--session` 時：直接傳給工具的 `--resume` 參數。
-    *   即使目錄已被 `wt-done` 刪除，仍可透過此命令恢復 session。
+從 repository root 啟動 PM planning session。支援 `claude`、`codex`、
+`antigravity`（亦接受 CLI 名稱 `agy`）、`copilot`；預設 Claude。Claude 與
+Antigravity 直接使用原生 plan flag，Codex 與 Copilot 會提示使用者在 Provider 內
+選擇 Plan Mode。此命令不建立 branch、OpenSpec change 或 Worktree。
 
-### 4. `pm-start`
-**用途**：在專案根目錄啟動「規劃大腦」PM Master Session。
-*   **特性**：會話名稱固定為 `PM: <repo-name>`。
+### `wt-work <change-id> [options]`
 
----
+RD apply launcher。`--agent` 支援四個 Provider；省略 `--session` 會啟動新
+session，明確提供 `--session` 才恢復該 session。兩種路徑都只傳入一次
+`openspec-apply-change` intent。
 
-## ⚙️ 進階配置
+```text
+--agent, -a <claude|codex|antigravity|agy|copilot>
+--session, -s <id-or-name>
+--path, -p <registered-worktree-path>
+--base, -b <branch>                         # default: main
+```
 
-*   **Zsh Completion**：安裝後自動載入 `_wt` 補全函式，支援 feature name、`--agent`（含 `gemini`）、`--session` 補全。
-*   **iTerm2 整合**：腳本執行期間會動態更新 iTerm2 的 Badge（徽章），方便識別目前的 feature 環境。
-*   **環境要求**：
-    *   `git` 2.5+ (必須支援 worktree)
-    *   `bash` 4+
+Path resolution 順序：
 
----
+1. 明確 `--path`。
+2. registered `.worktrees/<change-id>`。
+3. 唯一 checkout `feature/<change-id>` 的非 primary Worktree。
+4. 唯一包含 active change 且 HEAD 含 planning branch tip 的 detached Worktree。
+5. 無候選時，只能從已確認的 local／remote `feature/<change-id>` 建立
+   `.worktrees/<change-id>`。
 
-## 🔗 相關說明
+多個候選會列出 path 並要求 `--path`。同機 attach 允許 dirty state；啟動前會列出
+path、branch／detached、HEAD 與 `git status --short`，不會 stash、commit、reset
+或清除變更。
 
-*   **協作流程概覽**：了解如何配合 OpenSpec 進行多 Agent 開發，請看 [多 Agent 協作工作流](../../docs/workflow/guide.md)。
-*   **自動化 Commit**：了解 `/openspec-commit` 的運作原理，請看 [OpenSpec Commit 工作流](../../docs/workflow/commit.md)。
+新 Project-managed Worktree 只複製存在且 target 尚不存在的檔案：
+
+| Provider | local files |
+|---|---|
+| all | `.env` |
+| Claude | `.claude/settings.local.json` |
+| Codex | `.codex/config.toml` |
+| Antigravity | 無 repo-local allowlist |
+| Copilot | 無額外 local-only file |
+
+不複製 global credentials、其他 Provider 設定或 legacy `.gemini/settings.json`；
+不建立 `.worktreeinclude`，也不安裝 dependencies。
+
+### `wt-resume <change-id> [options]`
+
+使用與 `wt-work` 相同的 `--path`／registry resolver，只恢復所選 Provider 的
+session，不注入 apply intent。無 `--session` 時使用該 Provider 的 native picker
+或 continue 行為。
+
+### `wt-done <change-id> [--base <branch>]`
+
+Local-only merge helper。只移除 registered `.worktrees/<change-id>`；不接受任意
+cleanup path，也不移除 Provider-native Worktree。若 Provider-native path 仍
+checkout feature branch，merge 後保留該 branch 供原 cleanup owner 處理。它不啟動
+Provider，因此沒有 `--agent`，`agy` alias 也不適用。
+
+## Zsh Completion
+
+`_wt` 從 `git worktree list --porcelain` 取得 change ID，並補全四個 Provider、
+`--session`、`--path` 與 `--base`。不掃描未註冊的 `.worktrees/` 目錄。
+
+## 相關文件
+
+- [多 Agent 協作工作流](../../docs/workflow/guide.md)
+- [Worktree resolution](../../docs/workflow/wt-work-flow.md)
+- [Provider-native Worktree reference](../../docs/workflow/provider-worktrees.md)
+- [OpenSpec Commit 工作流](../../docs/workflow/commit.md)

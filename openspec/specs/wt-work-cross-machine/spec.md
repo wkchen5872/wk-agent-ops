@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Extends `wt-work` to handle three distinct branch resolution scenarios: a pre-existing local branch (same machine), a remote-only branch (cross-machine handoff), and the baseline new-branch case. This enables seamless RD onboarding when a PM has already created and pushed the feature branch from a different machine.
+Defines local and remote reviewed-branch hand-off for `wt-work`, including safe primary-checkout relocation and explicit separation of a confirmed missing remote branch from transport or authentication failures.
 
 ---
 

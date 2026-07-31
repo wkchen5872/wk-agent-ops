@@ -1,41 +1,59 @@
-#compdef wt-work wt-done wt-resume
+#compdef wt-work wt-done wt-resume pm-start opsx-branch
 
 _wt() {
-  local context state state_descr line
+  local context state state_descr line repo
   typeset -A opt_args
-
-  local repo
   repo=$(git rev-parse --show-toplevel 2>/dev/null)
 
-  local -a features
-  if [[ -n "$repo" && -d "$repo/.worktrees" ]]; then
-    features=("${(@f)$(ls "$repo/.worktrees/" 2>/dev/null)}")
+  local -a features worktree_paths
+  if [[ -n "$repo" ]]; then
+    features=(
+      "${(@f)$(git -C "$repo" for-each-ref --format='%(refname:short)' refs/heads/feature/ 2>/dev/null \
+        | sed 's#^feature/##')}"
+      "${(@f)$(git -C "$repo" worktree list --porcelain 2>/dev/null \
+        | awk '/^branch refs\/heads\/feature\// { sub("branch refs/heads/feature/", ""); print }')}"
+      "$repo"/.worktrees/*(N:t)
+    )
+    features=(${(u)features:#})
+    worktree_paths=("${(@f)$(git -C "$repo" worktree list --porcelain 2>/dev/null \
+      | awk '/^worktree / { print substr($0, 10) }')}")
   fi
 
   case "$service" in
     wt-work)
       _arguments \
-        '1:feature name:((${(q)features[@]}))' \
-        {--agent,-a}'[agent to use]:agent:(claude copilot gemini codex)' \
+        '1:change ID:((${(q)features[@]}))' \
+        {--agent,-a}'[Provider to use]:Provider:(claude codex antigravity agy copilot)' \
         {--base,-b}'[base branch]:branch: ' \
         {--session,-s}'[session ID or name]:session ID or name: ' \
+        {--path,-p}'[registered worktree path]:worktree path:((${(q)worktree_paths[@]}))' \
         && return 0
       ;;
     wt-resume)
       _arguments \
-        '1:feature name:((${(q)features[@]}))' \
-        {--agent,-a}'[agent to use]:agent:(claude copilot gemini codex)' \
+        '1:change ID:((${(q)features[@]}))' \
+        {--agent,-a}'[Provider to use]:Provider:(claude codex antigravity agy copilot)' \
         {--session,-s}'[session ID or name]:session ID or name: ' \
+        {--path,-p}'[registered worktree path]:worktree path:((${(q)worktree_paths[@]}))' \
         && return 0
       ;;
     wt-done)
       _arguments \
-        '1:feature name:((${(q)features[@]}))' \
+        '1:change ID:((${(q)features[@]}))' \
+        {--base,-b}'[base branch]:branch: ' \
         && return 0
+      ;;
+    pm-start)
+      _arguments \
+        {--agent,-a}'[Provider to use]:Provider:(claude codex antigravity agy copilot)' \
+        && return 0
+      ;;
+    opsx-branch)
+      _arguments '1:change ID:((${(q)features[@]}))' && return 0
       ;;
   esac
 
-  _describe 'feature names' features
+  _describe 'change IDs' features
 }
 
-compdef _wt wt-work wt-done wt-resume
+compdef _wt wt-work wt-done wt-resume pm-start opsx-branch

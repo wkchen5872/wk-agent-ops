@@ -2,7 +2,7 @@
 
 ## Purpose
 
-A Claude Code PostToolUse hook that intercepts `openspec new change` Bash commands and automatically creates a corresponding `feature/<name>` git branch in the project directory. This keeps the git branch lifecycle in sync with the OpenSpec change lifecycle without requiring manual branch creation.
+Provides the explicit `opsx-branch <change-id>` branch-first entry point plus a fail-soft Claude Code PostToolUse compatibility hook. The explicit command prepares `feature/<change-id>` before OpenSpec writes artifacts; the hook only repairs legacy invocation order when possible.
 
 ---
 

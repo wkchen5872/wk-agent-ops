@@ -13,11 +13,6 @@ timestamp: 2026-07-31T00:00:00+08:00
 `.worktrees/<change-id>`，再由 Provider adapter 啟動 RD Session；它不負責
 釐清需求或建立 OpenSpec change。
 
-> [!NOTE]
-> 現行腳本只辨識固定的 `.worktrees/<change-id>`。`--path`、Git registry 自動搜尋、
-> cross-provider new session、Provider local settings、cleanup owner 與 active
-> writer gate 都是目標契約，尚未實作。
-
 ## 標準前置條件
 
 - OpenSpec change 已達 apply-ready，並經人類 review。
@@ -54,21 +49,22 @@ flowchart TD
 Attach 或建立完成後，還必須驗證 resolved HEAD 包含 `planning_commit`，才能進入
 apply。零個既有候選時，預設建立 Project-managed Worktree。
 
-## Current Branch Resolution
+## Branch Hand-off
 
 ```mermaid
 flowchart TD
-    A([wt-work &lt;change-id&gt;]) --> B{.worktrees/change-id<br/>already exists?}
-    B -- yes --> C[Resume in existing Worktree<br/>and pass apply prompt]
-    B -- no --> D{Local branch<br/>feature/change-id<br/>exists?}
-    D -- yes --> E[Switch primary checkout away<br/>if it holds the branch]
-    E --> F[git worktree add<br/>.worktrees/change-id<br/>feature/change-id]
-    D -- no --> G{Remote branch<br/>origin/feature/change-id<br/>exists?}
-    G -- yes --> H[fetch remote branch<br/>and add tracking Worktree]
-    G -- no / error --> I[Compatibility fallback:<br/>create branch from base]
-    F --> J[Copy Claude local settings and .env<br/>then start RD adapter]
-    H --> J
-    I --> J
+    A([No eligible registered Worktree]) --> D{Local branch<br/>feature/change-id<br/>exists?}
+    D -- yes --> E{Primary checkout holds it?}
+    E -- yes, clean --> F[Switch primary to base]
+    E -- yes, dirty --> X[Stop without changing files]
+    E -- no --> G[Create .worktrees/change-id]
+    F --> G
+    D -- no --> H{Origin query result?}
+    H -- branch exists --> I[Fetch exact remote branch]
+    I --> G
+    H -- confirmed absent --> X
+    H -- infrastructure error --> X
+    G --> J[Copy allowlisted local files<br/>then start RD adapter]
 ```
 
 ## Path Details
@@ -98,21 +94,13 @@ git worktree add .worktrees/<change-id> \
   -b feature/<change-id> origin/feature/<change-id>
 ```
 
-`git ls-remote` 失敗時，現行腳本會跳到 Path 3。這可能同時代表 branch 不存在、
-沒有 remote 或網路錯誤，因此未來不應把所有失敗都解讀成「可以安全新建」。
+`git ls-remote` 的「branch confirmed absent」與 transport／authentication error
+分開處理；兩者都停止，且後者會明確回報 origin query failure。
 
-### Path 3 — No branch anywhere
+### Path 3 — No reviewed branch
 
-現行腳本會從 base branch 建立新 branch 與 Worktree：
-
-```bash
-git checkout <base-branch>
-git worktree add .worktrees/<change-id> -b feature/<change-id>
-```
-
-這是 legacy / standalone 相容路徑，不是標準 PM → RD hand-off。它只建立 Git
-branch 與 Worktree，不會建立或驗證 OpenSpec artifacts；若使用者原本期待接續
-已 review 的 change，應停止並修正 hand-off，而不是在空 branch 直接 apply。
+若 local 與 origin 都沒有 `feature/<change-id>`，`wt-work` 會停止並要求完成
+branch-first planning hand-off；不再從 base 建立空 feature branch。
 
 ## Cross-Machine Scenario
 
@@ -143,15 +131,15 @@ resume_session(provider, cwd=<resolved-path>, session, apply_prompt)
 
 Adapter 只處理 Provider 的 cwd、session 與 prompt 差異，不應重新建立 branch、
 Worktree 或 OpenSpec change。切換 Provider 時停止舊 active writer，再以相同
-`resolved-path` 啟動新 adapter；這是目標 `wt-work` 的 new-session 路徑。
+`resolved-path` 啟動新 adapter；這是 `wt-work` 的 new-session 路徑。
 `wt-resume` 只恢復同一 Provider 的 session，session history 不會跨 Provider
-轉移。現行 `wt-work` 遇到既有目錄仍會 resume，尚未實作此分流。
+轉移。
 
 Project-managed Worktree 建立後，core 複製 `.env`，Provider adapter 只複製所選
 LLM Provider 已知且存在的 local settings。它不複製所有 Provider 設定，也不
-自動安裝 dependencies。
+自動安裝 dependencies 或建立 `.worktreeinclude`。
 
-目標 Provider 矩陣與現行缺口見
+Provider 矩陣見
 [PM/RD 多 Agent 協作工作流](/docs/workflow/guide.md#目標-provider-矩陣)。
 
 ## 相關文件

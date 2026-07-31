@@ -49,6 +49,12 @@ PROJECT_DIR="${PROJECT_DIR:-$PWD}"
 
 BRANCH="feature/$CHANGE_NAME"
 
+# Explicit opsx-branch may already have prepared the branch.
+if [[ "$(git -C "$PROJECT_DIR" branch --show-current 2>/dev/null || true)" == "$BRANCH" ]]; then
+  printf 'Already on branch: %s\n' "$BRANCH"
+  exit 0
+fi
+
 # ── Trigger notice ───────────────────────────────────────────────────────────
 printf '\n┌─────────────────────────────────────────────┐\n'
 printf   '│  openspec-branch-creator                    │\n'

@@ -78,10 +78,24 @@ if git -C "$REPO" merge "$BRANCH"; then
   echo "✅ Merge successful, cleaning up..."
 
   if [[ -d "$WORKTREE_DIR" ]]; then
-    git -C "$REPO" worktree remove "$WORKTREE_DIR"
+    REGISTERED_PATH="$(cd "$WORKTREE_DIR" && pwd -P)"
+    if git -C "$REPO" worktree list --porcelain | grep -Fxq "worktree $REGISTERED_PATH"; then
+      git -C "$REPO" worktree remove "$REGISTERED_PATH"
+    else
+      echo "⚠️  Not removing unregistered Project-managed path: $WORKTREE_DIR"
+    fi
   fi
   git -C "$REPO" worktree prune
-  git -C "$REPO" branch -d "$BRANCH"
+
+  BRANCH_OWNER="$(git -C "$REPO" worktree list --porcelain | awk -v ref="refs/heads/$BRANCH" '
+    /^worktree / { path=substr($0, 10) }
+    $0 == "branch " ref { print path; exit }
+  ')"
+  if [[ -n "$BRANCH_OWNER" ]]; then
+    echo "⚠️  Preserving $BRANCH because it is still checked out at: $BRANCH_OWNER"
+  else
+    git -C "$REPO" branch -d "$BRANCH"
+  fi
 
   # Reset iTerm2 badge
   if [[ "${TERM_PROGRAM:-}" == "iTerm.app" ]]; then

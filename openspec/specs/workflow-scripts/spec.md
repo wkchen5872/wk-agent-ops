@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Specifications for the workflow helper scripts (`wt-work`, `wt-done`, `wt-resume`, `pm-start`) and their installation/documentation requirements. This covers the integrated install experience and documentation standards for the workflow tooling.
+Specifications for the branch-first and Worktree workflow helpers (`opsx-branch`, `wt-work`, `wt-done`, `wt-resume`, `pm-start`) and their shared runtime, installation, completion, and documentation requirements.
 
 ---
 

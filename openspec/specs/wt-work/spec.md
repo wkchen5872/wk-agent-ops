@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Provides a `wt-work <feature-name>` command that creates a new git worktree (if absent) or resumes an existing worktree (if present), and always passes `/opsx:apply <name>` as the initial prompt to the AI CLI agent. Replaces `wt-new`.
+Provides a multi-Provider `wt-work <change-id>` apply launcher that safely resolves a registered Worktree or creates a Project-managed Worktree from a reviewed feature branch, preserving dirty same-machine hand-offs and cleanup ownership.
 
 ## Requirements
 

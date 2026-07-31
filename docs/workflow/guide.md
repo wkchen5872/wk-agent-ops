@@ -12,10 +12,6 @@ timestamp: 2026-07-31T00:00:00+08:00
 不同責任。Worktree 是平行開發的隔離工具，不是 OpenSpec 或單一 Session
 開發的必要條件。
 
-> [!IMPORTANT]
-> 本文件目前是架構 review 草案。目標流程與現行腳本的差距列在
-> [尚待實作](#尚待實作)，review 通過前不要把該段能力視為已完成。
-
 ## 責任邊界
 
 | Lifecycle | 管理內容 | 主要動作 |
@@ -70,6 +66,7 @@ commit 規劃文件到 feature/<change-id>
 Branch 必須在 `$openspec-ff-change` 的第一個持久化動作
 `openspec new change <change-id>` 之前就存在。不得依賴 PostToolUse hook 在 change
 建立後才切 branch，否則 hook 失敗時 artifacts 仍會留在原本的 checkout。
+正式入口是 `opsx-branch <change-id>`；hook 只保留為相容性 fallback。
 
 ## Phase 2：RD 實作
 
@@ -110,11 +107,11 @@ OpenSpec artifacts、Git diff、測試結果與未完成 task。
 狀態決定。跨機器或 Provider-managed Worktree 可能被清理時，才必須先保存可攜
 的 commit／patch。
 
-目標語意是由 `wt-work <change-id> --agent <provider>` 啟動新的 Provider session，
-不是 `wt-resume`：後者只用於同一 Provider 的既有 session，session history 不會
-跨 Provider 轉移。現行 `wt-work` 遇到既有 `.worktrees/<change-id>` 仍會走 resume
-路徑；在 adapter 修正前，應依 reference 直接從既有 path 啟動接手者。若改在另一
-台機器接手，則先 commit／push named branch，再建立新的 Worktree。
+`wt-work <change-id> --agent <provider>` 在未指定 `--session` 時一定啟動新的
+Provider session；只有明確 `--session` 才 resume 並帶入 apply intent。`wt-resume`
+只恢復同一 Provider 的 session，不帶入 apply intent，session history 不會跨
+Provider 轉移。若改在另一台機器接手，先 commit／push named branch，再建立新的
+Worktree。
 
 原生預設位置、path discovery 與接手命令見
 [Provider-native Worktree Reference](/docs/workflow/provider-worktrees.md)。
@@ -172,7 +169,7 @@ flowchart TD
 |---|---|---|
 | Claude Code | 支援 | native OPSX alias 或 portable skill，擇一 |
 | Codex | 支援 | portable skill |
-| Antigravity | 支援 | native workflow 或 portable skill，擇一 |
+| Antigravity (`antigravity`／`agy`) | 支援 | native workflow 或 portable skill，擇一 |
 | GitHub Copilot CLI | 支援 | portable skill |
 | Gemini CLI | 移除 | 已不列入目標矩陣 |
 
@@ -181,24 +178,6 @@ Worktree core 應保持 Provider-neutral；Provider adapter 只負責在指定 c
 
 各 Provider surface 是否原生建立 Worktree、預設位置與 checkout 行為，集中記錄於
 [Provider-native Worktree Reference](/docs/workflow/provider-worktrees.md)。
-
-## 尚待實作
-
-目前文件共識尚未全部反映在腳本中：
-
-- `openspec-branch-creator` 仍是 change 建立後才執行的 PostToolUse hook，尚未改為
-  Scope Ready 後的明確 branch-first 入口。
-- `pm-start` 目前只有 Claude Code adapter；其實作雖只啟動 Plan Mode，主規格仍
-  留有自動 `/opsx:new` 的舊描述。
-- `wt-work` / `wt-resume` 仍列出 Gemini、尚無 Antigravity adapter，Codex 的
-  prompt 與 resume 行為也尚未完整對齊 portable skill。
-- `wt-work` 目前只辨識 `.worktrees/<change-id>`，尚不會從 Git registry attach
-  任意 Provider Worktree，也沒有 detached HEAD 的精確 path 輸入；既有目錄仍
-  固定走原 Provider 的 resume 語意，尚無 cross-provider new-session mode。
-- 腳本尚未區分 cleanup owner 與 active writer；在完成前，使用者必須自行避免
-  同時讓兩個 Provider 寫入，或讓錯誤 owner 清理 Worktree。
-- Project-managed Worktree 目前只複製 `.env` 與 Claude local settings；尚未依
-  `--agent` 複製所選 LLM Provider 的相關 local settings。
 
 ## 已確認的實作決策
 

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Provides a `wt-resume <feature-name>` command that resumes an AI CLI agent session regardless of whether the local worktree directory still exists. Supports Claude, Copilot, and Gemini agents with optional session targeting via `--session`.
+Provides a `wt-resume <change-id>` command that safely resolves a registered Worktree and resumes a Claude, Codex, Antigravity, or Copilot session without injecting a new apply action.
 
 ## Requirements
 
