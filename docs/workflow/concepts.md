@@ -1,86 +1,176 @@
-# OpenSpec + Git Worktree 並行開發模式
-
-本文件說明如何利用 Git Worktree 的特性，達成多個 AI Agent 同時並行開發不同功能的底層運作原理與工程實務。
-
+---
+type: Architecture
+title: OpenSpec、Git 與 Session 邊界
+description: PM/RD 工作流的 lifecycle 分離、branch-first 關卡與 Worktree state invariants。
+tags: [workflow, openspec, git, worktree, sessions]
+timestamp: 2026-07-31T00:00:00+08:00
 ---
 
-## 為什麼需要 Worktree 並行模式？
+# OpenSpec、Git 與 Session 邊界
 
-在傳統的 Git 分支開發中，切換功能（Context Switching）通常需要 `git checkout`，這會導致：
-1. **中斷開發**：必須先 `git commit` 或 `git stash` 才能切換，否則未完成的變更會跟著跑。
-2. **環境衝突**：無法同時在本地運行兩個不同分支的服務（例如：同時跑開發版與測試版）。
-3. **編譯等待**：切換分支後，往往需要重新編譯或重新安裝依賴。
+OpenSpec、Git 與 AI Provider 解決的是三個不同問題。把它們綁成單一路徑，會讓
+「建立 change」意外切 branch，或讓「啟動 Session」不必要地建立 Worktree。
 
-**Worktree 解決了這些問題**，它讓每個功能擁有「獨立的實體目錄」，讓你只需切換終端機視窗就能瞬間切換開發上下文。
-
----
-
-## 核心概念
-每個功能由一個 **Worktree（獨立目錄/Branch）** 與一個 **AI Agent 視窗** 組成，確保開發過程互不干擾。
+## 三個獨立 Lifecycle
 
 ```text
-my-project/                   ← 主倉庫 (main branch)
-├── .env                      ← 環境變數 (Source)
-└── .worktrees/               ← 存放所有開發中的功能實體
-    ├── user-login/           ← Agent A 的獨立實體空間
-    └── data-export/          ← Agent B 的獨立實體空間
+OpenSpec lifecycle
+explore → ff → review → apply → verify → archive
+
+Git lifecycle
+branch → optional worktree → commit → merge → cleanup
+
+Provider session lifecycle
+start → plan/explore → resume → stop
 ```
 
----
+`change-id` 是 workflow 的共同關聯鍵；若 Provider 使用 detached HEAD 或不透明
+路徑，Git hand-off 還必須攜帶精確 Worktree path。
 
-## 標準流程 (Under the Hood)
+| Lifecycle | Owner | 不負責的事 |
+|---|---|---|
+| OpenSpec | OpenSpec action / portable skill | 不決定 checkout 隔離方式 |
+| Git | project workflow scripts 或明確的 cleanup owner | 不決定需求是否已釐清 |
+| Session | Claude、Codex、Antigravity、Copilot adapter | 不偷偷建立 change 或 Git branch |
 
-### Step 1 — 建立隔離環境
-在專案根目錄執行，建立 feature 分支並對應到 `.worktrees/` 目錄：
-```bash
-git worktree add .worktrees/user-login -b feature/user-login
+## 兩種 PM 入口，一個正式轉換
+
+需求清楚時，可以用 `pm-start` 直接進入 Plan Mode；需求不清楚時，可以從一般
+Session 先讀取專案、討論，再選擇 Plan Mode 或 `$openspec-explore`。兩條路最後
+都停在同一個 Scope Ready 關卡。
+
+```text
+direct-plan ───────────────┐
+                          ├─ Scope Ready ─ branch-first ─ ff
+discovery-first ──────────┘
 ```
 
-### Step 2 — 複製環境配置
-由於 `.env` 等敏感檔案通常不在 Git 中，建立 Worktree 後需手動同步：
-```bash
-cp .env .worktrees/user-login/
+`pm-start` 與 `$openspec-explore` 都是可選入口。真正需要固定的只有
+Scope Ready 後的 branch-first 轉換，因為 `$openspec-ff-change` 從建立 change
+目錄開始就會產生持久化檔案。
+
+## Branch-first 的原因
+
+```text
+推薦
+確認 change-id → 建立 feature/<change-id> → openspec new change
+
+現行 PostToolUse 行為
+openspec new change → 寫入 artifacts → hook 嘗試切 feature/<change-id>
 ```
 
-### Step 3 — 啟動 Agent
-開啟新的終端機視窗，進入該目錄啟動 Agent：
-```bash
-cd .worktrees/user-login && claude 
+後者只有在 hook 成功時才看起來等價；hook 缺席、停用或解析失敗時，change
+artifacts 會留在原 checkout。因此，branch 建立應該是正式 transition 的前置
+條件，而不是事後補救。
+
+Branch、OpenSpec change 與 wk-agent-ops Worktree 採相同名稱，降低 hand-off
+時的推測：
+
+```text
+change-id:  user-login
+branch:     feature/user-login
+worktree:   .worktrees/user-login   # 只在 project provisions 時存在
 ```
 
-### Step 4 — OpenSpec 流程
-在各自視窗執行 `/opsx:new` → ... → `/opsx:archive`。
+## Worktree 是並行工具，不是流程階段
 
-### Step 5 — 合併與清理
-功能開發完成並 Commit 後，回到主目錄進行合併：
-```bash
-git checkout main
-git merge feature/user-login
+Worktree 解決的是同時 checkout 多個 branch 的問題。若只有一個 Session 依序
+規劃與實作，feature branch 已足夠，不需要建立 Worktree。
 
-# 移除 worktree 目錄並清理 git 狀態
-git worktree remove .worktrees/user-login
-git branch -d feature/user-login
+| PM 入口 | Branch-only 實作 | 平行 RD 實作 |
+|---|---|---|
+| `pm-start` direct-plan | 支援 | 支援 |
+| discovery-first | 支援 | 支援 |
+
+因此「如何開始釐清需求」與「是否平行實作」是兩個獨立選項，不需要四套工作流。
+
+### Branch-only
+
+```text
+primary checkout
+main → feature/change-id → ff → apply → verify → commit → merge
 ```
 
----
+適合單一 Session 或不需要同時處理其他 branch 的工作。
 
-## 避坑指南 (Precautions)
+### Project-managed Worktree
 
-| 挑戰 | 說明與對策 |
-| :--- | :--- |
-| **依賴更新** | 若 A 功能新增了 library，B 功能的本地執行可能會壞掉。對策：兩邊都需執行 `npm install`。 |
-| **環境變數** | 修改了主目錄的 `.env` 後，記得同步到各個 `.worktrees/` 下。 |
-| **資料庫衝突** | 若兩個功能共用同一個本地資料庫（如 SQLite），寫入時可能產生競爭。 |
-| **命名一致性** | Branch 名、Worktree 目錄名、OpenSpec Change 名三者保持一致，維護最輕鬆。 |
-| **OpenSpec/Specs/ 衝突** | Archive 時會同步 Spec 到 `openspec/specs/`，若兩個功能修改同一個 Spec 才會衝突。 |
+```text
+primary checkout                       .worktrees/change-id
+feature/change-id planning commit      feature/change-id
+          │                                  │
+          └─ wt-work switches primary ───────┘
+             away and attaches branch        apply / verify / commit
+```
 
----
+適合 PM 留在主 checkout 繼續規劃，RD Agent 在另一個實體目錄實作。完成後由
+`wt-done` 合併並清理。因為 path 與 branch 由 project 控制，這是 `wt-work` 的
+預設模式。
 
-## 🚀 更好的做法：使用自動化腳本
+### Provider-native Worktree
 
-為了減少重複的手動操作，本專案提供了 `wt-work` 與 `wt-done` 腳本。這些腳本已將上述步驟（包含自動建立目錄、複製環境變數、iTerm2 標籤設定、OpenSpec 自動對齊）封裝完畢：
+Provider 可以建立自己的隔離 checkout。其他 Provider 可以在建立者停止後 attach
+同一個 path，但不能再次建立 Worktree；第一版不移交 cleanup ownership，原
+Provider 仍負責清理。
 
-- **啟動/繼續工作**：`wt-work user-login`
-- **完成合併收尾**：`wt-done user-login`
+## Worktree State Invariants
 
-詳細用法請參考：[Worktree 腳本手冊](../../scripts/workflow/README.md)
+```text
+provisioner / cleanup_owner ∈ {none, project, provider}
+active_writer               ∈ {none, claude, codex, antigravity, copilot}
+```
+
+- Branch-only 的 provisioner 與 cleanup owner 都是 `none`。
+- `project` 表示 `wt-work` 建立，預設由 `wt-done` 清理。
+- `provider` 表示 Provider-native Worktree，預設由建立它的 Provider 清理。
+- `wt-work` attach 外部 Worktree 時只成為 launcher，不會自動成為 cleanup owner。
+
+同一個 Worktree 同一時間只能有一個 active writer。這項限制避免檔案與 Git
+index 競爭；cleanup 也只能由已知 owner 執行，避免原 Provider 與 `wt-done`
+重複移除同一 Worktree。
+
+## 跨 Provider Failover
+
+切換 Provider 不需要切換 Git checkout：
+
+```text
+Provider A @ worktree/path
+    ↓ stop A and subagents
+Provider B @ same worktree/path
+```
+
+這不會產生新的 Worktree 衝突，因為只有 active writer 改變。相反地，若 B 使用
+原生 Worktree 功能建立第二個 checkout，named branch 可能被 Git 拒絕；detached
+或不同 branch 則會讓工作狀態分岔。
+
+Provider session history 不屬於可攜 hand-off。B 必須從 Git status/diff、OpenSpec
+artifacts、測試結果與未完成 tasks 重建 context。
+
+同機 failover 不要求 clean Worktree。接手前必須停止原 active writer 並檢視
+status／diff；是否建立 checkpoint commit 由使用者依當下工作狀態決定。
+
+同一路徑接手只適用於同一台機器或共享檔案系統。跨機器時，應先建立可追蹤的
+commit 並推送 named branch，再由另一台機器建立新的 Worktree；未 commit 的檔案
+狀態不會隨 Provider session 移動。
+
+## PM → RD Hand-off
+
+Hand-off 的必要資料只有：
+
+- 精確的 `change-id`。
+- 已 review 並 commit 的 OpenSpec artifacts。
+- 包含該 artifacts 的精確 `planning_commit`。
+- `feature/<change-id>` 的可解析位置（本地或 remote）。
+- 若已建立 Worktree，可提供精確 path；省略時 workflow 只能採用唯一且可驗證的
+  Git registry 候選。
+- 明確的 cleanup owner，以及目前是否仍有 active writer。
+
+Session ID 是 Provider adapter 的資料，不應成為 Git 或 OpenSpec lifecycle 的
+必要欄位。
+
+## 相關文件
+
+- [PM/RD 多 Agent 協作工作流](/docs/workflow/guide.md)
+- [wt-work Worktree and Branch Resolution Flow](/docs/workflow/wt-work-flow.md)
+- [Provider-native Worktree Reference](/docs/workflow/provider-worktrees.md)
+- [OpenSpec Commit Workflow](/docs/workflow/commit.md)

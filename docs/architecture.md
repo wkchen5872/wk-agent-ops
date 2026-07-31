@@ -66,16 +66,25 @@ wk-agent-ops/
 
 ---
 
-## 3. Two-Phase Workflow Separation
+## 3. Workflow Lifecycle Boundaries
 
-This project enforces a strict **PM / RD separation** via git branches and worktrees:
+PM / RD 是角色分工，不等於固定的 checkout 形式。OpenSpec、Git 與 Provider
+session 各自管理獨立 lifecycle；`change-id` 與 `planning_commit` 是 hand-off 的共同
+識別資料。
 
-| Phase | Role | Branch | Tools |
-|-------|------|--------|-------|
-| PM (Planning) | Write specs, design, tasks | `main` | `pm-start`, `/opsx:new`, `/opsx:ff` |
-| RD (Implementation) | Implement tasks | `feature/<name>` worktree | `wt-work`, `/opsx:apply` |
+| 階段 | Checkout | 必要結果 |
+|---|---|---|
+| Explore | 任一安全 checkout；不建立持久化 change | Scope Ready 與唯一 `change-id` |
+| Plan | `feature/<change-id>` branch | 已 review 並 commit 的 OpenSpec artifacts |
+| Apply | 同一 branch；可為 primary、project-managed 或 provider-native Worktree | 通過 verify 並封存 change |
+| Finish | 由已知 cleanup owner 處理 | merge、branch／Worktree cleanup |
 
-**Why:** Prevents spec artifacts and code from being written in parallel in the same worktree, which causes merge conflicts and context pollution.
+Worktree 只在需要同時 checkout 多個工作時使用；單一 Session 可直接在 feature
+branch 完成。每個 Worktree 同一時間只能有一個 active writer，跨 Provider 接手
+則停止原 Provider，再使用同一個 path。
+
+完整流程見 [PM/RD 多 Agent 協作工作流](/docs/workflow/guide.md)，狀態與 ownership
+規則見 [OpenSpec、Git 與 Session 邊界](/docs/workflow/concepts.md)。
 
 ---
 
@@ -84,7 +93,8 @@ This project enforces a strict **PM / RD separation** via git branches and workt
 - **template/ → install.sh → .claude/ / .agents/ / managed docs** — one direction only; no reverse
 - **common/ rules apply to all profiles** — python/node profiles extend, never override common
 - **Hook scripts call into notify lib** — `scripts/notify/lib/` contains shared config and registry functions; hooks source these, they do not duplicate logic
-- **Hooks must be tool-agnostic** — detect `CLAUDE_PROJECT_DIR` vs `GEMINI_PROJECT_DIR` vs `PWD` fallback
+- **Workflow core remains provider-neutral** — Claude、Codex、Antigravity 與 Copilot
+  的 cwd、session、prompt 差異只存在於 adapters；Gemini CLI 不再是支援目標
 
 ---
 
