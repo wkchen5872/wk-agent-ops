@@ -1,114 +1,49 @@
-# 🤖 Claude Code Hooks Guide
-
-Hooks are user-defined shell commands executed at specific points in the Claude Code lifecycle. They provide deterministic control over Claude Code's behavior, allowing you to enforce project rules, automate repetitive tasks, and integrate with existing tools.
-
+---
+type: Reference
+title: Claude Code Hook Integration
+description: Claude Code hook locations, events, and wk-agent-ops ownership boundaries.
+tags: [hooks, claude-code, workflow, notifications]
+timestamp: 2026-08-01T00:00:00+08:00
 ---
 
-## 📅 Hook Events
+# Claude Code Hook Integration
 
-| Event | When it fires | Primary Impact |
-| :--- | :--- | :--- |
-| `SessionStart` | When a session begins or resumes | Inject context |
-| `UserPromptSubmit` | Before Claude processes a user prompt | Context injection / Block |
-| `PreToolUse` | Before a tool call executes | Block tool / Rewrite args |
-| `PermissionRequest` | When a permission dialog appears | Auto-approve/deny |
-| `PostToolUse` | After a tool call succeeds | Trigger follow-up (e.g., format) |
-| `PostToolUseFailure` | After a tool call fails | Handle errors |
-| `Notification` | When Claude Code sends a notification | Forward to OS/Desktop |
-| `Stop` | When Claude finishes responding | Block stop to force work (e.g., save) |
-| `InstructionsLoaded` | When `CLAUDE.md` or rules are loaded | Initial setup |
-| `ConfigChange` | When a config file changes | Audit / React |
-| `CwdChanged` | When working directory changes | Update environment (e.g., direnv) |
-| `FileChanged` | When a watched file changes | React to file edits |
-| `PreCompact` / `PostCompact` | Before/After context compaction | Save state / Re-inject context |
-| `SessionEnd` | When a session terminates | Cleanup |
+本文件只描述 `wk-agent-ops` 實際安裝的 Claude Code hooks；Provider 的完整事件
+目錄不在此複製，避免與 CLI 版本脫節。
 
----
+## 設定位置
 
-## 🛠️ Global Mechanics
+本專案的 user-level hooks 寫入 `~/.claude/settings.json`。安裝器只增刪自己擁有
+的 command，不會覆蓋其他 hook groups。
 
-### 1. Communication (Stdin/Stdout)
-- **Input**: Claude Code passes event-specific JSON to your script's `stdin`.
-- **Output (Exit 0)**: Operation continues. Any text on `stdout` is added to Claude's context (for `UserPromptSubmit`, `SessionStart`, etc.).
-- **Output (Exit 2)**: Operation is **blocked**. Text on `stderr` is shown to Claude as feedback.
-- **Structured JSON**: For advanced control, exit 0 and print a JSON object to `stdout`.
+## 本專案使用的事件
 
-### 2. The "Silence" Rule
-If your shell config (`.zshrc` / `.bashrc`) prints text (like "Shell ready"), it will pollute the hook's output and break JSON parsing. 
-**Fix**: Wrap `echo` statements in an interactivity check:
-```bash
-if [[ $- == *i* ]]; then
-  echo "Interactive shell message"
-fi
-```
+| 功能 | 事件 | Matcher | Script |
+|---|---|---|---|
+| OpenSpec branch compatibility | `PostToolUse` | `Bash` | `~/.config/wk-workflow/hooks/openspec-branch-creator.sh` |
+| Entropy counter | `PostToolUse` | `Bash` | `~/.config/wk-workflow/hooks/entropy-counter.sh` |
+| Telegram completion | `Stop` | 無 | `~/.config/ai-notify/hooks/telegram-notify.sh` |
+| Telegram attention | `Notification` | 無 | `~/.config/ai-notify/hooks/telegram-notify.sh` |
 
----
+OpenSpec hook 是 fail-soft 相容層；正式 branch-first contract 仍是 Agent 在建立或
+繼續 change 前執行 `opsx-branch <change-id>`。Telegram hook 也是背景通知，不會
+回傳批准或阻擋決策。
 
-## ⚙️ Configuration
-
-Hooks are configured in `.claude/settings.json` (Project) or `~/.claude/settings.json` (User).
-
-### Example: Auto-format after edits
-```json
-{
-  "hooks": {
-    "PostToolUse": [
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "jq -r '.tool_input.file_path' | xargs npx prettier --write"
-          }
-        ]
-      }
-    ]
-  }
-}
-```
-
----
-
-## 📝 Local Project Patterns (wk-agent-ops)
-
-### Infinite Loop Prevention (Stop Hook)
-When using a `Stop` hook to force extra work, you MUST check the `stop_hook_active` flag to avoid infinite loops.
+## 安裝與檢查
 
 ```bash
-#!/usr/bin/env bash
-INPUT=$(cat)
-IS_ACTIVE=$(echo "$INPUT" | jq -r '.stop_hook_active')
-
-if [ "$IS_ACTIVE" = "true" ]; then
-  echo "{}" # Allow stop
-  exit 0
-fi
-
-# ... your logic to block and force more work ...
-echo '{"decision": "block", "reason": "Please save your work first."}'
+bash scripts/workflow/install.sh
+bash scripts/notify/telegram/install.sh
 ```
 
-### Multi-Tool Compatibility
-Our hooks often detect the environment:
+在 Claude Code 內使用 `/hooks` 檢查載入狀態。重新註冊 Telegram hooks 可執行：
+
 ```bash
-if [[ -n "${CLAUDE_PROJECT_DIR:-}" ]]; then
-    TOOL_NAME="Claude Code"
-    PROJECT_DIR="$CLAUDE_PROJECT_DIR"
-elif [[ -n "${GEMINI_PROJECT_DIR:-}" ]]; then
-    TOOL_NAME="Gemini CLI"
-    PROJECT_DIR="$GEMINI_PROJECT_DIR"
-fi
+bash scripts/notify/telegram/update.sh fix-hooks
 ```
 
----
+## 相關文件
 
-## 🌍 Advanced Hook Types
-- **`type: "prompt"`**: Single-turn LLM evaluation (Haiku by default) for decision making.
-- **`type: "agent"`**: Multi-turn subagent with tool access for validation (e.g., run tests before allowing stop).
-- **`type: "http"`**: POST event data to a remote URL.
-
----
-
-## 🎮 Management
-- `/hooks`: View all active hooks and their status.
-- `disableAllHooks: true`: Disable all hooks via config.
+- [Provider hook 總覽](/docs/hooks/index.md)
+- [Telegram Notify](/docs/notify/telegram.md)
+- [Workflow scripts](/scripts/workflow/README.md)

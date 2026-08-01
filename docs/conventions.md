@@ -1,3 +1,11 @@
+---
+type: Reference
+title: wk-agent-ops Coding Conventions
+description: Bash, installer, hook, and workflow implementation conventions.
+tags: [conventions, bash, hooks, installers]
+timestamp: 2026-08-01T00:00:00+08:00
+---
+
 # 📝 wk-agent-ops Coding Conventions
 
 *This file defines the "Muscle Memory" for AI agents working in this repo. These conventions apply to bash scripts, install logic, hooks, and workflow tooling.*
@@ -40,9 +48,11 @@ SOURCE_REPO="$(cd "$(dirname "$0")/../.." && pwd)"  # for install.sh-style scrip
 ## 3. Hook Script Patterns
 
 *For the definitive technical specifications, see:*
-- [Gemini CLI Hooks Guide](hooks/gemini-hooks.md)
-- [Claude Code Hooks Guide](hooks/claude-hooks.md)
-- [GitHub Copilot Hooks Guide](hooks/copilot-hooks.md)
+- [Provider Hook Integrations](/docs/hooks/index.md)
+- [Claude Code](/docs/hooks/claude-hooks.md)
+- [Codex](/docs/hooks/codex-hooks.md)
+- [Antigravity](/docs/hooks/antigravity-hooks.md)
+- [GitHub Copilot CLI](/docs/hooks/copilot-hooks.md)
 
 ### Background hooks (notification, logging) — Silent Fail
 ```bash
@@ -62,17 +72,8 @@ fi
 
 ### Tool detection (multi-tool compatibility)
 ```bash
-# Priority: Gemini → Claude Code → fallback PWD
-if [[ -n "${GEMINI_PROJECT_DIR:-}" ]]; then
-    TOOL_NAME="Gemini CLI"
-    PROJECT_DIR="$GEMINI_PROJECT_DIR"
-elif [[ -n "${CLAUDE_PROJECT_DIR:-}" ]]; then
-    TOOL_NAME="Claude Code"
-    PROJECT_DIR="$CLAUDE_PROJECT_DIR"
-else
-    TOOL_NAME="AI CLI"
-    PROJECT_DIR="$(pwd)"
-fi
+# Prefer a normalized payload cwd; use Provider env vars only as fallbacks.
+PROJECT_DIR="${PAYLOAD_CWD:-${CLAUDE_PROJECT_DIR:-${PWD}}}"
 ```
 
 ---

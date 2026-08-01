@@ -160,7 +160,7 @@ wk-agent-ops/
 │   ├── workflow/               ← 多 Agent 協作與 Commit 流程說明
 │   ├── notify/                 ← 通知系統架構與 Telegram 安裝說明
 │   ├── skills/                 ← git-commit-writer, doc-updater 等工具說明
-│   └── hooks/                  ← Claude / Gemini / Codex / Antigravity / Copilot Hooks 指南
+│   └── hooks/                  ← Provider hook integration 與 ownership 說明
 └── openspec/                   ← 本專案的 OpenSpec 變更記錄
 ```
 
@@ -192,7 +192,7 @@ bash scripts/notify/telegram/uninstall.sh    # 移除 hook 與 config
 Codex 顯示 `registered` 只代表設定已寫入；還需要在 `/hooks` 將 `Stop` 與
 `PermissionRequest` 兩個 hook 設為 `Trusted` 並勾選 `[x]` 啟用。
 
-詳細說明：[docs/notify/telegram.md](docs/notify/telegram.md) · [docs/notify/architecture.md](docs/notify/architecture.md)
+詳細說明：[Provider hooks](docs/hooks/index.md) · [Telegram setup](docs/notify/telegram.md) · [Notification architecture](docs/notify/architecture.md)
 
 ---
 
