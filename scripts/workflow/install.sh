@@ -74,8 +74,18 @@ hash -r
 # 8. 安裝 openspec-branch-creator hook（PostToolUse 自動建立 feature branch）
 bash "$REPO/scripts/workflow/openspec-branch-creator/install.sh"
 
-# 9. 安裝 entropy-counter hook（PostToolUse 計數閘，觸發 entropy-check 提示）
-bash "$REPO/scripts/workflow/entropy-counter/install.sh"
+# 9. 清理已退役的 entropy-counter hook。
+# shellcheck source=lib.sh
+source "$REPO/scripts/workflow/lib.sh"
+LEGACY_ENTROPY_HOOK="$HOME/.config/wk-workflow/hooks/entropy-counter.sh"
+LEGACY_ENTROPY_CMD="bash \"$LEGACY_ENTROPY_HOOK\""
+if [[ -f "$HOME/.claude/settings.json" ]] && jq empty "$HOME/.claude/settings.json" 2>/dev/null; then
+  _remove_settings_hook "$HOME/.claude/settings.json" "PostToolUse" "$LEGACY_ENTROPY_CMD"
+fi
+if [[ -f "$HOME/.gemini/settings.json" ]] && jq empty "$HOME/.gemini/settings.json" 2>/dev/null; then
+  _remove_settings_hook "$HOME/.gemini/settings.json" "AfterTool" "$LEGACY_ENTROPY_CMD"
+fi
+rm -f "$REPO/.github/hooks/entropy-counter.json" "$LEGACY_ENTROPY_HOOK"
 
 echo "✅ 安裝完成。執行檔已部署至 $INSTALL_DIR"
 echo ""

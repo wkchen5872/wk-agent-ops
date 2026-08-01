@@ -12,15 +12,14 @@ runtime 啟用步驟，不複製各 CLI 的完整 hook API。
 | [Antigravity](/docs/hooks/antigravity-hooks.md) | 無；使用 Agent guard | named `Stop` | `statusLine` observer | user-level |
 | [GitHub Copilot CLI](/docs/hooks/copilot-hooks.md) | `postToolUse` | `sessionEnd`（opt-in） | `userPromptSubmitted`（opt-in） | repository-local |
 
-Gemini CLI 不在目前 Provider matrix。Notification installer 只會清除它過去建立的
-legacy entries，不會新增 Gemini notification hooks。`entropy-counter` 尚有獨立的
-legacy Gemini registration；它不代表 workflow 或 notification 的 Provider 支援。
+Gemini CLI 不在目前 Provider matrix。Installers 只會清除過去建立的 legacy
+entries，不會新增 Gemini hooks。
 
 ## Hook families
 
 ### Workflow compatibility
 
-`scripts/workflow/install.sh` 部署 OpenSpec branch fallback 與 entropy counter。
+`scripts/workflow/install.sh` 部署 OpenSpec branch fallback。
 Branch fallback 只處理直接 CLI／legacy `openspec new change` 路徑；正式流程由
 Agent-mediated `opsx-branch` guard 保證 branch-first。
 

@@ -676,7 +676,18 @@ if run_section installer; then
   git -C "$install_repo" add scripts
   git -C "$install_repo" commit -qm scripts
   fake_home="$tmp/home"
-  mkdir -p "$fake_home"
+  legacy_entropy_hook="$fake_home/.config/wk-workflow/hooks/entropy-counter.sh"
+  legacy_entropy_cmd="bash \"$legacy_entropy_hook\""
+  unrelated_hook='bash "/tmp/keep-hook.sh"'
+  mkdir -p "$fake_home/.claude" "$fake_home/.gemini" \
+    "$(dirname "$legacy_entropy_hook")" "$install_repo/.github/hooks"
+  touch "$legacy_entropy_hook" "$install_repo/.github/hooks/entropy-counter.json"
+  jq -n --arg legacy "$legacy_entropy_cmd" --arg keep "$unrelated_hook" \
+    '{hooks:{PostToolUse:[{matcher:"Bash",hooks:[{type:"command",command:$legacy,timeout:10}]},{matcher:"Bash",hooks:[{type:"command",command:$keep,timeout:10}]}]}}' \
+    > "$fake_home/.claude/settings.json"
+  jq -n --arg legacy "$legacy_entropy_cmd" --arg keep "$unrelated_hook" \
+    '{hooks:{AfterTool:[{matcher:"bash",hooks:[{type:"command",command:$legacy,timeout:10}]},{matcher:"bash",hooks:[{type:"command",command:$keep,timeout:10}]}]}}' \
+    > "$fake_home/.gemini/settings.json"
 
   if (cd "$install_repo" && HOME="$fake_home" SHELL=/bin/zsh bash scripts/workflow/install.sh) >/dev/null 2>&1 \
     && [[ -x "$fake_home/.local/bin/opsx-branch" \
@@ -725,12 +736,25 @@ if run_section installer; then
   hook_cmd="bash \"$fake_home/.config/wk-workflow/hooks/openspec-branch-creator.sh\""
   claude_count="$(jq --arg cmd "$hook_cmd" '[.hooks.PostToolUse[]?.hooks[]? | select(.command == $cmd)] | length' "$fake_home/.claude/settings.json" 2>/dev/null || printf 0)"
   codex_count="$(jq --arg cmd "$hook_cmd" '[.hooks.PostToolUse[]?.hooks[]? | select(.command == $cmd)] | length' "$fake_home/.codex/hooks.json" 2>/dev/null || printf 0)"
+  gemini_count="$(jq --arg cmd "$hook_cmd" '[.hooks.AfterTool[]?.hooks[]? | select(.command == $cmd)] | length' "$fake_home/.gemini/settings.json" 2>/dev/null || printf 0)"
   if [[ "$claude_count" == 1 && "$codex_count" == 1 \
     && -f "$install_repo/.github/hooks/openspec-branch-creator.json" \
-    && ! -e "$fake_home/.gemini" && ! -e "$fake_home/.agent/hooks" ]]; then
+    && "$gemini_count" == 0 && ! -e "$fake_home/.agent/hooks" ]]; then
     ok "installer registers Claude, Codex, and Copilot without an Antigravity hook"
   else
     bad "installer registers Claude, Codex, and Copilot without an Antigravity hook"
+  fi
+
+  legacy_claude_count="$(jq --arg cmd "$legacy_entropy_cmd" '[.hooks.PostToolUse[]?.hooks[]? | select(.command == $cmd)] | length' "$fake_home/.claude/settings.json")"
+  legacy_gemini_count="$(jq --arg cmd "$legacy_entropy_cmd" '[.hooks.AfterTool[]?.hooks[]? | select(.command == $cmd)] | length' "$fake_home/.gemini/settings.json")"
+  unrelated_count="$(jq --arg cmd "$unrelated_hook" '[.hooks[][]?.hooks[]? | select(.command == $cmd)] | length' "$fake_home/.claude/settings.json" "$fake_home/.gemini/settings.json" | awk '{ total += $1 } END { print total + 0 }')"
+  if [[ "$legacy_claude_count" == 0 && "$legacy_gemini_count" == 0 \
+    && "$unrelated_count" == 2 \
+    && ! -e "$legacy_entropy_hook" \
+    && ! -e "$install_repo/.github/hooks/entropy-counter.json" ]]; then
+    ok "installer removes legacy entropy hooks without changing unrelated hooks"
+  else
+    bad "installer removes legacy entropy hooks without changing unrelated hooks"
   fi
 
   migrated_home="$tmp/migrated-home"

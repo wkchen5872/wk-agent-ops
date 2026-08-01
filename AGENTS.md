@@ -206,31 +206,6 @@ diff template/common/.claude/agents/my-agent.md \
 
 本專案預定義的 skills：
 
-### entropy-check
-
-**位置：** `template/common/skills/entropy-check/SKILL.md`（安裝後複製到 `.claude/skills/entropy-check/SKILL.md`）
-
-**用途：** 週期性健康審查 skill（v2.1），偵測文件飄移、dead references、未使用程式碼與重構候選。自動偵測專案類型（openspec / standard），依 context 執行 D2–D3、C1、O1、R1 審查，輸出 findings 摘要表與決策選單。
-
-**特性：**
-
-- Context 自動偵測：`openspec/changes/` → openspec；否則 → standard（已移除 harness context）
-- D2：docs placeholder 文字檢查（僅提示）
-- D3：AGENTS.md 和 `docs/*.md` 中的 dead reference 檢查（backtick 路徑 + Markdown `[text](link)` + anchor），auto-fix 可修正路徑或移除無效連結
-- C1：未使用程式碼偵測（Bash 函式、Python imports、TS/JS named imports），**不提供 auto-fix**（需人工確認）
-- O1：超過 14 天未更新的 active OpenSpec changes（僅提示，openspec only）
-- R1：重構候選偵測（大型檔案 / 高 marker 密度），依 watermark archive 計數推薦 `/simplify` 或 `/refactor`
-- 決策選單：auto-fix 涵蓋 D3（C1 不納入）；可建立 OpenSpec change 或 skip 並更新 watermark
-- 每次執行後自動更新 `openspec/.entropy-state` watermark
-
-**觸發方式：**
-
-```
-/entropy-check
-```
-
----
-
 ### mutation-setup + mutation-check
 
 **位置：** `template/common/skills/mutation-setup/SKILL.md`、`template/common/skills/mutation-check/SKILL.md`（安裝後複製到 `.claude/skills/` 與 `.agents/skills/`）

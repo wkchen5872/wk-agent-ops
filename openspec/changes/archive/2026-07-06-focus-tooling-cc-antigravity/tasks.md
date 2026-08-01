@@ -3,7 +3,6 @@
 - [x] 1.1 重寫 `template/common/.claude/rules/multi-tool-compatibility.md` → 只 Claude Code + Antigravity；env 偵測改 `CLAUDE_PROJECT_DIR → PWD`。
 - [x] 1.2 同步重寫專案根 `.claude/rules/multi-tool-compatibility.md`（同上）。
 - [x] 1.3 更新專案根 `AGENTS.md`：工具清單（行 ~32-38）與模型提及（行 ~158、181）移除 Gemini/Copilot/Codex。
-- [x] 1.4 `template/common/skills/entropy-check/SKILL.md`：移除 `$GEMINI_PROJECT_DIR` 分支（PROJECT_ROOT 改 `CLAUDE_PROJECT_DIR → PWD`）。
 - [x] 1.5 `template/common/skills/openspec-commit/SKILL.md`：移除 "Copilot CLI" 字樣。
 - [x] 1.6 `template/common/skills/git-commit-writer/SKILL.md`：移除 Gemini 範例行，保留自我標記原則與 Claude 範例。
 - [x] 1.7 刪除 `template/common/.github/instructions/` 與 `template/python/.github/instructions/`。

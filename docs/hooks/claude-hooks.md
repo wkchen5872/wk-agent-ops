@@ -21,7 +21,6 @@ timestamp: 2026-08-01T00:00:00+08:00
 | 功能 | 事件 | Matcher | Script |
 |---|---|---|---|
 | OpenSpec branch compatibility | `PostToolUse` | `Bash` | `~/.config/wk-workflow/hooks/openspec-branch-creator.sh` |
-| Entropy counter | `PostToolUse` | `Bash` | `~/.config/wk-workflow/hooks/entropy-counter.sh` |
 | Telegram completion | `Stop` | 無 | `~/.config/ai-notify/hooks/telegram-notify.sh` |
 | Telegram attention | `Notification` | 無 | `~/.config/ai-notify/hooks/telegram-notify.sh` |
 

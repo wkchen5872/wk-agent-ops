@@ -13,7 +13,6 @@
 **A. 內容清理 — 移除 Copilot / Codex / Gemini CLI 假設**
 - 重寫 `template/common/.claude/rules/multi-tool-compatibility.md` 與專案根 `.claude/rules/multi-tool-compatibility.md` → 只列 Claude Code + Antigravity；環境偵測改 `CLAUDE_PROJECT_DIR → PWD`（移除 `GEMINI_PROJECT_DIR`）。
 - 更新專案根 `AGENTS.md`（工具清單 / 模型提及）移除 Gemini / Copilot / Codex。
-- `template/common/skills/entropy-check/SKILL.md`：移除 `$GEMINI_PROJECT_DIR` 偵測分支。
 - `template/common/skills/openspec-commit/SKILL.md`：移除 "Copilot CLI" 字樣（保留 Claude Code + Antigravity 路徑）。
 - `template/common/skills/git-commit-writer/SKILL.md`：移除 Gemini 範例行（保留「印出自己當下的模型名＋版本」原則與 Claude 範例 — 此自我標記為刻意設計）。
 - 移除 `template/common/.github/instructions/` 與 `template/python/.github/instructions/`，以及 `install.sh` 對 `.github` 的 sync（行 91/94/113）。
@@ -34,7 +33,7 @@
 ## Impact
 
 - `scripts/skills/install.sh`（移除 .github、新增 `.agent/rules/` 扁平 emit、`.agents`→`.agent`）。
-- `template/common/`：`.claude/rules/multi-tool-compatibility.md`、`skills/{entropy-check,openspec-commit,git-commit-writer}/SKILL.md`、`.agents/`→`.agent/`、刪 `.github/instructions/`。
+- `template/common/`：`.claude/rules/multi-tool-compatibility.md`、`skills/{openspec-commit,git-commit-writer}/SKILL.md`、`.agents/`→`.agent/`、刪 `.github/instructions/`。
 - `template/python/`：刪 `.github/instructions/`。
 - 專案根：`.claude/rules/multi-tool-compatibility.md`、`AGENTS.md`。
 - 不影響既有已安裝專案的客製檔（install 多為 `rsync -a` 覆蓋同名來源檔；docs 仍 `--ignore-existing`）。

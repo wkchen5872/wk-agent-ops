@@ -5,7 +5,5 @@
 .claude/settings.local.json
 .gemini/settings.json
 .github/hooks
-# OpenSpec runtime state
-openspec/.entropy-state
 
 graphify-out/cache/

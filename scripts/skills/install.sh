@@ -143,6 +143,16 @@ sync_dir "$TARGET/.claude/rules" "$TARGET/.agents/rules"
 rm -f "$TARGET/.claude/rules/openspec-commits.md" \
       "$TARGET/.agents/rules/openspec-commits.md"
 
+# Remove the retired entropy audit from existing installations.
+rm -rf "$TARGET/.claude/skills/entropy-check" \
+       "$TARGET/.agents/skills/entropy-check"
+rm -f "$TARGET/openspec/.entropy-state"
+if [[ -f "$TARGET/.gitignore" ]]; then
+  IGNORE_TMP="$(mktemp)"
+  grep -vFx 'openspec/.entropy-state' "$TARGET/.gitignore" > "$IGNORE_TMP" || true
+  mv "$IGNORE_TMP" "$TARGET/.gitignore"
+fi
+
 echo ""
 echo "✅ Done. Installed profiles: ${PROFILES_DISPLAY}"
 echo "   Target: $TARGET"

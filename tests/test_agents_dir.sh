@@ -18,8 +18,12 @@ grep -qE '\.agent/' "$ROOT/AGENTS.md"                  && bad "root AGENTS.md ha
 
 # 1.1 — install is non-no-op into .agents/
 T="$(mktemp -d)"; ( cd "$T" && git init -q )
-mkdir -p "$T/.claude/rules" "$T/.agents/rules"
+mkdir -p "$T/.claude/rules" "$T/.agents/rules" \
+  "$T/.claude/skills/entropy-check" "$T/.agents/skills/entropy-check" "$T/openspec"
 touch "$T/.claude/rules/openspec-commits.md" "$T/.agents/rules/openspec-commits.md"
+touch "$T/.claude/skills/entropy-check/SKILL.md" \
+  "$T/.agents/skills/entropy-check/SKILL.md" "$T/openspec/.entropy-state"
+printf 'keep-me\nopenspec/.entropy-state\n' > "$T/.gitignore"
 bash "$ROOT/scripts/skills/install.sh" --target "$T" python >/dev/null 2>&1
 [[ -n "$(ls -A "$T/.agents/workflows" 2>/dev/null)" ]] && ok ".agents/workflows populated" || bad ".agents/workflows populated"
 [[ -n "$(ls -A "$T/.agents/rules" 2>/dev/null)" ]]     && ok ".agents/rules populated"     || bad ".agents/rules populated"
@@ -31,6 +35,14 @@ cmp -s "$ANTIGRAVITY_ENTRYPOINT" "$T/.agents/workflows/opsx-commit.md" \
 [[ ! -d "$T/.codex" ]] && ok "no .codex/ dir created" || bad "no .codex/ dir created"
 [[ ! -e "$T/.claude/rules/openspec-commits.md" && ! -e "$T/.agents/rules/openspec-commits.md" ]] \
   && ok "retired openspec commit rule removed" || bad "retired openspec commit rule removed"
+if [[ ! -e "$T/.claude/skills/entropy-check" \
+  && ! -e "$T/.agents/skills/entropy-check" \
+  && ! -e "$T/openspec/.entropy-state" \
+  && "$(cat "$T/.gitignore")" == "keep-me" ]]; then
+  ok "retired entropy artifacts removed without changing unrelated ignores"
+else
+  bad "retired entropy artifacts removed without changing unrelated ignores"
+fi
 rm -rf "$T"
 
 # Linked worktrees use a .git file and share the repository hooks path.

@@ -16,10 +16,9 @@ Copilot CLI hooks 是 repository-local 設定；與 Claude、Codex 的 user-leve
 | 功能 | 設定檔 | 事件 | 安裝方式 |
 |---|---|---|---|
 | OpenSpec branch compatibility | `.github/hooks/openspec-branch-creator.json` | `postToolUse` | `scripts/workflow/install.sh` |
-| Entropy counter | `.github/hooks/entropy-counter.json` | `postToolUse` | `scripts/workflow/install.sh` |
 | Telegram notifications | `.github/hooks/hooks.json` | `sessionEnd`, `userPromptSubmitted` | Telegram installer opt-in |
 
-Workflow installer 會直接維護兩個單一用途的 hook files。Telegram hooks 則是
+Workflow installer 會直接維護 OpenSpec compatibility hook file。Telegram hooks 則是
 opt-in，因為 `.github/hooks/hooks.json` 是專案狀態，可能影響其他協作者。
 
 ```bash
