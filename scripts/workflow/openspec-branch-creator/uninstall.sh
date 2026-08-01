@@ -13,10 +13,15 @@ source "$(dirname "${BASH_SOURCE[0]}")/../lib.sh"
 HOOK_DST="$HOME/.config/wk-workflow/hooks/openspec-branch-creator.sh"
 HOOK_CMD="bash \"$HOOK_DST\""
 CLAUDE_SETTINGS="$HOME/.claude/settings.json"
+CODEX_HOOKS="$HOME/.codex/hooks.json"
 COPILOT_HOOKS_FILE=".github/hooks/openspec-branch-creator.json"
 
 if [[ -f "$CLAUDE_SETTINGS" ]] && jq empty "$CLAUDE_SETTINGS" 2>/dev/null; then
   _remove_settings_hook "$CLAUDE_SETTINGS" "PostToolUse" "$HOOK_CMD"
+fi
+
+if [[ -f "$CODEX_HOOKS" ]] && jq empty "$CODEX_HOOKS" 2>/dev/null; then
+  _remove_settings_hook "$CODEX_HOOKS" "PostToolUse" "$HOOK_CMD"
 fi
 
 if [[ -f "$COPILOT_HOOKS_FILE" ]]; then

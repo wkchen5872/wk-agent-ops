@@ -3,7 +3,7 @@ type: Playbook
 title: PM/RD 多 Agent 協作工作流
 description: 從需求探索、OpenSpec 規劃到循序或平行實作的協作流程。
 tags: [workflow, openspec, git, worktree, agents]
-timestamp: 2026-07-31T00:00:00+08:00
+timestamp: 2026-08-01T00:00:00+08:00
 ---
 
 # PM/RD 多 Agent 協作工作流
@@ -45,28 +45,80 @@ Plan Mode 與 `$openspec-explore` 也不是二選一：前者是 Provider 的執
 兩種入口都必須先收斂到 **Scope Ready**：
 
 - 問題、預期行為與不做的範圍已足以撰寫規格。
-- 已確認唯一的 kebab-case change ID。
+- 已有明確的 change ID，或需求描述已足以讓 OpenSpec skill 推導唯一的
+  kebab-case change ID。
 - 人類準備開始 review 持久化的 proposal、design、specs 與 tasks。
 
-在 Scope Ready 之前，不需要為探索中的想法建立 branch 或 change。通過關卡後，
-才執行同一個 branch-first 轉換：
+在 Scope Ready 之前，不需要為探索中的想法建立 branch 或 change。
+
+### OpenSpec 規劃入口
+
+三個規劃 action 的責任不同；artifact 順序由 schema 決定，不由 workflow script
+寫死：
+
+| Action | Change 狀態 | 單次執行結果 |
+|---|---|---|
+| `$openspec-new-change`／`/opsx:new` | 建立新 change | 建立 scaffold、顯示第一個 ready artifact 的 instructions，尚不寫入 artifact |
+| `$openspec-ff-change`／`/opsx:ff` | 建立新 change | 建立 scaffold，接著產生所有 apply-required artifacts |
+| `$openspec-continue-change`／`/opsx:continue` | 繼續既有 change | 解析 change ID，依 status 建立一個 ready artifact |
+
+目前 `spec-driven` schema 的常見順序是
+`proposal → specs → design → tasks`；其他 schema 一律遵循 `openspec status` 與
+`openspec instructions` 回傳的 dependencies。
+
+### Change ID 與 Branch Preparation
+
+> [!NOTE]
+> Agent-mediated branch preparation 已寫入 managed operating protocol，適用於
+> 所有 AGENTS.md-aware Provider。它不修改或覆蓋 OpenSpec 產生的 skills／commands。
+
+`new` 與 `ff` 都在 skill 接受或推導 change ID 後、執行
+`openspec new change` 前準備 branch：
 
 ```text
 Scope Ready
     ↓
-建立或切換 feature/<change-id>
+OpenSpec skill 接受或推導 <change-id>
     ↓
-在該 branch 執行 $openspec-ff-change
+Agent 執行 opsx-branch <change-id>
+    ├─ non-zero → 停止目前 action，回報錯誤或既有 Worktree path
+    └─ exit 0
+         ↓
+openspec new change <change-id>
+    ↓
+new：顯示第一個 artifact instructions 並停止
+ff ：繼續產生所有 apply-required artifacts
     ↓
 人類 review artifacts
     ↓
 commit 規劃文件到 feature/<change-id>
 ```
 
-Branch 必須在 `$openspec-ff-change` 的第一個持久化動作
-`openspec new change <change-id>` 之前就存在。不得依賴 PostToolUse hook 在 change
-建立後才切 branch，否則 hook 失敗時 artifacts 仍會留在原本的 checkout。
-正式入口是 `opsx-branch <change-id>`；hook 只保留為相容性 fallback。
+`continue` 不會再執行 `openspec new change`，因此不能依賴 change-creation hook。
+目標流程是在解析既有 change ID 後、讀取 status 或寫入下一份 artifact 前執行相同
+branch guard：
+
+```text
+continue 解析 <change-id>
+    ↓
+Agent 執行 opsx-branch <change-id>
+    ├─ non-zero → 停止，不建立下一份 artifact
+    └─ exit 0 → status → instructions → 建立一份 ready artifact
+```
+
+若 `feature/<change-id>` 已由另一個 registered Worktree 持有，`opsx-branch` 會回傳
+non-zero 並顯示該 path。Agent 應停止，不能自動切換 cwd、接手該 Worktree 或啟動
+另一個 Session；這保留既有的 single-active-writer 邊界。
+
+`openspec-branch-creator` 的 PostToolUse hook 繼續保留，處理人工直接執行
+`openspec new change`、舊版 entrypoint，或 Agent 未先執行 branch preparation 的
+情境。hook 與 Agent-mediated 路徑都呼叫同一個 `opsx-branch` 核心；若 hook
+在 change scaffold 建立後才切換 branch，未 commit 的 scaffold 會隨 checkout 留在
+feature branch，不會進入 main 的 Git 歷史。
+
+workflow installer 會為 Claude Code、Codex 與 GitHub Copilot CLI 安裝此 fallback；
+Antigravity 不安裝廣泛 shell hook。Codex 若已有從 Claude 遷移的相同 entry，安裝時
+不會重複加入；新安裝或腳本更新後仍應在 Codex `/hooks` 確認 trusted／enabled。
 
 ## Phase 2：RD 實作
 
@@ -138,19 +190,32 @@ flowchart TD
     B --> F{Scope Ready?}
     E --> F
     F -- no --> D
-    F -- yes --> G[建立或切換 feature/change-id]
-    G --> H[openspec-ff-change]
-    H --> I[人類 review + planning commit]
+    F -- yes --> G[OpenSpec skill 接受或推導 change-id]
+    G --> U[Agent 執行 opsx-branch<br/>先於 Antigravity 驗證]
+    U --> V{branch ready?}
+    V -- no --> X[停止 action<br/>回報錯誤或 Worktree path]
+    V -- yes --> W[openspec new change]
+    W --> Y{new 或 ff?}
+    Y -- new --> Z[顯示第一個 artifact instructions]
+    Z --> AA[continue 解析 change-id<br/>並執行相同 branch guard]
+    AA --> AB{branch ready?}
+    AB -- no --> X
+    AB -- yes --> AC[建立一份 ready artifact]
+    AC --> AD{planning complete?}
+    AD -- no --> AA
+    AD -- yes --> I[人類 review + planning commit]
+    Y -- ff --> AE[產生所有 apply-required artifacts]
+    AE --> I
     I --> J{需要平行 RD?}
     J -- no --> K[Branch-only apply]
     J -- yes --> P{已有可用 Worktree?}
     P -- yes --> Q[解析 path 並 attach<br/>保留 cleanup owner]
     P -- no, portable --> L[wt-work 建立<br/>Project-managed Worktree]
     P -- no, native --> M[Provider 建立<br/>Provider-native Worktree]
-    Q --> V[驗證包含 planning commit]
-    L --> V
-    M --> V
-    V --> R[在 resolved path 啟動 Provider]
+    Q --> VG[驗證包含 planning commit]
+    L --> VG
+    M --> VG
+    VG --> R[在 resolved path 啟動 Provider]
     R --> S{Provider 卡住?}
     S -- yes --> T[停止 active writer<br/>換 Provider 使用同一 path]
     T --> R

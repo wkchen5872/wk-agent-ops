@@ -71,13 +71,56 @@ if run_section branch; then
     bad "explains invalid change ID format"
   fi
 
-  git -C "$repo" switch -q feature/existing-feature
-  hook_input='{"tool_input":{"command":"openspec new change existing-feature"}}'
-  if output="$(printf '%s' "$hook_input" | CLAUDE_PROJECT_DIR="$repo" bash "$ROOT/scripts/workflow/openspec-branch-creator/hook.sh" 2>&1)" \
-    && [[ "$output" == *"Already on branch"* ]]; then
-    ok "compatibility hook is a no-op on the target branch"
+  compat_repo="$tmp/compat-repo"
+  new_repo "$compat_repo"
+  compat_repo="$(cd "$compat_repo" && pwd -P)"
+  hook_stub="$tmp/opsx-branch-stub"
+  hook_log="$tmp/hook.log"
+  printf '#!/usr/bin/env bash\nprintf "%%s|%%s\\n" "$PWD" "$*" >> "$HOOK_LOG"\nexit "${HOOK_EXIT:-0}"\n' > "$hook_stub"
+  chmod +x "$hook_stub"
+
+  codex_input="{\"hook_event_name\":\"PostToolUse\",\"cwd\":\"$compat_repo\",\"tool_input\":{\"command\":\"openspec new change codex-feature\"},\"tool_response\":{\"exit_code\":0}}"
+  if output="$(printf '%s' "$codex_input" | (cd "$compat_repo" && HOOK_LOG="$hook_log" OPSX_BRANCH_BIN="$hook_stub" \
+    bash "$ROOT/scripts/workflow/openspec-branch-creator/hook.sh") 2>&1)" \
+    && grep -Fxq "$compat_repo|codex-feature" "$hook_log"; then
+    ok "hook delegates Claude/Codex payloads to opsx-branch"
   else
-    bad "compatibility hook is a no-op on the target branch"
+    bad "hook delegates Claude/Codex payloads to opsx-branch"
+    printf '       %s\n' "$output"
+  fi
+
+  : > "$hook_log"
+  copilot_input="{\"cwd\":\"$compat_repo\",\"toolName\":\"bash\",\"toolArgs\":\"{\\\"command\\\":\\\"openspec new change copilot-feature\\\"}\",\"toolResult\":{\"resultType\":\"success\"}}"
+  if output="$(printf '%s' "$copilot_input" | (cd "$compat_repo" && HOOK_LOG="$hook_log" OPSX_BRANCH_BIN="$hook_stub" \
+    bash "$ROOT/scripts/workflow/openspec-branch-creator/hook.sh") 2>&1)" \
+    && grep -Fxq "$compat_repo|copilot-feature" "$hook_log"; then
+    ok "hook normalizes Copilot camelCase payloads"
+  else
+    bad "hook normalizes Copilot camelCase payloads"
+    printf '       %s\n' "$output"
+  fi
+
+  : > "$hook_log"
+  failed_input="{\"hook_event_name\":\"PostToolUse\",\"cwd\":\"$compat_repo\",\"tool_input\":{\"command\":\"openspec new change failed-feature\"},\"tool_response\":{\"exit_code\":1}}"
+  if output="$(printf '%s' "$failed_input" | (cd "$compat_repo" && CLAUDE_PROJECT_DIR="$compat_repo" HOOK_LOG="$hook_log" OPSX_BRANCH_BIN="$hook_stub" \
+    bash "$ROOT/scripts/workflow/openspec-branch-creator/hook.sh") 2>&1)" \
+    && [[ ! -s "$hook_log" ]] \
+    && ! git -C "$compat_repo" show-ref --verify --quiet refs/heads/feature/failed-feature; then
+    ok "hook ignores explicit Codex command failure"
+  else
+    bad "hook ignores explicit Codex command failure"
+    printf '       %s\n' "$output"
+  fi
+
+  : > "$hook_log"
+  delegated_failure="{\"hook_event_name\":\"PostToolUse\",\"cwd\":\"$compat_repo\",\"tool_input\":{\"command\":\"openspec new change occupied-feature\"},\"tool_response\":{\"exit_code\":0}}"
+  if output="$(printf '%s' "$delegated_failure" | (cd "$compat_repo" && HOOK_LOG="$hook_log" HOOK_EXIT=1 OPSX_BRANCH_BIN="$hook_stub" \
+    bash "$ROOT/scripts/workflow/openspec-branch-creator/hook.sh") 2>&1)" \
+    && grep -Fxq "$compat_repo|occupied-feature" "$hook_log" \
+    && [[ "$output" == *"warning"* ]]; then
+    ok "delegated branch failure remains fail-soft"
+  else
+    bad "delegated branch failure remains fail-soft"
     printf '       %s\n' "$output"
   fi
 fi
@@ -677,6 +720,44 @@ if run_section installer; then
     ok "completion registers the final command matrix"
   else
     bad "completion registers the final command matrix"
+  fi
+
+  hook_cmd="bash \"$fake_home/.config/wk-workflow/hooks/openspec-branch-creator.sh\""
+  claude_count="$(jq --arg cmd "$hook_cmd" '[.hooks.PostToolUse[]?.hooks[]? | select(.command == $cmd)] | length' "$fake_home/.claude/settings.json" 2>/dev/null || printf 0)"
+  codex_count="$(jq --arg cmd "$hook_cmd" '[.hooks.PostToolUse[]?.hooks[]? | select(.command == $cmd)] | length' "$fake_home/.codex/hooks.json" 2>/dev/null || printf 0)"
+  if [[ "$claude_count" == 1 && "$codex_count" == 1 \
+    && -f "$install_repo/.github/hooks/openspec-branch-creator.json" \
+    && ! -e "$fake_home/.gemini" && ! -e "$fake_home/.agent/hooks" ]]; then
+    ok "installer registers Claude, Codex, and Copilot without an Antigravity hook"
+  else
+    bad "installer registers Claude, Codex, and Copilot without an Antigravity hook"
+  fi
+
+  migrated_home="$tmp/migrated-home"
+  migrated_hook="$migrated_home/.config/wk-workflow/hooks/openspec-branch-creator.sh"
+  migrated_cmd="bash \"$migrated_hook\""
+  mkdir -p "$migrated_home/.codex"
+  jq -n --arg cmd "$migrated_cmd" '{hooks:{PostToolUse:[{matcher:"Bash",hooks:[{type:"command",command:$cmd,timeout:10}]}]}}' \
+    > "$migrated_home/.codex/hooks.json"
+  (cd "$install_repo" && HOME="$migrated_home" bash scripts/workflow/openspec-branch-creator/install.sh) >/dev/null 2>&1 || true
+  migrated_count="$(jq --arg cmd "$migrated_cmd" '[.hooks.PostToolUse[]?.hooks[]? | select(.command == $cmd)] | length' "$migrated_home/.codex/hooks.json")"
+  if [[ "$migrated_count" == 1 ]]; then
+    ok "installer preserves one migrated Codex registration"
+  else
+    bad "installer preserves one migrated Codex registration"
+  fi
+
+  mkdir -p "$fake_home/.codex"
+  if [[ ! -f "$fake_home/.codex/hooks.json" ]]; then
+    jq -n --arg cmd "$hook_cmd" '{hooks:{PostToolUse:[{matcher:"Bash",hooks:[{type:"command",command:$cmd,timeout:10}]}]}}' \
+      > "$fake_home/.codex/hooks.json"
+  fi
+  (cd "$install_repo" && HOME="$fake_home" bash scripts/workflow/openspec-branch-creator/uninstall.sh) >/dev/null 2>&1 || true
+  remaining_codex="$(jq --arg cmd "$hook_cmd" '[.hooks.PostToolUse[]?.hooks[]? | select(.command == $cmd)] | length' "$fake_home/.codex/hooks.json" 2>/dev/null || printf 0)"
+  if [[ "$remaining_codex" == 0 && ! -e "$install_repo/.github/hooks/openspec-branch-creator.json" ]]; then
+    ok "uninstaller removes Codex and Copilot registrations"
+  else
+    bad "uninstaller removes Codex and Copilot registrations"
   fi
 fi
 

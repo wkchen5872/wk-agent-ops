@@ -42,6 +42,15 @@ if [[ -f "$PROTO" ]]; then
   # R3b — no pinned command for the open "other tools" set
   if grep -q 'openspec-verify-change' "$PROTO"; then bad "R3b no fake other-tools command"; else ok "R3b no fake other-tools command"; fi
 
+  # R3c — OpenSpec actions share one branch-preparation guard
+  if grep -q 'opsx-branch <change-id>' "$PROTO" \
+    && grep -qiE 'new.*fast-forward.*continue|new.*continue.*fast-forward' "$PROTO" \
+    && grep -qiE 'non-zero|exits non-zero' "$PROTO"; then
+    ok "R3c protocol guards OpenSpec new, fast-forward, and continue"
+  else
+    bad "R3c protocol guards OpenSpec new, fast-forward, and continue"
+  fi
+
   # R4 — no dangling refs: every docs/*.md referenced ships; enforcement.md not referenced
   if grep -q 'docs/enforcement.md' "$PROTO"; then bad "R4 no reference to non-existent docs/enforcement.md"; else ok "R4 no reference to non-existent docs/enforcement.md"; fi
   missing=0

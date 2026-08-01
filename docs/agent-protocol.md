@@ -9,7 +9,7 @@
 
 | Field   | Value                                                     |
 | ------- | --------------------------------------------------------- |
-| Version | 2.1.0                                                     |
+| Version | 2.2.0                                                     |
 | Scope   | Operational framework for all AI agent tasks in this repo |
 
 ---
@@ -73,6 +73,12 @@ other tool, use that tool's equivalent for the same stage.
    *(Claude Code: `/opsx:apply`)*
 4. **Seal** — archive the change and commit.
    *(Claude Code: `/opsx:archive` or `/opsx:commit`)*
+
+> **OpenSpec branch guard:** after accepting or deriving a change ID, run
+> `opsx-branch <change-id>` before any OpenSpec new, fast-forward, or continue
+> action. For new and fast-forward, do this before creating the scaffold; for
+> continue, do it before reading status or writing the next artifact. If the
+> command exits non-zero, stop the current OpenSpec action and report the error.
 
 ## 4. TDD Implementation Loop (Level 2)
 

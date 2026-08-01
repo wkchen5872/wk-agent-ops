@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# install.sh — Deploy the compatibility hook for Claude Code and Copilot CLI.
+# install.sh — Deploy the compatibility hook for Claude Code, Codex, and Copilot CLI.
 #
 # Usage:
 #   bash scripts/workflow/openspec-branch-creator/install.sh
@@ -30,7 +30,11 @@ HOOK_CMD="bash \"$HOOK_DST\""
 # Claude Code: create settings if missing, then register.
 _register_settings_hook "$HOME/.claude/settings.json" "PostToolUse" "Bash" "$HOOK_CMD"
 
+# Codex uses the same settings shape but requires interactive trust review.
+_register_settings_hook "$HOME/.codex/hooks.json" "PostToolUse" "Bash" "$HOOK_CMD"
+
 # GitHub Copilot CLI.
 _write_copilot_hook ".github/hooks/openspec-branch-creator.json" "$HOOK_DST"
 
 echo "✅ openspec-branch-creator installed"
+echo "  ℹ️ Codex: review and enable the hook in /hooks if prompted"

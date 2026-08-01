@@ -14,6 +14,10 @@ source ~/.zshrc
 `wt-done`、`pm-start` 與 zsh completion。PostToolUse branch hook 只是相容性
 fallback；正式流程應在建立 OpenSpec artifacts 前執行 `opsx-branch`。
 
+fallback hook 會註冊到 Claude Code、Codex 與 GitHub Copilot CLI；Antigravity
+只使用 managed operating protocol 的 Agent-mediated guard。Codex 若提示 hook
+尚未信任或未啟用，請用 `/hooks` 檢查該 entry。
+
 ## 指令
 
 ### `opsx-branch <change-id>`

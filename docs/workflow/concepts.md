@@ -1,9 +1,9 @@
 ---
 type: Architecture
 title: OpenSpec、Git 與 Session 邊界
-description: PM/RD 工作流的 lifecycle 分離、branch-first 關卡與 Worktree state invariants。
+description: PM/RD 工作流的 lifecycle 分離、change-id 協調與 Worktree state invariants。
 tags: [workflow, openspec, git, worktree, sessions]
-timestamp: 2026-07-31T00:00:00+08:00
+timestamp: 2026-08-01T00:00:00+08:00
 ---
 
 # OpenSpec、Git 與 Session 邊界
@@ -15,7 +15,7 @@ OpenSpec、Git 與 AI Provider 解決的是三個不同問題。把它們綁成�
 
 ```text
 OpenSpec lifecycle
-explore → ff → review → apply → verify → archive
+explore → new + continue 或 ff → review → apply → verify → archive
 
 Git lifecycle
 branch → optional worktree → commit → merge → cleanup
@@ -33,7 +33,7 @@ start → plan/explore → resume → stop
 | Git | project workflow scripts 或明確的 cleanup owner | 不決定需求是否已釐清 |
 | Session | Claude、Codex、Antigravity、Copilot adapter | 不偷偷建立 change 或 Git branch |
 
-## 兩種 PM 入口，一個正式轉換
+## 兩種 PM 入口，一個 change-id 轉換
 
 需求清楚時，可以用 `pm-start` 直接進入 Plan Mode；需求不清楚時，可以從一般
 Session 先讀取專案、討論，再選擇 Plan Mode 或 `$openspec-explore`。兩條路最後
@@ -41,27 +41,86 @@ Session 先讀取專案、討論，再選擇 Plan Mode 或 `$openspec-explore`�
 
 ```text
 direct-plan ───────────────┐
-                          ├─ Scope Ready ─ branch-first ─ ff
+                          ├─ Scope Ready ─ derive change-id ─ branch guard ─ new/ff
 discovery-first ──────────┘
 ```
 
-`pm-start` 與 `$openspec-explore` 都是可選入口。真正需要固定的只有
-Scope Ready 後的 branch-first 轉換，因為 `$openspec-ff-change` 從建立 change
-目錄開始就會產生持久化檔案。
+`pm-start` 與 `$openspec-explore` 都是可選入口。Scope Ready 不要求使用者事先
+命名；它只要求需求已明確到足以讓 OpenSpec skill 接受既有名稱或推導唯一的
+kebab-case change ID。這個最終 ID 再成為 OpenSpec change、Git branch 與後續
+Worktree 的共同關聯鍵。
 
-## Branch-first 的原因
+## Change ID 與 Branch 的協調
+
+### Agent-mediated Branch Guard
+
+OpenSpec skill 在執行 `openspec new change` 前已接受或推導出最終 change ID。共用
+operating protocol 要求 Agent 在這個時間點自動執行 `opsx-branch`，而不是要求
+人類預先知道並輸入名稱。這是所有 AGENTS.md-aware Provider 的 branch-first
+正確性來源，不依賴 Provider 是否支援 hook。
 
 ```text
-推薦
-確認 change-id → 建立 feature/<change-id> → openspec new change
+new / ff
+接受或推導 change-id
+    → Agent 執行 opsx-branch <change-id>
+    → 成功才執行 openspec new change <change-id>
 
-現行 PostToolUse 行為
-openspec new change → 寫入 artifacts → hook 嘗試切 feature/<change-id>
+continue
+解析既有 change-id
+    → Agent 執行 opsx-branch <change-id>
+    → 成功才讀取 status 並建立下一份 artifact
 ```
 
-後者只有在 hook 成功時才看起來等價；hook 缺席、停用或解析失敗時，change
-artifacts 會留在原 checkout。因此，branch 建立應該是正式 transition 的前置
-條件，而不是事後補救。
+`opsx-branch` 的 exit status 是 branch guard contract。exit `0` 表示已位於
+`feature/<change-id>`；non-zero 表示不得繼續目前的 OpenSpec action。若 branch
+已由另一個 registered Worktree 持有，它會回報該 path；Agent 必須停止，不能自動
+接手或建立第二個 writer。
+
+### PostToolUse Safety Net
+
+PostToolUse hook 保留給人工直接執行 `openspec new change`、舊版 entrypoint，或
+Agent 未先執行 branch guard 的情境：
+
+```text
+openspec new change <change-id>
+    → PostToolUse 擷取 change-id
+    → 呼叫同一個 opsx-branch 核心
+    → 後續 status / instructions / artifacts
+```
+
+hook 在 scaffold 建立後、下一個 tool call 前切換 branch；未 commit 的 scaffold
+會隨 checkout 留在 feature branch，不會進入 main 的 Git 歷史。hook 只負責
+event payload normalization，Git mutation 全部交給 `opsx-branch`。
+
+### 現行支援邊界
+
+目前 `scripts/workflow/openspec-branch-creator/hook.sh` 只辨認 shell command 中的
+`openspec new change <change-id>`：
+
+| OpenSpec action | 現行 hook 行為 |
+|---|---|
+| `$openspec-new-change`／`/opsx:new` | 會觸發；action 建立 scaffold、顯示第一個 artifact instructions，尚不建立 artifact |
+| `$openspec-ff-change`／`/opsx:ff` | 會觸發；同一 action 隨後繼續產生 apply-required artifacts |
+| `$openspec-continue-change`／`/opsx:continue` | 不觸發；action 不會執行 `openspec new change` |
+| 人工執行 `openspec new change` | 會觸發 |
+
+Provider 路徑如下：
+
+| Provider | 現行狀態 |
+|---|---|
+| Claude Code | installer 註冊 `PostToolUse / Bash`；Agent-mediated guard 仍是正式路徑 |
+| Codex | installer 註冊相同 hook；Claude 遷移而來的相同 entry 會去重，使用者仍須在 `/hooks` 確認 trusted／enabled |
+| Antigravity | 不註冊廣泛 shell hook，只使用 managed protocol 的 Agent-mediated guard |
+| GitHub Copilot CLI | installer 寫入 `postToolUse` 設定，hook 正規化 camelCase payload |
+
+Claude Code 與 Copilot 的 success event 只處理成功 tool call；Codex 的
+`PostToolUse` 也可能收到非零 shell 結果，因此 hook 會先檢查 response status。
+非匹配、明確失敗或未知 payload 都保持 silent fail-soft。相容性 hook 始終 exit
+`0`；只有 action 前的 Agent-mediated guard 會在 branch preparation non-zero 時停止
+change/artifact workflow。
+
+`opsx-branch <change-id>` 保留給名稱已知的顯式路徑，以及 hook 缺席、停用、解析或
+checkout 失敗時的 recovery。它不是每次都要由人類先輸入的必要步驟。
 
 Branch、OpenSpec change 與 wk-agent-ops Worktree 採相同名稱，降低 hand-off
 時的推測：
@@ -174,3 +233,8 @@ Session ID 是 Provider adapter 的資料，不應成為 Git 或 OpenSpec lifecy
 - [wt-work Worktree and Branch Resolution Flow](/docs/workflow/wt-work-flow.md)
 - [Provider-native Worktree Reference](/docs/workflow/provider-worktrees.md)
 - [OpenSpec Commit Workflow](/docs/workflow/commit.md)
+
+# Citations
+
+[1] [OpenAI Codex Hooks](https://developers.openai.com/codex/hooks)
+[2] [GitHub Copilot Hooks Reference](https://docs.github.com/en/copilot/reference/hooks-reference)
