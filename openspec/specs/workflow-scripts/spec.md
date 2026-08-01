@@ -9,18 +9,21 @@ Specifications for the branch-first and Worktree workflow helpers (`opsx-branch`
 ## Requirements
 
 ### Requirement: workflow install.sh deploys hook as part of standard setup
-`scripts/workflow/install.sh` SHALL call `openspec-branch-creator/install.sh` as part of the standard workflow setup so that one command installs everything.
+`scripts/workflow/install.sh` SHALL install `wt-work`, `wt-done`, `wt-resume`, `pm-start`, `opsx-branch`, and shell completion. It SHALL continue deploying the idempotent openspec-branch-creator hook as a compatibility fallback while documenting `opsx-branch` as the required branch-first entrypoint.
 
-#### Scenario: Running install.sh installs both scripts and hook
+#### Scenario: Running install.sh installs workflow entrypoints and fallback
 - **WHEN** `bash scripts/workflow/install.sh` is executed
-- **THEN** wt-work, wt-done, wt-resume, pm-start are installed AND the openspec-branch-creator hook is deployed and registered in settings.json
+- **THEN** all five workflow commands and completion are installed
+- **AND** the compatibility hook is deployed without duplicate registration
+- **AND** the output identifies `opsx-branch` as the pre-artifact transition
 
 ### Requirement: wt-work-flow.md documents the branch resolution flow
-A new file `docs/workflow/wt-work-flow.md` SHALL exist with a Mermaid flowchart illustrating the three branch resolution paths in `wt-work.sh`, plus an explanation of the cross-machine scenario.
+`docs/workflow/wt-work-flow.md` SHALL document the implemented resolution flow, including explicit `--path`, Git registry auto-discovery, Project-managed creation, cross-machine hand-off, Provider adapters, and ambiguous-candidate failure.
 
-#### Scenario: Doc is present and contains a Mermaid diagram
+#### Scenario: Documentation exposes implemented behavior
 - **WHEN** `docs/workflow/wt-work-flow.md` is read
-- **THEN** the file contains a `flowchart` or `graph` Mermaid block covering local-branch, remote-branch, and new-branch paths
+- **THEN** it contains Mermaid flows for Worktree resolution and branch hand-off
+- **AND** it does not retain obsolete fallback or automatic-resume behavior
 
 ### Requirement: wt-done documentation notes local-only scope
 The workflow documentation SHALL include an explicit note that `wt-done` handles only local branch merges and does not support team workflows (remote push, PR creation, code review).
@@ -28,3 +31,15 @@ The workflow documentation SHALL include an explicit note that `wt-done` handles
 #### Scenario: Local-only note is present in docs
 - **WHEN** `docs/workflow/guide.md` or the wt-done section of the README is read
 - **THEN** a visible warning or note states that wt-done is local-only and team/remote workflows are a future TODO
+
+### Requirement: Workflow cleanup respects Worktree ownership
+Workflow commands SHALL distinguish Project-managed Worktrees from Provider-native Worktrees. `wt-done` SHALL remove only `.worktrees/<change-id>` created by the project workflow and SHALL NOT remove an attached Provider-native path.
+
+#### Scenario: Complete a Project-managed Worktree
+- **WHEN** `wt-done <change-id>` successfully merges `feature/<change-id>` and the registered project path is `.worktrees/<change-id>`
+- **THEN** it removes that Worktree, prunes Git metadata, and deletes the merged feature branch
+
+#### Scenario: Provider-native Worktree remains provider-owned
+- **WHEN** a Provider-native Worktree was attached during implementation
+- **THEN** `wt-done` does not infer or remove its path
+- **AND** cleanup remains the responsibility of the Provider or user that created it

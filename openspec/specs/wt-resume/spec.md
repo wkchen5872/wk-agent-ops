@@ -7,45 +7,40 @@ Provides a `wt-resume <change-id>` command that safely resolves a registered Wor
 ## Requirements
 
 ### Requirement: Resume agent session by feature name
-The system SHALL provide a `wt-resume <feature-name>` command that resumes an AI CLI agent session. When `--session` is not specified, Claude and Copilot SHALL display an interactive selection list; Gemini SHALL auto-resume the latest session. When `--session` is specified, its value SHALL be forwarded directly to the tool without format validation.
+The system SHALL provide `wt-resume <change-id> --agent <provider> [--session <id-or-name>] [--path <worktree-path>]` solely for resuming a session in the selected Provider. It SHALL use the same safe path validation as `wt-work`, SHALL NOT switch Provider identity, and SHALL NOT inject a new OpenSpec apply action.
 
-#### Scenario: Resume with worktree present, no session (Claude)
-- **WHEN** user runs `wt-resume feature123`
-- **AND** agent is `claude`
-- **AND** `$REPO/.worktrees/feature123` exists
-- **THEN** system SHALL change directory to the worktree
-- **AND** execute `claude --resume` (displays interactive session list)
+#### Scenario: Claude interactive resume
+- **WHEN** the user runs `wt-resume feature123 --agent claude` without `--session`
+- **THEN** the system resolves the Worktree and opens Claude's native resume picker there
 
-#### Scenario: Resume without worktree, no session (Claude)
-- **WHEN** user runs `wt-resume feature123`
-- **AND** agent is `claude`
-- **AND** `$REPO/.worktrees/feature123` does NOT exist
-- **THEN** system SHALL execute `claude --resume` from the current directory
+#### Scenario: Claude explicit resume
+- **WHEN** the user supplies a Claude session ID or name
+- **THEN** the system forwards it to Claude's native resume option from the resolved Worktree
 
-#### Scenario: Resume with session specified (Claude)
-- **WHEN** user runs `wt-resume feature123 --session a469f20a-a791-4c6f-af7a-5a0e599527f4`
-- **AND** agent is `claude`
-- **THEN** system SHALL execute `claude --resume a469f20a-a791-4c6f-af7a-5a0e599527f4`
+#### Scenario: Codex interactive resume
+- **WHEN** the user runs `wt-resume feature123 --agent codex` without `--session`
+- **THEN** the system opens Codex's native resume picker from the resolved Worktree
 
-#### Scenario: Resume with session specified (Copilot)
-- **WHEN** user runs `wt-resume feature123 --session 6d4b8b78-14d6-4cbd-9658-3bb5d698d288`
-- **AND** agent is `copilot`
-- **THEN** system SHALL execute `copilot --resume=6d4b8b78-14d6-4cbd-9658-3bb5d698d288 --allow-all`
+#### Scenario: Codex explicit resume
+- **WHEN** the user supplies a Codex session ID or name
+- **THEN** the system invokes Codex's native resume command for that session from the resolved Worktree
 
-#### Scenario: Resume without session (Copilot)
-- **WHEN** user runs `wt-resume feature123 --agent copilot`
-- **AND** no --session provided
-- **THEN** system SHALL execute `copilot --resume --allow-all` (displays interactive session list)
+#### Scenario: Antigravity resume
+- **WHEN** the user selects Antigravity with an explicit conversation ID
+- **THEN** the system invokes `agy` with that conversation in the resolved Worktree
 
-#### Scenario: Resume without session (Gemini, auto latest)
-- **WHEN** user runs `wt-resume feature123 --agent gemini`
-- **AND** no --session provided
-- **THEN** system SHALL execute `gemini --resume` (auto-resumes latest chat)
+#### Scenario: Antigravity alias resume
+- **WHEN** the user selects `--agent agy`
+- **THEN** the system uses the same `agy` resume behavior as `--agent antigravity`
 
-#### Scenario: Resume with session specified (Gemini)
-- **WHEN** user runs `wt-resume feature123 --session 3 --agent gemini`
-- **THEN** system SHALL execute `gemini --resume 3`
+#### Scenario: Copilot resume
+- **WHEN** the user selects Copilot
+- **THEN** the system preserves its supported interactive or explicit resume behavior in the resolved Worktree
 
-#### Scenario: Missing feature name argument
-- **WHEN** user runs `wt-resume` with no arguments
-- **THEN** system SHALL print a usage error and exit with code 1
+#### Scenario: Removed Gemini value
+- **WHEN** the user selects `gemini`
+- **THEN** the system exits non-zero and lists the supported Provider values
+
+#### Scenario: Missing change ID
+- **WHEN** the user runs `wt-resume` without a change ID
+- **THEN** the system prints usage guidance and exits non-zero

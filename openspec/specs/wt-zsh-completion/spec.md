@@ -7,34 +7,35 @@ Provides an installed zsh completion script (`_wt`) for the workflow command mat
 ## Requirements
 
 ### Requirement: Tab-complete feature names for wt-* commands
-The system SHALL provide a zsh completion script (`_wt`) that completes the first argument of `wt-work`, `wt-done`, and `wt-resume` with existing feature names derived from the `.worktrees/` directory. The command `wt-new` SHALL be removed from completion (replaced by `wt-work`).
+The completion script SHALL derive change suggestions from `.worktrees/`, local `feature/*` branches, and registered Worktrees, de-duplicate the change IDs, and remain silent when no candidate exists.
 
-#### Scenario: Tab-complete on wt-work
-- **WHEN** user types `wt-work <TAB>` in zsh
-- **THEN** completion SHALL list all directory names under `$REPO/.worktrees/`
+#### Scenario: Complete a Project-managed change
+- **WHEN** the user requests completion for `wt-work`, `wt-done`, or `wt-resume`
+- **AND** `.worktrees/feature123` or local `feature/feature123` exists
+- **THEN** `feature123` is suggested once
 
-#### Scenario: Tab-complete on wt-done
-- **WHEN** user types `wt-done <TAB>` in zsh
-- **THEN** completion SHALL list all directory names under `$REPO/.worktrees/`
+#### Scenario: Complete a Provider-native named-branch Worktree
+- **WHEN** a registered external Worktree checks out `feature/feature123`
+- **THEN** `feature123` is included without exposing unrelated branches
 
-#### Scenario: Tab-complete on wt-resume
-- **WHEN** user types `wt-resume <TAB>` in zsh
-- **THEN** completion SHALL list all directory names under `$REPO/.worktrees/`
+#### Scenario: No candidate
+- **WHEN** no matching directory, feature branch, or registered Worktree exists
+- **THEN** completion returns no suggestions and no error
 
-#### Scenario: No worktrees exist
-- **WHEN** `.worktrees/` directory is empty or does not exist
-- **THEN** completion SHALL return no suggestions (no error)
+### Requirement: Tab-complete supported Provider values
+The system SHALL complete `--agent`／`-a` for `wt-work`, `wt-resume`, and `pm-start` with `claude`, `codex`, `antigravity`, `agy`, and `copilot`.
 
-### Requirement: Tab-complete --agent flag with gemini option
-The system SHALL complete `--agent` / `-a` values for `wt-work` and `wt-resume` with the list: `claude`, `copilot`, `gemini`, `codex`.
+#### Scenario: Complete Provider values
+- **WHEN** the user requests completion after `--agent`
+- **THEN** the four Providers plus the `agy` alias are offered
+- **AND** `gemini` is absent
 
-#### Scenario: Tab-complete agent values for wt-work
-- **WHEN** user types `wt-work feature123 --agent <TAB>` in zsh
-- **THEN** completion SHALL list `claude copilot gemini codex`
+### Requirement: Tab-complete Worktree path option
+The system SHALL recognize `--path` for `wt-work` and `wt-resume` and complete paths from `git worktree list --porcelain`.
 
-#### Scenario: Tab-complete agent values for wt-resume
-- **WHEN** user types `wt-resume feature123 -a <TAB>` in zsh
-- **THEN** completion SHALL list `claude copilot gemini codex`
+#### Scenario: Complete registered Worktree paths
+- **WHEN** the user requests completion after `wt-work feature123 --path`
+- **THEN** registered Worktree paths are offered
 
 ### Requirement: Tab-complete --session flag
 The system SHALL recognize `--session` / `-s` as a valid flag for `wt-work` and `wt-resume`, providing a hint that a session ID or name is expected.

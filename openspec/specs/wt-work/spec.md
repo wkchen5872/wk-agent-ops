@@ -7,76 +7,101 @@ Provides a multi-Provider `wt-work <change-id>` apply launcher that safely resol
 ## Requirements
 
 ### Requirement: wt-work command replaces wt-new
-The system SHALL provide a `wt-work <feature-name>` command that creates a new git worktree (if absent) or resumes an existing worktree (if present), and always passes `/opsx:apply <name>` as the initial prompt to the AI CLI agent.
+The system SHALL provide `wt-work <change-id>` as the RD apply launcher. Without `--path`, it SHALL reuse one uniquely verifiable registered Worktree or create a Project-managed Worktree at `.worktrees/<change-id>` from the existing local or remote `feature/<change-id>` branch. Without `--session`, it SHALL start a new session for the selected Provider and pass the portable OpenSpec apply intent.
 
-#### Scenario: New worktree, no session specified
-- **WHEN** user runs `wt-work feature123`
-- **AND** `$REPO/.worktrees/feature123` does NOT exist
-- **THEN** system SHALL create a `feature/feature123` branch and worktree at `$REPO/.worktrees/feature123`
-- **AND** copy `.claude/settings.local.json` and `.env` to the worktree (if they exist)
-- **AND** launch the agent with a new named session `"RD: feature123"` and prompt `/opsx:apply feature123`
+#### Scenario: Create the default Project-managed Worktree
+- **WHEN** the user runs `wt-work feature123`
+- **AND** no eligible non-primary Worktree exists
+- **AND** local `feature/feature123` contains the reviewed OpenSpec planning artifacts
+- **THEN** the system creates `.worktrees/feature123` attached to that branch
+- **AND** launches a new Claude RD session there with the apply intent for `feature123`
 
-#### Scenario: New worktree, with session specified
-- **WHEN** user runs `wt-work feature123 --session a469f20a-a791-4c6f-af7a-5a0e599527f4`
-- **AND** `$REPO/.worktrees/feature123` does NOT exist
-- **THEN** system SHALL create the worktree as normal
-- **AND** launch the agent with `--resume <session>` and prompt `/opsx:apply feature123`
+#### Scenario: Existing Project-managed Worktree starts a new selected Provider
+- **WHEN** `.worktrees/feature123` is registered and the user runs `wt-work feature123 --agent codex` without `--session`
+- **THEN** the system reuses the same physical path without creating another Worktree
+- **AND** starts a new Codex session rather than attempting to resume a Claude session
 
-#### Scenario: Existing worktree, no session specified
-- **WHEN** user runs `wt-work feature123`
-- **AND** `$REPO/.worktrees/feature123` already exists
-- **THEN** system SHALL NOT create a new worktree or branch
-- **AND** change directory to the worktree
-- **AND** launch the agent resuming by session name `"RD: feature123"` with prompt `/opsx:apply feature123`
+#### Scenario: Explicit session resumes in the resolved Worktree
+- **WHEN** the user runs `wt-work feature123 --agent claude --session <session>`
+- **THEN** the system resolves and validates the Worktree
+- **AND** forwards `<session>` to Claude's resume mechanism with the apply intent
 
-#### Scenario: Existing worktree, with session specified
-- **WHEN** user runs `wt-work feature123 --session <session>`
-- **AND** `$REPO/.worktrees/feature123` already exists
-- **THEN** system SHALL change directory to the worktree
-- **AND** launch the agent with `--resume <session>` and prompt `/opsx:apply feature123`
+#### Scenario: Missing reviewed feature branch
+- **WHEN** no eligible Worktree, local feature branch, or confirmed remote feature branch exists
+- **THEN** the system exits non-zero and instructs the user to complete the branch-first planning hand-off
+- **AND** does not create an empty feature branch from the base branch
 
-#### Scenario: Missing feature name argument
-- **WHEN** user runs `wt-work` with no arguments
-- **THEN** system SHALL print usage error and exit with code 1
-
-#### Scenario: Branch exists but worktree directory missing
-- **WHEN** user runs `wt-work feature123`
-- **AND** branch `feature/feature123` exists
-- **AND** `$REPO/.worktrees/feature123` does NOT exist
-- **THEN** system SHALL print an error and exit with code 1
+#### Scenario: Missing change ID
+- **WHEN** the user runs `wt-work` without a change ID
+- **THEN** the system prints usage guidance and exits non-zero
 
 ### Requirement: wt-work supports --session parameter
-The system SHALL accept an optional `--session` / `-s` parameter that passes the session identifier directly to the AI CLI tool's resume mechanism, without format validation.
+The system SHALL accept `--session`／`-s` only as an explicit request to resume that session for the selected Provider inside the resolved Worktree. Omitting the option SHALL start a new Provider session.
 
-#### Scenario: Session forwarded to Claude
-- **WHEN** user runs `wt-work feature123 --session my-session-name`
-- **AND** agent is `claude`
-- **THEN** system SHALL execute `claude --resume my-session-name "/opsx:apply feature123" --enable-auto-mode`
+#### Scenario: Claude session forwarding
+- **WHEN** `--agent claude --session my-session-name` is supplied
+- **THEN** the Claude adapter resumes `my-session-name` and supplies the apply intent
 
-#### Scenario: Session forwarded to Copilot
-- **WHEN** user runs `wt-work feature123 --session 6d4b8b78-14d6-4cbd-9658-3bb5d698d288`
-- **AND** agent is `copilot`
-- **THEN** system SHALL execute `copilot --resume=6d4b8b78-14d6-4cbd-9658-3bb5d698d288 --allow-all -i "/openspec-apply-change feature123"`
+#### Scenario: Codex session forwarding
+- **WHEN** `--agent codex --session <session-id>` is supplied
+- **THEN** the Codex adapter uses Codex's native resume command in the resolved Worktree and supplies the apply intent when supported
 
-#### Scenario: Session forwarded to Gemini
-- **WHEN** user runs `wt-work feature123 --session 3`
-- **AND** agent is `gemini`
-- **THEN** system SHALL execute `gemini --resume 3 -p "/opsx:apply feature123"`
+#### Scenario: Antigravity conversation forwarding
+- **WHEN** `--agent antigravity --session <conversation-id>` is supplied
+- **THEN** the Antigravity adapter uses its native conversation option in the resolved Worktree
 
-### Requirement: wt-work supports --agent gemini
-The system SHALL accept `gemini` as a valid value for the `--agent` parameter and launch Gemini CLI accordingly.
+### Requirement: wt-work supports the current Provider matrix
+`wt-work --agent` SHALL accept `claude`, `codex`, `antigravity`, `agy`, and `copilot`, with `agy` normalized as an alias of `antigravity`. Each adapter SHALL launch from the resolved Worktree and express the same portable OpenSpec apply intent exactly once.
 
-#### Scenario: New session with Gemini
-- **WHEN** user runs `wt-work feature123 --agent gemini`
-- **AND** worktree does NOT exist
-- **THEN** system SHALL create the worktree
-- **AND** execute `gemini -p "/opsx:apply feature123"`
+#### Scenario: Antigravity launch
+- **WHEN** the user runs `wt-work feature123 --agent antigravity`
+- **THEN** the system launches `agy` from the resolved Worktree with the apply intent
 
-#### Scenario: Resume session with Gemini, no session specified
-- **WHEN** user runs `wt-work feature123 --agent gemini`
-- **AND** worktree exists
-- **THEN** system SHALL execute `gemini --resume -p "/opsx:apply feature123"`
+#### Scenario: Antigravity alias launch
+- **WHEN** the user runs `wt-work feature123 --agent agy`
+- **THEN** the system behaves identically to `--agent antigravity`
 
-#### Scenario: Invalid agent value
-- **WHEN** user runs `wt-work feature123 --agent invalid`
-- **THEN** system SHALL print an error listing valid agents and exit with code 1
+#### Scenario: Codex launch
+- **WHEN** the user runs `wt-work feature123 --agent codex`
+- **THEN** the system launches Codex with the resolved Worktree as its working root and the apply intent
+
+#### Scenario: Invalid or removed Provider
+- **WHEN** the user supplies `gemini` or another unsupported value
+- **THEN** the system exits non-zero and lists only the four supported Provider values
+
+### Requirement: wt-work resolves explicit and discovered Worktree paths safely
+The system SHALL accept `--path <worktree-path>` with highest precedence. Without it, the resolver SHALL inspect only Git's registered Worktrees and select a candidate only when exactly one candidate can be verified for the requested change.
+
+#### Scenario: Explicit registered path
+- **WHEN** `--path` points to a registered Worktree belonging to the same repository and containing the reviewed planning commit
+- **THEN** the system uses that path without creating or removing a Worktree
+
+#### Scenario: Explicit invalid path
+- **WHEN** `--path` is absent from the repository's Git Worktree registry, belongs to another repository, or lacks the planning commit
+- **THEN** the system exits non-zero without launching a Provider
+
+#### Scenario: One automatically discovered candidate
+- **WHEN** exactly one eligible registered non-primary Worktree matches `.worktrees/<change-id>`, `feature/<change-id>`, or the verified detached-change criteria
+- **THEN** the system attaches that candidate
+
+#### Scenario: Ambiguous automatic discovery
+- **WHEN** two or more registered Worktrees remain eligible
+- **THEN** the system exits non-zero, lists their exact paths and states, and requires `--path`
+
+### Requirement: Same-machine failover preserves dirty state
+The resolver SHALL NOT require a clean Worktree for same-machine Provider failover. It SHALL report the current branch／detached state and dirty summary before launch and SHALL leave checkpoint commits to the user.
+
+#### Scenario: Dirty Worktree attach
+- **WHEN** the original active writer has stopped and the selected Worktree contains modified, staged, or untracked files
+- **THEN** `wt-work` reports that state and launches the new Provider in the same path without stashing, committing, resetting, or deleting files
+
+### Requirement: Project-managed setup copies only relevant local files
+When creating a Project-managed Worktree, the system SHALL copy an existing `.env` plus the selected Provider's allowlisted repository-local settings. It SHALL NOT copy another Provider's local settings, overwrite tracked files, copy global credentials, create `.worktreeinclude`, or install dependencies.
+
+#### Scenario: Claude local setup
+- **WHEN** a Claude Worktree is created and `.env` plus `.claude/settings.local.json` exist in the source checkout
+- **THEN** those existing local files are copied without copying Codex or Antigravity settings
+
+#### Scenario: Selected Provider has no local-only file
+- **WHEN** the selected Provider's allowlisted local setting is absent
+- **THEN** Worktree creation continues successfully without synthesizing a setting file
