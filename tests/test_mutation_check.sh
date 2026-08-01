@@ -10,6 +10,8 @@ PROTO="$COMMON/docs/agent-protocol.md"
 fail=0
 ok(){ printf '  ok   %s\n' "$1"; }
 bad(){ printf '  FAIL %s\n' "$1"; fail=1; }
+require_text(){ grep -Fq "$2" "$1" && ok "$3" || bad "$3"; }
+forbid_text(){ grep -Fq "$2" "$1" && bad "$3" || ok "$3"; }
 
 # (c) both SKILL.md files exist with complete frontmatter
 for name in mutation-setup mutation-check; do
@@ -25,6 +27,38 @@ for name in mutation-setup mutation-check; do
   fi
 done
 
+# Refined cross-provider and current-tool contracts.
+SETUP="$COMMON/skills/mutation-setup/SKILL.md"
+CHECK="$COMMON/skills/mutation-check/SKILL.md"
+for f in "$SETUP" "$CHECK"; do
+  label="$(basename "$(dirname "$f")")"
+  require_text "$f" 'git rev-parse --show-toplevel' "$label resolves the Git repository root"
+  require_text "$f" 'affected project unit' "$label selects affected project units"
+  require_text "$f" 'Provider-specific example' "$label treats slash commands as examples"
+  forbid_text "$f" 'if $CLAUDE_PROJECT_DIR is set' "$label has no Claude-only root contract"
+done
+
+require_text "$SETUP" 'source_paths' "mutation-setup uses current mutmut source_paths"
+require_text "$SETUP" 'lockfile' "mutation-setup preserves the project package manager"
+require_text "$SETUP" 'fork-capable' "mutation-setup checks fork support"
+require_text "$SETUP" 'WSL' "mutation-setup documents Windows support"
+require_text "$SETUP" 'mutants/' "mutation-setup ignores mutmut worktree output"
+forbid_text "$SETUP" 'paths_to_mutate' "mutation-setup drops stale paths_to_mutate"
+forbid_text "$SETUP" 'pip install mutmut' "mutation-setup has no blind pip fallback"
+
+require_text "$CHECK" 'baseline tests' "mutation-check has a baseline gate"
+require_text "$CHECK" 'mutmut-generated `mutants/`' "mutation-check protects baseline discovery"
+require_text "$CHECK" 'source universe' "mutation-check states mutmut generation scope"
+require_text "$CHECK" 'no coverage' "mutation-check reports no-coverage results"
+require_text "$CHECK" 'timeout' "mutation-check reports timeouts"
+require_text "$CHECK" 'invalid' "mutation-check reports invalid results"
+require_text "$CHECK" 'last_scan_commit=' "mutation-check separates the scan base"
+require_text "$CHECK" 'deferred=' "mutation-check preserves deferred findings"
+require_text "$CHECK" 'implementation/TDD workflow' "mutation-check hands test gaps back to TDD"
+require_text "$CHECK" 'mutmut results' "mutation-check uses the verified public results command"
+forbid_text "$CHECK" 'mutants/summary.json' "mutation-check drops undocumented mutmut JSON"
+forbid_text "$CHECK" 'changed_lines × 1.5' "mutation-check has no cross-tool cost formula"
+
 # (d) protocol doc references /mutation-check
 grep -q '/mutation-check' "$PROTO" 2>/dev/null && ok "agent-protocol.md references /mutation-check" || bad "agent-protocol.md references /mutation-check"
 
@@ -36,6 +70,10 @@ if [[ -f "$DOC" ]]; then
   for url in 'stryker-mutator.io' 'mutmut.readthedocs.io' 'stryker-js' 'add-mutation-testing.md' 'test-architect.md'; do
     grep -q "$url" "$DOC" && ok "playbook cites $url" || bad "playbook cites $url"
   done
+  require_text "$DOC" 'conditional causal check' "playbook keeps revert-check conditional"
+  require_text "$DOC" 'Provider-specific example' "playbook explains portable invocation"
+  forbid_text "$DOC" 'the *revert-check*' "playbook does not claim fixed revert-check adoption"
+  forbid_text "$DOC" 'only mutates the files' "playbook does not overstate mutmut file scope"
   grep -q 'mutation-testing.md' "$ROOT/scripts/skills/install.sh" && ok "playbook is a MANAGED_DOC" || bad "playbook is a MANAGED_DOC"
 else
   bad "mutation-testing.md ships ($DOC)"

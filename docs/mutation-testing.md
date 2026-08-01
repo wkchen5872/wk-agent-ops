@@ -1,82 +1,115 @@
 ---
 type: Playbook
 title: Mutation Testing Playbook
-description: How to audit test effectiveness with the mutation-setup and mutation-check skills.
+description: How to configure and run provider-neutral mutation audits with mutmut and Stryker.
 tags: [testing, mutation-testing, tdd, playbook]
-timestamp: 2026-07-09T00:00:00Z
+timestamp: 2026-08-01T00:00:00+08:00
 ---
 
 <!-- Managed by wk-agent-ops · do not edit here — re-running install.sh overwrites this file. -->
 
 # Mutation Testing Playbook
 
-Line coverage proves a line **ran**; it does not prove a test would **notice if
-that line broke**. Mutation testing closes that gap: it introduces small faults
-(mutants) into your code and checks whether your tests turn red. A surviving
-mutant is a spot where the code could be wrong and no test would catch it.
+Line coverage proves a line ran; it does not prove a test would notice if that
+line broke. Mutation testing introduces small faults and observes whether the
+existing tests detect them. It is an advisory test-strength audit, never a
+mutation-score, completion, commit, or CI gate.
 
-This is the second line of defence behind the TDD rules in
-[/docs/agent-protocol.md](/docs/agent-protocol.md) §4 — advisory, never a commit gate.
+## Invocation and ownership
 
-## Two skills, split by concern
+| Skill | When | Ownership |
+|---|---|---|
+| `mutation-setup` | first setup, upgrades, config changes | interactive dependency/config side effects |
+| `mutation-check` | audit a current change | baseline, mutation run, report, triage state |
 
-| Skill | When | Nature |
-|-------|------|--------|
-| `/mutation-setup` | first time, upgrades, config changes | idempotent, interactive, side-effecting |
-| `/mutation-check` | every change / verify step | zero-config, diff-scoped run |
+Invoke either portable skill by name in Claude Code, Codex, Antigravity, or
+another Provider that supports project skills. **Provider-specific example:**
+Claude Code may expose `/mutation-setup` and `/mutation-check`; slash commands
+are not a cross-Provider requirement.
 
-`mutation-setup` owns all install/upgrade and config side effects — it is
-idempotent, so re-running detects existing setup and asks before changing
-anything. `mutation-check` stays pure: it opens with a setup gate (if the tool
-isn't installed/configured it points you to `/mutation-setup`), then runs.
+`mutation-setup` is idempotent: it resolves the Git root and affected project
+unit, preserves the existing package manager/lockfile, shows current settings,
+and asks before every write. The common installer only distributes Agent
+configuration; it never edits a target project's manifest or mutation config.
 
-## Diff-based by design
+## Valid audit sequence
 
-`mutation-check` only mutates the files in your current change, not the whole
-codebase — mutation testing is slow, and the change is what needs the audit.
-Scope resolution:
+1. Resolve the repository root with Git, then map changed production files to
+   their nearest Python or TS/JS project unit. Ask when monorepo ownership is
+   ambiguous.
+2. Confirm the tool and configuration are ready; otherwise return to
+   `mutation-setup`.
+3. Run the project unit's baseline tests. A failing baseline makes the audit
+   invalid: stop without a score or scan-state update. After a mutmut run, make
+   sure pytest targets the real tests directory or excludes generated
+   `mutants/` to avoid duplicate-module collection.
+4. Compute changed-code focus from dirty work, the feature-branch merge-base,
+   or `last_scan_commit` on the default branch.
+5. Run the tool with its native scope model, report all result categories, and
+   preserve human triage decisions.
 
-1. Uncommitted work → `git diff HEAD`
-2. Clean feature branch → since the merge-base with the default branch
-3. Clean on default branch → since the last watermark commit
+## Tool-specific scope
 
-Note: mutating one changed file pulls its **whole module** into scope, so a
-trivial edit is enough to audit a module's full test strength during a dogfood.
+| Language | Tool | Mutation scope |
+|---|---|---|
+| Python | [mutmut](https://mutmut.readthedocs.io/en/latest/) | configured `source_paths` is the generation/cache universe; changed modules focus rerun, inspection, and reporting |
+| TS/JS | [StrykerJS](https://stryker-mutator.io/) | `--mutate` accepts changed files and line ranges |
 
-## Tools per language
+The Git diff defines the audit focus, but the tools do not implement that focus
+identically. In particular, mutmut may generate mutants for the configured
+source universe before a positional selector narrows a rerun. Do not describe
+it as Stryker-style file-level generation, and do not use one changed-line cost
+formula for both tools.
 
-| Language | Tool | Scoping mechanism |
-|----------|------|-------------------|
-| Python | [mutmut](https://mutmut.readthedocs.io/en/latest/) | module-name pattern (`pkg.mod*`) |
-| TS / JS | [StrykerJS](https://stryker-mutator.io/) | `--mutate` glob (file, even line ranges) |
+Current mutmut configuration uses `source_paths`; mutmut 3.7.0 dogfood verified
+the public `mutmut run`, `mutmut results`, `mutmut show`, and `mutmut browse`
+commands. Do not depend on an undocumented internal result file. Stryker's
+`mutate`, incremental, and force settings are documented in its official
+configuration reference.
 
-The installer never touches a target project's `pyproject.toml`, `package.json`,
-or `stryker.config.json` — those are project-owned. `mutation-setup` manages them
-at run time, with confirmation.
+## Results and triage state
 
-## Reading the results
+Keep tool-native result meanings separate: killed, survived, no coverage or
+untested, timeout, invalid/error, and skipped when available. A tool-provided
+score is secondary context. Even 100% only describes the executed scope; it is
+not proof that the complete test suite is effective.
 
-Surviving mutants are ranked by risk class, highest first: **conditional**
-(`>`→`>=`, `&&`→`||`), **boundary**, **return-value**, then **other** (statement
-deletion, literals). Each survivor offers a triage choice: add a test, mark
-equivalent (recorded in the watermark, skipped next time), or skip with a reason.
-No mutation-score threshold is enforced — triage is advisory tracking, not a gate.
+Actionable survivors are sorted conditional → boundary → return-value → other.
+The audit offers three outcomes:
 
-## Design positioning
+1. hand the test gap to the current implementation/TDD workflow;
+2. record an equivalent mutant with a human reason;
+3. defer the finding with a reason, keeping it unresolved.
 
-This toolkit deliberately differs from two community references (see Citations):
+The state file keeps the scan base separate from decisions:
 
-- **Adopted** from the test-architect agent: the *revert-check* (revert the
-  implementation, confirm the test goes red) and the surviving-mutant *risk
-  classification*.
-- **Not adopted**: a hard-wired `score < 80%` threshold (arbitrary per module,
-  and counter to this repo's no-coverage-gate stance), and the one-shot
-  setup-checklist shape (no diff-scope focus, CI-gate heavy, no triage loop).
+```text
+last_scan_commit=<sha>
+equivalent=<fingerprint>\t<date>\t<reason>
+deferred=<fingerprint>\t<date>\t<reason>
+```
+
+Advancing the scan base must not delete equivalent or deferred records. If a
+tool output cannot identify a prior finding reliably, show it for triage again.
+
+## Relationship to TDD
+
+Mutation testing supplements test-first evidence; it does not replace it. The
+shared protocol uses a **conditional causal check** when Red evidence is absent,
+risk is high, or test causality remains unclear. A revert-check is one possible
+causal check, not a mandatory step for every task.
+
+From the community test-architect reference this toolkit adopts survivor risk
+classification. It does not adopt a fixed score threshold or unconditional
+revert-check. From the add-mutation-testing command it keeps the setup concern,
+but not its one-shot, CI-gate-heavy shape.
 
 # Citations
 
 [1] [StrykerJS — Mutation testing for JavaScript and TypeScript](https://stryker-mutator.io/)
-[2] [stryker-mutator/stryker-js (source)](https://github.com/stryker-mutator/stryker-js)
-[3] [mutmut — Python mutation testing (docs)](https://mutmut.readthedocs.io/en/latest/)
-[4] [add-mutation-testing command (design reference, not adopted)](https://github.com/davepoon/buildwithclaude/blob/main/plugins/all-commands/commands/add-mutation-testing.md)
-[5] [test-architect agent (design reference, partially adopted)](https://github.com/rohitg00/awesome-claude-code-toolkit/blob/main/agents/quality-assurance/test-architect.md)
+[2] [StrykerJS configuration reference](https://stryker-mutator.io/docs/stryker-js/configuration/)
+[3] [stryker-mutator/stryker-js source](https://github.com/stryker-mutator/stryker-js)
+[4] [mutmut documentation](https://mutmut.readthedocs.io/en/latest/)
+[5] [boxed/mutmut source](https://github.com/boxed/mutmut)
+[6] [add-mutation-testing command](https://github.com/davepoon/buildwithclaude/blob/main/plugins/all-commands/commands/add-mutation-testing.md)
+[7] [test-architect agent](https://github.com/rohitg00/awesome-claude-code-toolkit/blob/main/agents/quality-assurance/test-architect.md)

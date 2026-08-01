@@ -1,197 +1,187 @@
 ---
 name: mutation-check
 description: >
-  Diff-based mutation testing audit for AI agent projects. Measures whether the
-  test suite actually catches bugs (not just line coverage) on changed files.
-  Python via mutmut, TS/JS via Stryker. Advisory only — never a commit gate.
+  Provider-neutral mutation testing audit for changed production code. Uses
+  mutmut or Stryker, reports tool-native outcomes, and preserves human triage.
 license: MIT
-compatibility: "Requires bash, git. Python: mutmut v3. TS/JS: StrykerJS. Optional: uv/npm."
+compatibility: "Requires git and a project configured by mutation-setup. Python: mutmut v3. TS/JS: StrykerJS."
 metadata:
   author: wk-agent-ops
-  version: "1.0"
+  version: "1.1"
 ---
 
 # mutation-check
 
-Runs diff-based mutation testing on the current change: mutates the code you
-touched, checks whether your tests kill each mutant, and reports the survivors.
-Surviving mutants are places your code could be broken and no test would notice.
+Audit whether existing tests detect deliberate faults in changed production
+code. This skill is advisory: it never applies a fixed score gate, blocks a
+commit, or edits production code/tests itself.
 
-> **Version assumption:** commands target **mutmut v3** and **current StrykerJS**.
-> If a command errors on an interface change, re-verify with ctx7 before editing
-> this skill (see AGENTS.md rule on library docs).
+Invoke it by name on any Provider that supports project skills.
+**Provider-specific example:** Claude Code may expose `/mutation-check`; other
+Providers need no slash command or hook.
 
-> **Advisory, not a gate.** This skill never blocks a commit or fails a task.
-> It surfaces weak tests for human triage. No mutation-score threshold is enforced.
+> Commands target current mutmut v3 and StrykerJS. If an interface differs, stop
+> and verify the current official documentation rather than improvising.
 
----
+## Step 1 — Resolve root and affected project units
 
-## Step 1 — Resolve project root
+Resolve the repository root in this order:
 
-```
-if $CLAUDE_PROJECT_DIR is set → PROJECT_ROOT=$CLAUDE_PROJECT_DIR
-else                          → PROJECT_ROOT=$PWD
-```
+1. explicit user target;
+2. `git rev-parse --show-toplevel`;
+3. normalized Provider-supplied project directory;
+4. `PWD` only when Git cannot resolve a root.
 
----
+Compute the changed production files in Step 4, then map each to its nearest
+Python (`pyproject.toml`, `setup.cfg`, `setup.py`) or TS/JS (`package.json`)
+manifest. Each unique owner is an **affected project unit**. If ownership is
+ambiguous, list candidates and ask; do not run multiple units by guesswork.
 
-## Step 2 — Detect language & tool
+## Step 2 — Setup gate
 
-Examine the project root manifest(s):
+For every selected unit, verify the mutation tool, configuration, and baseline
+test command are present:
 
-| Found | Tool | File extensions (exclude tests) |
-|-------|------|--------------------------------|
-| `pyproject.toml` or `setup.py` | mutmut | `*.py` (exclude `tests/`, `test_*.py`, `*_test.py`) |
-| `package.json` | Stryker | `*.ts` / `*.js` (exclude `*.test.*`, `*.spec.*`) |
-| both (monorepo) | run each on its own files | — |
-| none | **abort** | — |
+- mutmut: installed in the project environment and configured with
+  `[tool.mutmut] source_paths` (or the current supported equivalent);
+- StrykerJS: installed through the project package manager with a readable
+  Stryker config.
 
-If none match, announce: **"mutation-check supports Python (mutmut) and TS/JS
-(Stryker) only — no supported manifest found."** and stop.
+If anything is missing, stop that unit without installing. Suggest the portable
+skill `mutation-setup` (**Provider-specific example:** `/mutation-setup` in
+Claude Code).
 
-Announce detected tool(s).
+## Step 3 — Baseline gate
 
----
+Run the affected project unit's existing **baseline tests** before mutation.
+Use the project-defined command; if several commands are plausible, ask the
+user. Record command, exit status, and a short sanitized result.
 
-## Step 3 — Setup gate
+For mutmut projects, ensure the command targets the real tests or excludes the
+mutmut-generated `mutants/` directory. A duplicate-module collection error from
+that directory is a setup failure, not valid baseline evidence.
 
-This skill does **not** install anything. Check the tool is set up:
+- pass → continue;
+- fail/error → report `invalid audit: baseline failed`, do not run mutation,
+  do not calculate a score, and do not update `last_scan_commit`.
 
-```bash
-# Python
-python -c 'import mutmut' 2>/dev/null && grep -q '^\[tool.mutmut\]' "$PROJECT_ROOT/pyproject.toml" 2>/dev/null
-# TS/JS
-npx stryker --version 2>/dev/null && [ -f "$PROJECT_ROOT/stryker.config.json" ]
-```
+## Step 4 — Compute changed-code focus
 
-If the tool is not installed **or** its config is missing, stop the run and prompt:
+Choose the diff base:
 
-```
-mutation-check is not set up for this project (tool/config missing).
-Run /mutation-setup first — shall I run it now? [y/N]
-```
+1. dirty worktree → tracked changes relative to `HEAD`, plus untracked
+   production files from `git ls-files --others --exclude-standard`;
+2. clean feature branch → changes since the merge-base with the default branch;
+3. clean default branch → changes since `last_scan_commit` in the state file;
+4. no usable state → explain the limitation and ask for an explicit base rather
+   than silently assuming `HEAD~1`.
 
-Only proceed past this step once setup is confirmed present.
+Exclude test/spec fixtures and map remaining files to affected project units.
+If none remain, report `No mutable changed files in scope` and stop without
+claiming an audit passed.
 
----
+## Step 5 — Explain tool-specific scope and cost
 
-## Step 4 — Compute diff scope
+Do not apply one cross-tool cost formula.
 
-Determine which files to mutate. Default branch = `git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's@^origin/@@'` (fallback `main`).
+**StrykerJS** can restrict mutation generation with `--mutate`. Prefer safe line
+ranges derived from a zero-context diff; fall back to exact changed files when
+line ranges cannot be represented reliably. Report selected files/ranges and
+incremental cache status before running.
 
-```bash
-cd "$PROJECT_ROOT"
-if ! git diff --quiet HEAD 2>/dev/null || [ -n "$(git status --porcelain)" ]; then
-  # 1) uncommitted work
-  CHANGED=$(git diff --name-only HEAD)
-elif [ "$(git rev-parse --abbrev-ref HEAD)" != "$DEFAULT_BRANCH" ]; then
-  # 2) clean feature branch → since branch point
-  CHANGED=$(git diff --name-only "$(git merge-base HEAD "$DEFAULT_BRANCH")")
-else
-  # 3) clean, on default branch → since last watermark commit
-  WM=$(cat "$PROJECT_ROOT/openspec/.mutation-state" 2>/dev/null \
-       || cat "$PROJECT_ROOT/.mutation-state" 2>/dev/null)
-  BASE=$(printf '%s' "$WM" | grep -oE '^commit=[0-9a-f]+' | cut -d= -f2)
-  CHANGED=$([ -n "$BASE" ] && git diff --name-only "$BASE" || git diff --name-only HEAD~1)
-fi
-```
+**mutmut** uses configured `source_paths` as its mutation **source universe**.
+It may generate/cache mutants for that universe before positional mutant or
+module selectors focus a rerun. Changed modules therefore control what this
+audit reruns, inspects, and reports; they are not a promise of file-level mutant
+generation. Report source paths, cached/generated mutant counts when available,
+and the changed-module focus.
 
-Filter `CHANGED` to the tool's extensions (Step 2), dropping test files. If the
-filtered list is empty, announce **"No mutable changed files in scope"** and stop.
+If the tool reports a large scope or the cost is unknown, let the user proceed,
+narrow, or stop. Do not invent a numeric estimate.
 
----
+## Step 6 — Run mutation testing
 
-## Step 5 — Estimate cost & warn
+Run from the affected project unit using its project environment.
 
-Rough estimate: `mutants ≈ changed_lines × 1.5`. Count changed lines with
-`git diff --numstat <base> -- <files>`.
-
-If estimate exceeds **200 mutants**, warn: **"~N mutants — this may take a while."**
-and ask whether to proceed, narrow to specific files, or abort. Otherwise proceed.
-
----
-
-## Step 6 — Run scoped mutation testing
-
-**mutmut** scopes by **module name pattern**, not file path. Convert each changed
-`.py` file to a pattern: `src/pkg/mod.py` → `pkg.mod*` (strip source root + `.py`,
-`/`→`.`).
+For mutmut, use current supported commands:
 
 ```bash
-mutmut run "pkg.mod_a*" "pkg.mod_b*"      # patterns from changed files
-mutmut results                             # list survivors after the run
+mutmut run
+mutmut results
+mutmut show <mutant-name>
+mutmut browse
 ```
 
-**Stryker** scopes by `--mutate` glob, accepting exact files (and line ranges):
+Use `results` to enumerate outcomes and `show` for a reviewable mutant diff;
+`browse` remains the interactive viewer. Tool-supported positional
+mutant/module names may rerun selected changed modules. Do not parse
+undocumented internal files as a stable API.
+
+For StrykerJS, invoke through the owning package manager and pass one or more
+exact mutation scopes, for example:
 
 ```bash
-npx stryker run --incremental --force --mutate "src/mod_a.ts" --mutate "src/mod_b.ts"
+npx stryker run --incremental --force --mutate "src/example.ts:10-24"
 ```
 
-Capture the survivor list and mutation score from each tool's output
-(`mutants/summary.json` for mutmut; the Stryker report).
+Capture the command, tool version, exit status, scope, and reporter output.
 
----
+## Step 7 — Report native result semantics
 
-## Step 7 — Report
+Preserve every category the tool exposes instead of collapsing all non-killed
+results into survivors:
 
-Skip mutants already marked equivalent in the watermark (Step 9). Group survivors
-by risk class, **highest risk first**:
+- killed;
+- survived;
+- no coverage / untested;
+- timeout;
+- invalid / compile error / runtime error;
+- skipped or ignored.
 
-1. **conditional** — `>`→`>=`, `&&`→`||`, `if` boundary flips
-2. **boundary** — off-by-one, edge values
-3. **return-value** — mutated/replaced return
-4. **other** — statement deletion, literals, etc.
+Show the tool-provided mutation score only as secondary context. Never compare
+scores across tools or treat 100% as proof that the whole test suite is
+effective. Always state the baseline result, actual mutation scope, excluded
+files, incomplete/error categories, and tool limitations.
 
-```
-## Mutation Check — <tool>, N files in scope
+Prioritize actionable survivors as conditional, boundary, return-value, then
+other mutations:
 
-Mutation score: <killed>/<total> (<pct>%)   ·   equivalent skipped: <k>
-
-| # | Risk | File:line | Mutation | Test gap |
-|---|------|-----------|----------|----------|
-| 1 | conditional | src/x.py:42 | `>` → `>=` | no test at the boundary |
-| 2 | return-value | src/y.ts:10 | `return a` → `return null` | ... |
-```
-
-If score is 100% (no survivors), report the score and go straight to Step 9.
-
----
-
-## Step 8 — Decision menu
-
-```
-What would you like to do?
-  [1] Add a test to kill a surviving mutant (pick #)
-  [2] Mark a mutant equivalent (recorded, skipped next time)
-  [3] Skip — update watermark and continue
+```text
+| # | Status | Risk | File:line | Mutation | Test gap |
+|---|---|---|---|---|---|
 ```
 
-- **[1]** Help write a test targeting the survivor, then re-run just that mutant
-  to confirm it's killed. (Level 1 fix, or open an OpenSpec change if larger.)
-- **[2]** Record `file:line:mutation` + reason + date in the watermark. Do not
-  auto-mark — require the user to state why it's equivalent.
-- **[3]** Proceed to watermark update.
+## Step 8 — Triage without implementing
 
-Nothing here blocks a commit. Untriaged survivors are tracked, not enforced.
+Offer three choices for an actionable finding:
 
----
+1. hand the test gap to the current **implementation/TDD workflow**;
+2. mark it equivalent, requiring a human reason;
+3. defer it, requiring a human reason and keeping it unresolved.
 
-## Step 9 — Update watermark
+Do not write the test in this audit. If the user chooses option 1, return the
+finding, expected behavior, and replay command to the workflow that owns the
+implementation.
 
-Location: `openspec/.mutation-state` if `openspec/` exists, else `.mutation-state`.
-Record the current commit plus any equivalent marks. Ensure the file is gitignored.
+## Step 9 — Preserve scan and decision state
 
-```bash
-STATE="$PROJECT_ROOT/openspec/.mutation-state"
-[ -d "$PROJECT_ROOT/openspec" ] || STATE="$PROJECT_ROOT/.mutation-state"
-{
-  printf 'commit=%s\n' "$(git rev-parse HEAD)"
-  # append/keep lines: equivalent=<file>:<line>:<mutation> # <reason> <date>
-} > "$STATE"
-grep -qF "$(basename "$STATE")" "$PROJECT_ROOT/.gitignore" 2>/dev/null \
-  || printf '%s\n' "${STATE#$PROJECT_ROOT/}" >> "$PROJECT_ROOT/.gitignore"
-echo "  ✓ Watermark updated"
+Use `openspec/.mutation-state` when `openspec/` exists, otherwise
+`.mutation-state`. Read legacy `commit=<sha>` as a scan base, but write the
+separate current records:
+
+```text
+last_scan_commit=<sha>
+equivalent=<fingerprint>\t<date>\t<reason>
+deferred=<fingerprint>\t<date>\t<reason>
 ```
 
-Confirm: **"Watermark updated at `<commit>`"**
+Build a fingerprint from available tool, project-unit, path, location, mutator,
+and mutation-description fields. If those fields cannot identify a finding
+reliably, show it for triage again instead of guessing a match.
+
+Only advance `last_scan_commit` after a valid completed run. Preserve all
+equivalent and deferred records when the scan base changes. Equivalent findings
+may be excluded from the main table but remain counted in the summary; deferred
+findings remain visible until explicitly resolved or reclassified.
+
+Finish by reporting the state path and whether the scan base changed.

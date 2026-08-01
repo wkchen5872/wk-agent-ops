@@ -1,119 +1,151 @@
 ---
 name: mutation-setup
 description: >
-  Idempotent one-time setup for mutation testing. Installs/upgrades the tool
-  (mutmut for Python, StrykerJS for TS/JS), collects config values, and gitignores
-  the state files. Re-runnable anytime — detects existing setup, never clobbers.
+  Idempotent setup for mutation testing. Selects the affected project unit,
+  preserves its package manager, and configures mutmut or Stryker with consent.
 license: MIT
-compatibility: "Requires bash, git. Python: mutmut v3 (uv or pip). TS/JS: StrykerJS (npm)."
+compatibility: "Requires git. Python: mutmut v3, Python 3.10+, fork-capable OS. TS/JS: StrykerJS."
 metadata:
   author: wk-agent-ops
-  version: "1.0"
+  version: "1.1"
 ---
 
 # mutation-setup
 
-Prepares a project for `/mutation-check`: installs or upgrades the mutation tool
-and writes its configuration. Everything interactive and side-effecting lives here,
-so `/mutation-check` itself stays zero-config.
+Prepare one affected project unit for the portable `mutation-check` audit. This
+skill owns every install and configuration side effect; it is safe to re-run and
+never overwrites project files without showing the proposed change and obtaining
+user consent.
 
-> **Version assumption:** targets **mutmut v3** and **current StrykerJS**. If a
-> command errors on an interface change, re-verify with ctx7 before editing this
-> skill (see AGENTS.md rule on library docs).
+Invoke this skill by name on any Provider that supports project skills.
+**Provider-specific example:** Claude Code may expose `/mutation-setup`; the slash
+command is not a portable requirement.
 
-> **Idempotent.** Safe to re-run. Detects existing installs and config, shows
-> current values, and asks before changing anything — never blindly re-prompts or
-> overwrites. Re-run when you want to upgrade the tool or change a config value.
+> Commands target current mutmut v3 and StrykerJS. If an interface differs, stop
+> and verify the current official documentation before changing project files.
 
----
+## Step 1 — Resolve the repository root
 
-## Step 1 — Resolve project root
+Use the first available source:
 
-```
-if $CLAUDE_PROJECT_DIR is set → PROJECT_ROOT=$CLAUDE_PROJECT_DIR
-else                          → PROJECT_ROOT=$PWD
-```
+1. an explicit target supplied by the user;
+2. `git rev-parse --show-toplevel` from the current directory;
+3. a normalized Provider-supplied project directory;
+4. `PWD` only when no Git repository can be resolved.
 
----
+Canonicalize the path and announce it. Do not search or write outside that root.
 
-## Step 2 — Detect language & tool
+## Step 2 — Select the affected project unit
 
-| Found | Tool |
-|-------|------|
-| `pyproject.toml` or `setup.py` | mutmut |
-| `package.json` | Stryker |
-| both (monorepo) | set up each |
-| none | **abort** — "supports Python (mutmut) and TS/JS (Stryker) only" |
+Find candidate manifests beneath the repository root:
 
-Announce detected tool(s). Run the matching branch(es) below.
+| Manifest | Tool |
+|---|---|
+| `pyproject.toml`, `setup.cfg`, or legacy `setup.py` | mutmut |
+| `package.json` | StrykerJS |
 
----
+Prefer the nearest manifest that owns the user-specified target or current
+changed production files. A repository may contain more than one **affected
+project unit**:
 
-## Step 3 — Install or upgrade the tool (ask first)
+- one unambiguous candidate → select it and announce its directory;
+- multiple plausible candidates → list them and ask the user to choose;
+- Python and TS/JS units both affected → offer to configure each separately;
+- no supported candidate → stop without writing.
 
-**Never install without asking.** Report the current state, then propose the action.
+Never choose the repository-root manifest merely because it was found first.
 
-**Python / mutmut:**
+## Step 3 — Inspect existing dependency management
+
+Before proposing an install, report:
+
+- the selected project unit and tool;
+- installed tool version or `not installed`;
+- current mutation configuration or `missing`;
+- the package manager declared by the manifest, `packageManager` field, or
+  lockfile.
+
+Use the project's existing package manager and lockfile. If these disagree or no
+manager is evident, ask which established project workflow to use. Do not create
+a competing lockfile and do not use a global install as a fallback.
+
+## Step 4 — Python preflight and mutmut setup
+
+For a Python unit, verify before installation:
+
+- the selected interpreter is Python 3.10 or newer;
+- the environment is **fork-capable**;
+- native Windows users are directed to **WSL** rather than an unsupported run;
+- baseline tests already have a known project command, or the user supplies one.
+
+If mutmut is absent, show the exact dev-dependency command for the detected
+manager and ask before running it. For example, an existing uv project uses:
 
 ```bash
-python -c 'import mutmut, importlib.metadata as m; print(m.version("mutmut"))' 2>/dev/null \
-  || echo "not installed"
+uv add --dev mutmut
 ```
 
-- Not installed → ask, then `uv add --dev mutmut` (fallback `pip install mutmut`).
-- Installed → offer upgrade: `uv add --dev --upgrade mutmut` (fallback `pip install -U mutmut`). Keep if user declines.
+For other managers, use that project's documented dev-dependency workflow; do
+not silently switch managers. If mutmut is present, show its version and offer
+keep or upgrade.
 
-**TS/JS / Stryker:**
+The current pyproject form is:
+
+```toml
+[tool.mutmut]
+source_paths = ["src/"]
+pytest_add_cli_args_test_selection = ["tests/"]
+```
+
+Treat the values as examples. Infer candidate source/test directories, show the
+proposed values, and ask before editing. Preserve other `[tool.mutmut]` keys.
+When a legacy project has no supported config file, ask whether to use its
+existing `setup.cfg` or add `pyproject.toml`; do not guess.
+
+## Step 5 — StrykerJS setup
+
+Invoke Stryker through the selected JavaScript package manager. For an npm
+project, the current initializer is:
 
 ```bash
-npx stryker --version 2>/dev/null || echo "not installed"
+npx stryker init
 ```
 
-- Not installed → ask, then `npx stryker init` (installs `@stryker-mutator/core` and
-  generates `stryker.config.json`; it interactively asks test runner / reporters).
-- Installed → offer to bump the Stryker devDependencies. Keep if user declines.
+Equivalent package-manager-native launchers may be used only when that manager
+already owns the project. The initializer is interactive and may add dev
+dependencies plus a Stryker config. Show the expected files and obtain consent
+before running it.
 
----
+If Stryker is already configured, display its installed version, test runner,
+mutate setting, and incremental setting. Offer keep or update; never replace the
+whole config merely to change one value. Per-run changed-file scope belongs to
+`mutation-check`, not setup.
 
-## Step 4 — Configuration values (idempotent)
+## Step 6 — Ignore local state
 
-**Python / mutmut** — needs the source dir to mutate.
+Show and confirm any missing ignore entries before appending them to the
+repository `.gitignore`:
 
-```bash
-grep -q '^\[tool.mutmut\]' "$PROJECT_ROOT/pyproject.toml" 2>/dev/null && echo "configured" || echo "missing"
-```
-
-- Missing → ask for the source dir (default `src/`), then propose writing and confirm:
-  ```toml
-  [tool.mutmut]
-  paths_to_mutate = "src/"
-  ```
-- Present → show the current `paths_to_mutate` and ask keep or update. Do not overwrite without confirmation.
-
-**TS/JS / Stryker** — `stryker init` (Step 3) writes `stryker.config.json`. If it
-already exists, show the `mutate` and test-runner settings and ask keep or update.
-`/mutation-check` scopes with `--mutate` per run, so no per-file globs are needed here.
-
----
-
-## Step 5 — Gitignore state files
-
-Ensure these are ignored (append any missing line to `.gitignore`):
-
-```
+```text
+mutants/
 .stryker-tmp/
 reports/stryker-incremental.json
 .mutation-state
 openspec/.mutation-state
 ```
 
----
+Do not remove or reorder unrelated ignore rules.
 
-## Step 6 — Confirm ready
+If the project's normal pytest discovery scans the repository root, configure
+that command to target the real tests directory or exclude `mutants/`; otherwise
+mutmut's generated test copy can cause duplicate-module collection errors on the
+next baseline.
 
-Summarize what was installed/configured, then point to the run skill:
+## Step 7 — Report readiness
 
-```
-✅ Mutation setup complete (<tool>).
-   Run /mutation-check to audit test strength on your changed files.
-```
+Summarize the selected project unit, package manager, tool version, config path,
+baseline test command, and changed files. If no change was needed, explicitly
+report that the existing setup was kept.
+
+Then suggest the portable skill name `mutation-check`.
+**Provider-specific example:** Claude Code may invoke `/mutation-check`.

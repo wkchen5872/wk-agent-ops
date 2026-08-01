@@ -235,26 +235,28 @@ diff template/common/.claude/agents/my-agent.md \
 
 **位置：** `template/common/skills/mutation-setup/SKILL.md`、`template/common/skills/mutation-check/SKILL.md`（安裝後複製到 `.claude/skills/` 與 `.agents/skills/`）
 
-**用途：** diff-based 變異測試整合（v1.0），量測「測試是否真能抓到程式缺陷」而非只有 line coverage。Python 走 mutmut、TS/JS 走 Stryker。刻意拆成兩個 skill：**設定**與**執行**分離以利維護。
+**用途：** diff-focused 變異測試整合（v1.1），量測「測試是否真能抓到程式缺陷」而非只有 line coverage。Python 走 mutmut、TS/JS 走 Stryker。刻意拆成兩個 skill：**設定**與**執行**分離以利維護。
 
 **`mutation-setup`（冪等設定）：**
 
-- 語言偵測：`pyproject.toml`/`setup.py` → mutmut；`package.json` → Stryker；皆無則中止
-- 詢問後 install/upgrade 套件（`uv add --dev mutmut` / `npx stryker init`）、收集設定值（mutmut source 目錄 / Stryker init）、gitignore 狀態檔
+- 先以 Git 解析 repository root，再依變更檔與最近 manifest 選擇 affected project unit；monorepo 有歧義時詢問
+- 沿用既有 package manager 與 lockfile；mutmut 使用 `source_paths`，並先檢查 Python、fork 與 WSL 前提
+- 詢問後才 install/upgrade 套件、修改設定或 gitignore 狀態檔；mutmut 的 `mutants/` 需忽略並排除於 baseline discovery
 - 冪等：重跑偵測既有設定，顯示現值供 keep/update，不覆蓋。升級或改設定時才需再跑
 - **installer 不碰目標專案的 manifest / 設定**——所有安裝副作用集中於此
 
 **`mutation-check`（零設定執行）：**
 
-- 開頭 setup gate：偵測未安裝/未設定 → 提示先跑 `/mutation-setup`（可詢問是否現在執行）
-- diff scope：未 commit → `git diff HEAD`；乾淨 feature branch → 與 default branch 的 merge-base；default branch → 上次 watermark
-- findings 依風險類別排序（conditional → boundary → return-value → other），附三選項決策選單（補測試 / equivalent / skip）
-- watermark 存於 `openspec/.mutation-state`（或 `.mutation-state`），記錄 commit 與 equivalent 標記
+- 開頭 setup gate 與 baseline test gate；baseline 失敗時 audit 無效且不移動 scan base
+- Stryker 用 file/line `--mutate`；mutmut 以完整 `source_paths` 產生/cache，再用變更模組聚焦檢視與重跑
+- 分類 killed、survived、no coverage、timeout、invalid/error、skipped；score 只作次要資訊
+- findings 依風險排序並 hand off 給既有 TDD workflow；equivalent/deferred 都需人工理由
+- state 存於 `openspec/.mutation-state`（或 `.mutation-state`），分開保存 `last_scan_commit` 與 decisions
 - 搭配 `docs/agent-protocol.md` §4 的 test-first 與分層驗證；mutation audit 維持 optional/advisory，不是完成或 commit gate
 
 **完整說明與參考連結：** 見 `docs/mutation-testing.md`（工具官方文件 mutmut / Stryker，以及設計靈感來源 test-architect agent、add-mutation-testing command，吸收/未採用詳見 change `design.md` D8）。
 
-**觸發方式：**
+**觸發方式：** 跨 Provider 以 skill 名稱呼叫；以下 slash command 只是 Claude Code 範例。
 
 ```
 /mutation-setup     # 初次 / 升級 / 改設定
