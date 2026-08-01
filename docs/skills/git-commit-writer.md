@@ -3,7 +3,7 @@ type: Playbook
 title: Git Commit Writer
 description: Stage a completed worktree and create one Conventional Commits commit.
 tags: [skills, git, commits]
-timestamp: 2026-07-30T00:00:00+08:00
+timestamp: 2026-08-01T00:00:00+08:00
 ---
 
 # Git Commit Writer
@@ -14,7 +14,7 @@ timestamp: 2026-07-30T00:00:00+08:00
 
 ## 核心功能
 
-1. **精確 context 優先**：caller 提供 `archive_path` 與 `change_id` 時直接驗證並使用；只有獨立呼叫才自動偵測。
+1. **精確 context 優先**：caller 提供 `archive_path` 與 `change_id` 時直接驗證並使用；只有獨立呼叫才依 branch 與 staged path 的明確關聯自動偵測。
 2. **語意化 Commit Type**：根據 `git diff` 內容自動推斷 type (feat, fix, docs, refactor, chore, test)。
 3. **高品質 Subject/Body**：從 `proposal.md` 或 diff 內容推斷變更的原因 (Why) 與細節 (What)。
 4. **Co-Authored-By 注入**：自動在 commit footer 加入執行該操作的 AI 模型名稱。
@@ -29,12 +29,20 @@ timestamp: 2026-07-30T00:00:00+08:00
 graph TD
     Start[呼叫 git-commit-writer] --> Context{caller 有完整 archive context?}
     Context -- Yes --> Validate[驗證精確 archive_path]
-    Context -- No --> Detect[從 Git status / openspec list<br/>找唯一候選]
+    Context -- Invalid --> Invalid[停止：參數不完整或路徑不存在]
+    Context -- No --> Stage[git add -A]
     Validate --> Stage[git add -A]
-    Detect --> Stage
     Stage --> Empty{cached diff 為空?}
     Empty -- Yes --> Stop[停止：Nothing to commit]
-    Empty -- No --> Infer[依 staged diff + proposal<br/>推斷訊息]
+    Empty -- No --> Resolve{有明確 context?}
+    Resolve -- Yes --> Scoped[使用 caller context]
+    Resolve -- No --> Detect[依精確 branch / staged path<br/>篩選關聯候選]
+    Detect --> Count{關聯候選數}
+    Count -- 0 --> Unscoped[只使用 staged diff，不加 scope]
+    Count -- 1 --> Scoped
+    Count -- 多個 --> Ambiguous[互動選擇；無互動能力則停止]
+    Scoped --> Infer[依 staged diff + proposal 推斷訊息]
+    Unscoped --> Infer
     Infer --> Commit[執行 git commit]
     Commit --> Hook{hook 通過?}
     Hook -- No --> Restage[修正後重新 git add -A]
@@ -54,8 +62,29 @@ change_id=<OpenSpec change id without date prefix>
 ```
 
 少一個值或路徑不存在就停止，不可改抓「最新」archive。獨立呼叫且沒有
-context 時，才依序尋找唯一的未 commit archive、唯一的 active change，最後
-退回無 scope 的 Git diff。任何層級有多個候選都不得選第一筆。
+context 時，先完成 staging，再依以下明確證據篩選候選：
+
+| 候選 | 必要關聯證據 |
+|---|---|
+| Active change | 存在於 `openspec list --json`，且目前 branch 正好是 `feature/<change-id>`，或 staged path 位於 `openspec/changes/<change-id>/` |
+| Archived change | staged path 位於該筆精確的 `openspec/changes/archive/<archive-directory>/` |
+
+候選數只用來處理篩選後的歧義，不能取代關聯證據：零筆時使用無 scope 的
+staged diff；一筆時使用其 context；多筆時互動選擇，無互動能力則停止。
+即使目前只有一筆 active change，只要沒有上述關聯，也必須忽略。
+
+### 無關 active change 重播案例
+
+下列是歷史錯誤輸入形狀的安全重播，不會實際建立 commit：
+
+```text
+branch: main
+cached paths: docs/hooks/codex.md, docs/hooks/antigravity.md
+active changes: add-mutation-check
+association: none
+expected: docs: <subject>
+forbidden: docs(add-mutation-check): <subject>
+```
 
 ---
 
