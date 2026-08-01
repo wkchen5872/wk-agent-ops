@@ -1,10 +1,4 @@
-# Spec: git-commit-writer
-
-## Purpose
-
-A skill that generates and executes Conventional Commits messages, optionally using openspec change context to derive the scope and subject.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Generate commit message from openspec change context
 `git-commit-writer` SHALL validate and directly use explicit `archive_path` and
@@ -49,8 +43,7 @@ NOT be treated as association evidence.
 
 #### Scenario: Multiple associated standalone candidates
 - **WHEN** no explicit context is supplied and multiple positively associated candidates remain
-- **THEN** the skill asks the user to select one when the host supports
-  interactive questions
+- **THEN** the skill asks the user to select one when the host supports interactive questions
 - **AND** otherwise stops and returns the candidates to its caller
 - **AND** MUST NOT choose the first
 
@@ -67,37 +60,3 @@ from `git diff --cached`.
 - **WHEN** one or more active changes exist but none match the current feature branch or staged OpenSpec paths
 - **THEN** the skill formats `<type>: <subject>` from the staged diff
 - **AND** MUST NOT read an unrelated proposal to infer the type, subject, or body
-
-### Requirement: Infer commit type
-The skill SHALL infer the correct Conventional Commits type from the nature of the staged changes.
-
-#### Scenario: Type inference from proposal
-- **WHEN** proposal.md is available
-- **THEN** type is derived from the "What Changes" section (feat/fix/refactor/docs/chore/test)
-
-#### Scenario: Type inference from diff only
-- **WHEN** no proposal is available
-- **THEN** type is inferred from file paths and diff content
-
-### Requirement: Execute commit without confirmation
-The skill SHALL execute `git add -A` immediately before reading the cached diff
-and committing, without a separate confirmation prompt. It MUST stop when the
-staged diff is empty.
-
-#### Scenario: Successful commit
-- **WHEN** the worktree contains intended feature, archive, and documentation
-  changes
-- **THEN** the skill runs `git add -A`
-- **AND** derives the message from `git diff --cached`
-- **AND** executes `git commit -m "<message>"`
-- **AND** prints the short commit hash
-
-#### Scenario: Empty staged diff
-- **WHEN** `git add -A` produces no staged changes
-- **THEN** the skill reports that there is nothing to commit and stops
-
-#### Scenario: Pre-commit hook failure
-- **WHEN** `git commit` fails due to a pre-commit hook
-- **THEN** the skill fixes the issue
-- **AND** reruns `git add -A` before retrying
-- **AND** never uses `--no-verify`

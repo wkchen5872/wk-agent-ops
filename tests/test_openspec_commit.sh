@@ -94,6 +94,16 @@ for file in "$COMMIT_SKILL" "$COMMIT_AGENT"; do
   require_text "$file" 'archive_path and change_id are provided' "$(basename "$file") explicit context is primary"
   require_text "$file" 'git add -A' "$(basename "$file") stages changes"
   require_text "$file" 'git diff --cached --quiet' "$(basename "$file") guards empty staged diff"
+  require_text "$file" 'git diff --cached --name-only' "$(basename "$file") reads final staged paths"
+  require_text "$file" '### Standalone context resolution' "$(basename "$file") names standalone resolution boundary"
+  require_text "$file" 'feature/<change-id>' "$(basename "$file") requires exact feature branch evidence"
+  require_text "$file" 'openspec/changes/<change-id>/' "$(basename "$file") requires exact active path evidence"
+  require_text "$file" 'openspec/changes/archive/<archive-directory>/' "$(basename "$file") requires exact archive path evidence"
+  require_text "$file" 'A sole active change without either association is not context.' "$(basename "$file") ignores a sole unrelated active change"
+  require_text "$file" 'The number of active changes does not create an association.' "$(basename "$file") separates candidate count from association"
+  require_text "$file" 'Zero associated candidates' "$(basename "$file") defines unscoped fallback"
+  require_text "$file" 'One associated candidate' "$(basename "$file") defines associated context"
+  require_text "$file" 'Multiple associated candidates' "$(basename "$file") guards ambiguity"
   require_text "$file" 'Re-run `git add -A`' "$(basename "$file") restages on retry"
   add_line="$(line_of "$file" 'git add -A')"
   diff_line="$(line_of "$file" 'git diff --cached --stat')"
@@ -102,7 +112,16 @@ for file in "$COMMIT_SKILL" "$COMMIT_AGENT"; do
   else
     bad "$(basename "$file") stages before reading cached diff"
   fi
+  standalone_line="$(line_of "$file" '### Standalone context resolution')"
+  if [[ -n "$add_line" && -n "$standalone_line" ]] && (( add_line < standalone_line )); then
+    ok "$(basename "$file") stages before standalone resolution"
+  else
+    bad "$(basename "$file") stages before standalone resolution"
+  fi
 done
+
+require_text "$COMMIT_SKILL" 'ask the user to select one' "portable skill asks on associated ambiguity"
+require_text "$COMMIT_AGENT" 'stop and list them' "Claude agent stops on associated ambiguity"
 fi
 
 printf '\n'
