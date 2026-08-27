@@ -35,6 +35,11 @@ commit。這些步驟仍由 canonical skill 擁有。
 active change / resumable archive
                |
                v
+resolve attribution
+  -> tool_name
+  -> assisting_model
+               |
+               v
 openspec-archive-change
   -> change_id
   -> archive_path
@@ -50,7 +55,7 @@ doc-updater(change_id, archive_path)
   -> archived proposal/specs + git status + git diff HEAD
                |
                v
-git-commit-writer(change_id, archive_path)
+git-commit-writer(change_id, archive_path, tool_name, assisting_model)
   -> final staging + empty-diff guard + commit
 ```
 
@@ -98,9 +103,18 @@ Archive 檔案描述意圖，Git diff 描述實際完成內容；兩者不一致
 
 ### 4. Commit
 
-`git-commit-writer` 接收相同的精確 context，驗證 archive 後執行 final
-`git add -A`。若 staged diff 為空則停止；pre-commit hook 修正檔案後必須
-重新 staging，再重試 commit。
+`git-commit-writer` 接收相同的精確 archive context，以及不可拆分的
+attribution context：
+
+```text
+tool_name=<executing agent tool>
+assisting_model=<primary implementation model>
+```
+
+`tool_name` 是實際執行工作的 agent tool；`assisting_model` 是主要實作模型。
+commit-only agent 必須保留 caller 傳入的模型，不可改成自己的模型。驗證
+context 後執行 final `git add -A`；若 staged diff 為空則停止；pre-commit
+hook 修正檔案後必須重新 staging，再重試 commit。
 
 ## Provider 邊界
 

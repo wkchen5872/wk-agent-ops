@@ -17,7 +17,8 @@ timestamp: 2026-08-01T00:00:00+08:00
 1. **精確 context 優先**：caller 提供 `archive_path` 與 `change_id` 時直接驗證並使用；只有獨立呼叫才依 branch 與 staged path 的明確關聯自動偵測。
 2. **語意化 Commit Type**：根據 `git diff` 內容自動推斷 type (feat, fix, docs, refactor, chore, test)。
 3. **高品質 Subject/Body**：從 `proposal.md` 或 diff 內容推斷變更的原因 (Why) 與細節 (What)。
-4. **Co-Authored-By 注入**：自動在 commit footer 加入執行該操作的 AI 模型名稱。
+4. **可追溯的 AI attribution**：以執行工具寫入 `Co-Authored-By`，並以
+   `AI-Assisted-By` 記錄主要實作模型。
 5. **完整 staging guard**：先 `git add -A`，空 staged diff 不 commit；hook 修正後重新 staging。
 6. **即刻執行**：生成後不需額外確認，直接執行 `git commit`。
 
@@ -59,9 +60,13 @@ graph TD
 ```text
 archive_path=<exact archived change directory>
 change_id=<OpenSpec change id without date prefix>
+tool_name=<executing agent tool>
+assisting_model=<primary implementation model>
 ```
 
-少一個值或路徑不存在就停止，不可改抓「最新」archive。獨立呼叫且沒有
+每一組少一個值或 archive 路徑不存在就停止，不可改抓「最新」archive。
+commit-only agent 必須保留 caller 傳入的主要實作模型，不可換成自己的模型。
+獨立呼叫且沒有
 context 時，先完成 staging，再依以下明確證據篩選候選：
 
 | 候選 | 必要關聯證據 |
@@ -96,7 +101,8 @@ forbidden: docs(add-mutation-check): <subject>
 
 <body>
 
-Co-Authored-By: <Model Name> <noreply@anthropic.com>
+Co-Authored-By: <tool name> <verified provider email when mapped>
+AI-Assisted-By: <primary implementation model>
 ```
 
 ### 無 OpenSpec Context
@@ -105,8 +111,13 @@ Co-Authored-By: <Model Name> <noreply@anthropic.com>
 
 <body>
 
-Co-Authored-By: <Model Name> <noreply@anthropic.com>
+Co-Authored-By: <tool name> <verified provider email when mapped>
+AI-Assisted-By: <primary implementation model>
 ```
+
+目前驗證的 mapping 只有 `Codex <noreply@openai.com>` 與
+`Claude Code <noreply@anthropic.com>`。未知 mapping 只寫
+`Co-Authored-By: <tool name>`，不得猜測 email。
 
 ---
 
@@ -134,7 +145,7 @@ Co-Authored-By: <Model Name> <noreply@anthropic.com>
 
 > [!TIP]
 > 自動偵測只供獨立呼叫。`openspec-commit` 一律傳入精確的
-> `archive_path` 與 `change_id`。
+> `archive_path`、`change_id`、`tool_name` 與 `assisting_model`。
 
 ---
 

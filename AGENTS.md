@@ -279,8 +279,10 @@ Skill 和 Agent 應該遵循相同的邏輯和步驟，差異只在：
 
 例：`git-commit-writer`
 
-- Skill 中：「Step 6 — Execute」包含 `Co-Authored-By: <current model name>`（動態）
-- Agent 中：「Step 6 — Execute」同樣動態寫入 `Co-Authored-By: <your own model name>`（執行時自填）
+- Skill 中：「Step 6 — Execute」以執行工具寫入 `Co-Authored-By`，已驗證的
+  Codex／Claude Code mapping 才附 provider email；未知 mapping 保留 name-only trailer。
+- Skill 與 Agent 都在下一行寫入 `AI-Assisted-By: <primary implementation model>`；
+  commit-only agent 必須沿用 caller 傳入的主要實作模型，不可改填自己的模型。
 - 兩者在 Step 5 均加入 archive guard：archive 目錄不存在則停止
 
 ---

@@ -24,6 +24,19 @@ This skill coordinates those capabilities; it does not duplicate their logic.
 **Input:** An optional active change name. If omitted, resolve it from the
 current OpenSpec and Git state. Never guess when multiple candidates exist.
 
+Before any delegation, record the exact attribution context for this workflow:
+
+```text
+tool_name=<executing agent tool>
+assisting_model=<primary implementation model>
+```
+
+Use the agent tool that performed the work (`Codex`, `Claude Code`, or
+`Antigravity`), not an outer host surface. `assisting_model` is the primary
+model responsible for the implementation. If either value is unavailable, stop
+and request it; do not guess from environment variables, vendor domains, or a
+commit-only agent's identity.
+
 ---
 
 ## Provider action routing
@@ -171,10 +184,13 @@ Pass the same exact context:
 ```text
 change_id=<change_id, when available>
 archive_path=<archive_path, when available>
+tool_name=<executing agent tool>
+assisting_model=<primary implementation model>
 ```
 
 - **Claude Code:** invoke the `git-commit-writer` agent with these values in its
-  task prompt.
+  task prompt. The commit-only agent must preserve `assisting_model`; it MUST
+  NOT replace the primary implementation model with its own model.
 - **Codex and Antigravity:** invoke the project-owned `git-commit-writer` skill
   with these values.
 

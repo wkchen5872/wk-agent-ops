@@ -16,10 +16,14 @@ The caller may provide:
 ```text
 archive_path=<exact archived change directory>
 change_id=<OpenSpec change id without date prefix>
+tool_name=<executing agent tool>
+assisting_model=<primary implementation model>
 ```
 
 When archive_path and change_id are provided, use them directly. If only one is
-provided, stop.
+provided, stop. `tool_name` and `assisting_model` are also a pair and must both
+be present. This commit-only agent MUST preserve the primary implementation
+model supplied as `assisting_model`; it must not replace it with its own model.
 
 ## Step 1 — Validate optional OpenSpec input
 
@@ -34,6 +38,10 @@ fi
 
 Keep the verified pair as explicit context. Never replace an invalid explicit
 path with auto-detection. Do not resolve standalone context yet.
+
+Validate that `tool_name` is exactly `Claude Code` and that `assisting_model`
+is present. If either value is missing or uncertain, stop before staging and
+request it rather than guessing.
 
 ## Step 2 — Stage and gather the final diff
 
@@ -115,7 +123,8 @@ with no trailing period.
 ```bash
 git commit -m "<message>
 
-Co-Authored-By: <your actual model name> <noreply@anthropic.com>"
+Co-Authored-By: Claude Code <noreply@anthropic.com>
+AI-Assisted-By: <assisting_model>"
 ```
 
 On pre-commit failure, fix the in-scope issue. **Re-run `git add -A`**, inspect

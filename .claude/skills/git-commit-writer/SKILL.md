@@ -24,10 +24,18 @@ The caller may provide:
 ```text
 archive_path=<exact archived change directory>
 change_id=<OpenSpec change id without date prefix>
+tool_name=<executing agent tool>
+assisting_model=<primary implementation model>
 ```
 
 When archive_path and change_id are provided, use them directly. They are a
 pair: if only one is provided, stop and report the invalid input.
+
+`tool_name` and `assisting_model` are also a pair. `openspec-commit` always
+supplies both. For standalone use, accept exact runtime-provided identities; if
+either value is unavailable or uncertain, stop and request it. You MUST NOT
+guess an identity from environment variables, model families, or vendor
+domains.
 
 ---
 
@@ -47,6 +55,13 @@ fi
 
 Keep the verified pair as explicit context. Never replace an invalid explicit
 path with auto-detection. Do not resolve standalone context yet.
+
+### Attribution context
+
+When `tool_name` and `assisting_model` are provided, preserve both exact values.
+If only one is provided, stop. When neither is provided, standalone resolution
+may use exact identities supplied by the current runtime; if either identity is
+uncertain, stop before staging and request the missing value.
 
 ---
 
@@ -154,12 +169,22 @@ Rules:
 
 ## Step 6 — Commit
 
-Include `Co-Authored-By` using the current model's actual name:
+Build the co-author trailer from this strict verified mapping:
+
+| `tool_name` | Trailer |
+|---|---|
+| `Codex` | `Co-Authored-By: Codex <noreply@openai.com>` |
+| `Claude Code` | `Co-Authored-By: Claude Code <noreply@anthropic.com>` |
+
+Unmapped tools use `Co-Authored-By: <tool_name>` without an email. Preserve the
+tool name and MUST NOT guess an address. Follow it immediately with the primary
+implementation model supplied by the caller:
 
 ```bash
 git commit -m "<message>
 
-Co-Authored-By: <current model name> <noreply@anthropic.com>"
+<resolved Co-Authored-By trailer>
+AI-Assisted-By: <assisting_model>"
 ```
 
 If a pre-commit hook fails:

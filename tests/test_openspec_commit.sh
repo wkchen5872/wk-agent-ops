@@ -50,6 +50,9 @@ require_text "$ORCHESTRATOR" 'openspec-archive-change' "portable archive capabil
 require_text "$ORCHESTRATOR" 'git status --short' "resume state comes from Git"
 require_text "$ORCHESTRATOR" 'archive_path' "exact archive path retained"
 require_text "$ORCHESTRATOR" 'git add -A' "new files prepared before doc-updater"
+require_text "$ORCHESTRATOR" 'tool_name=<executing agent tool>' "executing tool handed to commit writer"
+require_text "$ORCHESTRATOR" 'assisting_model=<primary implementation model>' "primary model handed to commit writer"
+require_text "$ORCHESTRATOR" 'commit-only agent' "commit-only agent cannot replace implementation model"
 forbid_text "$ORCHESTRATOR" 'ls -t openspec/changes/archive/' "no newest-archive rediscovery"
 
 printf '\nprovider boundaries\n'
@@ -105,6 +108,9 @@ for file in "$COMMIT_SKILL" "$COMMIT_AGENT"; do
   require_text "$file" 'One associated candidate' "$(basename "$file") defines associated context"
   require_text "$file" 'Multiple associated candidates' "$(basename "$file") guards ambiguity"
   require_text "$file" 'Re-run `git add -A`' "$(basename "$file") restages on retry"
+  require_text "$file" 'tool_name=<executing agent tool>' "$(basename "$file") accepts tool identity"
+  require_text "$file" 'assisting_model=<primary implementation model>' "$(basename "$file") accepts primary model"
+  require_text "$file" 'AI-Assisted-By: <assisting_model>' "$(basename "$file") records primary model"
   add_line="$(line_of "$file" 'git add -A')"
   diff_line="$(line_of "$file" 'git diff --cached --stat')"
   if [[ -n "$add_line" && -n "$diff_line" ]] && (( add_line < diff_line )); then
@@ -121,7 +127,23 @@ for file in "$COMMIT_SKILL" "$COMMIT_AGENT"; do
 done
 
 require_text "$COMMIT_SKILL" 'ask the user to select one' "portable skill asks on associated ambiguity"
+require_text "$COMMIT_SKILL" 'Codex <noreply@openai.com>' "portable skill maps Codex email"
+require_text "$COMMIT_SKILL" 'Claude Code <noreply@anthropic.com>' "portable skill maps Claude Code email"
+require_text "$COMMIT_SKILL" 'Co-Authored-By: <tool_name>' "portable skill keeps unmapped tool name"
+require_text "$COMMIT_SKILL" 'MUST NOT guess' "portable skill forbids guessed attribution"
 require_text "$COMMIT_AGENT" 'stop and list them' "Claude agent stops on associated ambiguity"
+require_text "$COMMIT_AGENT" 'Claude Code <noreply@anthropic.com>' "Claude agent uses verified tool mapping"
+require_text "$COMMIT_AGENT" 'primary implementation model' "Claude agent preserves primary implementation model"
+
+for file in "$COMMIT_SKILL" "$COMMIT_AGENT"; do
+  coauthor_line="$(line_of "$file" 'Co-Authored-By:')"
+  assisted_line="$(line_of "$file" 'AI-Assisted-By: <assisting_model>')"
+  if [[ -n "$coauthor_line" && -n "$assisted_line" ]] && (( coauthor_line < assisted_line )); then
+    ok "$(basename "$file") orders tool attribution before model metadata"
+  else
+    bad "$(basename "$file") orders tool attribution before model metadata"
+  fi
+done
 fi
 
 printf '\n'
