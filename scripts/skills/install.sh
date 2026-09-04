@@ -11,11 +11,14 @@
 #   (none)   — common only (language-agnostic skills, rules, workflows)
 #   python   — common + Python coding style rules + pre-commit hook
 #   node     — common + Node.js coding style rules + pre-commit hook
+#   jvm      — common + Java/Kotlin mutation testing skills
+#   dotnet   — common + .NET mutation testing skills
 #
 # Examples:
 #   bash install.sh                  # common only
 #   bash install.sh python           # common + python
 #   bash install.sh python node      # common + python + node
+#   bash install.sh jvm dotnet       # common + JVM + .NET
 
 set -euo pipefail
 
@@ -72,6 +75,29 @@ for profile in "${PROFILES[@]+"${PROFILES[@]}"}"; do
     exit 1
   fi
 done
+
+# Select one testland/qa runner per language profile. Keep this mapping here,
+# beside profile validation, so the installer has one source of truth.
+MUTATION_SKILLS=()
+add_mutation_skill() {
+  local candidate="$1" existing
+  for existing in "${MUTATION_SKILLS[@]+"${MUTATION_SKILLS[@]}"}"; do
+    [[ "$candidate" == "$existing" ]] && return 0
+  done
+  MUTATION_SKILLS+=("$candidate")
+}
+
+for profile in "${PROFILES[@]+"${PROFILES[@]}"}"; do
+  case "$profile" in
+    node) add_mutation_skill "stryker-mutation" ;;
+    python) add_mutation_skill "mutmut-mutation" ;;
+    jvm) add_mutation_skill "pitest-mutation" ;;
+    dotnet) add_mutation_skill "stryker-net-mutation" ;;
+  esac
+done
+if [[ ${#MUTATION_SKILLS[@]} -gt 0 ]]; then
+  add_mutation_skill "mutant-survival-triage"
+fi
 
 PROFILES_DISPLAY="common${PROFILES[*]:+ ${PROFILES[*]}}"
 echo "🔧 Installing custom agent extensions"
@@ -151,6 +177,48 @@ if [[ -f "$TARGET/.gitignore" ]]; then
   IGNORE_TMP="$(mktemp)"
   grep -vFx 'openspec/.entropy-state' "$TARGET/.gitignore" > "$IGNORE_TMP" || true
   mv "$IGNORE_TMP" "$TARGET/.gitignore"
+fi
+
+# Remove the retired wk-agent-ops mutation skills. Third-party replacements are
+# installed below; legacy human triage state is intentionally preserved.
+rm -rf "$TARGET/.claude/skills/mutation-setup" \
+       "$TARGET/.claude/skills/mutation-check" \
+       "$TARGET/.agents/skills/mutation-setup" \
+       "$TARGET/.agents/skills/mutation-check"
+
+print_mutation_install_command() {
+  printf '   Replay in target:'
+  printf ' cd %q &&' "$TARGET"
+  printf ' %q' "${MUTATION_INSTALL_CMD[@]}"
+  printf '\n'
+}
+
+if [[ ${#MUTATION_SKILLS[@]} -gt 0 ]]; then
+  MUTATION_INSTALL_CMD=(npx skills add testland/qa)
+  for skill in "${MUTATION_SKILLS[@]}"; do
+    MUTATION_INSTALL_CMD+=(--skill "$skill")
+  done
+  MUTATION_INSTALL_CMD+=(
+    --agent claude-code
+    --agent codex
+    --agent antigravity
+    --yes
+  )
+
+  if ! command -v npx >/dev/null 2>&1; then
+    echo "❌ npx is required to install testland/qa mutation skills" >&2
+    echo "   Skills not installed: ${MUTATION_SKILLS[*]}" >&2
+    print_mutation_install_command >&2
+    exit 1
+  fi
+
+  echo "🔧 Installing testland/qa mutation skills"
+  if ! (cd "$TARGET" && "${MUTATION_INSTALL_CMD[@]}"); then
+    echo "❌ Failed to install testland/qa mutation skills" >&2
+    echo "   Skills not installed: ${MUTATION_SKILLS[*]}" >&2
+    print_mutation_install_command >&2
+    exit 1
+  fi
 fi
 
 echo ""

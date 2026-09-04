@@ -17,10 +17,12 @@ template/
 │   ├── .claude/rules/            → Python-specific Claude rules
 │   └── hooks/
 │       └── pre-commit            → .git/hooks/pre-commit (chmod +x)
-└── node/                         ← opt-in: Node.js projects
-    ├── .claude/rules/            → Node.js-specific Claude rules
-    └── hooks/
-        └── pre-commit            → .git/hooks/pre-commit (chmod +x)
+├── node/                         ← opt-in: Node.js projects
+│   ├── .claude/rules/            → Node.js-specific Claude rules
+│   └── hooks/
+│       └── pre-commit            → .git/hooks/pre-commit (chmod +x)
+├── jvm/                          ← opt-in: Java / Kotlin projects
+└── dotnet/                       ← opt-in: .NET projects
 ```
 
 ## Install Usage
@@ -37,6 +39,12 @@ bash /path/to/wk-agent-ops/scripts/skills/install.sh python
 # common + node profile
 bash /path/to/wk-agent-ops/scripts/skills/install.sh node
 
+# common + Java / Kotlin profile
+bash /path/to/wk-agent-ops/scripts/skills/install.sh jvm
+
+# common + .NET profile
+bash /path/to/wk-agent-ops/scripts/skills/install.sh dotnet
+
 # common + python + node
 bash /path/to/wk-agent-ops/scripts/skills/install.sh python node
 
@@ -51,6 +59,23 @@ linked worktree root are valid; a subdirectory inside either one is rejected.
 For linked worktrees, `.git` is a file, so the installer resolves repository and
 hook paths through Git instead of assuming `<target>/.git` is a directory.
 
+Selecting a language profile also runs `npx skills add testland/qa` in the
+target repository. It installs one profile-specific mutation runner plus
+`mutant-survival-triage` for Claude Code, Codex, and Antigravity using project
+scope and the skills CLI default link mode. Common-only installation does not
+call `npx`.
+
+| Profile | Mutation runner |
+|---|---|
+| `node` | `stryker-mutation` |
+| `python` | `mutmut-mutation` |
+| `jvm` | `pitest-mutation` |
+| `dotnet` | `stryker-net-mutation` |
+
+If the third-party install fails or `npx` is unavailable, the installer exits
+non-zero and prints the exact command to replay. It does not fall back to a
+global or copied installation.
+
 ## What Gets Installed
 
 | Source | Destination | Notes |
@@ -62,6 +87,7 @@ hook paths through Git instead of assuming `<target>/.git` is a directory.
 | `common/.github/` | `.github/` | Copilot instructions |
 | `<profile>/.claude/rules/` | `.claude/rules/` | per-profile rules |
 | `<profile>/hooks/` | Git-resolved hooks path | shared git hooks, auto chmod +x |
+| `testland/qa` selected skills | project-local Agent skill paths | one language runner plus deduplicated triage |
 
 ## Adding a New Profile
 
@@ -72,13 +98,16 @@ hook paths through Git instead of assuming `<target>/.git` is a directory.
    └── hooks/            ← optional: git hook scripts
        └── pre-commit
    ```
-2. Add content. For placeholder hooks, use the existing `python/hooks/pre-commit` as a template.
+2. Add only required content. Add a hook only when the profile has a reliable
+   test command; do not create placeholder hooks.
 3. `install.sh` auto-discovers profiles from subdirectories of `template/` (excluding `common/`).
 4. Document the new profile in this file.
 
 ## Notes
 
-- Installing does **not** remove previously installed files. If you switch profiles, manually clean up obsolete files.
+- Installing does not remove arbitrary project files. It may remove explicitly
+  retired wk-agent-ops artifacts, including the legacy `mutation-setup` and
+  `mutation-check` skills; other user and third-party skills are preserved.
 - Hook scripts are installed at `git rev-parse --git-path hooks` and made
   executable (`chmod +x`). Linked worktrees therefore use the repository's
   shared hooks directory.

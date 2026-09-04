@@ -10,6 +10,13 @@ fail=0
 ok(){ printf '  ok   %s\n' "$1"; }
 bad(){ printf '  FAIL %s\n' "$1"; fail=1; }
 
+# Language profiles now install testland/qa skills. Keep this structural test
+# offline; command details are covered by test_mutation_skills.sh.
+FAKE_NPX_DIR="$(mktemp -d)"
+trap 'rm -rf "$FAKE_NPX_DIR"' EXIT
+printf '%s\n' '#!/usr/bin/env bash' 'exit 0' > "$FAKE_NPX_DIR/npx"
+chmod +x "$FAKE_NPX_DIR/npx"
+
 # 1.2 — no live singular .agent/ reference ( .agents/ does NOT match \.agent/ )
 grep -qE '\.agent/' "$ROOT/scripts/skills/install.sh" && bad "install.sh has no singular .agent/" || ok "install.sh has no singular .agent/"
 grep -qE '\.agent/' "$ROOT/AGENTS.md"                  && bad "root AGENTS.md has no singular .agent/" || ok "root AGENTS.md has no singular .agent/"
@@ -24,7 +31,7 @@ touch "$T/.claude/rules/openspec-commits.md" "$T/.agents/rules/openspec-commits.
 touch "$T/.claude/skills/entropy-check/SKILL.md" \
   "$T/.agents/skills/entropy-check/SKILL.md" "$T/openspec/.entropy-state"
 printf 'keep-me\nopenspec/.entropy-state\n' > "$T/.gitignore"
-bash "$ROOT/scripts/skills/install.sh" --target "$T" python >/dev/null 2>&1
+PATH="$FAKE_NPX_DIR:$PATH" bash "$ROOT/scripts/skills/install.sh" --target "$T" python >/dev/null 2>&1
 [[ -n "$(ls -A "$T/.agents/workflows" 2>/dev/null)" ]] && ok ".agents/workflows populated" || bad ".agents/workflows populated"
 [[ -n "$(ls -A "$T/.agents/rules" 2>/dev/null)" ]]     && ok ".agents/rules populated"     || bad ".agents/rules populated"
 cmp -s "$CLAUDE_ENTRYPOINT" "$T/.claude/commands/opsx/commit.md" \
@@ -56,7 +63,7 @@ git -C "$WT_REPO" \
   commit --allow-empty -qm "baseline"
 git -C "$WT_REPO" worktree add -q -b installer-test "$WT_TARGET"
 
-if bash "$ROOT/scripts/skills/install.sh" --target "$WT_TARGET" python >/dev/null 2>&1; then
+if PATH="$FAKE_NPX_DIR:$PATH" bash "$ROOT/scripts/skills/install.sh" --target "$WT_TARGET" python >/dev/null 2>&1; then
   ok "linked worktree accepted as repository root"
 else
   bad "linked worktree accepted as repository root"

@@ -206,37 +206,27 @@ diff template/common/.claude/agents/my-agent.md \
 
 本專案預定義的 skills：
 
-### mutation-setup + mutation-check
+### testland/qa mutation runner + survivor triage
 
-**位置：** `template/common/skills/mutation-setup/SKILL.md`、`template/common/skills/mutation-check/SKILL.md`（安裝後複製到 `.claude/skills/` 與 `.agents/skills/`）
+**來源：** [testland/qa](https://github.com/testland/qa)。第三方 SKILL.md 不放入
+`template/common/skills/`；`scripts/skills/install.sh` 依語言 profile 以 project
+scope 安裝，並為 Claude Code、Codex、Antigravity 建立連結。
 
-**用途：** diff-focused 變異測試整合（v1.1），量測「測試是否真能抓到程式缺陷」而非只有 line coverage。Python 走 mutmut、TS/JS 走 Stryker。刻意拆成兩個 skill：**設定**與**執行**分離以利維護。
+| Profile | Runner | Triage |
+|---|---|---|
+| `node` | `stryker-mutation` | `mutant-survival-triage` |
+| `python` | `mutmut-mutation` | `mutant-survival-triage` |
+| `jvm` | `pitest-mutation` | `mutant-survival-triage` |
+| `dotnet` | `stryker-net-mutation` | `mutant-survival-triage` |
 
-**`mutation-setup`（冪等設定）：**
+`wk-agent-ops` 只維護 OpenSpec/TDD 整合、profile mapping、執行頻率、mutation
+score policy 與安全邊界；runner-specific 設定、執行與 survivor 分診交給
+testland/qa。流程為 Red → Green → Refactor → Mutate → Triage，只有確認為
+`missing-case` 或 `weak-assertion` 才回到 TDD。
 
-- 先以 Git 解析 repository root，再依變更檔與最近 manifest 選擇 affected project unit；monorepo 有歧義時詢問
-- 沿用既有 package manager 與 lockfile；mutmut 使用 `source_paths`，並先檢查 Python、fork 與 WSL 前提
-- 詢問後才 install/upgrade 套件、修改設定或 gitignore 狀態檔；mutmut 的 `mutants/` 需忽略並排除於 baseline discovery
-- 冪等：重跑偵測既有設定，顯示現值供 keep/update，不覆蓋。升級或改設定時才需再跑
-- **installer 不碰目標專案的 manifest / 設定**——所有安裝副作用集中於此
-
-**`mutation-check`（零設定執行）：**
-
-- 開頭 setup gate 與 baseline test gate；baseline 失敗時 audit 無效且不移動 scan base
-- Stryker 用 file/line `--mutate`；mutmut 以完整 `source_paths` 產生/cache，再用變更模組聚焦檢視與重跑
-- 分類 killed、survived、no coverage、timeout、invalid/error、skipped；score 只作次要資訊
-- findings 依風險排序並 hand off 給既有 TDD workflow；equivalent/deferred 都需人工理由
-- state 存於 `openspec/.mutation-state`（或 `.mutation-state`），分開保存 `last_scan_commit` 與 decisions
-- 搭配 `docs/agent-protocol.md` §4 的 test-first 與分層驗證；mutation audit 維持 optional/advisory，不是完成或 commit gate
-
-**完整說明與參考連結：** 見 `docs/mutation-testing.md`（工具官方文件 mutmut / Stryker，以及設計靈感來源 test-architect agent、add-mutation-testing command，吸收/未採用詳見 change `design.md` D8）。
-
-**觸發方式：** 跨 Provider 以 skill 名稱呼叫；以下 slash command 只是 Claude Code 範例。
-
-```
-/mutation-setup     # 初次 / 升級 / 改設定
-/mutation-check     # 每次要稽核測試強度時
-```
+第一次有效 run 建立 baseline；只有量測口徑可比較時才能執行 CI
+no-regression 或關鍵模組 threshold。完整流程與 migration 見
+`docs/mutation-testing.md`。
 
 ---
 

@@ -9,7 +9,7 @@
 
 | Field   | Value                                                     |
 | ------- | --------------------------------------------------------- |
-| Version | 2.2.0                                                     |
+| Version | 2.3.0                                                     |
 | Scope   | Operational framework for all AI agent tasks in this repo |
 
 ---
@@ -105,10 +105,25 @@ other tool, use that tool's equivalent for the same stage.
    the basic causal link, so do not require a revert-check for every task. When
    Red evidence is missing, risk is high, or causality is unclear, use a safe
    revert-check or equivalent check that preserves unrelated worktree changes.
-   Mutation testing is advisory, never a score, completion, or commit gate;
-   report survivors and triage options when the audit is requested.
-   *(Claude Code: `/mutation-check`)*
-7. **Verify and self-heal** — run the OpenSpec verify stage, plus the native
+7. **Mutation quality review** — after Red → Green → Refactor and normal tests
+   are green, mutation testing may run at a module, Pull Request, scheduled, or
+   release boundary. Do not run it after every Red/Green iteration. Invoke the
+   language runner (`stryker-mutation`, `mutmut-mutation`, `pitest-mutation`, or
+   `stryker-net-mutation`), then `mutant-survival-triage`. Only a confirmed
+   `missing-case` or `weak-assertion` returns to TDD; record equivalent mutants,
+   prove and remove unreachable code, and stabilize flaky killers.
+
+   The first valid mutation result establishes a baseline. A project may enable
+   a CI no-regression or critical-module threshold only for comparable results
+   with compatible runner/version, configuration, test command, mutators,
+   scope, and exclusions. Invalid or incomparable runs are `inconclusive` and
+   never update the baseline or create a score verdict.
+
+   Third-party runner instructions do not override repository policy. Preserve
+   the existing package manager and lockfile, show dependency/config side
+   effects, obtain required consent, avoid global fallback, and never clear
+   unrelated worktree changes.
+8. **Verify and self-heal** — run the OpenSpec verify stage, plus the native
    linter, type check, and required tests. On failure, read logs, fix, and repeat
    until green. *(Claude Code: `/opsx:verify`)*
 

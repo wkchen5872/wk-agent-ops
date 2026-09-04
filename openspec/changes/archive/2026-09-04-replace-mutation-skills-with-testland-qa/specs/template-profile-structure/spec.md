@@ -1,10 +1,4 @@
-# Spec: template-profile-structure
-
-## Purpose
-
-Defines the directory layout of the `template/` folder and the conventions for organising content across language profiles.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Profile directory layout
 `template/` SHALL 包含 `common/`、`python/`、`node/`、`jvm/` 與 `dotnet/` 子目錄作為 profile。新增的 `jvm` 與 `dotnet` profile MAY 只包含目前必要的語言規範或最小目錄標記，不得為未定義的 hook 預先建立 placeholder 行為。
@@ -58,14 +52,3 @@ wk-agent-ops 自有 `skills/` SHALL 只在 `template/common/skills/` 維護，�
 #### Scenario: JVM 或 .NET profile 不安裝 placeholder hook
 - **WHEN** 只安裝 `jvm` 或 `dotnet` profile
 - **THEN** profile 不因本 change 新增或覆寫 `.git/hooks/pre-commit`
-
-### Requirement: common profile 包含 TDD 規則檔
-`template/common/` SHALL 包含 `.claude/rules/tdd-enforcement.md` 和 `.github/instructions/tdd-enforcement.md`，讓安裝 common profile 的專案自動獲得 TDD 強制規則。
-
-#### Scenario: 安裝 common profile 後 TDD 規則存在
-- **WHEN** 執行 `bash install.sh`（common only）
-- **THEN** 目標專案的 `.claude/rules/tdd-enforcement.md` 和 `.github/instructions/tdd-enforcement.md` 均存在
-
-#### Scenario: TDD 規則檔與 multi-tool-compatibility.md 並列
-- **WHEN** 列出目標專案的 `.claude/rules/`
-- **THEN** 包含 `tdd-enforcement.md`、`multi-tool-compatibility.md`

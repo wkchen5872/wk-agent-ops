@@ -27,9 +27,20 @@ scripts/skills/install.sh
 .claude/ .agents/ docs/  ← This repo's installed tooling and managed policy
       ↓
 <target-project>/.claude/ .agents/ docs/  ← Other projects (via --target)
+
+selected language profile
+      ↓
+scripts/skills/install.sh → npx skills add testland/qa
+                              ↓
+                    project-local runner + triage
 ```
 
 **Rule:** Modify `template/`, never `.claude/` or `.agents/` directly.
+
+Mutation testing intentionally uses a second distribution lane: wk-agent-ops
+selects the language mapping and retains TDD/score/safety policy, while the
+skills CLI installs testland/qa runner and triage skills project-locally. Those
+third-party skills are not copied into `template/common/skills/`.
 
 ---
 
@@ -45,7 +56,9 @@ wk-agent-ops/
 │   │   ├── AGENTS.md          ← Thin pointer to docs/agent-protocol.md (seed, no-overwrite)
 │   │   └── docs/              ← agent-protocol.md/okf-conventions.md (managed) + architecture/conventions starters (seed)
 │   ├── python/                ← Python-specific: pytest hook, style guide
-│   └── node/                  ← Node-specific: npm test hook
+│   ├── node/                  ← Node-specific: npm test hook
+│   ├── jvm/                   ← Java/Kotlin profile; PIT mutation skill selection
+│   └── dotnet/                ← .NET profile; Stryker.NET mutation skill selection
 │
 ├── scripts/
 │   ├── skills/install.sh      ← Propagates template/ to .claude/ and target projects
@@ -90,7 +103,10 @@ branch 完成。每個 Worktree 同一時間只能有一個 active writer，跨 
 ## 4. Dependency Rules
 
 - **template/ → install.sh → .claude/ / .agents/ / managed docs** — one direction only; no reverse
-- **common/ rules apply to all profiles** — python/node profiles extend, never override common
+- **common/ rules apply to all profiles** — language profiles extend, never override common
+- **language profile → testland/qa runner + common triage** — installer selects
+  one runner per profile and one deduplicated `mutant-survival-triage`; no
+  third-party mutation SKILL.md is vendored in the template
 - **Hook scripts call into notify lib** — `scripts/notify/lib/` contains shared config and registry functions; hooks source these, they do not duplicate logic
 - **Workflow core remains provider-neutral** — Claude、Codex、Antigravity 與 Copilot
   的 cwd、session、prompt 差異只存在於 adapters；Gemini CLI 不再是支援目標

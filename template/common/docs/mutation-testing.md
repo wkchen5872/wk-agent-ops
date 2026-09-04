@@ -1,115 +1,129 @@
 ---
 type: Playbook
 title: Mutation Testing Playbook
-description: How to configure and run provider-neutral mutation audits with mutmut and Stryker.
-tags: [testing, mutation-testing, tdd, playbook]
-timestamp: 2026-08-01T00:00:00+08:00
+description: Stage-based mutation testing with testland/qa runners, survivor triage, and comparable score policy.
+tags: [testing, mutation-testing, tdd, testland]
+timestamp: 2026-09-04T00:00:00+08:00
 ---
 
 <!-- Managed by wk-agent-ops · do not edit here — re-running install.sh overwrites this file. -->
 
 # Mutation Testing Playbook
 
-Line coverage proves a line ran; it does not prove a test would notice if that
-line broke. Mutation testing introduces small faults and observes whether the
-existing tests detect them. It is an advisory test-strength audit, never a
-mutation-score, completion, commit, or CI gate.
+Mutation testing checks whether tests notice small faults in production code.
+`wk-agent-ops` owns the TDD integration, language mapping, score policy, cadence,
+and safety boundaries. [testland/qa](https://github.com/testland/qa) owns the
+language runners and survivor triage.
 
-## Invocation and ownership
+## Skills installed by language profile
 
-| Skill | When | Ownership |
-|---|---|---|
-| `mutation-setup` | first setup, upgrades, config changes | interactive dependency/config side effects |
-| `mutation-check` | audit a current change | baseline, mutation run, report, triage state |
+Running `scripts/skills/install.sh <profile>` installs one runner plus
+`mutant-survival-triage` with project scope for Claude Code, Codex, and
+Antigravity. The installer uses the skills CLI default link mode; it does not
+use global scope or copy mode.
 
-Invoke either portable skill by name in Claude Code, Codex, Antigravity, or
-another Provider that supports project skills. **Provider-specific example:**
-Claude Code may expose `/mutation-setup` and `/mutation-check`; slash commands
-are not a cross-Provider requirement.
+| Profile | Language | Runner skill | Triage skill |
+|---|---|---|---|
+| `node` | JavaScript / TypeScript | `stryker-mutation` | `mutant-survival-triage` |
+| `python` | Python | `mutmut-mutation` | `mutant-survival-triage` |
+| `jvm` | Java / Kotlin | `pitest-mutation` | `mutant-survival-triage` |
+| `dotnet` | .NET | `stryker-net-mutation` | `mutant-survival-triage` |
 
-`mutation-setup` is idempotent: it resolves the Git root and affected project
-unit, preserves the existing package manager/lockfile, shows current settings,
-and asks before every write. The common installer only distributes Agent
-configuration; it never edits a target project's manifest or mutation config.
+Common-only installation does not guess a language and installs no mutation
+skills. If automatic installation fails, the installer prints the exact
+`npx skills add testland/qa` command to replay from the target repository.
 
-## Valid audit sequence
+The common installer installs Agent skills only. It does not install a mutation
+runner package or edit the target project's manifest, lockfile, mutation config,
+or test command. When a runner skill later proposes those changes, repository
+policy remains authoritative: preserve the existing package manager and
+lockfile, show side effects, obtain required consent, and never clear unrelated
+worktree changes.
 
-1. Resolve the repository root with Git, then map changed production files to
-   their nearest Python or TS/JS project unit. Ask when monorepo ownership is
-   ambiguous.
-2. Confirm the tool and configuration are ready; otherwise return to
-   `mutation-setup`.
-3. Run the project unit's baseline tests. A failing baseline makes the audit
-   invalid: stop without a score or scan-state update. After a mutmut run, make
-   sure pytest targets the real tests directory or excludes generated
-   `mutants/` to avoid duplicate-module collection.
-4. Compute changed-code focus from dirty work, the feature-branch merge-base,
-   or `last_scan_commit` on the default branch.
-5. Run the tool with its native scope model, report all result categories, and
-   preserve human triage decisions.
-
-## Tool-specific scope
-
-| Language | Tool | Mutation scope |
-|---|---|---|
-| Python | [mutmut](https://mutmut.readthedocs.io/en/latest/) | configured `source_paths` is the generation/cache universe; changed modules focus rerun, inspection, and reporting |
-| TS/JS | [StrykerJS](https://stryker-mutator.io/) | `--mutate` accepts changed files and line ranges |
-
-The Git diff defines the audit focus, but the tools do not implement that focus
-identically. In particular, mutmut may generate mutants for the configured
-source universe before a positional selector narrows a rerun. Do not describe
-it as Stryker-style file-level generation, and do not use one changed-line cost
-formula for both tools.
-
-Current mutmut configuration uses `source_paths`; mutmut 3.7.0 dogfood verified
-the public `mutmut run`, `mutmut results`, `mutmut show`, and `mutmut browse`
-commands. Do not depend on an undocumented internal result file. Stryker's
-`mutate`, incremental, and force settings are documented in its official
-configuration reference.
-
-## Results and triage state
-
-Keep tool-native result meanings separate: killed, survived, no coverage or
-untested, timeout, invalid/error, and skipped when available. A tool-provided
-score is secondary context. Even 100% only describes the executed scope; it is
-not proof that the complete test suite is effective.
-
-Actionable survivors are sorted conditional → boundary → return-value → other.
-The audit offers three outcomes:
-
-1. hand the test gap to the current implementation/TDD workflow;
-2. record an equivalent mutant with a human reason;
-3. defer the finding with a reason, keeping it unresolved.
-
-The state file keeps the scan base separate from decisions:
+## Five-step closed loop
 
 ```text
-last_scan_commit=<sha>
-equivalent=<fingerprint>\t<date>\t<reason>
-deferred=<fingerprint>\t<date>\t<reason>
+[OpenSpec scenario / acceptance criteria]
+                  │
+                  ▼
+Red ──► Green ──► Refactor ──► Mutate ──► Triage
+  ▲                                         │
+  └──────── confirmed test gap ─────────────┘
 ```
 
-Advancing the scan base must not delete equivalent or deferred records. If a
-tool output cannot identify a prior finding reliably, show it for triage again.
+1. **Red** — write and run the smallest test that fails because the specified
+   behavior is missing.
+2. **Green** — implement only enough production behavior to pass.
+3. **Refactor** — improve production and test structure while tests stay green.
+4. **Mutate** — after the feature or stage is complete and normal tests are
+   green, invoke the language runner for the intended scope.
+5. **Triage** — invoke `mutant-survival-triage`; return to TDD only for a
+   confirmed test gap.
 
-## Relationship to TDD
+Do not run mutation testing after every Red/Green step. TDD is the fast daily
+loop; mutation testing is a stage-level review of test strength.
 
-Mutation testing supplements test-first evidence; it does not replace it. The
-shared protocol uses a **conditional causal check** when Red evidence is absent,
-risk is high, or test causality remains unclear. A revert-check is one possible
-causal check, not a mandatory step for every task.
+## Survivor decisions
 
-From the community test-architect reference this toolkit adopts survivor risk
-classification. It does not adopt a fixed score threshold or unconditional
-revert-check. From the add-mutation-testing command it keeps the setup concern,
-but not its one-shot, CI-gate-heavy shape.
+| Classification | Action |
+|---|---|
+| `missing-case` | Add a failing test, then run Red → Green → Refactor. |
+| `weak-assertion` | Produce Red evidence for the weakness, then strengthen the existing assertion; a new test file is not required. |
+| `equivalent-mutant` | Record the observable-equivalence reason; do not add a meaningless test. |
+| `unreachable` | Prove the code is unreachable, then prefer deleting dead code. No coverage alone is not proof. |
+| `flaky-killer` | Treat the result as unreliable, stabilize the test, and rerun the relevant scope. |
+
+Keep runner-native statuses separate when available: killed, survived, no
+coverage or untested, timeout, invalid/error, and skipped. A failed baseline
+test, runner error, or incomplete report makes the run invalid; do not derive a
+score verdict from it.
+
+## Execution cadence and scope
+
+| Stage | Normal tests | Mutation testing |
+|---|---|---|
+| Each small TDD iteration | Focused test | Do not run |
+| Module complete | Affected suite | That module |
+| Pull Request | Required tests | Changed files or runner incremental mode |
+| Main branch schedule | Full required checks | Full configured mutation universe |
+| Before release | Full required checks | Full run for critical business modules |
+
+Scope syntax belongs to each runner skill. For example, StrykerJS documents
+incremental mode for reusing a prior result and reducing repeated work. Always
+record the actual scope and exclusions; an incremental report still needs that
+context.
+
+## Mutation score policy
+
+Do not begin with an arbitrary universal threshold such as 80%.
+
+1. The first valid run establishes a baseline.
+2. CI may enforce no regression only for comparable runs.
+3. After important survivors are resolved, deliberately raise the baseline or
+   ratchet threshold.
+4. Permission, transaction, and amount-calculation modules may use explicitly
+   configured higher thresholds.
+
+Runs are comparable only when the project unit, runner and major version,
+mutation configuration, test command, mutator set, scope, and exclusion policy
+are compatible. Otherwise report `inconclusive`; do not update the baseline or
+claim a score regression. A 100% score describes only the executed scope and is
+not proof that the entire test suite is effective.
+
+## Migration from wk-agent-ops legacy skills
+
+The installer removes only the generated `mutation-setup` and `mutation-check`
+skill directories. Existing `.mutation-state` or `openspec/.mutation-state`
+files may contain human equivalent/deferred reasons, so they are preserved as
+legacy records. Remove them only after those decisions have been reviewed or
+transferred.
 
 # Citations
 
-[1] [StrykerJS — Mutation testing for JavaScript and TypeScript](https://stryker-mutator.io/)
-[2] [StrykerJS configuration reference](https://stryker-mutator.io/docs/stryker-js/configuration/)
-[3] [stryker-mutator/stryker-js source](https://github.com/stryker-mutator/stryker-js)
-[4] [mutmut documentation](https://mutmut.readthedocs.io/en/latest/)
-[5] [boxed/mutmut source](https://github.com/boxed/mutmut)
-[6] [add-mutation-testing command](https://github.com/davepoon/buildwithclaude/blob/main/plugins/all-commands/commands/add-mutation-testing.md)
-[7] [test-architect agent](https://github.com/rohitg00/awesome-claude-code-toolkit/blob/main/agents/quality-assurance/test-architect.md)
+[1] [testland/qa](https://github.com/testland/qa)
+[2] [Vercel Labs skills CLI](https://github.com/vercel-labs/skills)
+[3] [StrykerJS documentation](https://stryker-mutator.io/docs/stryker-js/introduction/)
+[4] [StrykerJS incremental mode](https://stryker-mutator.io/docs/stryker-js/incremental/)
+[5] [mutmut documentation](https://mutmut.readthedocs.io/en/latest/)
+[6] [PIT mutation testing](https://pitest.org/)
+[7] [Stryker.NET documentation](https://stryker-mutator.io/docs/stryker-net/introduction/)

@@ -1,10 +1,4 @@
-# Spec: mutation-check
-
-## Purpose
-
-定義跨 AI Provider 的 mutation testing 整合，使語言 runner 與 survivor triage 由 testland/qa 提供，而 wk-agent-ops 保留 TDD、安裝、安全、執行頻率與可比較 score policy。
-
-## Requirements
+## ADDED Requirements
 
 ### Requirement: 每個語言使用一個第三方 runner 與共用 triage
 系統 SHALL 依已選語言 profile 使用 `testland/qa` 的一個 mutation runner，並同時提供 `mutant-survival-triage`。對應 MUST 為：Node 使用 `stryker-mutation`、Python 使用 `mutmut-mutation`、JVM 使用 `pitest-mutation`、.NET 使用 `stryker-net-mutation`。這些 skills MUST 可由 Claude Code、Codex 與 Antigravity 在 project scope 使用。
@@ -114,3 +108,37 @@ installer SHALL 精確移除自身曾安裝的 `mutation-setup` 與 `mutation-ch
 #### Scenario: 目標專案有既有 mutation state
 - **WHEN** migration 發現 `.mutation-state` 或 `openspec/.mutation-state`
 - **THEN** installer 保留檔案並在文件中說明其 legacy 狀態，不自動刪除人工 decisions
+
+## REMOVED Requirements
+
+### Requirement: 兩個 mutation skill 可由支援的 Provider 使用
+**Reason**: 自有 `mutation-setup` 與 `mutation-check` 由語言 runner 與共用 triage 取代。
+**Migration**: 依語言改用 `stryker-mutation`、`mutmut-mutation`、`pitest-mutation` 或 `stryker-net-mutation`，並搭配 `mutant-survival-triage`。
+
+### Requirement: 專案根目錄與 affected project unit 可可靠解析
+**Reason**: runner 與 project unit 解析改由對應第三方 skill 處理，wk-agent-ops 只以明確 profile 選擇語言。
+**Migration**: 安裝時選擇語言 profile；執行時依 runner skill 的專案解析流程處理。
+
+### Requirement: mutation-setup 是經同意且冪等的設定入口
+**Reason**: 自有 setup skill 退役。
+**Migration**: 啟動對應語言 runner skill，並以 managed local policy 約束 dependency 與設定副作用。
+
+### Requirement: mutation-check 具備 setup 與 baseline gates
+**Reason**: 自有 check skill 退役，baseline gate 成為共用流程政策。
+**Migration**: 在一般測試全綠後啟動語言 runner；無效 run 不形成 score verdict。
+
+### Requirement: 變更範圍符合各 mutation tool 的實際能力
+**Reason**: runner-specific scope 表達交由各第三方 runner skill 維護。
+**Migration**: PR 使用 changed-files 或 runner incremental 能力，排程使用完整 scope，並記錄實際範圍。
+
+### Requirement: 報告完整呈現結果語義與限制
+**Reason**: 報告責任改由 runner 原生結果與共用 triage 分工，並新增 score comparability policy。
+**Migration**: 保留 tool-native 狀態；只對有效且可比較結果形成 score verdict。
+
+### Requirement: 人工 triage 可追溯且不由 watermark 吞掉
+**Reason**: 自有 state/watermark 模型退役，survivor 分診改由 `mutant-survival-triage` 處理。
+**Migration**: 保留既有 state 作為 legacy record；新的 findings 使用 triage skill 的輸出與本地決策紀錄。
+
+### Requirement: mutation audit 維持 advisory 並交還 TDD 流程
+**Reason**: mutation 仍是階段性審查，但 score policy 改為可在建立 baseline 後提供可比較的 CI no-regression gate。
+**Migration**: 有效測試缺口仍交回 TDD；CI 僅對有效且可比較的 score 執行已啟用政策。

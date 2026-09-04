@@ -39,6 +39,12 @@ bash /path/to/wk-agent-ops/scripts/skills/install.sh python
 # Node.js 專案
 bash /path/to/wk-agent-ops/scripts/skills/install.sh node
 
+# Java / Kotlin 專案
+bash /path/to/wk-agent-ops/scripts/skills/install.sh jvm
+
+# .NET 專案
+bash /path/to/wk-agent-ops/scripts/skills/install.sh dotnet
+
 # 同時安裝多個 profile
 bash /path/to/wk-agent-ops/scripts/skills/install.sh python node
 ```
@@ -46,6 +52,12 @@ bash /path/to/wk-agent-ops/scripts/skills/install.sh python node
 安裝目標必須是 Git repository root，可使用 primary checkout 或 linked
 worktree。語言 profile 的 hooks 會安裝到 Git 回報的共用 hooks path；repository
 內部的子目錄不會被當成有效 target。
+
+語言 profile 也會透過 `npx skills add testland/qa`，以 project scope 為 Claude
+Code、Codex、Antigravity 安裝一個對應 mutation runner 與
+`mutant-survival-triage`。若自動安裝失敗，installer 會以非零結束並顯示可重播
+命令；不會改用 global 或 copy fallback。詳見
+[Mutation Testing Playbook](docs/mutation-testing.md)。
 
 ---
 
@@ -144,6 +156,18 @@ CLI 針對 Claude、Codex、Antigravity 產生的 `.claude/`、`.codex/`、單�
 - 優先使用專案 `.venv`，fallback 系統 Python
 - 測試結果寫入 `logs/unit_test_<timestamp>.log`
 
+### Mutation Testing Skills
+
+| Profile | testland/qa runner | 共用 triage |
+|---|---|---|
+| `node` | `stryker-mutation` | `mutant-survival-triage` |
+| `python` | `mutmut-mutation` | `mutant-survival-triage` |
+| `jvm` | `pitest-mutation` | `mutant-survival-triage` |
+| `dotnet` | `stryker-net-mutation` | `mutant-survival-triage` |
+
+`wk-agent-ops` 維護 TDD 閉環、執行頻率、score baseline/no-regression policy
+與安全邊界；runner 執行及 survivor 分診由 testland/qa skills 負責。
+
 ---
 
 ## 目錄結構
@@ -212,5 +236,6 @@ mkdir -p template/<profile>/hooks
 ## 相依
 
 - [OpenSpec CLI](https://github.com/Fission-AI/OpenSpec)：`npm install -g @fission-ai/openspec`
+- Node.js / npm（語言 profile 透過 `npx` 安裝 testland/qa skills）
 - Claude Code CLI（`wt-work` 預設 Provider；亦支援 Codex、Antigravity、Copilot）
 - bash 4+、rsync、git 2.5+（worktree 支援）
