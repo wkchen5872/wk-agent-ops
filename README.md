@@ -173,6 +173,21 @@ project-owned `.codex/agents/` custom agents。它不接管 `.codex/config.toml`
 
 ---
 
+## 使用者層級的 Read-heavy Discovery Skill
+
+`bulk-read-routing` 只在程式碼位置未知、需要廣泛唯讀探索時，委派一次
+`bulk-reader-agent`；驗證、工程判斷與編輯仍由 parent agent 保留。它不屬於
+project-level common installer，請另行安裝：
+
+```bash
+bash scripts/user/install-bulk-read-routing.sh
+```
+
+可指定 `claude` 或 `codex` 單一 Provider。完整安裝、靜態驗證與 A/B 評估方式見
+[Bulk Read Routing Playbook](docs/skills/bulk-read-routing.md)。
+
+---
+
 ## 目錄結構
 
 ```
