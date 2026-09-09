@@ -144,9 +144,10 @@ OpenSpec CLI 產生的原生 action 與 wk-agent-ops 安裝的 portable workflow
 | `template/common/skills/*` | `.claude/skills/*`、`.agents/skills/*` |
 | `template/common/.claude/commands/opsx/commit.md` | `.claude/commands/opsx/commit.md` |
 | `template/common/.agents/workflows/opsx-commit.md` | `.agents/workflows/opsx-commit.md` |
+| `template/common/.codex/agents/*.toml` | `.codex/agents/*.toml` |
 
-Installer 不產生 `.codex/` 或單數 `.agent/`；這兩個目錄由 OpenSpec 的
-provider setup 管理。
+Installer 對 `.codex/` 的管理只限於 project-owned `.codex/agents/`；不產生
+單數 `.agent/`，也不修改 OpenSpec provider setup 管理的 `.codex/skills/`。
 
 ## 失敗與續跑
 

@@ -124,6 +124,7 @@ sync_dir "$COMMON/skills" "$TARGET/.agents/skills"
 mkdir -p "$TARGET/.claude" "$TARGET/.agents"
 rsync -a --itemize-changes --exclude 'skills/' "$COMMON/.claude/" "$TARGET/.claude/"
 sync_dir "$COMMON/.agents" "$TARGET/.agents"   # agent workflows → .agents/workflows/
+sync_dir "$COMMON/.codex/agents" "$TARGET/.codex/agents"
 
 # --- AGENTS.md: copy only if not present in target ---
 if [[ -f "$COMMON/AGENTS.md" && ! -f "$TARGET/AGENTS.md" ]]; then

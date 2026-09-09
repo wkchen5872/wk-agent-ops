@@ -12,6 +12,7 @@ template/
 │   │   ├── commands/opsx/        → /opsx:* slash commands
 │   │   └── rules/                → always-on Claude Code rules
 │   ├── .agents/workflows/         → agent workflow definitions
+│   ├── .codex/agents/             → Codex custom-agent TOML
 │   └── .github/instructions/     → GitHub Copilot instructions
 ├── python/                       ← opt-in: Python projects
 │   ├── .claude/rules/            → Python-specific Claude rules
@@ -84,6 +85,7 @@ global or copied installation.
 | `common/skills/` | `.agents/skills/` | agent skills (duplicate) |
 | `common/.claude/` | `.claude/` | rules, commands |
 | `common/.agents/` | `.agents/` | workflows |
+| `common/.codex/agents/` | `.codex/agents/` | project-owned Codex custom agents only |
 | `common/.github/` | `.github/` | Copilot instructions |
 | `<profile>/.claude/rules/` | `.claude/rules/` | per-profile rules |
 | `<profile>/hooks/` | Git-resolved hooks path | shared git hooks, auto chmod +x |
@@ -108,6 +110,8 @@ global or copied installation.
 - Installing does not remove arbitrary project files. It may remove explicitly
   retired wk-agent-ops artifacts, including the legacy `mutation-setup` and
   `mutation-check` skills; other user and third-party skills are preserved.
+- Codex ownership is limited to `.codex/agents/`; `.codex/config.toml` and
+  `.codex/skills/` are preserved.
 - Hook scripts are installed at `git rev-parse --git-path hooks` and made
   executable (`chmod +x`). Linked worktrees therefore use the repository's
   shared hooks directory.

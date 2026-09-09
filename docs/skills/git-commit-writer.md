@@ -153,6 +153,8 @@ AI-Assisted-By: <primary implementation model>
 
 - **Skill**: `template/common/skills/git-commit-writer/SKILL.md`
 - **Agent**: `template/common/.claude/agents/git-commit-writer.md`
+- **Codex agent**: `template/common/.codex/agents/git-commit-writer.toml`
+  （`gpt-5.6-luna`、medium）
 - **Installed portable skill**: `.claude/skills/git-commit-writer/SKILL.md`、
   `.agents/skills/git-commit-writer/SKILL.md`
 - **Workflow**: [OpenSpec Commit Workflow](/docs/workflow/commit.md)

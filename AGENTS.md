@@ -2,7 +2,7 @@
 
 > **專案核心使命**：`wk-agent-ops` 是一個專門為個人或團隊開發、管理與維護 AI Agent 擴充元件（包括 Skills、Rules、Workflows 與 Git Hooks）的中央倉儲。本專案的產出旨在透過安裝腳本，將這些標準化的 Agent 配置無縫部署到其他各個開發專案中，確保跨專案的 Agent 行為一致、高效且具備高度自動化能力。
 
-本文件說明如何在本專案中定義與管理 Claude Code sub-agents、skills、rules 等配置。
+本文件說明如何在本專案中定義與管理 Claude Code、Codex sub-agents、skills、rules 與 workflows 等配置。
 
 ---
 
@@ -15,12 +15,12 @@
    ↓
 2. 本地確認無誤
    ↓
-3. 執行 scripts/skills/install.sh 安裝到 .claude/ 和 .agents/
+3. 執行 scripts/skills/install.sh 安裝到 .claude/、.agents/ 和 .codex/agents/
    ↓
 4. 提交 git commit
 ```
 
-**禁止直接編輯 `.claude/`、`.agents/` 下的檔案** — 這些是由 install.sh 生成的安裝目標，不應該手動維護。
+**禁止直接編輯 `.claude/`、`.agents/` 或 `.codex/agents/` 下的檔案** — 這些是由 install.sh 生成的安裝目標，不應該手動維護。
 
 ---
 
@@ -51,6 +51,8 @@ template/common/
 │   └── rules/            ← 編碼規範、git 規則等
 ├── .agents/
 │   └── workflows/        ← Antigravity workflows
+├── .codex/
+│   └── agents/           ← Codex custom agents（.toml）
 ├── AGENTS.md             ← 跨工具 managed protocol 入口
 ├── docs/
 │   └── agent-protocol.md ← 跨工具共用規範
@@ -74,6 +76,8 @@ template/common/
 touch template/common/.claude/agents/<agent-name>.md
 # 編輯 frontmatter + system prompt
 ```
+
+Codex custom agent 則新增於 `template/common/.codex/agents/<agent-name>.toml`。
 
 **修改 skill：**
 
@@ -106,6 +110,7 @@ bash scripts/skills/install.sh --target <project-path>
 - 複製 `template/common/skills/` → `.claude/skills/` 和 `.agents/skills/`
 - 複製 `template/common/.claude/` → `.claude/`（除 skills/）
 - 複製 `template/common/.agents/` → `.agents/`
+- 複製 `template/common/.codex/agents/` → `.codex/agents/`
 - Mirror `.claude/rules/` → `.agents/rules/`
 - 更新 managed `docs/agent-protocol.md`
 
@@ -121,10 +126,10 @@ bash scripts/skills/install.sh --target <project-path>
 
 ### 5. 提交 Git
 
-同時提交 template 和安裝目標（`.claude/`, `.agents/`）：
+同時提交 template 和安裝目標（`.claude/`, `.agents/`, `.codex/agents/`）：
 
 ```bash
-git add template/common/ .claude/ .agents/
+git add template/common/ .claude/ .agents/ .codex/agents/
 git commit -m "chore(agents): add/update <agent-name>"
 ```
 
@@ -134,12 +139,13 @@ git commit -m "chore(agents): add/update <agent-name>"
 
 某些檔案需要在三個位置保持同步：
 
-| 檔案類型 | Template | .claude/ | .agents/ | 備註 |
-|---------|----------|----------|---------|------|
-| Agents | `template/common/.claude/agents/` | ✓ 自動複製 | ✓ 自動複製 | 兩個位置需要相同 |
-| Skills | `template/common/skills/` | ✓ 自動複製 | ✓ 自動複製 | 兩個位置需要相同 |
-| Rules | `template/common/.claude/rules/` | ✓ 自動複製 | ✓ 自動 mirror | 單一 template source |
-| Commands | `template/common/.claude/commands/` | ✓ 自動複製 | ✗ 不複製 | CC 專用 |
+| 檔案類型 | Template | 安裝位置 | 備註 |
+|---------|----------|----------|------|
+| Claude Agents | `template/common/.claude/agents/` | `.claude/agents/` | Markdown agent 定義 |
+| Codex Agents | `template/common/.codex/agents/` | `.codex/agents/` | TOML custom agent；不接管其他 `.codex/` 內容 |
+| Skills | `template/common/skills/` | `.claude/skills/`、`.agents/skills/` | 兩個位置需要相同 |
+| Rules | `template/common/.claude/rules/` | `.claude/rules/`、`.agents/rules/` | 單一 template source |
+| Commands | `template/common/.claude/commands/` | `.claude/commands/` | CC 專用 |
 
 **重要：** 修改後務必確認三個位置內容一致。使用 `diff` 或 `git diff` 檢查：
 
@@ -157,6 +163,8 @@ diff template/common/.claude/agents/my-agent.md \
 ### git-commit-writer
 
 **位置：** `.claude/agents/git-commit-writer.md`
+
+Codex 版本：`.codex/agents/git-commit-writer.toml`（`gpt-5.6-luna`、medium）
 
 **用途：** 生成並執行 Conventional Commits 格式的 git commit
 
@@ -179,6 +187,8 @@ diff template/common/.claude/agents/my-agent.md \
 ### doc-updater
 
 **位置：** `.claude/agents/doc-updater.md`
+
+Codex 版本：`.codex/agents/doc-updater.toml`（`gpt-5.6-terra`、medium）
 
 **用途：** 偵測 git 狀態，自動選擇模式，對 `docs/`、`README.md`、`AGENTS.md` 做最小化更新，並將變更留在工作區由使用者 review 後自行 commit
 
@@ -279,7 +289,7 @@ Skill 和 Agent 應該遵循相同的邏輯和步驟，差異只在：
 
 ## 最佳實踐
 
-1. **優先修改 template**：所有變更先在 `template/common/` 完成，然後透過 install.sh 傳播
+1. **優先修改 template**：所有變更先在 `template/common/` 完成，然後透過 install.sh 傳播到 `.claude/`、`.agents/` 與受管理的 `.codex/agents/`
 2. **測試後再提交**：新 agent/skill 務必在本地測試無誤
 3. **保持同步**：定期檢查 template 和安裝位置是否一致
 4. **清晰的 commit 訊息**：使用 `chore(agents):`, `feat(agents):` 等 scope 區分
@@ -303,7 +313,7 @@ A: 分開。Skill 是通用指令集（跨工具），Agent 是 CC 特定設定�
 
 **Q: 可以只在 `.claude/` 編輯，不用 template 嗎？**
 
-A: 不建議。`template/` 是「來源」，`.claude/` 和 `.agents/` 是「安裝」。分離設計是為了支援多個專案共用同套配置。
+A: 不建議。`template/` 是「來源」，`.claude/`、`.agents/` 和 `.codex/agents/` 是「安裝」。分離設計是為了支援多個專案共用同套配置；`.codex/skills/` 與 `.codex/config.toml` 不在此 installer 的管理範圍。
 
 ---
 

@@ -6,6 +6,8 @@ set -u
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CLAUDE_ENTRYPOINT="$ROOT/template/common/.claude/commands/opsx/commit.md"
 ANTIGRAVITY_ENTRYPOINT="$ROOT/template/common/.agents/workflows/opsx-commit.md"
+CODEX_COMMIT_AGENT="$ROOT/template/common/.codex/agents/git-commit-writer.toml"
+CODEX_DOC_AGENT="$ROOT/template/common/.codex/agents/doc-updater.toml"
 fail=0
 ok(){ printf '  ok   %s\n' "$1"; }
 bad(){ printf '  FAIL %s\n' "$1"; fail=1; }
@@ -26,11 +28,15 @@ grep -qE '\.agent/' "$ROOT/AGENTS.md"                  && bad "root AGENTS.md ha
 # 1.1 — install is non-no-op into .agents/
 T="$(mktemp -d)"; ( cd "$T" && git init -q )
 mkdir -p "$T/.claude/rules" "$T/.agents/rules" \
-  "$T/.claude/skills/entropy-check" "$T/.agents/skills/entropy-check" "$T/openspec"
+  "$T/.claude/skills/entropy-check" "$T/.agents/skills/entropy-check" \
+  "$T/.codex/skills/openspec-existing" "$T/openspec"
 touch "$T/.claude/rules/openspec-commits.md" "$T/.agents/rules/openspec-commits.md"
 touch "$T/.claude/skills/entropy-check/SKILL.md" \
-  "$T/.agents/skills/entropy-check/SKILL.md" "$T/openspec/.entropy-state"
+  "$T/.agents/skills/entropy-check/SKILL.md" \
+  "$T/.codex/skills/openspec-existing/SKILL.md" "$T/openspec/.entropy-state"
+printf 'user-setting = true\n' > "$T/.codex/config.toml"
 printf 'keep-me\nopenspec/.entropy-state\n' > "$T/.gitignore"
+PATH="$FAKE_NPX_DIR:$PATH" bash "$ROOT/scripts/skills/install.sh" --target "$T" python >/dev/null 2>&1
 PATH="$FAKE_NPX_DIR:$PATH" bash "$ROOT/scripts/skills/install.sh" --target "$T" python >/dev/null 2>&1
 [[ -n "$(ls -A "$T/.agents/workflows" 2>/dev/null)" ]] && ok ".agents/workflows populated" || bad ".agents/workflows populated"
 [[ -n "$(ls -A "$T/.agents/rules" 2>/dev/null)" ]]     && ok ".agents/rules populated"     || bad ".agents/rules populated"
@@ -39,7 +45,31 @@ cmp -s "$CLAUDE_ENTRYPOINT" "$T/.claude/commands/opsx/commit.md" \
 cmp -s "$ANTIGRAVITY_ENTRYPOINT" "$T/.agents/workflows/opsx-commit.md" \
   && ok "Antigravity commit entrypoint copied exactly" || bad "Antigravity commit entrypoint copied exactly"
 [[ ! -d "$T/.agent" ]] && ok "no singular .agent/ dir created" || bad "no singular .agent/ dir created"
-[[ ! -d "$T/.codex" ]] && ok "no .codex/ dir created" || bad "no .codex/ dir created"
+cmp -s "$CODEX_COMMIT_AGENT" "$T/.codex/agents/git-commit-writer.toml" \
+  && ok "Codex commit agent copied exactly" || bad "Codex commit agent copied exactly"
+cmp -s "$CODEX_DOC_AGENT" "$T/.codex/agents/doc-updater.toml" \
+  && ok "Codex doc agent copied exactly" || bad "Codex doc agent copied exactly"
+for agent in "$CODEX_COMMIT_AGENT" "$CODEX_DOC_AGENT"; do
+  if grep -q '^name = ' "$agent" \
+    && grep -q '^description = ' "$agent" \
+    && grep -q '^developer_instructions = ' "$agent"; then
+    ok "$(basename "$agent") has required Codex fields"
+  else
+    bad "$(basename "$agent") has required Codex fields"
+  fi
+done
+grep -q '^model = "gpt-5.6-luna"$' "$CODEX_COMMIT_AGENT" 2>/dev/null \
+  && grep -q '^model_reasoning_effort = "medium"$' "$CODEX_COMMIT_AGENT" 2>/dev/null \
+  && ok "Codex commit agent model configured" || bad "Codex commit agent model configured"
+grep -q '^model = "gpt-5.6-terra"$' "$CODEX_DOC_AGENT" 2>/dev/null \
+  && grep -q '^model_reasoning_effort = "medium"$' "$CODEX_DOC_AGENT" 2>/dev/null \
+  && ok "Codex doc agent model configured" || bad "Codex doc agent model configured"
+if [[ "$(cat "$T/.codex/config.toml")" == "user-setting = true" \
+  && -f "$T/.codex/skills/openspec-existing/SKILL.md" ]]; then
+  ok "unrelated Codex content preserved"
+else
+  bad "unrelated Codex content preserved"
+fi
 [[ ! -e "$T/.claude/rules/openspec-commits.md" && ! -e "$T/.agents/rules/openspec-commits.md" ]] \
   && ok "retired openspec commit rule removed" || bad "retired openspec commit rule removed"
 if [[ ! -e "$T/.claude/skills/entropy-check" \
@@ -90,6 +120,10 @@ cmp -s "$CLAUDE_ENTRYPOINT" "$ROOT/.claude/commands/opsx/commit.md" \
   && ok "repository Claude commit entrypoint synchronized" || bad "repository Claude commit entrypoint synchronized"
 cmp -s "$ANTIGRAVITY_ENTRYPOINT" "$ROOT/.agents/workflows/opsx-commit.md" \
   && ok "repository Antigravity commit entrypoint synchronized" || bad "repository Antigravity commit entrypoint synchronized"
+cmp -s "$CODEX_COMMIT_AGENT" "$ROOT/.codex/agents/git-commit-writer.toml" \
+  && ok "repository Codex commit agent synchronized" || bad "repository Codex commit agent synchronized"
+cmp -s "$CODEX_DOC_AGENT" "$ROOT/.codex/agents/doc-updater.toml" \
+  && ok "repository Codex doc agent synchronized" || bad "repository Codex doc agent synchronized"
 
 echo
 [[ $fail -eq 0 ]] && { echo "PASS"; exit 0; } || { echo "FAIL"; exit 1; }

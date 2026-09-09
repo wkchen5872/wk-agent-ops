@@ -30,7 +30,7 @@ PostToolUse branch hook 僅作相容性 fallback。
 # 進入目標專案目錄
 cd /path/to/your-project
 
-# 只裝通用套件（skills、rules、commands）
+# 只裝通用套件（skills、rules、commands、Codex agents）
 bash /path/to/wk-agent-ops/scripts/skills/install.sh
 
 # Python 專案（多裝 Python rules + git hooks）
@@ -137,10 +137,13 @@ wt-done feature123 --base main
 | `.claude/skills/doc-updater/` | `/doc-updater` skill |
 | `.agents/skills/doc-updater/` | 跨 Provider 的 `doc-updater` skill |
 | `.agents/skills/git-commit-writer/` | 跨 Provider 的 `git-commit-writer` skill |
+| `.codex/agents/git-commit-writer.toml` | Codex custom agent（`gpt-5.6-luna`、medium） |
+| `.codex/agents/doc-updater.toml` | Codex custom agent（`gpt-5.6-terra`、medium） |
 
-`scripts/skills/install.sh` 只管理 `.claude/` 與複數的 `.agents/`。OpenSpec
-CLI 針對 Claude、Codex、Antigravity 產生的 `.claude/`、`.codex/`、單數
-`.agent/` 原生檔案屬於另一個分發邊界；完整路徑與呼叫規則見
+`scripts/skills/install.sh` 管理 `.claude/`、複數 `.agents/`，以及兩個
+project-owned `.codex/agents/` custom agents。它不接管 `.codex/config.toml`、
+`.codex/skills/` 或單數 `.agent/`；OpenSpec provider setup 產生的原生檔案
+仍屬於另一個分發邊界。完整路徑與呼叫規則見
 [OpenSpec Commit 工作流](docs/workflow/commit.md)。
 
 ### Python Profile
