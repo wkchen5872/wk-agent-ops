@@ -40,11 +40,6 @@ Claude Code 與 Codex 在文件及 commit 階段分別呼叫
 active change / resumable archive
                |
                v
-resolve attribution
-  -> tool_name
-  -> assisting_model
-               |
-               v
 openspec-archive-change
   -> change_id
   -> archive_path
@@ -58,6 +53,11 @@ git add -A
                v
 doc-updater-agent 或 doc-updater skill(change_id, archive_path)
   -> archived proposal/specs + git status + git diff HEAD
+               |
+               v
+resolve commit attribution
+  -> tool_name
+  -> assisting_model (Git trailer metadata only)
                |
                v
 git-commit-writer-agent 或 git-commit-writer skill
@@ -109,7 +109,8 @@ Archive 檔案描述意圖，Git diff 描述實際完成內容；兩者不一致
 
 ### 4. Commit
 
-`git-commit-writer-agent` 或 portable `git-commit-writer` skill 接收相同的精確 archive context，以及不可拆分的
+文件處理完成後，協調層才解析 attribution。`git-commit-writer-agent` 或
+portable `git-commit-writer` skill 接收相同的精確 archive context，以及不可拆分的
 attribution context：
 
 ```text
@@ -117,9 +118,11 @@ tool_name=<executing agent tool>
 assisting_model=<primary implementation model>
 ```
 
-`tool_name` 是實際執行工作的 agent tool；`assisting_model` 是主要實作模型。
-commit-only agent 必須保留 caller 傳入的模型，不可改成自己的模型。驗證
-context 後執行 final `git add -A`；若 staged diff 為空則停止；pre-commit
+`tool_name` 是實際執行工作的 agent tool；`assisting_model` 是主要實作模型，
+只用於 `AI-Assisted-By` trailer。它不是 subagent runtime 設定，不得作為 spawn
+model 或 reasoning-effort override。Claude Code 與 Codex 只按 exact agent name
+啟動 provider-native agent；runtime model 與 effort 由各自 agent 設定檔決定。
+驗證 context 後執行 final `git add -A`；若 staged diff 為空則停止；pre-commit
 hook 修正檔案後必須重新 staging，再重試 commit。
 
 ## Provider 邊界

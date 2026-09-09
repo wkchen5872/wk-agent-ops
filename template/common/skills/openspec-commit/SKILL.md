@@ -24,19 +24,6 @@ This skill coordinates those capabilities; it does not duplicate their logic.
 **Input:** An optional active change name. If omitted, resolve it from the
 current OpenSpec and Git state. Never guess when multiple candidates exist.
 
-Before any delegation, record the exact attribution context for this workflow:
-
-```text
-tool_name=<executing agent tool>
-assisting_model=<primary implementation model>
-```
-
-Use the agent tool that performed the work (`Codex`, `Claude Code`, or
-`Antigravity`), not an outer host surface. `assisting_model` is the primary
-model responsible for the implementation. If either value is unavailable, stop
-and request it; do not guess from environment variables, vendor domains, or a
-commit-only agent's identity.
-
 ---
 
 ## Provider action routing
@@ -169,6 +156,9 @@ Claude Code and Codex MUST NOT silently fall back to the portable skill. If the
 required subagent is unavailable, stop and report the missing provider
 configuration.
 
+For Claude Code and Codex, invoke the exact custom agent name only. Do not pass a spawn `model` or `reasoning_effort`; the provider-native agent configuration
+owns those runtime settings.
+
 Pass the selected entry point:
 
 ```text
@@ -191,7 +181,20 @@ conflict, stop before commit.
 
 ## Step 5 — Invoke git-commit-writer
 
-Pass the same exact context:
+Resolve the attribution pair now, immediately before commit delegation:
+
+```text
+tool_name=<executing agent tool>
+assisting_model=<primary implementation model>
+```
+
+Use the agent tool that performed the implementation (`Codex`, `Claude Code`,
+or `Antigravity`), not an outer host surface. `assisting_model` is Git attribution metadata only: it identifies the primary implementation model for
+the `AI-Assisted-By` trailer. It MUST NOT be used as a subagent spawn model or reasoning-effort override. If either attribution value is unavailable, request
+it now; do not guess from environment variables, vendor domains, Git history,
+or a commit-only agent's identity.
+
+Pass the same exact archive context plus this attribution pair as task input:
 
 ```text
 change_id=<change_id, when available>
@@ -212,6 +215,9 @@ Claude Code and Codex MUST NOT silently fall back to the portable skill. If the
 required subagent is unavailable, stop and report the missing provider
 configuration. The commit-only agent must preserve `assisting_model`; it MUST
 NOT replace the primary implementation model with its own model.
+
+For Claude Code and Codex, invoke the exact custom agent name only. Do not pass a spawn `model` or `reasoning_effort`; the provider-native agent configuration
+owns those runtime settings.
 
 The writer owns final staging, empty-diff validation, commit execution, and
 restaging before a pre-commit retry. Wait for and capture `commit_hash`.

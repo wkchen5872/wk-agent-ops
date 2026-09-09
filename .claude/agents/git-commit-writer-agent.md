@@ -25,6 +25,9 @@ provided, stop. `tool_name` and `assisting_model` are also a pair and must both
 be present. This commit-only agent MUST preserve the primary implementation
 model supplied as `assisting_model`; it must not replace it with its own model.
 
+`assisting_model` is Git attribution metadata only. It identifies the primary
+implementation model for the `AI-Assisted-By` trailer. It MUST NOT select or override this writer's runtime model or reasoning effort.
+
 ## Step 1 — Validate optional OpenSpec input
 
 When archive_path and change_id are provided, verify before staging:

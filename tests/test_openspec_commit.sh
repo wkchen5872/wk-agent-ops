@@ -10,6 +10,7 @@ DOC_SKILL="$ROOT/template/common/skills/doc-updater/SKILL.md"
 DOC_AGENT="$ROOT/template/common/.claude/agents/doc-updater-agent.md"
 COMMIT_SKILL="$ROOT/template/common/skills/git-commit-writer/SKILL.md"
 COMMIT_AGENT="$ROOT/template/common/.claude/agents/git-commit-writer-agent.md"
+CODEX_COMMIT_AGENT="$ROOT/template/common/.codex/agents/git-commit-writer-agent.toml"
 fail=0
 section="${1:-all}"
 
@@ -40,11 +41,18 @@ archive_line="$(line_of "$ORCHESTRATOR" '## Step 2 — Archive or resume')"
 stage_line="$(line_of "$ORCHESTRATOR" '## Step 3 — Prepare the complete diff')"
 docs_line="$(line_of "$ORCHESTRATOR" '## Step 4 — Invoke doc-updater')"
 commit_line="$(line_of "$ORCHESTRATOR" '## Step 5 — Invoke git-commit-writer')"
+attribution_line="$(line_of "$ORCHESTRATOR" 'Resolve the attribution pair now, immediately before commit delegation:')"
 if [[ -n "$archive_line" && -n "$stage_line" && -n "$docs_line" && -n "$commit_line" ]] \
   && (( archive_line < stage_line && stage_line < docs_line && docs_line < commit_line )); then
   ok "archive -> stage -> docs -> commit order"
 else
   bad "archive -> stage -> docs -> commit order"
+fi
+if [[ -n "$docs_line" && -n "$commit_line" && -n "$attribution_line" ]] \
+  && (( docs_line < commit_line && commit_line < attribution_line )); then
+  ok "attribution resolved only at commit boundary"
+else
+  bad "attribution resolved only at commit boundary"
 fi
 require_text "$ORCHESTRATOR" 'openspec-archive-change' "portable archive capability named"
 require_text "$ORCHESTRATOR" 'git status --short' "resume state comes from Git"
@@ -53,6 +61,12 @@ require_text "$ORCHESTRATOR" 'git add -A' "new files prepared before doc-updater
 require_text "$ORCHESTRATOR" 'tool_name=<executing agent tool>' "executing tool handed to commit writer"
 require_text "$ORCHESTRATOR" 'assisting_model=<primary implementation model>' "primary model handed to commit writer"
 require_text "$ORCHESTRATOR" 'commit-only agent' "commit-only agent cannot replace implementation model"
+forbid_text "$ORCHESTRATOR" 'Before any delegation, record the exact attribution context' "no early attribution gate"
+require_text "$ORCHESTRATOR" '`assisting_model` is Git attribution metadata only' "orchestrator defines attribution metadata"
+require_text "$ORCHESTRATOR" 'MUST NOT be used as a subagent spawn model or reasoning-effort override' "orchestrator forbids attribution override"
+require_text "$ORCHESTRATOR" 'Do not pass a spawn `model` or `reasoning_effort`' "native agents keep configured runtime"
+[[ "$(grep -Fc 'Do not pass a spawn `model` or `reasoning_effort`' "$ORCHESTRATOR")" -eq 2 ]] \
+  && ok "both native subagents keep configured runtime" || bad "both native subagents keep configured runtime"
 forbid_text "$ORCHESTRATOR" 'ls -t openspec/changes/archive/' "no newest-archive rediscovery"
 
 printf '\nprovider boundaries\n'
@@ -117,6 +131,8 @@ for file in "$COMMIT_SKILL" "$COMMIT_AGENT"; do
   require_text "$file" 'Re-run `git add -A`' "$(basename "$file") restages on retry"
   require_text "$file" 'tool_name=<executing agent tool>' "$(basename "$file") accepts tool identity"
   require_text "$file" 'assisting_model=<primary implementation model>' "$(basename "$file") accepts primary model"
+  require_text "$file" '`assisting_model` is Git attribution metadata only' "$(basename "$file") keeps attribution separate from runtime"
+  require_text "$file" 'MUST NOT select or override this writer' "$(basename "$file") forbids runtime override"
   require_text "$file" 'AI-Assisted-By: <assisting_model>' "$(basename "$file") records primary model"
   add_line="$(line_of "$file" 'git add -A')"
   diff_line="$(line_of "$file" 'git diff --cached --stat')"
@@ -132,6 +148,9 @@ for file in "$COMMIT_SKILL" "$COMMIT_AGENT"; do
     bad "$(basename "$file") stages before standalone resolution"
   fi
 done
+
+require_text "$CODEX_COMMIT_AGENT" '`assisting_model` is Git attribution metadata only' "Codex agent keeps attribution separate from runtime"
+require_text "$CODEX_COMMIT_AGENT" 'MUST NOT select or override this writer' "Codex agent forbids runtime override"
 
 require_text "$COMMIT_SKILL" 'ask the user to select one' "portable skill asks on associated ambiguity"
 require_text "$COMMIT_SKILL" 'Codex <noreply@openai.com>' "portable skill maps Codex email"

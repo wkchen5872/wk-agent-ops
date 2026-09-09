@@ -37,6 +37,9 @@ either value is unavailable or uncertain, stop and request it. You MUST NOT
 guess an identity from environment variables, model families, or vendor
 domains.
 
+`assisting_model` is Git attribution metadata only. It identifies the primary
+implementation model for the `AI-Assisted-By` trailer. It MUST NOT select or override this writer's runtime model or reasoning effort.
+
 ---
 
 ## Step 1 — Validate optional OpenSpec input

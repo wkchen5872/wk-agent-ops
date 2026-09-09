@@ -66,6 +66,8 @@ assisting_model=<primary implementation model>
 
 每一組少一個值或 archive 路徑不存在就停止，不可改抓「最新」archive。
 commit-only agent 必須保留 caller 傳入的主要實作模型，不可換成自己的模型。
+`assisting_model` 只用於 `AI-Assisted-By` trailer，不得覆寫 commit-only agent
+既有的 runtime model 或 reasoning effort。
 獨立呼叫且沒有
 context 時，先完成 staging，再依以下明確證據篩選候選：
 
