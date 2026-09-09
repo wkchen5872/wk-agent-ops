@@ -64,6 +64,13 @@ require_text "$ORCHESTRATOR" 'commit-only agent' "commit-only agent cannot repla
 forbid_text "$ORCHESTRATOR" 'Before any delegation, record the exact attribution context' "no early attribution gate"
 require_text "$ORCHESTRATOR" '`assisting_model` is Git attribution metadata only' "orchestrator defines attribution metadata"
 require_text "$ORCHESTRATOR" 'MUST NOT be used as a subagent spawn model or reasoning-effort override' "orchestrator forbids attribution override"
+require_text "$ORCHESTRATOR" 'Codex MAY use exact current-turn runtime metadata' "Codex exact runtime provenance is explicit"
+require_text "$ORCHESTRATOR" 'Claude Code MAY use only an exact model identity exposed through its supported runtime or session interface' "Claude exact runtime provenance is explicit"
+require_text "$ORCHESTRATOR" 'generic model-family label' "generic model families are rejected"
+require_text "$ORCHESTRATOR" 'provider alias' "provider aliases are rejected"
+require_text "$ORCHESTRATOR" 'model switch or multi-model implementation' "model-switch ambiguity is guarded"
+require_text "$ORCHESTRATOR" 'MUST NOT parse session logs' "session-log parsing is forbidden"
+require_text "$ORCHESTRATOR" 'MUST NOT use documentation lookup' "documentation cannot prove runtime identity"
 require_text "$ORCHESTRATOR" 'Do not pass a spawn `model` or `reasoning_effort`' "native agents keep configured runtime"
 [[ "$(grep -Fc 'Do not pass a spawn `model` or `reasoning_effort`' "$ORCHESTRATOR")" -eq 2 ]] \
   && ok "both native subagents keep configured runtime" || bad "both native subagents keep configured runtime"
@@ -133,6 +140,9 @@ for file in "$COMMIT_SKILL" "$COMMIT_AGENT"; do
   require_text "$file" 'assisting_model=<primary implementation model>' "$(basename "$file") accepts primary model"
   require_text "$file" '`assisting_model` is Git attribution metadata only' "$(basename "$file") keeps attribution separate from runtime"
   require_text "$file" 'MUST NOT select or override this writer' "$(basename "$file") forbids runtime override"
+  require_text "$file" 'generic model-family label or provider alias' "$(basename "$file") rejects generic model attribution"
+  require_text "$file" 'documentation' "$(basename "$file") does not resolve identity from documentation"
+  require_text "$file" 'session logs' "$(basename "$file") does not parse session logs"
   require_text "$file" 'AI-Assisted-By: <assisting_model>' "$(basename "$file") records primary model"
   add_line="$(line_of "$file" 'git add -A')"
   diff_line="$(line_of "$file" 'git diff --cached --stat')"
@@ -151,6 +161,9 @@ done
 
 require_text "$CODEX_COMMIT_AGENT" '`assisting_model` is Git attribution metadata only' "Codex agent keeps attribution separate from runtime"
 require_text "$CODEX_COMMIT_AGENT" 'MUST NOT select or override this writer' "Codex agent forbids runtime override"
+require_text "$CODEX_COMMIT_AGENT" 'generic model-family label or provider alias' "Codex agent rejects generic model attribution"
+require_text "$CODEX_COMMIT_AGENT" 'documentation' "Codex agent does not resolve identity from documentation"
+require_text "$CODEX_COMMIT_AGENT" 'session logs' "Codex agent does not parse session logs"
 
 require_text "$COMMIT_SKILL" 'ask the user to select one' "portable skill asks on associated ambiguity"
 require_text "$COMMIT_SKILL" 'Codex <noreply@openai.com>' "portable skill maps Codex email"

@@ -22,7 +22,10 @@ assisting_model=<primary implementation model>
 `tool_name` and `assisting_model` are also a pair. Preserve exact supplied
 values. For standalone use, accept exact runtime-provided identities; if either
 is unavailable or uncertain, stop and request it. Never guess identity from
-environment variables, model families, or vendor domains.
+environment variables, model families, provider aliases, vendor domains,
+documentation, session logs, or this commit-only agent's identity. Reject a
+missing value or a generic model-family label or provider alias; do not
+normalize, expand, or resolve it.
 
 `assisting_model` is Git attribution metadata only. It identifies the primary
 implementation model for the `AI-Assisted-By` trailer. It MUST NOT select or override this writer's runtime model or reasoning effort.

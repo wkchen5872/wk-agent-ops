@@ -122,6 +122,11 @@ assisting_model=<primary implementation model>
 只用於 `AI-Assisted-By` trailer。它不是 subagent runtime 設定，不得作為 spawn
 model 或 reasoning-effort override。Claude Code 與 Codex 只按 exact agent name
 啟動 provider-native agent；runtime model 與 effort 由各自 agent 設定檔決定。
+Codex 只有在 current-turn runtime metadata 能明確代表實作 context 時才能沿用；
+Claude Code 只接受其支援的 runtime/session interface 明確提供的 exact model。
+`GPT-5` 等 family label、`sonnet` 等 alias、官方文件查詢與私有 session log 都不能
+證明實際執行模型。若實作後切換 model、涉及多個實作 model，或 exact identity
+無法取得，協調層必須在 delegation 前詢問使用者，不得自動採用最新 model。
 驗證 context 後執行 final `git add -A`；若 staged diff 為空則停止；pre-commit
 hook 修正檔案後必須重新 staging，再重試 commit。
 

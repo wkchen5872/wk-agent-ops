@@ -189,10 +189,21 @@ assisting_model=<primary implementation model>
 ```
 
 Use the agent tool that performed the implementation (`Codex`, `Claude Code`,
-or `Antigravity`), not an outer host surface. `assisting_model` is Git attribution metadata only: it identifies the primary implementation model for
-the `AI-Assisted-By` trailer. It MUST NOT be used as a subagent spawn model or reasoning-effort override. If either attribution value is unavailable, request
-it now; do not guess from environment variables, vendor domains, Git history,
-or a commit-only agent's identity.
+or `Antigravity`), not an outer host surface. Resolve `assisting_model` from an
+exact runtime identity only when that runtime unambiguously performed the
+implementation. Codex MAY use exact current-turn runtime metadata. Claude Code MAY use only an exact model identity exposed through its supported runtime or session interface.
+
+A generic model-family label (for example `GPT-5`) or provider alias (for
+example `sonnet`) is unresolved. If a model switch or multi-model implementation
+makes the primary model ambiguous, request the exact value from the user now;
+do not attribute the work to the latest model automatically. MUST NOT parse session logs or use private transcript formats. MUST NOT use documentation lookup
+to infer which model ran the implementation.
+
+`assisting_model` is Git attribution metadata only: it identifies the primary
+implementation model for the `AI-Assisted-By` trailer. It MUST NOT be used as a subagent spawn model or reasoning-effort override. If either attribution value
+is unavailable, request it now; do not guess from environment variables, vendor
+domains, Git history, system-description families, or a commit-only agent's
+identity.
 
 Pass the same exact archive context plus this attribution pair as task input:
 

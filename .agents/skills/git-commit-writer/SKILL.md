@@ -34,8 +34,9 @@ pair: if only one is provided, stop and report the invalid input.
 `tool_name` and `assisting_model` are also a pair. `openspec-commit` always
 supplies both. For standalone use, accept exact runtime-provided identities; if
 either value is unavailable or uncertain, stop and request it. You MUST NOT
-guess an identity from environment variables, model families, or vendor
-domains.
+guess an identity from environment variables, model families, provider
+aliases, vendor domains, documentation, session logs, or the commit-only
+agent's identity. Reject a missing value or a generic model-family label or provider alias; do not normalize, expand, or resolve it.
 
 `assisting_model` is Git attribution metadata only. It identifies the primary
 implementation model for the `AI-Assisted-By` trailer. It MUST NOT select or override this writer's runtime model or reasoning effort.

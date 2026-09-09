@@ -24,6 +24,9 @@ When archive_path and change_id are provided, use them directly. If only one is
 provided, stop. `tool_name` and `assisting_model` are also a pair and must both
 be present. This commit-only agent MUST preserve the primary implementation
 model supplied as `assisting_model`; it must not replace it with its own model.
+Reject a missing value or a generic model-family label or provider alias; do
+not normalize, expand, or resolve it from documentation, session logs, model
+family descriptions, or this commit-only agent's identity.
 
 `assisting_model` is Git attribution metadata only. It identifies the primary
 implementation model for the `AI-Assisted-By` trailer. It MUST NOT select or override this writer's runtime model or reasoning effort.
@@ -43,8 +46,8 @@ Keep the verified pair as explicit context. Never replace an invalid explicit
 path with auto-detection. Do not resolve standalone context yet.
 
 Validate that `tool_name` is exactly `Claude Code` and that `assisting_model`
-is present. If either value is missing or uncertain, stop before staging and
-request it rather than guessing.
+is exact. If either value is missing, generic, aliased, or uncertain, stop
+before staging and request it rather than guessing.
 
 ## Step 2 — Stage and gather the final diff
 
