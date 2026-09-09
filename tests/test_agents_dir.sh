@@ -6,8 +6,10 @@ set -u
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CLAUDE_ENTRYPOINT="$ROOT/template/common/.claude/commands/opsx/commit.md"
 ANTIGRAVITY_ENTRYPOINT="$ROOT/template/common/.agents/workflows/opsx-commit.md"
-CODEX_COMMIT_AGENT="$ROOT/template/common/.codex/agents/git-commit-writer.toml"
-CODEX_DOC_AGENT="$ROOT/template/common/.codex/agents/doc-updater.toml"
+CLAUDE_COMMIT_AGENT="$ROOT/template/common/.claude/agents/git-commit-writer-agent.md"
+CLAUDE_DOC_AGENT="$ROOT/template/common/.claude/agents/doc-updater-agent.md"
+CODEX_COMMIT_AGENT="$ROOT/template/common/.codex/agents/git-commit-writer-agent.toml"
+CODEX_DOC_AGENT="$ROOT/template/common/.codex/agents/doc-updater-agent.toml"
 fail=0
 ok(){ printf '  ok   %s\n' "$1"; }
 bad(){ printf '  FAIL %s\n' "$1"; fail=1; }
@@ -29,12 +31,19 @@ grep -qE '\.agent/' "$ROOT/AGENTS.md"                  && bad "root AGENTS.md ha
 T="$(mktemp -d)"; ( cd "$T" && git init -q )
 mkdir -p "$T/.claude/rules" "$T/.agents/rules" \
   "$T/.claude/skills/entropy-check" "$T/.agents/skills/entropy-check" \
+  "$T/.claude/agents" "$T/.codex/agents" \
   "$T/.codex/skills/openspec-existing" "$T/openspec"
 touch "$T/.claude/rules/openspec-commits.md" "$T/.agents/rules/openspec-commits.md"
 touch "$T/.claude/skills/entropy-check/SKILL.md" \
   "$T/.agents/skills/entropy-check/SKILL.md" \
   "$T/.codex/skills/openspec-existing/SKILL.md" "$T/openspec/.entropy-state"
 printf 'user-setting = true\n' > "$T/.codex/config.toml"
+printf 'legacy\n' > "$T/.claude/agents/git-commit-writer.md"
+printf 'legacy\n' > "$T/.claude/agents/doc-updater.md"
+printf 'legacy\n' > "$T/.codex/agents/git-commit-writer.toml"
+printf 'legacy\n' > "$T/.codex/agents/doc-updater.toml"
+printf 'keep-custom\n' > "$T/.claude/agents/custom-agent.md"
+printf 'keep-custom\n' > "$T/.codex/agents/custom-agent.toml"
 printf 'keep-me\nopenspec/.entropy-state\n' > "$T/.gitignore"
 PATH="$FAKE_NPX_DIR:$PATH" bash "$ROOT/scripts/skills/install.sh" --target "$T" python >/dev/null 2>&1
 PATH="$FAKE_NPX_DIR:$PATH" bash "$ROOT/scripts/skills/install.sh" --target "$T" python >/dev/null 2>&1
@@ -45,9 +54,13 @@ cmp -s "$CLAUDE_ENTRYPOINT" "$T/.claude/commands/opsx/commit.md" \
 cmp -s "$ANTIGRAVITY_ENTRYPOINT" "$T/.agents/workflows/opsx-commit.md" \
   && ok "Antigravity commit entrypoint copied exactly" || bad "Antigravity commit entrypoint copied exactly"
 [[ ! -d "$T/.agent" ]] && ok "no singular .agent/ dir created" || bad "no singular .agent/ dir created"
-cmp -s "$CODEX_COMMIT_AGENT" "$T/.codex/agents/git-commit-writer.toml" \
+cmp -s "$CLAUDE_COMMIT_AGENT" "$T/.claude/agents/git-commit-writer-agent.md" \
+  && ok "Claude commit agent copied exactly" || bad "Claude commit agent copied exactly"
+cmp -s "$CLAUDE_DOC_AGENT" "$T/.claude/agents/doc-updater-agent.md" \
+  && ok "Claude doc agent copied exactly" || bad "Claude doc agent copied exactly"
+cmp -s "$CODEX_COMMIT_AGENT" "$T/.codex/agents/git-commit-writer-agent.toml" \
   && ok "Codex commit agent copied exactly" || bad "Codex commit agent copied exactly"
-cmp -s "$CODEX_DOC_AGENT" "$T/.codex/agents/doc-updater.toml" \
+cmp -s "$CODEX_DOC_AGENT" "$T/.codex/agents/doc-updater-agent.toml" \
   && ok "Codex doc agent copied exactly" || bad "Codex doc agent copied exactly"
 for agent in "$CODEX_COMMIT_AGENT" "$CODEX_DOC_AGENT"; do
   if grep -q '^name = ' "$agent" \
@@ -58,6 +71,10 @@ for agent in "$CODEX_COMMIT_AGENT" "$CODEX_DOC_AGENT"; do
     bad "$(basename "$agent") has required Codex fields"
   fi
 done
+grep -q '^name = "git-commit-writer-agent"$' "$CODEX_COMMIT_AGENT" 2>/dev/null \
+  && ok "Codex commit agent name matches filename" || bad "Codex commit agent name matches filename"
+grep -q '^name = "doc-updater-agent"$' "$CODEX_DOC_AGENT" 2>/dev/null \
+  && ok "Codex doc agent name matches filename" || bad "Codex doc agent name matches filename"
 grep -q '^model = "gpt-5.6-luna"$' "$CODEX_COMMIT_AGENT" 2>/dev/null \
   && grep -q '^model_reasoning_effort = "medium"$' "$CODEX_COMMIT_AGENT" 2>/dev/null \
   && ok "Codex commit agent model configured" || bad "Codex commit agent model configured"
@@ -69,6 +86,20 @@ if [[ "$(cat "$T/.codex/config.toml")" == "user-setting = true" \
   ok "unrelated Codex content preserved"
 else
   bad "unrelated Codex content preserved"
+fi
+if [[ ! -e "$T/.claude/agents/git-commit-writer.md" \
+  && ! -e "$T/.claude/agents/doc-updater.md" \
+  && ! -e "$T/.codex/agents/git-commit-writer.toml" \
+  && ! -e "$T/.codex/agents/doc-updater.toml" ]]; then
+  ok "obsolete managed agent names removed"
+else
+  bad "obsolete managed agent names removed"
+fi
+if [[ "$(cat "$T/.claude/agents/custom-agent.md")" == "keep-custom" \
+  && "$(cat "$T/.codex/agents/custom-agent.toml")" == "keep-custom" ]]; then
+  ok "unrelated custom agents preserved"
+else
+  bad "unrelated custom agents preserved"
 fi
 [[ ! -e "$T/.claude/rules/openspec-commits.md" && ! -e "$T/.agents/rules/openspec-commits.md" ]] \
   && ok "retired openspec commit rule removed" || bad "retired openspec commit rule removed"
@@ -120,9 +151,13 @@ cmp -s "$CLAUDE_ENTRYPOINT" "$ROOT/.claude/commands/opsx/commit.md" \
   && ok "repository Claude commit entrypoint synchronized" || bad "repository Claude commit entrypoint synchronized"
 cmp -s "$ANTIGRAVITY_ENTRYPOINT" "$ROOT/.agents/workflows/opsx-commit.md" \
   && ok "repository Antigravity commit entrypoint synchronized" || bad "repository Antigravity commit entrypoint synchronized"
-cmp -s "$CODEX_COMMIT_AGENT" "$ROOT/.codex/agents/git-commit-writer.toml" \
+cmp -s "$CLAUDE_COMMIT_AGENT" "$ROOT/.claude/agents/git-commit-writer-agent.md" \
+  && ok "repository Claude commit agent synchronized" || bad "repository Claude commit agent synchronized"
+cmp -s "$CLAUDE_DOC_AGENT" "$ROOT/.claude/agents/doc-updater-agent.md" \
+  && ok "repository Claude doc agent synchronized" || bad "repository Claude doc agent synchronized"
+cmp -s "$CODEX_COMMIT_AGENT" "$ROOT/.codex/agents/git-commit-writer-agent.toml" \
   && ok "repository Codex commit agent synchronized" || bad "repository Codex commit agent synchronized"
-cmp -s "$CODEX_DOC_AGENT" "$ROOT/.codex/agents/doc-updater.toml" \
+cmp -s "$CODEX_DOC_AGENT" "$ROOT/.codex/agents/doc-updater-agent.toml" \
   && ok "repository Codex doc agent synchronized" || bad "repository Codex doc agent synchronized"
 
 echo

@@ -7,9 +7,9 @@ ORCHESTRATOR="$ROOT/template/common/skills/openspec-commit/SKILL.md"
 CLAUDE_ENTRYPOINT="$ROOT/template/common/.claude/commands/opsx/commit.md"
 ANTIGRAVITY_ENTRYPOINT="$ROOT/template/common/.agents/workflows/opsx-commit.md"
 DOC_SKILL="$ROOT/template/common/skills/doc-updater/SKILL.md"
-DOC_AGENT="$ROOT/template/common/.claude/agents/doc-updater.md"
+DOC_AGENT="$ROOT/template/common/.claude/agents/doc-updater-agent.md"
 COMMIT_SKILL="$ROOT/template/common/skills/git-commit-writer/SKILL.md"
-COMMIT_AGENT="$ROOT/template/common/.claude/agents/git-commit-writer.md"
+COMMIT_AGENT="$ROOT/template/common/.claude/agents/git-commit-writer-agent.md"
 fail=0
 section="${1:-all}"
 
@@ -61,6 +61,13 @@ require_text "$ORCHESTRATOR" '.codex/skills/openspec-archive-change/' "Codex ski
 require_text "$ORCHESTRATOR" '.agent/workflows/opsx-archive.md' "Antigravity native alias documented"
 require_text "$ORCHESTRATOR" '.agents/skills/' "project-owned shared skill root documented"
 require_text "$ORCHESTRATOR" 'Do not invoke both' "provider aliases cannot double-run an action"
+require_text "$ORCHESTRATOR" 'Claude Code and Codex MUST NOT silently fall back' "known providers cannot silently use skills"
+require_text "$ORCHESTRATOR" 'provider-native `doc-updater-agent`' "documentation agent route is explicit"
+require_text "$ORCHESTRATOR" 'provider-native `git-commit-writer-agent`' "commit agent route is explicit"
+require_text "$ORCHESTRATOR" 'Every other provider' "other providers use default route"
+require_text "$ORCHESTRATOR" '.agents/skills/doc-updater/' "portable documentation fallback path named"
+require_text "$ORCHESTRATOR" '.agents/skills/git-commit-writer/' "portable commit fallback path named"
+forbid_text "$ORCHESTRATOR" '**Codex and Antigravity:**' "Codex is not grouped with skill-only provider"
 
 printf '\nprovider entrypoints\n'
 require_text "$CLAUDE_ENTRYPOINT" 'argument-hint: "[change-name]"' "Claude advertises optional change name"

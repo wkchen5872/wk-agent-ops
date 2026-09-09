@@ -17,7 +17,7 @@ archive、文件判斷或 commit 邏輯，只依序呼叫三個能力：
 
 ## 進入方式
 
-三個 provider 共用同一份 project-owned `openspec-commit` skill，但入口保持
+所有 provider 共用同一份 project-owned `openspec-commit` skill，但入口保持
 provider-specific：
 
 | Provider | 入口 | Adapter 行為 |
@@ -28,6 +28,11 @@ provider-specific：
 
 兩個 adapter 都只傳遞可選的 change name，不自行執行 archive、文件更新或
 commit。這些步驟仍由 canonical skill 擁有。
+
+Claude Code 與 Codex 在文件及 commit 階段分別呼叫
+`doc-updater-agent`、`git-commit-writer-agent`；若任一 subagent 不存在便停止，
+不靜默降級。其他 provider 預設使用 `.agents/skills/` 下同名但沒有
+`-agent` 後綴的 portable skills。
 
 ## 執行順序
 
@@ -51,11 +56,12 @@ git add -A
   -> 新檔、spec sync、archive move 都進入 git diff HEAD
                |
                v
-doc-updater(change_id, archive_path)
+doc-updater-agent 或 doc-updater skill(change_id, archive_path)
   -> archived proposal/specs + git status + git diff HEAD
                |
                v
-git-commit-writer(change_id, archive_path, tool_name, assisting_model)
+git-commit-writer-agent 或 git-commit-writer skill
+  (change_id, archive_path, tool_name, assisting_model)
   -> final staging + empty-diff guard + commit
 ```
 
@@ -91,7 +97,7 @@ warnings=<list>
 ### 3. 文件更新
 
 Archive 後先執行 `git add -A`，再把同一組 `change_id` 與 `archive_path`
-交給 `doc-updater`。它會讀取：
+交給依 provider 選定的 `doc-updater-agent` 或 `doc-updater` skill。它會讀取：
 
 - `<archive_path>/proposal.md`
 - `<archive_path>/specs/**/*.md`
@@ -103,7 +109,7 @@ Archive 檔案描述意圖，Git diff 描述實際完成內容；兩者不一致
 
 ### 4. Commit
 
-`git-commit-writer` 接收相同的精確 archive context，以及不可拆分的
+`git-commit-writer-agent` 或 portable `git-commit-writer` skill 接收相同的精確 archive context，以及不可拆分的
 attribution context：
 
 ```text
@@ -157,6 +163,7 @@ Installer 對 `.codex/` 的管理只限於 project-owned `.codex/agents/`；不�
 | Archive 失敗或回傳路徑不存在 | 停在 docs 與 commit 之前 |
 | Archive 已完成、docs 或 commit 中斷 | 從 Git status 的精確 archive path resume |
 | Doc update 衝突 | 顯示衝突檔案並停止 |
+| Claude Code／Codex 缺少必要 subagent | 顯示 provider 配置錯誤並停止，不改走 skill |
 | Commit hook 失敗 | 修正、重新 `git add -A`、檢查 cached diff、重試 |
 
 ## 相關文件

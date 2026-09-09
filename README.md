@@ -131,14 +131,14 @@ wt-done feature123 --base main
 | `.agents/skills/openspec-commit/` | 跨 Provider 的 `openspec-commit` skill |
 | `.claude/commands/opsx/commit.md` | `/opsx:commit` slash command |
 | `.agents/workflows/opsx-commit.md` | Agent workflow |
-| `.claude/agents/git-commit-writer.md` | `@"git-commit-writer"` — 自動產生 Conventional Commits |
+| `.claude/agents/git-commit-writer-agent.md` | `@"git-commit-writer-agent"` — 自動產生 Conventional Commits |
 | `.claude/skills/git-commit-writer/` | `/git-commit-writer` skill |
-| `.claude/agents/doc-updater.md` | `@"doc-updater"` — 分析 git 變更並同步更新說明文件 |
+| `.claude/agents/doc-updater-agent.md` | `@"doc-updater-agent"` — 分析 git 變更並同步更新說明文件 |
 | `.claude/skills/doc-updater/` | `/doc-updater` skill |
 | `.agents/skills/doc-updater/` | 跨 Provider 的 `doc-updater` skill |
 | `.agents/skills/git-commit-writer/` | 跨 Provider 的 `git-commit-writer` skill |
-| `.codex/agents/git-commit-writer.toml` | Codex custom agent（`gpt-5.6-luna`、medium） |
-| `.codex/agents/doc-updater.toml` | Codex custom agent（`gpt-5.6-terra`、medium） |
+| `.codex/agents/git-commit-writer-agent.toml` | Codex custom agent（`gpt-5.6-luna`、medium） |
+| `.codex/agents/doc-updater-agent.toml` | Codex custom agent（`gpt-5.6-terra`、medium） |
 
 `scripts/skills/install.sh` 管理 `.claude/`、複數 `.agents/`，以及兩個
 project-owned `.codex/agents/` custom agents。它不接管 `.codex/config.toml`、

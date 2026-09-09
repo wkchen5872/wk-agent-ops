@@ -138,7 +138,7 @@ AI-Assisted-By: <primary implementation model>
 
 如果你已經手動實作完畢，想直接提交：
 
-1. **Claude Code**：輸入 `@"git-commit-writer (agent)"`
+1. **Claude Code**：輸入 `@"git-commit-writer-agent"`
 2. **支援 project skill 的 host**：呼叫 `git-commit-writer`
 3. **完整 OpenSpec 收尾**：改呼叫 `openspec-commit`，由協調層傳入精確
    archive context
@@ -152,8 +152,8 @@ AI-Assisted-By: <primary implementation model>
 ## 相關組件
 
 - **Skill**: `template/common/skills/git-commit-writer/SKILL.md`
-- **Agent**: `template/common/.claude/agents/git-commit-writer.md`
-- **Codex agent**: `template/common/.codex/agents/git-commit-writer.toml`
+- **Agent**: `template/common/.claude/agents/git-commit-writer-agent.md`
+- **Codex agent**: `template/common/.codex/agents/git-commit-writer-agent.toml`
   （`gpt-5.6-luna`、medium）
 - **Installed portable skill**: `.claude/skills/git-commit-writer/SKILL.md`、
   `.agents/skills/git-commit-writer/SKILL.md`

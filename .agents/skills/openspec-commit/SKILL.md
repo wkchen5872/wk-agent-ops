@@ -157,7 +157,19 @@ or commit.
 
 ## Step 4 — Invoke doc-updater
 
-Invoke the project-owned `doc-updater` capability with:
+Invoke exactly one provider entry point:
+
+- **Claude Code:** invoke the provider-native `doc-updater-agent` subagent.
+- **Codex:** spawn the provider-native `doc-updater-agent` custom agent.
+- **Every other provider:** invoke the portable `doc-updater` skill from
+  `.agents/skills/doc-updater/`. If the host cannot nest a skill call, follow
+  that skill's instructions in the current context.
+
+Claude Code and Codex MUST NOT silently fall back to the portable skill. If the
+required subagent is unavailable, stop and report the missing provider
+configuration.
+
+Pass the selected entry point:
 
 ```text
 change_id=<change_id, when available>
@@ -188,11 +200,18 @@ tool_name=<executing agent tool>
 assisting_model=<primary implementation model>
 ```
 
-- **Claude Code:** invoke the `git-commit-writer` agent with these values in its
-  task prompt. The commit-only agent must preserve `assisting_model`; it MUST
-  NOT replace the primary implementation model with its own model.
-- **Codex and Antigravity:** invoke the project-owned `git-commit-writer` skill
+- **Claude Code:** invoke the provider-native `git-commit-writer-agent`
+  subagent with these values in its task prompt.
+- **Codex:** spawn the provider-native `git-commit-writer-agent` custom agent
   with these values.
+- **Every other provider:** invoke the portable `git-commit-writer` skill from
+  `.agents/skills/git-commit-writer/`. If the host cannot nest a skill call,
+  follow that skill's instructions in the current context.
+
+Claude Code and Codex MUST NOT silently fall back to the portable skill. If the
+required subagent is unavailable, stop and report the missing provider
+configuration. The commit-only agent must preserve `assisting_model`; it MUST
+NOT replace the primary implementation model with its own model.
 
 The writer owns final staging, empty-diff validation, commit execution, and
 restaging before a pre-commit retry. Wait for and capture `commit_hash`.

@@ -17,7 +17,7 @@ timestamp: 2026-07-30T00:00:00+08:00
 ### Claude Code 中
 
 ```
-@"doc-updater (agent)"
+@"doc-updater-agent"
 ```
 
 ### Skill 呼叫
@@ -34,8 +34,8 @@ doc-updater 同時以 **sub-agent** 和 **skill** 兩種形式提供：
 
 | 形式 | 路徑 | 使用方式 |
 |------|------|---------|
-| Sub-agent | `.claude/agents/doc-updater.md` | `@"doc-updater (agent)"` |
-| Codex subagent | `.codex/agents/doc-updater.toml` | Codex custom agent（`gpt-5.6-terra`、medium） |
+| Sub-agent | `.claude/agents/doc-updater-agent.md` | `@"doc-updater-agent"` |
+| Codex subagent | `.codex/agents/doc-updater-agent.toml` | Codex custom agent（`gpt-5.6-terra`、medium） |
 | Skill | `.claude/skills/doc-updater/SKILL.md` | `/doc-updater` |
 | Portable skill | `.agents/skills/doc-updater/SKILL.md` | 由支援 project skill 的 host 呼叫 |
 
@@ -177,11 +177,11 @@ A: 不會。skill 指令中明確規定更新 README.md 時必須使用繁體中
 
 ## 相關檔案
 
-- `.claude/agents/doc-updater.md` — Agent 定義
+- `.claude/agents/doc-updater-agent.md` — Agent 定義
 - `.claude/skills/doc-updater/SKILL.md` — Skill 定義
 - `.agents/skills/doc-updater/SKILL.md` — Portable skill 安裝位置
-- `template/common/.claude/agents/doc-updater.md` — Template 來源（agent）
-- `template/common/.codex/agents/doc-updater.toml` — Codex agent template
+- `template/common/.claude/agents/doc-updater-agent.md` — Template 來源（agent）
+- `template/common/.codex/agents/doc-updater-agent.toml` — Codex agent template
 - `template/common/skills/doc-updater/SKILL.md` — Template 來源（skill）
 - [Git Commit Writer](/docs/skills/git-commit-writer.md)
 - [OpenSpec commit 工作流程](/docs/workflow/commit.md)

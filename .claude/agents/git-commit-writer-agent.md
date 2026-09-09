@@ -1,5 +1,5 @@
 ---
-name: git-commit-writer
+name: git-commit-writer-agent
 description: Stage completed changes, generate a Conventional Commits message, and execute the commit. Prefer explicit archive_path and change_id from openspec-commit; auto-detect only for standalone use.
 model: haiku
 tools: Read, Bash, Grep

@@ -1,10 +1,4 @@
-# codex-subagent-templates Specification
-
-## Purpose
-
-Define project-owned Codex custom-agent templates and their required model configuration so installations remain reproducible and do not drift from this repository's maintained agent behavior.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Codex custom-agent templates are project owned
 The common profile SHALL provide Codex custom-agent templates named
@@ -17,19 +11,6 @@ the `name` value MUST match its suffixed filename.
 - **THEN** it contains `git-commit-writer-agent.toml` and `doc-updater-agent.toml`
 - **AND** each file contains all required Codex custom-agent fields
 - **AND** it does not contain the obsolete unsuffixed project-owned templates
-
-### Requirement: Codex custom agents use workload-specific models
-The Git Commit Writer custom agent SHALL set `model = "gpt-5.6-luna"` and `model_reasoning_effort = "medium"`. The Doc Updater custom agent SHALL set `model = "gpt-5.6-terra"` and `model_reasoning_effort = "medium"`.
-
-#### Scenario: Git Commit Writer model configuration is validated
-- **WHEN** the Git Commit Writer Codex template is inspected
-- **THEN** its model is `gpt-5.6-luna`
-- **AND** its reasoning effort is `medium`
-
-#### Scenario: Doc Updater model configuration is validated
-- **WHEN** the Doc Updater Codex template is inspected
-- **THEN** its model is `gpt-5.6-terra`
-- **AND** its reasoning effort is `medium`
 
 ### Requirement: Installed Codex custom agents match their templates
 The common installer SHALL copy the project-owned Codex custom-agent templates

@@ -122,6 +122,11 @@ sync_dir "$COMMON/skills" "$TARGET/.agents/skills"
 
 # .claude/ and .agents/ (excluding skills/)
 mkdir -p "$TARGET/.claude" "$TARGET/.agents"
+# Remove only the project-owned agent names retired by the `-agent` migration.
+rm -f "$TARGET/.claude/agents/git-commit-writer.md" \
+      "$TARGET/.claude/agents/doc-updater.md" \
+      "$TARGET/.codex/agents/git-commit-writer.toml" \
+      "$TARGET/.codex/agents/doc-updater.toml"
 rsync -a --itemize-changes --exclude 'skills/' "$COMMON/.claude/" "$TARGET/.claude/"
 sync_dir "$COMMON/.agents" "$TARGET/.agents"   # agent workflows → .agents/workflows/
 sync_dir "$COMMON/.codex/agents" "$TARGET/.codex/agents"

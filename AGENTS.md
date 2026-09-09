@@ -160,11 +160,11 @@ diff template/common/.claude/agents/my-agent.md \
 
 本專案預定義的 agent：
 
-### git-commit-writer
+### git-commit-writer-agent
 
-**位置：** `.claude/agents/git-commit-writer.md`
+**位置：** `.claude/agents/git-commit-writer-agent.md`
 
-Codex 版本：`.codex/agents/git-commit-writer.toml`（`gpt-5.6-luna`、medium）
+Codex 版本：`.codex/agents/git-commit-writer-agent.toml`（`gpt-5.6-luna`、medium）
 
 **用途：** 生成並執行 Conventional Commits 格式的 git commit
 
@@ -179,16 +179,16 @@ Codex 版本：`.codex/agents/git-commit-writer.toml`（`gpt-5.6-luna`、medium�
 **觸發方式：**
 
 ```
-@"git-commit-writer (agent)"
+@"git-commit-writer-agent"
 
 # 或在 openspec-commit workflow 中自動呼叫
 ```
 
-### doc-updater
+### doc-updater-agent
 
-**位置：** `.claude/agents/doc-updater.md`
+**位置：** `.claude/agents/doc-updater-agent.md`
 
-Codex 版本：`.codex/agents/doc-updater.toml`（`gpt-5.6-terra`、medium）
+Codex 版本：`.codex/agents/doc-updater-agent.toml`（`gpt-5.6-terra`、medium）
 
 **用途：** 偵測 git 狀態，自動選擇模式，對 `docs/`、`README.md`、`AGENTS.md` 做最小化更新，並將變更留在工作區由使用者 review 後自行 commit
 
@@ -204,7 +204,7 @@ Codex 版本：`.codex/agents/doc-updater.toml`（`gpt-5.6-terra`、medium）
 **觸發方式：**
 
 ```
-@"doc-updater (agent)"
+@"doc-updater-agent"
 
 # 或透過 skill 呼叫
 /doc-updater
