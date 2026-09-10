@@ -79,6 +79,9 @@ other tool, use that tool's equivalent for the same stage.
 > action. For new and fast-forward, do this before creating the scaffold; for
 > continue, do it before reading status or writing the next artifact. If the
 > command exits non-zero, stop the current OpenSpec action and report the error.
+> When the active Provider sandbox is known to protect Git metadata, request the
+> minimum required Git-write permission on the first attempt; do not run a
+> guaranteed-to-fail sandbox probe first.
 
 ## 4. TDD Implementation Loop (Level 2)
 

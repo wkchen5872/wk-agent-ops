@@ -51,6 +51,14 @@ if [[ -f "$PROTO" ]]; then
     bad "R3c protocol guards OpenSpec new, fast-forward, and continue"
   fi
 
+  # R3d — known Git-metadata protection does not require a failing probe
+  if grep -qi 'minimum required Git-write permission' "$PROTO" \
+    && grep -qi 'first attempt' "$PROTO"; then
+    ok "R3d branch guard requests required permission on the first attempt"
+  else
+    bad "R3d branch guard requests required permission on the first attempt"
+  fi
+
   # R4 — no dangling refs: every docs/*.md referenced ships; enforcement.md not referenced
   if grep -q 'docs/enforcement.md' "$PROTO"; then bad "R4 no reference to non-existent docs/enforcement.md"; else ok "R4 no reference to non-existent docs/enforcement.md"; fi
   missing=0
