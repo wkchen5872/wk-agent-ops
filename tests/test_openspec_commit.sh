@@ -64,8 +64,13 @@ require_text "$ORCHESTRATOR" 'commit-only agent' "commit-only agent cannot repla
 forbid_text "$ORCHESTRATOR" 'Before any delegation, record the exact attribution context' "no early attribution gate"
 require_text "$ORCHESTRATOR" '`assisting_model` is Git attribution metadata only' "orchestrator defines attribution metadata"
 require_text "$ORCHESTRATOR" 'MUST NOT be used as a subagent spawn model or reasoning-effort override' "orchestrator forbids attribution override"
-require_text "$ORCHESTRATOR" 'Codex MAY use exact current-turn runtime metadata' "Codex exact runtime provenance is explicit"
-require_text "$ORCHESTRATOR" 'Claude Code MAY use only an exact model identity exposed through its supported runtime or session interface' "Claude exact runtime provenance is explicit"
+require_text "$ORCHESTRATOR" 'MUST use that identity automatically' "same-session runtime attribution is mandatory"
+require_text "$ORCHESTRATOR" 'MUST NOT ask the user to repeat it' "same-session attribution is not reconfirmed"
+require_text "$ORCHESTRATOR" 'later commits in the same session' "same-session attribution survives later commits"
+require_text "$ORCHESTRATOR" 'Provider-native documentation and commit subagents MUST NOT replace or make the root-session attribution ambiguous' "subagents do not create attribution ambiguity"
+require_text "$ORCHESTRATOR" 'MUST NOT request or require `assisting_model` before archive or documentation handling' "attribution cannot block archive or docs"
+forbid_text "$ORCHESTRATOR" 'Codex MAY use exact current-turn runtime metadata' "runtime attribution is not merely optional"
+require_text "$ORCHESTRATOR" 'Codex and Claude Code MUST use the exact model identity exposed through their supported runtime or session interface' "provider runtime provenance is mandatory"
 require_text "$ORCHESTRATOR" 'generic model-family label' "generic model families are rejected"
 require_text "$ORCHESTRATOR" 'provider alias' "provider aliases are rejected"
 require_text "$ORCHESTRATOR" 'model switch or multi-model implementation' "model-switch ambiguity is guarded"
@@ -159,8 +164,15 @@ for file in "$COMMIT_SKILL" "$COMMIT_AGENT"; do
   fi
 done
 
+require_text "$COMMIT_SKILL" 'MUST use the exact current runtime identity automatically' "standalone commit uses root runtime automatically"
+require_text "$COMMIT_SKILL" 'MUST NOT ask the user to repeat it' "standalone commit avoids repeated confirmation"
+require_text "$COMMIT_SKILL" 'later standalone commits in that session' "standalone attribution survives later commits"
+require_text "$COMMIT_SKILL" 'Provider-native documentation and commit subagents MUST NOT replace or make root-session attribution ambiguous' "portable writer ignores subagent model differences"
+
 require_text "$CODEX_COMMIT_AGENT" '`assisting_model` is Git attribution metadata only' "Codex agent keeps attribution separate from runtime"
 require_text "$CODEX_COMMIT_AGENT" 'MUST NOT select or override this writer' "Codex agent forbids runtime override"
+require_text "$CODEX_COMMIT_AGENT" 'root-session model supplied as `assisting_model`' "Codex agent preserves root-session attribution"
+require_text "$CODEX_COMMIT_AGENT" "MUST NOT resolve it from this commit-only agent's runtime identity" "Codex agent cannot self-attribute"
 require_text "$CODEX_COMMIT_AGENT" 'generic model-family label or provider alias' "Codex agent rejects generic model attribution"
 require_text "$CODEX_COMMIT_AGENT" 'documentation' "Codex agent does not resolve identity from documentation"
 require_text "$CODEX_COMMIT_AGENT" 'session logs' "Codex agent does not parse session logs"
@@ -173,6 +185,8 @@ require_text "$COMMIT_SKILL" 'MUST NOT guess' "portable skill forbids guessed at
 require_text "$COMMIT_AGENT" 'stop and list them' "Claude agent stops on associated ambiguity"
 require_text "$COMMIT_AGENT" 'Claude Code <noreply@anthropic.com>' "Claude agent uses verified tool mapping"
 require_text "$COMMIT_AGENT" 'primary implementation model' "Claude agent preserves primary implementation model"
+require_text "$COMMIT_AGENT" 'root-session model supplied as `assisting_model`' "Claude agent preserves root-session attribution"
+require_text "$COMMIT_AGENT" "MUST NOT resolve it from this commit-only agent's runtime identity" "Claude agent cannot self-attribute"
 
 for file in "$COMMIT_SKILL" "$COMMIT_AGENT"; do
   coauthor_line="$(line_of "$file" 'Co-Authored-By:')"

@@ -32,14 +32,20 @@ When archive_path and change_id are provided, use them directly. They are a
 pair: if only one is provided, stop and report the invalid input.
 
 `tool_name` and `assisting_model` are also a pair. `openspec-commit` always
-supplies both. For standalone use, accept exact runtime-provided identities; if
-either value is unavailable or uncertain, stop and request it. You MUST NOT
-guess an identity from environment variables, model families, provider
-aliases, vendor domains, documentation, session logs, or the commit-only
-agent's identity. Reject a missing value or a generic model-family label or provider alias; do not normalize, expand, or resolve it.
+supplies both. For standalone use in the root session that performed the work,
+you MUST use the exact current runtime identity automatically. You MUST NOT ask the user to repeat it.
+Apply the same rule to later standalone commits in that session while the root model remains unchanged.
+Provider-native documentation and commit subagents MUST NOT replace or make root-session attribution ambiguous.
 
-`assisting_model` is Git attribution metadata only. It identifies the primary
-implementation model for the `AI-Assisted-By` trailer. It MUST NOT select or override this writer's runtime model or reasoning effort.
+Request missing attribution only when the work came from another session, the
+root model changed during the work, or the exact root identity is unavailable.
+You MUST NOT guess an identity from environment variables, model families,
+provider aliases, vendor domains, documentation, session logs, Git history, or
+the commit-only agent's identity. Reject a missing value or a generic model-family label or provider alias; do not normalize, expand, or resolve it.
+
+`assisting_model` is Git attribution metadata only. It identifies the exact
+root-session model governing the implementation for the `AI-Assisted-By`
+trailer. It MUST NOT select or override this writer's runtime model or reasoning effort.
 
 ---
 
@@ -63,9 +69,10 @@ path with auto-detection. Do not resolve standalone context yet.
 ### Attribution context
 
 When `tool_name` and `assisting_model` are provided, preserve both exact values.
-If only one is provided, stop. When neither is provided, standalone resolution
-may use exact identities supplied by the current runtime; if either identity is
-uncertain, stop before staging and request the missing value.
+If only one is provided, stop. When neither is provided and the current root
+session performed the work without switching models, use its exact runtime
+identity without confirmation. Otherwise stop before staging and request the
+missing value.
 
 ---
 

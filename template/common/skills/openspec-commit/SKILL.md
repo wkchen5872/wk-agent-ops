@@ -24,6 +24,10 @@ This skill coordinates those capabilities; it does not duplicate their logic.
 **Input:** An optional active change name. If omitted, resolve it from the
 current OpenSpec and Git state. Never guess when multiple candidates exist.
 
+Do not preflight, request, or require attribution before Step 5. Archive and
+documentation handling run first even when attribution may later need user
+input.
+
 ---
 
 ## Provider action routing
@@ -188,22 +192,33 @@ tool_name=<executing agent tool>
 assisting_model=<primary implementation model>
 ```
 
-Use the agent tool that performed the implementation (`Codex`, `Claude Code`,
-or `Antigravity`), not an outer host surface. Resolve `assisting_model` from an
-exact runtime identity only when that runtime unambiguously performed the
-implementation. Codex MAY use exact current-turn runtime metadata. Claude Code MAY use only an exact model identity exposed through its supported runtime or session interface.
+Use the agent tool that owns the root session (`Codex`, `Claude Code`, or
+`Antigravity`), not an outer host surface. When the current root session
+performed the work, exposes an exact model identity, and has not switched root
+models, you MUST use that identity automatically. You MUST NOT ask the user to repeat it.
+Continue using the exact current root-session identity for later commits in the same session while the root model remains unchanged.
+Codex and Claude Code MUST use the exact model identity exposed through their supported runtime or session interface when these conditions hold.
 
+Provider-native documentation and commit subagents MUST NOT replace or make the root-session attribution ambiguous.
+Their configured models and reasoning
+efforts are unrelated to this trailer metadata.
+
+Request the exact value now only when the work came from another session, the
+root model changed during the work, a model switch or multi-model implementation
+makes root attribution ambiguous, or the exact root identity is unavailable.
 A generic model-family label (for example `GPT-5`) or provider alias (for
-example `sonnet`) is unresolved. If a model switch or multi-model implementation
-makes the primary model ambiguous, request the exact value from the user now;
-do not attribute the work to the latest model automatically. MUST NOT parse session logs or use private transcript formats. MUST NOT use documentation lookup
-to infer which model ran the implementation.
+example `sonnet`) remains unresolved. Do not attribute cross-session or
+model-switched work to the latest model automatically. MUST NOT parse session logs or use private transcript formats.
+MUST NOT use documentation lookup to
+infer which model governed the work.
 
-`assisting_model` is Git attribution metadata only: it identifies the primary
-implementation model for the `AI-Assisted-By` trailer. It MUST NOT be used as a subagent spawn model or reasoning-effort override. If either attribution value
-is unavailable, request it now; do not guess from environment variables, vendor
-domains, Git history, system-description families, or a commit-only agent's
-identity.
+`assisting_model` is Git attribution metadata only: it identifies the exact
+root-session model governing the implementation for the `AI-Assisted-By`
+trailer. It MUST NOT be used as a subagent spawn model or reasoning-effort override.
+If either attribution value remains unavailable, request it now; do
+not guess from environment variables, vendor domains, Git history,
+system-description families, or a commit-only agent's identity.
+This workflow MUST NOT request or require `assisting_model` before archive or documentation handling.
 
 Pass the same exact archive context plus this attribution pair as task input:
 

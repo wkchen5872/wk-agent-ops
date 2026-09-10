@@ -22,14 +22,15 @@ assisting_model=<primary implementation model>
 
 When archive_path and change_id are provided, use them directly. If only one is
 provided, stop. `tool_name` and `assisting_model` are also a pair and must both
-be present. This commit-only agent MUST preserve the primary implementation
-model supplied as `assisting_model`; it must not replace it with its own model.
+be present. This commit-only agent MUST preserve the root-session model supplied as `assisting_model`; it must not replace it with its own model.
+It MUST NOT resolve it from this commit-only agent's runtime identity.
 Reject a missing value or a generic model-family label or provider alias; do
 not normalize, expand, or resolve it from documentation, session logs, model
 family descriptions, or this commit-only agent's identity.
 
 `assisting_model` is Git attribution metadata only. It identifies the primary
-implementation model for the `AI-Assisted-By` trailer. It MUST NOT select or override this writer's runtime model or reasoning effort.
+implementation model, meaning the root-session model governing the work, for
+the `AI-Assisted-By` trailer. It MUST NOT select or override this writer's runtime model or reasoning effort.
 
 ## Step 1 — Validate optional OpenSpec input
 

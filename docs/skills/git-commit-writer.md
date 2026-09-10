@@ -65,12 +65,15 @@ assisting_model=<primary implementation model>
 ```
 
 每一組少一個值或 archive 路徑不存在就停止，不可改抓「最新」archive。
-commit-only agent 必須保留 caller 傳入的主要實作模型，不可換成自己的模型。
+commit-only agent 必須保留 caller 傳入的 root-session 主要實作模型，不可換成自己的模型。
 `assisting_model` 只用於 `AI-Assisted-By` trailer，不得覆寫 commit-only agent
 既有的 runtime model 或 reasoning effort。它必須是 coordinator 已解析的 exact
 primary implementation model；writer 會拒絕 family label、provider alias 或缺值，
-也不會透過官方文件、環境變數、session log 或自己的 runtime model 猜測。若 model
-切換或多模型實作造成歧義，coordinator 必須在呼叫 writer 前向使用者確認。
+也不會透過官方文件、環境變數、session log、Git history 或自己的 runtime model
+猜測。同一個 root session 完成實作、能提供 exact identity 且未切換模型時，獨立
+呼叫會自動使用該 identity，後續 commit 也不需再次確認；文件或 commit subagent
+使用的模型不會改變 attribution。若工作來自另一個 session、model 切換或多模型
+實作造成歧義，或 exact identity 無法取得，coordinator 必須在呼叫 writer 前向使用者確認。
 獨立呼叫且沒有
 context 時，先完成 staging，再依以下明確證據篩選候選：
 
