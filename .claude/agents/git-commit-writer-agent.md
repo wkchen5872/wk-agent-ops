@@ -21,12 +21,15 @@ assisting_model=<primary implementation model>
 ```
 
 When archive_path and change_id are provided, use them directly. If only one is
-provided, stop. `tool_name` and `assisting_model` are also a pair and must both
-be present. This commit-only agent MUST preserve the root-session model supplied as `assisting_model`; it must not replace it with its own model.
+provided, stop. Use `Claude Code` as the tool when the caller omits `tool_name`.
+This commit-only agent MUST preserve the root-session model supplied as `assisting_model` verbatim.
+Accept `GPT-5.6` or `GPT-6`, or a known Claude model name; do not invent a
+variant, version, or context size. `assisting_model` is optional.
+A missing model name or variant must not block the commit or trigger a user
+question. Tool names are not model names. If no implementation model is supplied,
+omit `AI-Assisted-By` and report the omission; never write an empty value or placeholder.
 It MUST NOT resolve it from this commit-only agent's runtime identity.
-Reject a missing value or a generic model-family label or provider alias; do
-not normalize, expand, or resolve it from documentation, session logs, model
-family descriptions, or this commit-only agent's identity.
+Never infer it from documentation, session logs, environment variables, or Git history.
 
 `assisting_model` is Git attribution metadata only. It identifies the primary
 implementation model, meaning the root-session model governing the work, for
@@ -46,9 +49,8 @@ fi
 Keep the verified pair as explicit context. Never replace an invalid explicit
 path with auto-detection. Do not resolve standalone context yet.
 
-Validate that `tool_name` is exactly `Claude Code` and that `assisting_model`
-is exact. If either value is missing, generic, aliased, or uncertain, stop
-before staging and request it rather than guessing.
+Validate that the executing tool is `Claude Code`. If a conflicting tool is
+supplied, return the mismatch to the caller. Model precision is not a gate.
 
 ## Step 2 — Stage and gather the final diff
 
@@ -133,6 +135,8 @@ git commit -m "<message>
 Co-Authored-By: Claude Code <noreply@anthropic.com>
 AI-Assisted-By: <assisting_model>"
 ```
+
+Omit the entire `AI-Assisted-By` line when no implementation model is supplied.
 
 On pre-commit failure, fix the in-scope issue. **Re-run `git add -A`**, inspect
 the cached diff, and retry without `--no-verify`.

@@ -19,13 +19,15 @@ assisting_model=<primary implementation model>
 ```
 
 `archive_path` and `change_id` are a pair. If only one is provided, stop.
-`tool_name` and `assisting_model` are also a pair. Preserve the exact root-session model supplied as `assisting_model`; do not replace it with this agent's configured model.
-This commit-only agent MUST NOT resolve it from this commit-only agent's runtime identity. If either value is unavailable or
-uncertain, stop and request it. Never guess identity from environment
-variables, model families, provider aliases, vendor domains, documentation,
-session logs, Git history, or this commit-only agent's identity. Reject a
-missing value or a generic model-family label or provider alias; do not
-normalize, expand, or resolve it.
+Use `Codex` as the executing tool when the caller omits `tool_name`.
+Preserve the root-session model supplied as `assisting_model` verbatim.
+Accept `GPT-5.6` or `GPT-6`; do not invent a variant, version, or context size.
+`assisting_model` is optional. A missing model name or variant must not block
+the commit or trigger a user question. Tool names are not model names.
+If no implementation model is supplied, omit `AI-Assisted-By` and report the
+omission; never write an empty value or placeholder.
+This commit-only agent MUST NOT resolve it from this commit-only agent's runtime identity.
+Never infer it from environment variables, documentation, session logs, or Git history.
 
 `assisting_model` is Git attribution metadata only. It identifies the primary
 implementation model, meaning the root-session model governing the work, for
@@ -120,6 +122,8 @@ git commit -m "<message>
 <resolved Co-Authored-By trailer>
 AI-Assisted-By: <assisting_model>"
 ```
+
+Omit the entire `AI-Assisted-By` line when no implementation model is supplied.
 
 On pre-commit failure, fix only the in-scope issue, rerun `git add -A`, inspect
 the cached diff, and retry without `--no-verify`.

@@ -64,16 +64,17 @@ tool_name=<executing agent tool>
 assisting_model=<primary implementation model>
 ```
 
-每一組少一個值或 archive 路徑不存在就停止，不可改抓「最新」archive。
+archive context 少一個值或路徑不存在就停止，不可改抓「最新」archive。
+`assisting_model` 為選填；缺少模型名稱不阻擋 commit。
 commit-only agent 必須保留 caller 傳入的 root-session 主要實作模型，不可換成自己的模型。
 `assisting_model` 只用於 `AI-Assisted-By` trailer，不得覆寫 commit-only agent
-既有的 runtime model 或 reasoning effort。它必須是 coordinator 已解析的 exact
-primary implementation model；writer 會拒絕 family label、provider alias 或缺值，
-也不會透過官方文件、環境變數、session log、Git history 或自己的 runtime model
-猜測。同一個 root session 完成實作、能提供 exact identity 且未切換模型時，獨立
-呼叫會自動使用該 identity，後續 commit 也不需再次確認；文件或 commit subagent
-使用的模型不會改變 attribution。若工作來自另一個 session、model 切換或多模型
-實作造成歧義，或 exact identity 無法取得，coordinator 必須在呼叫 writer 前向使用者確認。
+既有的 runtime model 或 reasoning effort。優先原樣使用使用者為本次工作提供的
+模型名稱，否則自動記錄目前可確認的 root-session 模型；接受 `GPT-5.6`、`GPT-6`，
+不補猜 variant、版本或 context size。同一 session 模型未切換時持續沿用，不重問。
+工具名稱如 `OpenAI Codex` 不當作模型名稱；模型完全未知，或跨 session／模型切換
+造成歧義且無已確認 attribution 時，省略整行 `AI-Assisted-By` 並回報，不填空值或
+placeholder，也不阻擋 commit。不透過文件、環境變數、session logs、Git history
+或 commit-only agent 自己的模型推測主要實作模型。
 獨立呼叫且沒有
 context 時，先完成 staging，再依以下明確證據篩選候選：
 

@@ -7,7 +7,7 @@ license: MIT
 compatibility: Requires openspec CLI and git.
 metadata:
   author: wkchen
-  version: "2.0"
+  version: "2.1"
 ---
 
 # OpenSpec Commit
@@ -24,9 +24,8 @@ This skill coordinates those capabilities; it does not duplicate their logic.
 **Input:** An optional active change name. If omitted, resolve it from the
 current OpenSpec and Git state. Never guess when multiple candidates exist.
 
-Do not preflight, request, or require attribution before Step 5. Archive and
-documentation handling run first even when attribution may later need user
-input.
+Resolve available attribution at Step 5. Model precision or absence must not
+block archive, documentation handling, or commit.
 
 ---
 
@@ -193,34 +192,30 @@ assisting_model=<primary implementation model>
 ```
 
 Use the agent tool that owns the root session (`Codex`, `Claude Code`, or
-`Antigravity`), not an outer host surface. When the current root session
-performed the work, exposes an exact model identity, and has not switched root
-models, you MUST use that identity automatically. You MUST NOT ask the user to repeat it.
-Continue using the exact current root-session identity for later commits in the same session while the root model remains unchanged.
-Codex and Claude Code MUST use the exact model identity exposed through their supported runtime or session interface when these conditions hold.
+`Antigravity`), not an outer host surface. Record the most specific model name
+actually known for the implementation. Accept `GPT-5.6` or `GPT-6`; do not invent
+a variant, version, or context size. Preserve a user-supplied name for this work
+verbatim; otherwise use the current runtime model name automatically when the
+root session performed the work without switching models.
+You MUST NOT ask the user to repeat it or provide a more precise name to commit.
+Reuse confirmed attribution for later commits in the same session while the
+root model remains unchanged.
 
 Provider-native documentation and commit subagents MUST NOT replace or make the root-session attribution ambiguous.
-Their configured models and reasoning
-efforts are unrelated to this trailer metadata.
-
-Request the exact value now only when the work came from another session, the
-root model changed during the work, a model switch or multi-model implementation
-makes root attribution ambiguous, or the exact root identity is unavailable.
-A generic model-family label (for example `GPT-5`) or provider alias (for
-example `sonnet`) remains unresolved. Do not attribute cross-session or
-model-switched work to the latest model automatically. MUST NOT parse session logs or use private transcript formats.
-MUST NOT use documentation lookup to
+Tool names are not model names. If the implementation model is unknown, or a
+model switch or multi-model implementation leaves attribution unresolved, omit
+`assisting_model` from the handoff and report the omitted `AI-Assisted-By` trailer;
+do not block the commit or attribute older work to the latest model automatically.
+MUST NOT parse session logs or use private transcript formats.
+MUST NOT use documentation lookup, environment variables, or Git history to
 infer which model governed the work.
 
-`assisting_model` is Git attribution metadata only: it identifies the exact
-root-session model governing the implementation for the `AI-Assisted-By`
-trailer. It MUST NOT be used as a subagent spawn model or reasoning-effort override.
-If either attribution value remains unavailable, request it now; do
-not guess from environment variables, vendor domains, Git history,
-system-description families, or a commit-only agent's identity.
+`assisting_model` is Git attribution metadata only, at the available precision.
+It MUST NOT be used as a subagent spawn model or reasoning-effort override.
 This workflow MUST NOT request or require `assisting_model` before archive or documentation handling.
 
-Pass the same exact archive context plus this attribution pair as task input:
+Pass the same exact archive context plus the tool and optional model as task input
+(omit the `assisting_model` field entirely when unknown):
 
 ```text
 change_id=<change_id, when available>
