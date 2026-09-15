@@ -24,6 +24,11 @@ timestamp: 2026-08-01T00:00:00+08:00
 已建立 OpenSpec change；執行 `$openspec-ff-change` 也不應自行決定是否建立
 Worktree。
 
+是否需要正式規劃，依 [Agent Operating Protocol](/docs/agent-protocol.md) 分級；
+正式規劃的共用步驟見 [OpenSpec Workflow](/docs/openspec-workflow.md)。
+本頁的 Provider Plan Mode 僅指執行／權限模式，不授權另建原生 plan、workflow
+或 task 文件來取代 OpenSpec。規格、設計與開發任務一律以 OpenSpec 為準。
+
 ## Phase 1：PM 規劃
 
 ### 兩種入口

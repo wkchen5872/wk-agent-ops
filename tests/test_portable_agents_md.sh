@@ -9,6 +9,7 @@ set -u
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DOCS="$ROOT/template/common/docs"
 PROTO="$DOCS/agent-protocol.md"       # managed: the relocated operating protocol
+WORKFLOW="$DOCS/openspec-workflow.md"
 AGENTS="$ROOT/template/common/AGENTS.md"  # seed: thin pointer
 BANNER='Managed by wk-agent-ops'
 fail=0
@@ -23,7 +24,6 @@ if [[ -f "$PROTO" ]]; then
   header="$(sed -n '1,22p' "$PROTO")"
 
   # R1 — no named secondary tool binding
-  grep -qi 'claude code' <<<"$header"                && ok  "R1 protocol names Claude Code" || bad "R1 protocol names Claude Code"
   grep -qiE 'portable|agents\.md-aware' <<<"$header"  && ok  "R1 protocol states generic portability" || bad "R1 protocol states generic portability"
   if grep -qiE '\bcodex\b|antigravity|and others supported' "$PROTO"; then
     bad "R1 no named secondary tool anywhere"
@@ -43,17 +43,17 @@ if [[ -f "$PROTO" ]]; then
   if grep -q 'openspec-verify-change' "$PROTO"; then bad "R3b no fake other-tools command"; else ok "R3b no fake other-tools command"; fi
 
   # R3c — OpenSpec actions share one branch-preparation guard
-  if grep -q 'opsx-branch <change-id>' "$PROTO" \
-    && grep -qiE 'new.*fast-forward.*continue|new.*continue.*fast-forward' "$PROTO" \
-    && grep -qiE 'non-zero|exits non-zero' "$PROTO"; then
-    ok "R3c protocol guards OpenSpec new, fast-forward, and continue"
+  if grep -q 'opsx-branch <change-id>' "$WORKFLOW" \
+    && grep -qiE 'new.*fast-forward.*continue|new.*continue.*fast-forward' "$WORKFLOW" \
+    && grep -qiE 'non-zero|exits non-zero' "$WORKFLOW"; then
+    ok "R3c workflow guards OpenSpec new, fast-forward, and continue"
   else
-    bad "R3c protocol guards OpenSpec new, fast-forward, and continue"
+    bad "R3c workflow guards OpenSpec new, fast-forward, and continue"
   fi
 
   # R3d — known Git-metadata protection does not require a failing probe
-  if grep -qi 'minimum required Git-write permission' "$PROTO" \
-    && grep -qi 'first attempt' "$PROTO"; then
+  if grep -qi 'minimum required Git-write permission' "$WORKFLOW" \
+    && grep -qi 'first attempt' "$WORKFLOW"; then
     ok "R3d branch guard requests required permission on the first attempt"
   else
     bad "R3d branch guard requests required permission on the first attempt"
@@ -78,7 +78,7 @@ if grep -qiE 'Definition of Done|Implementation Loop' "$AGENTS"; then
 else ok "P2 AGENTS.md does not inline the protocol"; fi
 
 # ── Managed docs carry the banner; seed docs do not ──────────────────────────
-for m in agent-protocol.md okf-conventions.md; do
+for m in agent-protocol.md okf-conventions.md openspec-workflow.md; do
   grep -q "$BANNER" "$DOCS/$m" 2>/dev/null && ok "B1 managed $m has banner" || bad "B1 managed $m has banner"
 done
 for s in architecture.md conventions.md; do

@@ -20,7 +20,15 @@
 4. 提交 git commit
 ```
 
-**禁止直接編輯 `.claude/`、`.agents/` 或 `.codex/agents/` 下的檔案** — 這些是由 install.sh 生成的安裝目標，不應該手動維護。
+**禁止直接建立、編輯或刪除已安裝的 agent 配置** — 包括 `.claude/`、
+`.agents/` 與 `.codex/agents/` 下受本 repo installer 管理的 skills、workflows、
+rules 和 agents。使用者要求調整這些配置時，必須先修改 `template/` 中的來源，
+再透過 `scripts/skills/install.sh` 安裝；允許 installer 在其管理範圍內更新安裝目標。
+`.codex/skills/` 與 `.codex/config.toml` 不屬於此 installer 的管理範圍，
+不得藉此流程覆寫。第三方配置須透過其來源與指定安裝工具更新。
+
+以上來源路徑與安裝流程是 **wk-agent-ops 本 repo 專用規則**；
+不應寫入會散布至其他 repo 的 `template/common/docs/agent-protocol.md`。
 
 ---
 

@@ -30,6 +30,13 @@ expect_present "Test integrity" "$PROTO" "policy protects test intent"
 expect_present "Layered verification" "$PROTO" "policy layers verification"
 expect_present "Conditional causal checks" "$PROTO" "policy makes causal checks conditional"
 expect_absent  "minor fixes" "$PROTO" "Level 1 does not exempt behavioral fixes"
+expect_present "OpenSpec is the source of truth" "$PROTO" "OpenSpec owns formal planning"
+expect_present "Read-only analysis, review, or diagnosis" "$PROTO" "read-only tasks have an explicit route"
+expect_present "Clear, low-risk local behavior changes or bug fixes" "$PROTO" "local fixes have a lightweight route"
+expect_present "record actual results after implementation" "$PROTO" "acceptance results follow implementation"
+expect_present "openspec-workflow.md" "$PROTO" "protocol links the OpenSpec playbook"
+expect_absent "opsx-branch" "$PROTO" "branch mechanics live outside the protocol"
+expect_absent "regardless of diff size" "$PROTO" "formal planning is no longer mandatory for every fix"
 
 # Native rules stay thin and point at the managed policy.
 expect_present "docs/agent-protocol.md" "$RULE" "native rule points to managed protocol"
@@ -51,6 +58,13 @@ bash "$ROOT/scripts/skills/install.sh" --target "$TARGET" >/dev/null 2>&1
 
 cmp -s "$PROTO" "$TARGET/docs/agent-protocol.md" \
   && ok "managed protocol installed exactly" || bad "managed protocol installed exactly"
+cmp -s "$COMMON/docs/openspec-workflow.md" "$TARGET/docs/openspec-workflow.md" \
+  && ok "OpenSpec playbook installed exactly" || bad "OpenSpec playbook installed exactly"
+# A re-install must refresh this playbook, not treat it as a seed document.
+printf 'stale playbook\n' > "$TARGET/docs/openspec-workflow.md"
+bash "$ROOT/scripts/skills/install.sh" --target "$TARGET" >/dev/null 2>&1
+cmp -s "$COMMON/docs/openspec-workflow.md" "$TARGET/docs/openspec-workflow.md" \
+  && ok "OpenSpec playbook refreshed on reinstall" || bad "OpenSpec playbook refreshed on reinstall"
 cmp -s "$RULE" "$TARGET/.claude/rules/tdd-enforcement.md" \
   && ok "Claude receives thin entrypoint" || bad "Claude receives thin entrypoint"
 cmp -s "$RULE" "$TARGET/.agents/rules/tdd-enforcement.md" \

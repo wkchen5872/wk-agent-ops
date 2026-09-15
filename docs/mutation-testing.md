@@ -3,7 +3,7 @@ type: Playbook
 title: Mutation Testing Playbook
 description: Stage-based mutation testing with testland/qa runners, survivor triage, and comparable score policy.
 tags: [testing, mutation-testing, tdd, testland]
-timestamp: 2026-09-04T00:00:00+08:00
+timestamp: 2026-09-15T00:00:00+08:00
 ---
 
 <!-- Managed by wk-agent-ops · do not edit here — re-running install.sh overwrites this file. -->
@@ -37,8 +37,8 @@ The common installer installs Agent skills only. It does not install a mutation
 runner package or edit the target project's manifest, lockfile, mutation config,
 or test command. When a runner skill later proposes those changes, repository
 policy remains authoritative: preserve the existing package manager and
-lockfile, show side effects, obtain required consent, and never clear unrelated
-worktree changes.
+lockfile, show side effects, obtain required consent, avoid global fallback,
+and never clear unrelated worktree changes.
 
 ## Five-step closed loop
 
@@ -75,8 +75,8 @@ loop; mutation testing is a stage-level review of test strength.
 
 Keep runner-native statuses separate when available: killed, survived, no
 coverage or untested, timeout, invalid/error, and skipped. A failed baseline
-test, runner error, or incomplete report makes the run invalid; do not derive a
-score verdict from it.
+test, runner error, or incomplete report makes the run invalid; report
+`inconclusive`, do not update the baseline, and do not derive a score verdict.
 
 ## Execution cadence and scope
 

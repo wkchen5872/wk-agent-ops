@@ -30,8 +30,8 @@ done
 for term in 'Five-step closed loop' missing-case weak-assertion equivalent-mutant unreachable flaky-killer baseline 'no regression' ratchet inconclusive; do
   contains "$DOC" "$term" "playbook documents $term"
 done
-contains "$PROTO" 'mutant-survival-triage' "protocol routes through survivor triage"
-contains "$PROTO" 'The first valid mutation result establishes a baseline' "protocol defines score baseline"
+contains "$PROTO" 'Mutation Testing Playbook](mutation-testing.md)' "protocol routes to mutation playbook"
+contains "$DOC" 'The first valid run establishes a baseline' "playbook defines score baseline"
 forbids "$PROTO" '/mutation-check' "protocol drops legacy slash command"
 contains "$ROOT/docs/architecture.md" 'testland/qa' "architecture records third-party boundary"
 contains "$ROOT/README.md" 'stryker-net-mutation' "README lists language mapping"

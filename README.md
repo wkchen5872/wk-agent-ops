@@ -9,6 +9,11 @@
 
 以 [OpenSpec](https://github.com/Fission-AI/OpenSpec)（Spec-Driven Development）為核心流程。
 
+[Agent Operating Protocol](docs/agent-protocol.md) 依任務效果與風險分級；
+需要正式規劃時，依 [OpenSpec Workflow](docs/openspec-workflow.md) 管理規格、
+設計與任務，不以 Claude Code、Codex 或 Antigravity 的原生計畫取代。
+兩份文件都會安裝至目標 repo，並在重新安裝時更新。
+
 ---
 
 ## 快速開始
