@@ -8,7 +8,7 @@ license: MIT
 compatibility: "Requires git. Optional: openspec CLI."
 metadata:
   author: wkchen
-  version: "1.5"
+  version: "1.6"
 ---
 
 # Git Commit Writer
@@ -25,7 +25,7 @@ The caller may provide:
 archive_path=<exact archived change directory>
 change_id=<OpenSpec change id without date prefix>
 tool_name=<executing agent tool>
-assisting_model=<primary implementation model>
+assisting_model=<current root-session model>
 ```
 
 When archive_path and change_id are provided, use them directly. They are a
@@ -33,7 +33,7 @@ pair: if only one is provided, stop and report the invalid input.
 
 `tool_name` identifies the collaborating tool, such as `Codex` or `Claude Code`.
 `assisting_model` is optional. Record the most specific model name actually
-known for the root session that performed the work. Accept `GPT-5.6` or `GPT-6`;
+known for the current collaborating root session. Accept `GPT-5`, `GPT-5.6`, or `GPT-6`;
 do not invent a variant, version, or context size to make the name more precise.
 Preserve a user-supplied model name for this work verbatim; otherwise use the
 model name available in the current runtime context automatically.
@@ -42,14 +42,18 @@ model remains unchanged. You MUST NOT ask the user to repeat it or provide a
 more precise model name just to commit.
 
 Provider-native documentation and commit subagents MUST NOT replace or make root-session attribution ambiguous.
-Tool names such as `OpenAI Codex` are not model names. If the implementation
-model is unknown, or cross-session/model-switched work has unresolved attribution,
-omit `AI-Assisted-By` and report the omission; do not block the commit.
+This records current collaboration, not original code authorship. Pre-existing
+changes, another implementation session, or a commit-only root session MUST NOT
+cause omission of a known current model. After a root model switch, use the
+currently known model; do not reuse a stale name from before the switch.
+Tool names such as `OpenAI Codex` are not model names. Only when no model name
+is known for the current root session, omit `AI-Assisted-By` and report the omission;
+do not block the commit. A known `GPT-5` MUST be recorded, not omitted.
 You MUST NOT guess attribution from environment variables, documentation,
 session logs, Git history, or the commit-only agent's identity.
 
 `assisting_model` is Git attribution metadata only. It identifies the known
-root-session implementation model, at the available precision.
+current root-session collaboration model, at the available precision.
 It MUST NOT select or override this writer's runtime model or reasoning effort.
 
 ---
@@ -192,7 +196,7 @@ Build the co-author trailer from this strict verified mapping:
 | `Claude Code` | `Co-Authored-By: Claude Code <noreply@anthropic.com>` |
 
 Unmapped tools use `Co-Authored-By: <tool_name>` without an email. Preserve the
-tool name and MUST NOT guess an address. When the implementation model is known,
+tool name and MUST NOT guess an address. When the current root-session model is known,
 follow it immediately with the model trailer:
 
 ```bash

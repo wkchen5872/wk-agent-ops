@@ -182,7 +182,7 @@ Codex 版本：`.codex/agents/git-commit-writer-agent.toml`（`gpt-5.6-luna`、m
 - 支援 openspec 上下文（有 change 時加 scope）
 - 以輕量模型（如 Claude Haiku）執行，兼顧效能與費用
 - 不需要確認，直接執行
-- 自動以當下可確認的實作模型作為 `AI-Assisted-By`；接受 `GPT-5.6`、`GPT-6`
+- 自動以當下可確認的協作模型作為 `AI-Assisted-By`；接受 `GPT-5`、`GPT-5.6`、`GPT-6`
   等名稱，不補猜變體。完全未知時省略該 trailer 並回報，不阻擋 commit
 - Archive guard：若傳入 `archive_path`，在 commit 前驗證目錄存在；archive 未完成則停止
 
@@ -291,10 +291,11 @@ Skill 和 Agent 應該遵循相同的邏輯和步驟，差異只在：
 
 - Skill 中：「Step 6 — Execute」以執行工具寫入 `Co-Authored-By`，已驗證的
   Codex／Claude Code mapping 才附 provider email；未知 mapping 保留 name-only trailer。
-- Skill 與 Agent 都在下一行寫入 `AI-Assisted-By: <primary implementation model>`；
+- Skill 與 Agent 都在下一行寫入 `AI-Assisted-By: <current root-session model>`；
   優先沿用使用者提供的名稱，否則使用 root session 可確認的模型名稱；
   不要求完整 variant；完全未知時省略模型 trailer 並回報；
-  commit-only agent 必須沿用該主要實作模型，不可改填自己的模型；
+  接手既有變更或只負責提交的 root session 也記錄當下已知模型，不追查原始實作者；
+  commit-only subagent 必須沿用 caller 傳來的 root-session 模型，不可改填自己的模型；
   此 attribution metadata 不得覆寫 agent 自身的 runtime model 或 reasoning effort。
 - 兩者在 Step 5 均加入 archive guard：archive 目錄不存在則停止
 

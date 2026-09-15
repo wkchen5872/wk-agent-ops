@@ -17,22 +17,25 @@ The caller may provide:
 archive_path=<exact archived change directory>
 change_id=<OpenSpec change id without date prefix>
 tool_name=<executing agent tool>
-assisting_model=<primary implementation model>
+assisting_model=<current root-session model>
 ```
 
 When archive_path and change_id are provided, use them directly. If only one is
 provided, stop. Use `Claude Code` as the tool when the caller omits `tool_name`.
 This commit-only agent MUST preserve the root-session model supplied as `assisting_model` verbatim.
-Accept `GPT-5.6` or `GPT-6`, or a known Claude model name; do not invent a
+Accept `GPT-5`, `GPT-5.6`, or `GPT-6`, or a known Claude model name; do not invent a
 variant, version, or context size. `assisting_model` is optional.
+This records current collaboration, not original code authorship. Record the
+supplied root-session model even when the changes predate that session.
+A known `GPT-5` MUST be recorded, not omitted.
 A missing model name or variant must not block the commit or trigger a user
-question. Tool names are not model names. If no implementation model is supplied,
+question. Tool names are not model names. If no root-session model is supplied,
 omit `AI-Assisted-By` and report the omission; never write an empty value or placeholder.
 It MUST NOT resolve it from this commit-only agent's runtime identity.
 Never infer it from documentation, session logs, environment variables, or Git history.
 
-`assisting_model` is Git attribution metadata only. It identifies the primary
-implementation model, meaning the root-session model governing the work, for
+`assisting_model` is Git attribution metadata only. It identifies the current
+collaborating root-session model for
 the `AI-Assisted-By` trailer. It MUST NOT select or override this writer's runtime model or reasoning effort.
 
 ## Step 1 — Validate optional OpenSpec input
@@ -136,7 +139,7 @@ Co-Authored-By: Claude Code <noreply@anthropic.com>
 AI-Assisted-By: <assisting_model>"
 ```
 
-Omit the entire `AI-Assisted-By` line when no implementation model is supplied.
+Omit the entire `AI-Assisted-By` line when no root-session model is supplied.
 
 On pre-commit failure, fix the in-scope issue. **Re-run `git add -A`**, inspect
 the cached diff, and retry without `--no-verify`.

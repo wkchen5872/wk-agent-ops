@@ -15,22 +15,25 @@ The caller may provide:
 archive_path=<exact archived change directory>
 change_id=<OpenSpec change id without date prefix>
 tool_name=<executing agent tool>
-assisting_model=<primary implementation model>
+assisting_model=<current root-session model>
 ```
 
 `archive_path` and `change_id` are a pair. If only one is provided, stop.
 Use `Codex` as the executing tool when the caller omits `tool_name`.
 Preserve the root-session model supplied as `assisting_model` verbatim.
-Accept `GPT-5.6` or `GPT-6`; do not invent a variant, version, or context size.
+Accept `GPT-5`, `GPT-5.6`, or `GPT-6`; do not invent a variant, version, or context size.
+This records current collaboration, not original code authorship. Record the
+supplied root-session model even when the changes predate that session.
+A known `GPT-5` MUST be recorded, not omitted.
 `assisting_model` is optional. A missing model name or variant must not block
 the commit or trigger a user question. Tool names are not model names.
-If no implementation model is supplied, omit `AI-Assisted-By` and report the
+If no root-session model is supplied, omit `AI-Assisted-By` and report the
 omission; never write an empty value or placeholder.
 This commit-only agent MUST NOT resolve it from this commit-only agent's runtime identity.
 Never infer it from environment variables, documentation, session logs, or Git history.
 
-`assisting_model` is Git attribution metadata only. It identifies the primary
-implementation model, meaning the root-session model governing the work, for
+`assisting_model` is Git attribution metadata only. It identifies the current
+collaborating root-session model for
 the `AI-Assisted-By` trailer. It MUST NOT select or override this writer's runtime model or reasoning effort.
 
 ## Step 1 — Validate optional input
@@ -123,7 +126,7 @@ git commit -m "<message>
 AI-Assisted-By: <assisting_model>"
 ```
 
-Omit the entire `AI-Assisted-By` line when no implementation model is supplied.
+Omit the entire `AI-Assisted-By` line when no root-session model is supplied.
 
 On pre-commit failure, fix only the in-scope issue, rerun `git add -A`, inspect
 the cached diff, and retry without `--no-verify`.

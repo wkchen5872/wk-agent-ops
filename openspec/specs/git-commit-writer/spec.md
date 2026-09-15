@@ -106,22 +106,25 @@ staged diff is empty.
 The `git-commit-writer` skill and provider-specific agent SHALL accept
 `tool_name` and an optional root-session `assisting_model` immediately before
 commit execution. `assisting_model` SHALL identify the model of the root agent
-session governing the work at the available precision and SHALL be used only as
+session collaborating on the current task at the available precision and SHALL be used only as
 Git trailer metadata; it MUST NOT select or override the writer's runtime model
 or reasoning effort.
 
 An orchestrated call SHALL supply the tool and any known model name as task input.
 Preserve a user-supplied model name for the work verbatim; otherwise a standalone
-invocation in the root session that performed the work MUST use the available
+invocation in the current root session MUST use the available
 runtime model name automatically and MUST NOT ask the user to repeat it or
 provide greater precision. The same rule applies to later commits while the
 root model remains unchanged. Provider-native documentation and commit
 subagents MUST NOT replace or make root-session attribution ambiguous.
 
-The writer SHALL accept known family versions such as `GPT-5.6` or `GPT-6`
+The writer SHALL accept known family versions such as `GPT-5`, `GPT-5.6`, or `GPT-6`
 without inventing a variant, version, or context size. Tool names MUST NOT be
-used as model names. Unknown models or unresolved cross-session/model-switch
-attribution SHALL cause omission of the model trailer and a reported omission,
+used as model names. This records current collaboration, not original code
+authorship. Pre-existing work or a commit-only root session MUST NOT cause
+omission of a known current model. After a root model switch, use the currently
+known model rather than stale attribution. Only an unknown current model
+SHALL cause omission of the model trailer and a reported omission,
 not a user question or commit blocker. The writer MUST NOT infer identity from
 documentation, email domains, environment variables, session logs, Git history,
 or a commit-only agent's identity.
@@ -147,27 +150,27 @@ or a commit-only agent's identity.
 - **AND** `assisting_model` does not override the commit-only agent's runtime configuration
 
 #### Scenario: Orchestrated commit supplies a family label
-- **WHEN** the available model name is `GPT-5.6` or `GPT-6` without a known variant
+- **WHEN** the available model name is `GPT-5`, `GPT-5.6`, or `GPT-6` without a known variant
 - **THEN** the commit writer records the supplied name unchanged
 - **AND** it neither guesses a variant nor asks for greater precision
 
 #### Scenario: Work came from another session
-- **WHEN** standalone `git-commit-writer` is invoked in a session that did not perform the work and no model attribution is supplied
-- **THEN** it commits without the model trailer and reports the omission
-- **AND** it does not substitute the current or previous commit model
+- **WHEN** standalone `git-commit-writer` handles pre-existing changes and the current root model is known only as `GPT-5`
+- **THEN** it records `AI-Assisted-By: GPT-5` without asking who originally implemented the changes
+- **AND** it does not omit the known model or infer a more precise variant
 
 #### Scenario: Root model changed during the work
-- **WHEN** the root model changed during implementation and the attribution is ambiguous
-- **THEN** the writer commits without the model trailer and reports the omission
-- **AND** it does not select the latest model automatically
+- **WHEN** the root model changes and the current collaboration model is known
+- **THEN** the writer records the currently known root model
+- **AND** it does not carry forward a stale model name from before the switch
 
 #### Scenario: Standalone identity is uncertain
-- **WHEN** a standalone invocation knows its executing tool but not the implementation model
+- **WHEN** a standalone invocation knows its executing tool but no current root-session model name
 - **THEN** it commits with tool attribution only and reports the omitted model
 - **AND** it does not use a tool name, empty value, or placeholder as the model
 
 #### Scenario: User supplies a precise model name
-- **WHEN** the user supplies `gpt-6-astra` for the implementation
+- **WHEN** the user supplies `gpt-6-astra` for the current collaboration
 - **THEN** the writer preserves `gpt-6-astra` verbatim without reconfirmation
 
 #### Scenario: Codex custom agent has a configured model

@@ -61,20 +61,22 @@ graph TD
 archive_path=<exact archived change directory>
 change_id=<OpenSpec change id without date prefix>
 tool_name=<executing agent tool>
-assisting_model=<primary implementation model>
+assisting_model=<current root-session model>
 ```
 
 archive context 少一個值或路徑不存在就停止，不可改抓「最新」archive。
 `assisting_model` 為選填；缺少模型名稱不阻擋 commit。
-commit-only agent 必須保留 caller 傳入的 root-session 主要實作模型，不可換成自己的模型。
+commit-only subagent 必須保留 caller 傳入的當下 root-session 協作模型，不可換成自己的模型。
 `assisting_model` 只用於 `AI-Assisted-By` trailer，不得覆寫 commit-only agent
 既有的 runtime model 或 reasoning effort。優先原樣使用使用者為本次工作提供的
-模型名稱，否則自動記錄目前可確認的 root-session 模型；接受 `GPT-5.6`、`GPT-6`，
+模型名稱，否則自動記錄目前可確認的 root-session 模型；接受 `GPT-5`、`GPT-5.6`、`GPT-6`，
 不補猜 variant、版本或 context size。同一 session 模型未切換時持續沿用，不重問。
-工具名稱如 `OpenAI Codex` 不當作模型名稱；模型完全未知，或跨 session／模型切換
-造成歧義且無已確認 attribution 時，省略整行 `AI-Assisted-By` 並回報，不填空值或
-placeholder，也不阻擋 commit。不透過文件、環境變數、session logs、Git history
-或 commit-only agent 自己的模型推測主要實作模型。
+這記錄當下協作，不是原始程式作者。接手既有變更或只負責提交時，仍記錄當下已知
+模型；切換模型後改記目前模型，不沿用切換前的名稱。已知 `GPT-5` 就必須記錄。
+工具名稱如 `OpenAI Codex` 不當作模型名稱；只有完全不知道當下模型名稱時才省略
+整行 `AI-Assisted-By` 並回報，不填空值或 placeholder，也不阻擋 commit。
+不透過文件、環境變數、session logs、Git history 或 commit-only subagent 自己的
+模型推測 root-session 模型。
 獨立呼叫且沒有
 context 時，先完成 staging，再依以下明確證據篩選候選：
 
@@ -111,7 +113,7 @@ forbidden: docs(add-mutation-check): <subject>
 <body>
 
 Co-Authored-By: <tool name> <verified provider email when mapped>
-AI-Assisted-By: <primary implementation model>
+AI-Assisted-By: <current root-session model>
 ```
 
 ### 無 OpenSpec Context
@@ -121,7 +123,7 @@ AI-Assisted-By: <primary implementation model>
 <body>
 
 Co-Authored-By: <tool name> <verified provider email when mapped>
-AI-Assisted-By: <primary implementation model>
+AI-Assisted-By: <current root-session model>
 ```
 
 目前驗證的 mapping 只有 `Codex <noreply@openai.com>` 與

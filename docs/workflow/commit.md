@@ -115,18 +115,19 @@ attribution context：
 
 ```text
 tool_name=<executing agent tool>
-assisting_model=<primary implementation model>
+assisting_model=<current root-session model>
 ```
 
 `tool_name` 是擁有 root session 的 agent tool；`assisting_model` 是該 root session
-的主要實作模型，只用於 `AI-Assisted-By` trailer。它不是 subagent runtime 設定，
+的當下協作模型，只用於 `AI-Assisted-By` trailer。它不是 subagent runtime 設定，
 不得作為 spawn model 或 reasoning-effort override。協調層優先原樣使用使用者
-為本次工作提供的名稱，否則自動使用可確認的 root-session 模型。接受 `GPT-5.6`、
+為本次協作提供的名稱，否則自動使用可確認的 root-session 模型。接受 `GPT-5`、`GPT-5.6`、
 `GPT-6` 等已知版本，不補猜 variant；同一 session 模型未變時沿用，不重問。
 Claude Code 與 Codex 只按 exact agent name 啟動 provider-native agent；runtime
 model 與 effort 由 agent 設定檔決定，文件與 commit subagent 的模型不改變 attribution。
-模型完全未知或跨 session／模型切換造成無法確認的歧義時，省略 `assisting_model`
-及 `AI-Assisted-By` 並回報，不阻擋 commit。不得以工具名稱代替模型，或透過官方
+接手既有變更或只負責提交時也記錄當下已知模型，不追查原始實作者；已知 `GPT-5`
+就必須寫入。切換模型後改記目前模型。只有完全不知道當下模型名稱時，才省略
+`assisting_model` 及 `AI-Assisted-By` 並回報，不阻擋 commit。不得以工具名稱代替模型，或透過官方
 文件、環境變數、session logs、Git history、commit-only agent 身分補猜。
 驗證 context 後執行 final `git add -A`；若 staged diff 為空則停止；pre-commit
 hook 修正檔案後必須重新 staging，再重試 commit。

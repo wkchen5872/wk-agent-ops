@@ -7,7 +7,7 @@ license: MIT
 compatibility: Requires openspec CLI and git.
 metadata:
   author: wkchen
-  version: "2.1"
+  version: "2.2"
 ---
 
 # OpenSpec Commit
@@ -188,27 +188,29 @@ Resolve the attribution pair now, immediately before commit delegation:
 
 ```text
 tool_name=<executing agent tool>
-assisting_model=<primary implementation model>
+assisting_model=<current root-session model>
 ```
 
 Use the agent tool that owns the root session (`Codex`, `Claude Code`, or
 `Antigravity`), not an outer host surface. Record the most specific model name
-actually known for the implementation. Accept `GPT-5.6` or `GPT-6`; do not invent
+actually known for the current root session. Accept `GPT-5`, `GPT-5.6`, or `GPT-6`; do not invent
 a variant, version, or context size. Preserve a user-supplied name for this work
-verbatim; otherwise use the current runtime model name automatically when the
-root session performed the work without switching models.
+verbatim when it describes the current collaboration; otherwise use the current runtime model name automatically.
+This records current collaboration, not original code authorship. Pre-existing
+changes, another implementation session, or a commit-only root session MUST NOT
+cause omission of a known current model. After a root model switch, use the
+currently known model rather than a stale name from before the switch.
 You MUST NOT ask the user to repeat it or provide a more precise name to commit.
 Reuse confirmed attribution for later commits in the same session while the
 root model remains unchanged.
 
 Provider-native documentation and commit subagents MUST NOT replace or make the root-session attribution ambiguous.
-Tool names are not model names. If the implementation model is unknown, or a
-model switch or multi-model implementation leaves attribution unresolved, omit
+Tool names are not model names. Only if the current root-session model is unknown, omit
 `assisting_model` from the handoff and report the omitted `AI-Assisted-By` trailer;
-do not block the commit or attribute older work to the latest model automatically.
+do not block the commit. A known `GPT-5` MUST be recorded, not omitted.
 MUST NOT parse session logs or use private transcript formats.
 MUST NOT use documentation lookup, environment variables, or Git history to
-infer which model governed the work.
+infer a model name that is not available in the current context.
 
 `assisting_model` is Git attribution metadata only, at the available precision.
 It MUST NOT be used as a subagent spawn model or reasoning-effort override.
@@ -221,7 +223,7 @@ Pass the same exact archive context plus the tool and optional model as task inp
 change_id=<change_id, when available>
 archive_path=<archive_path, when available>
 tool_name=<executing agent tool>
-assisting_model=<primary implementation model>
+assisting_model=<current root-session model>
 ```
 
 - **Claude Code:** invoke the provider-native `git-commit-writer-agent`
@@ -235,7 +237,7 @@ assisting_model=<primary implementation model>
 Claude Code and Codex MUST NOT silently fall back to the portable skill. If the
 required subagent is unavailable, stop and report the missing provider
 configuration. The commit-only agent must preserve `assisting_model`; it MUST
-NOT replace the primary implementation model with its own model.
+NOT replace the current root-session model with its own model.
 
 For Claude Code and Codex, invoke the exact custom agent name only. Do not pass a spawn `model` or `reasoning_effort`; the provider-native agent configuration
 owns those runtime settings.

@@ -85,20 +85,23 @@ before delegating final staging and commit execution. It MUST NOT request or
 require `assisting_model` before archive or documentation handling.
 
 The coordinator SHALL preserve a user-supplied model name for this work verbatim.
-Otherwise, when the current root session performed the work and exposes a model
+Otherwise, when the current root session exposes a model
 name, it MUST use that name automatically and MUST NOT ask for greater precision
 or reconfirmation. It SHALL continue using the known current root-session
 identity for later commits in the same session while the root model remains
 unchanged. Provider-native documentation and commit subagents MUST NOT replace
 or make the root-session attribution ambiguous.
 
-Known family versions such as `GPT-5.6` or `GPT-6` SHALL be accepted without
-inventing a variant, version, or context size. If the implementation model is
-unknown or cross-session/model-switch attribution remains unresolved, omit the
+Known family versions such as `GPT-5`, `GPT-5.6`, or `GPT-6` SHALL be accepted without
+inventing a variant, version, or context size. Attribution records current
+collaboration, not original code authorship. Existing changes from another
+session MUST NOT cause omission of a known current model. After a root model
+switch, use the currently known model rather than stale attribution.
+Only if no current root-session model name is known, omit the
 model from delegation and report the omitted trailer without blocking commit.
 Tool names are not model names. Environment inference, documentation lookup,
 session-log parsing, Git history, or commit-only agent identity MUST NOT be used
-to guess the implementation model.
+to guess a model name unavailable in the current context.
 
 In Claude Code and Codex the coordinator SHALL invoke the provider-native
 `git-commit-writer-agent` by its exact agent name without supplying a spawn
@@ -111,7 +114,7 @@ the workflow MUST stop without falling back to the portable skill.
 
 #### Scenario: Codex or Antigravity environment
 - **WHEN** `openspec-commit` reaches the commit step in Codex or Antigravity
-- **THEN** Codex automatically uses the exact unchanged root-session model without asking when the current session performed the work
+- **THEN** Codex automatically records the available current root-session model without asking, including when only committing pre-existing work
 - **AND** Codex invokes `git-commit-writer-agent` by exact name without a spawn model or effort override
 - **AND** Antigravity invokes the portable `git-commit-writer` skill with the resolved root-session attribution
 
@@ -136,19 +139,19 @@ the workflow MUST stop without falling back to the portable skill.
 - **AND** it omits unknown model attribution and reports the omission without requesting user input
 
 #### Scenario: Generic family label is available
-- **WHEN** only a known family version such as `GPT-5.6` or `GPT-6` is available
+- **WHEN** only a known family version such as `GPT-5`, `GPT-5.6`, or `GPT-6` is available
 - **THEN** `openspec-commit` passes that name unchanged to the writer
 - **AND** it does not invent a variant or request a more precise name
 
 #### Scenario: Work came from another session
 - **WHEN** the current session is only finishing work implemented in another session
-- **THEN** `openspec-commit` does not attribute the work to the current session automatically
-- **AND** uses supplied implementation attribution or omits the unknown model and reports the omission
+- **THEN** `openspec-commit` records the available current root-session model as collaboration attribution
+- **AND** it does not require identifying the original implementation model
 
 #### Scenario: Model changed after implementation
-- **WHEN** the root session switched models during implementation and the attribution is ambiguous
-- **THEN** `openspec-commit` does not attribute the work to the latest model automatically
-- **AND** omits unresolved model attribution and reports the omission without blocking commit
+- **WHEN** the root session switched models and the current model name is available
+- **THEN** `openspec-commit` passes the currently known root-session model
+- **AND** it does not reuse a stale model name or omit the known current model
 
 #### Scenario: Required commit subagent is missing
 - **WHEN** Claude Code or Codex cannot invoke `git-commit-writer-agent`
