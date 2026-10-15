@@ -8,7 +8,7 @@ runtime 啟用步驟，不複製各 CLI 的完整 hook API。
 | Provider | OpenSpec branch fallback | Telegram completion | Telegram attention | 設定範圍 |
 |---|---|---|---|---|
 | [Claude Code](/docs/hooks/claude-hooks.md) | `PostToolUse` | `Stop` | `Notification` | user-level |
-| [Codex](/docs/hooks/codex-hooks.md) | `PostToolUse` | `Stop` | `PermissionRequest` | user-level；另需 trust + enable |
+| [Codex](/docs/hooks/codex-hooks.md) | `PostToolUse` | `Stop` | `PermissionRequest`；同步問題 `PreToolUse` 檢查；非同步問題 `PostToolUse` 通知 | user-level；另需 trust + enable |
 | [Antigravity](/docs/hooks/antigravity-hooks.md) | 無；使用 Agent guard | named `Stop` | `statusLine` observer | user-level |
 | [GitHub Copilot CLI](/docs/hooks/copilot-hooks.md) | `postToolUse` | `sessionEnd`（opt-in） | `userPromptSubmitted`（opt-in） | repository-local |
 

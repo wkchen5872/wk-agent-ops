@@ -8,11 +8,22 @@
 
 # ── Load config ────────────────────────────────────────────────────────────────
 # Save env vars that should take priority over config file values (e.g., in tests).
-_SAVED_NOTIFY_LEVEL="${NOTIFY_LEVEL:-}"
+_NOTIFY_ENV_KEYS=(NOTIFY_LEVEL NOTIFY_COMPLETION NOTIFY_ACTION_REQUIRED NOTIFY_FAILURE NOTIFY_CODEX_HUMAN_APPROVAL NOTIFY_CODEX_USER_INPUT)
+_NOTIFY_ENV_VALUES=()
+for _notify_key in "${_NOTIFY_ENV_KEYS[@]}"; do
+  _NOTIFY_ENV_VALUES+=("${!_notify_key:-}")
+done
+NOTIFY_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=../lib/config.sh
+source "${NOTIFY_SCRIPT_DIR}/../lib/config.sh" 2>/dev/null || true
 # shellcheck source=/dev/null
 source "${HOME}/.config/ai-notify/config" 2>/dev/null || true
 # Restore explicitly-set env vars (env var > config file, following Unix convention).
-[[ -n "${_SAVED_NOTIFY_LEVEL}" ]] && NOTIFY_LEVEL="${_SAVED_NOTIFY_LEVEL}"
+for ((_notify_i=0; _notify_i<${#_NOTIFY_ENV_KEYS[@]}; _notify_i++)); do
+  if [[ -n "${_NOTIFY_ENV_VALUES[_notify_i]}" ]]; then
+    printf -v "${_NOTIFY_ENV_KEYS[_notify_i]}" '%s' "${_NOTIFY_ENV_VALUES[_notify_i]}"
+  fi
+done
 
 # ── Read stdin ─────────────────────────────────────────────────────────────────
 STDIN_JSON=""
@@ -70,7 +81,7 @@ finish_hook() {
   fi
   if [[ "${TELEGRAM_DRY_RUN:-}" != "true" ]]; then
     case "${EVENT_TYPE}" in
-      codex-stop|codex-permission) printf '{}\n' ;;
+      codex-stop|codex-permission|codex-question|codex-async-question|codex-human-approval|codex-user-input) printf '{}\n' ;;
       antigravity-stop) printf '{"decision":"stop"}\n' ;;
     esac
   fi
@@ -120,6 +131,35 @@ fi
 TITLE_SUFFIX=""
 [[ -n "${SESSION_LABEL}" ]] && TITLE_SUFFIX=" (${SESSION_LABEL})"
 
+# This branch is independent of the legacy Action Required delivery filter.
+start_codex_inspection() {
+  [[ "${TELEGRAM_ENABLED:-}" == true && "${TELEGRAM_DRY_RUN:-}" != true ]] || return 0
+  if ! notify_category_enabled NOTIFY_CODEX_HUMAN_APPROVAL &&
+     ! notify_category_enabled NOTIFY_CODEX_USER_INPUT; then return 0; fi
+  local python="${HOME}/.config/ai-notify/runtime/codex-wait/bin/python3"
+  local checker="${NOTIFY_SCRIPT_DIR}/codex-wait.py" trigger
+  [[ -x "${python}" && -f "${checker}" ]] || return 0
+  command -v jq >/dev/null 2>&1 || return 0
+  trigger="$(printf '%s' "${STDIN_JSON}" | jq -c '{session_id,turn_id,cwd}' 2>/dev/null)" || return 0
+  printf '%s' "${trigger}" | "${python}" "${checker}" start >/dev/null 2>&1 || true
+}
+
+case "${EVENT_TYPE}" in
+  codex-permission) start_codex_inspection ;;
+  codex-question)
+    [[ "$(_json_str "${STDIN_JSON}" tool_name)" == request_user_input_async ]] || start_codex_inspection
+    finish_hook
+    ;;
+  codex-async-question)
+    [[ "${HOOK_EVENT_NAME}" == PostToolUse && "$(_json_str "${STDIN_JSON}" tool_name)" == request_user_input_async ]] || finish_hook
+    # Async questions are posted as messages and never raise a daemon wait flag.
+    ASYNC_ACCEPTED="$(_json_query "${STDIN_JSON}" '.tool_response | (if type == "string" then fromjson? else . end) | select(.accepted == true) | "true"')"
+    [[ "${ASYNC_ACCEPTED}" == true ]] || finish_hook
+    EVENT_TYPE=codex-user-input
+    HOOK_EVENT_NAME=AsyncUserInputRequested
+    ;;
+esac
+
 # ── Antigravity approval transition ───────────────────────────────────────────
 if [[ "${EVENT_TYPE}" == "antigravity-statusline" ]]; then
   AGY_CONFIRMATION_PENDING="$(_json_query "${STDIN_JSON}" 'if .tool_confirmation_pending == true then "true" else "false" end')"
@@ -153,6 +193,8 @@ EVENT_CATEGORY="unknown"
 case "${EVENT_TYPE}" in
   stop|sessionend|codex-stop) EVENT_CATEGORY="completion" ;;
   notification|userpromptsubmitted|codex-permission|antigravity-statusline) EVENT_CATEGORY="action_required" ;;
+  codex-human-approval) EVENT_CATEGORY="human_approval" ;;
+  codex-user-input) EVENT_CATEGORY="user_input" ;;
   antigravity-stop)
     if [[ "${AGY_TERMINATION_REASON}" == "model_stop" ]]; then
       EVENT_CATEGORY="completion"
@@ -162,11 +204,14 @@ case "${EVENT_TYPE}" in
     ;;
 esac
 
-if [[ "${NOTIFY_LEVEL}" == "attention_required" &&
-      "${EVENT_CATEGORY}" != "action_required" &&
-      "${EVENT_CATEGORY}" != "failure" ]]; then
-  finish_hook
-fi
+case "${EVENT_CATEGORY}" in
+  completion) notify_category_enabled NOTIFY_COMPLETION || finish_hook ;;
+  action_required) notify_category_enabled NOTIFY_ACTION_REQUIRED || finish_hook ;;
+  failure) notify_category_enabled NOTIFY_FAILURE || finish_hook ;;
+  human_approval) notify_category_enabled NOTIFY_CODEX_HUMAN_APPROVAL || finish_hook ;;
+  user_input) notify_category_enabled NOTIFY_CODEX_USER_INPUT || finish_hook ;;
+  *) [[ "${NOTIFY_LEVEL}" == attention_required ]] && finish_hook ;;
+esac
 
 # ── Guard: skip if disabled or credentials missing ─────────────────────────────
 # State transitions and native event classification happen before this guard.
@@ -218,12 +263,29 @@ Execution ended: ${STOP_REASON} ${EVENT_TAG}"
     fi
     ;;
 
+  codex-human-approval|codex-user-input)
+    if [[ "${EVENT_TYPE}" == codex-human-approval ]]; then
+      WAIT_TITLE='🔴 **等待你授權**'
+      WAIT_DESCRIPTION='Codex 正在等待人工授權。'
+    else
+      WAIT_TITLE='🟡 **Waiting for Your Response**'
+      WAIT_DESCRIPTION='Codex has a question awaiting your response.'
+    fi
+    MESSAGE="${WAIT_TITLE}${TITLE_SUFFIX}
+
+🤖 ${TOOL_NAME}
+📂 ${PROJECT_NAME}
+⏰ ${TIMESTAMP}
+
+${WAIT_DESCRIPTION} ${EVENT_TAG}"
+    ;;
+
   codex-permission)
     REQUEST_TOOL=""
     [[ -n "${STDIN_JSON}" ]] && REQUEST_TOOL="$(_json_str "${STDIN_JSON}" "tool_name")"
     [[ -z "${REQUEST_TOOL}" ]] && REQUEST_TOOL="a tool"
 
-    MESSAGE="🟠 **Action Required**${TITLE_SUFFIX}
+    MESSAGE="🟡 **Action Required**${TITLE_SUFFIX}
 
 🤖 ${TOOL_NAME}
 📂 ${PROJECT_NAME}
@@ -233,7 +295,7 @@ Approval requested for ${REQUEST_TOOL} ${EVENT_TAG}"
     ;;
 
   antigravity-statusline)
-    MESSAGE="🟠 **Action Required**${TITLE_SUFFIX}
+    MESSAGE="🟡 **Action Required**${TITLE_SUFFIX}
 
 🤖 ${TOOL_NAME}
 📂 ${PROJECT_NAME}
@@ -248,7 +310,7 @@ Tool confirmation is waiting ${EVENT_TAG}"
 
     [[ -z "${NOTIFICATION_MSG}" ]] && NOTIFICATION_MSG="Waiting for user interaction..."
 
-    MESSAGE="🟠 **Action Required**${TITLE_SUFFIX}
+    MESSAGE="🟡 **Action Required**${TITLE_SUFFIX}
 
 🤖 ${TOOL_NAME}
 📂 ${PROJECT_NAME}

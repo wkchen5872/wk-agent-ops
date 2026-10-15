@@ -9,7 +9,7 @@ hook 整合，讓 AI 任務完成、需要使用者操作或異常停止時自�
 
 ### Requirement: 共用基礎庫 — config.sh
 `scripts/notify/lib/config.sh` SHALL provide shell functions for reading and
-writing `~/.config/ai-notify/config`. The canonical `NOTIFY_LEVEL` values SHALL
+writing `~/.config/ai-notify/config`. Five explicit boolean category keys SHALL override legacy defaults; absent new Codex categories SHALL default false. Category saves MUST preserve unrelated keys and credentials atomically with mode 600. The canonical `NOTIFY_LEVEL` values SHALL
 be `all` and `attention_required`; runtime consumers MUST continue treating the
 legacy `notify_only` value as equivalent to `attention_required`.
 
@@ -88,7 +88,7 @@ legacy environment variables.
 
 ### Requirement: install.sh 互動式安裝精靈
 `scripts/notify/telegram/install.sh` SHALL guide the user through credential
-setup, canonical notification-level selection, hook deployment, supported-host
+setup, a grouped Traditional Chinese category menu with help, cancellation and a save summary; legacy notification-level compatibility, hook deployment, supported-host
 registration, safe Antigravity approval observation, optional Copilot
 registration, and a test notification. It SHALL NOT offer Gemini CLI
 registration or a separate Antigravity approval-notification preference.
@@ -125,12 +125,16 @@ registration or a separate Antigravity approval-notification preference.
 - **WHEN** the user declines Copilot registration
 - **THEN** `.github/hooks/hooks.json` is not created or changed
 
+#### Scenario: Category edit cancelled
+- **WHEN** category editing is cancelled or input ends before saving
+- **THEN** no config or deployment changes are made by that edit
+
 ---
 
 ### Requirement: hook.sh — 通知腳本
 The deployed Telegram hook SHALL normalize recognized provider events into
-`completion`, `action_required`, or `failure` before applying
-`NOTIFY_LEVEL`. `all` SHALL send all three categories.
+`completion`, `action_required`, or `failure` before applying explicit category switches, falling back to
+`NOTIFY_LEVEL` when category keys are absent. `all` SHALL send all three categories.
 `attention_required` and legacy `notify_only` SHALL send
 `action_required` and `failure` while suppressing only successful completion.
 Native provider control responses SHALL be returned even when delivery is
@@ -155,6 +159,10 @@ suppressed or unavailable.
 #### Scenario: legacy notify_only uses the new policy
 - **WHEN** `NOTIFY_LEVEL=notify_only` receives the same fixtures
 - **THEN** its observable filtering matches `attention_required`
+
+#### Scenario: Explicit shared switch controls Codex permissions
+- **WHEN** NOTIFY_ACTION_REQUIRED=false and a PermissionRequest arrives
+- **THEN** the legacy permission message is suppressed without disabling opt-in inspection
 
 ### Requirement: 工具偵測以 CLI 參數為主、環境變數為輔
 The hook SHALL use its second argument as the canonical host name. When absent,
@@ -255,7 +263,7 @@ used for every supported host.
 ### Requirement: Codex native lifecycle notifications
 The notification installer SHALL register idempotent Codex `Stop` and
 `PermissionRequest` command hooks in the user Codex hook configuration when
-Codex is detected. The hooks SHALL preserve unrelated configuration and SHALL
+Codex is detected. It SHALL additionally register a neutral PreToolUse handler for synchronous structured-question inspection and a PostToolUse handler for successfully posted async questions, preserving unrelated handlers. The hooks SHALL preserve unrelated configuration and SHALL
 not allow, deny, continue, or stop Codex on the user's behalf.
 
 #### Scenario: Codex hooks are registered once
@@ -269,6 +277,10 @@ not allow, deny, continue, or stop Codex on the user's behalf.
 #### Scenario: Codex approval keeps the native prompt
 - **WHEN** the notification hook receives a Codex `PermissionRequest` payload
 - **THEN** it emits an action-required notification and returns no allow or deny decision so the normal Codex approval prompt continues
+
+#### Scenario: Question registration lifecycle
+- **WHEN** registration runs twice and is then removed
+- **THEN** each owned question handler exists once and is removed without changing unrelated PreToolUse or PostToolUse hooks
 
 ### Requirement: Antigravity completion notifications
 The notification installer SHALL register an idempotent named Antigravity

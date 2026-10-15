@@ -27,7 +27,7 @@ run_test() {
   local expected_pattern="$2"
   shift 2
   local output
-  output="$(TELEGRAM_DRY_RUN=true "$@" 2>/dev/null)"
+  output="$(env HOME="${TEST_TMP_ROOT}/default-home" TELEGRAM_DRY_RUN=true "$@" 2>/dev/null)"
   if echo "${output}" | grep -q "${expected_pattern}"; then
     echo "  ✓ PASS: ${name}"
     PASS_COUNT=$((PASS_COUNT + 1))
@@ -46,7 +46,7 @@ run_test_absent() {
   local absent_pattern="$2"
   shift 2
   local output
-  output="$(TELEGRAM_DRY_RUN=true "$@" 2>/dev/null)"
+  output="$(env HOME="${TEST_TMP_ROOT}/default-home" TELEGRAM_DRY_RUN=true "$@" 2>/dev/null)"
   if ! echo "${output}" | grep -q "${absent_pattern}"; then
     echo "  ✓ PASS: ${name}"
     PASS_COUNT=$((PASS_COUNT + 1))
@@ -64,7 +64,7 @@ run_test_empty() {
   local name="$1"
   shift 1
   local output
-  output="$(TELEGRAM_DRY_RUN=true "$@" 2>/dev/null)"
+  output="$(env HOME="${TEST_TMP_ROOT}/default-home" TELEGRAM_DRY_RUN=true "$@" 2>/dev/null)"
   if [[ -z "${output}" ]]; then
     echo "  ✓ PASS: ${name}"
     PASS_COUNT=$((PASS_COUNT + 1))
@@ -82,7 +82,7 @@ run_test_exact() {
   local expected="$2"
   shift 2
   local output
-  output="$("$@" 2>/dev/null)"
+  output="$(env HOME="${TEST_TMP_ROOT}/default-home" "$@" 2>/dev/null)"
   if [[ "${output}" == "${expected}" ]]; then
     echo "  ✓ PASS: ${name}"
     PASS_COUNT=$((PASS_COUNT + 1))

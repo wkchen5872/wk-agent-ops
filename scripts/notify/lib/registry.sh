@@ -153,7 +153,7 @@ _unregister_hooks_in_file() {
     '
 }
 
-# Public: register Codex Stop and PermissionRequest hooks in ~/.codex/hooks.json.
+# Public: register Codex lifecycle and structured-question hooks.
 register_hook_codex() {
   local hook_path="$1"
   _require_jq || return 1
@@ -161,10 +161,14 @@ register_hook_codex() {
 
   local stop_cmd="bash \"${hook_path}\" codex-stop \"Codex\""
   local permission_cmd="bash \"${hook_path}\" codex-permission \"Codex\""
+  local question_cmd="bash \"${hook_path}\" codex-question \"Codex\""
+  local async_question_cmd="bash \"${hook_path}\" codex-async-question \"Codex\""
 
   _jq_write "${CODEX_HOOKS}" \
     --arg stop_cmd "${stop_cmd}" \
     --arg permission_cmd "${permission_cmd}" \
+    --arg question_cmd "${question_cmd}" \
+    --arg async_question_cmd "${async_question_cmd}" \
     '
     def has_command(arr; cmd):
       any((arr // [])[]?;
@@ -176,6 +180,16 @@ register_hook_codex() {
     .hooks.Stop = (
       if has_command(.hooks.Stop; $stop_cmd) then .hooks.Stop
       else ((.hooks.Stop // []) + [{"hooks":[{"type":"command","command":$stop_cmd,"timeout":5}]}])
+      end
+    ) |
+    .hooks.PreToolUse = (
+      if has_command(.hooks.PreToolUse; $question_cmd) then .hooks.PreToolUse
+      else ((.hooks.PreToolUse // []) + [{"matcher":"^(request_user_input|request_user_input_async)$","hooks":[{"type":"command","command":$question_cmd,"timeout":5}]}])
+      end
+    ) |
+    .hooks.PostToolUse = (
+      if has_command(.hooks.PostToolUse; $async_question_cmd) then .hooks.PostToolUse
+      else ((.hooks.PostToolUse // []) + [{"matcher":"^request_user_input_async$","hooks":[{"type":"command","command":$async_question_cmd,"timeout":5}]}])
       end
     ) |
     .hooks.PermissionRequest = (
@@ -195,10 +209,14 @@ unregister_hook_codex() {
 
   local stop_prefix="bash \"${hook_path}\" codex-stop"
   local permission_prefix="bash \"${hook_path}\" codex-permission"
+  local question_prefix="bash \"${hook_path}\" codex-question"
+  local async_question_prefix="bash \"${hook_path}\" codex-async-question"
 
   _jq_write "${CODEX_HOOKS}" \
     --arg stop_prefix "${stop_prefix}" \
     --arg permission_prefix "${permission_prefix}" \
+    --arg question_prefix "${question_prefix}" \
+    --arg async_question_prefix "${async_question_prefix}" \
     '
     def remove_owned(arr; prefix):
       (arr // [])
@@ -215,8 +233,12 @@ unregister_hook_codex() {
 
     .hooks.Stop = remove_owned(.hooks.Stop; $stop_prefix) |
     .hooks.PermissionRequest = remove_owned(.hooks.PermissionRequest; $permission_prefix) |
+    .hooks.PreToolUse = remove_owned(.hooks.PreToolUse; $question_prefix) |
+    .hooks.PostToolUse = remove_owned(.hooks.PostToolUse; $async_question_prefix) |
     if (.hooks.Stop | length) == 0 then del(.hooks.Stop) else . end |
-    if (.hooks.PermissionRequest | length) == 0 then del(.hooks.PermissionRequest) else . end
+    if (.hooks.PermissionRequest | length) == 0 then del(.hooks.PermissionRequest) else . end |
+    if (.hooks.PreToolUse | length) == 0 then del(.hooks.PreToolUse) else . end |
+    if (.hooks.PostToolUse | length) == 0 then del(.hooks.PostToolUse) else . end
     '
   echo "  ✓ Unregistered Codex hooks from ${CODEX_HOOKS}"
 }
@@ -361,6 +383,12 @@ show_hook_status() {
   else
     echo "Codex: not registered"
   fi
+
+  _has_command_prefix "${CODEX_HOOKS}" "bash \"${hook_path}\" codex-question" &&
+    echo "Codex structured questions: registered" || echo "Codex structured questions: not registered"
+
+  _has_command_prefix "${CODEX_HOOKS}" "bash \"${hook_path}\" codex-async-question" &&
+    echo "Codex async questions: registered" || echo "Codex async questions: not registered"
 
   _has_command_prefix "${ANTIGRAVITY_HOOKS}" "${agy_stop}" &&
     echo "Antigravity completion: registered" || echo "Antigravity completion: not registered"

@@ -3,7 +3,7 @@ type: Architecture
 title: AI CLI Notification Hooks Architecture
 description: Native host hook registration and Telegram notification data flow.
 tags: [notifications, hooks, codex, antigravity, telegram]
-timestamp: 2026-07-31T17:43:42+08:00
+timestamp: 2026-10-15T00:00:00+08:00
 ---
 
 # Notify Hooks — Architecture
@@ -18,7 +18,7 @@ The notification system allows Claude Code, Codex, Antigravity CLI, and Copilot
 CLI to send Telegram notifications when an agent turn finishes, requires user
 attention, or stops abnormally.
 
-**Design principle:** The repository contains only scripts. All machine state (config files, deployed hooks, settings.json entries) is created exclusively by running `install.sh` — never at repository checkout time.
+**Design principle:** The repository contains only scripts. All machine state (config files, deployed hooks, settings.json entries) is created exclusively by running the install/update entrypoints — never at repository checkout time.
 
 ---
 
@@ -30,6 +30,11 @@ scripts/
     lib/
       config.sh        # Shared: read/write ~/.config/ai-notify/config
       registry.sh      # Shared: register/unregister hooks in AI CLI settings
+      settings.sh      # Grouped, draft-only category editor
+      runtime.sh       # Explicit helper/venv deployment and support status
+    codex/
+      wait.py          # Hook-triggered daemon metadata checker
+      requirements.txt # Optional isolated dependency
     telegram/
       hook.sh          # Notification hook (called by AI CLI at runtime)
       install.sh       # Interactive install wizard
@@ -51,6 +56,10 @@ scripts/
   config               # Shell-sourceable key=value (chmod 600)
   hooks/
     telegram-notify.sh # Deployed copy of scripts/notify/telegram/hook.sh
+    codex-wait.py      # On-demand checker
+  lib/config.sh       # Shared category logic for deployed hooks
+  runtime/codex-wait/ # Optional Python venv, only for enabled new categories
+  state/codex-*       # Scoped lock, sanitized trigger mailbox and diagnostics
 
 # Copilot CLI hooks (opt-in, created by install.sh if user accepts):
 .github/
@@ -58,7 +67,7 @@ scripts/
     hooks.json         # Copilot CLI hook config (version:1)
 
 # Native user-level host configuration:
-~/.codex/hooks.json                         # Codex Stop + PermissionRequest
+~/.codex/hooks.json                         # Codex Stop + PermissionRequest + question Pre/PostToolUse
 ~/.gemini/config/hooks.json                 # Antigravity named Stop hook
 ~/.gemini/antigravity-cli/settings.json     # Approval observer when statusLine is free
 ```
@@ -76,7 +85,12 @@ notification-owned legacy Gemini commands but never register new ones.
 TELEGRAM_ENABLED=true
 TELEGRAM_BOT_TOKEN="7123456789:ABCdef..."
 TELEGRAM_CHAT_ID="987654321"
-NOTIFY_LEVEL=all           # all | attention_required
+NOTIFY_LEVEL=all           # legacy fallback: all | attention_required
+NOTIFY_COMPLETION=true
+NOTIFY_ACTION_REQUIRED=true # includes Codex PermissionRequest
+NOTIFY_FAILURE=true
+NOTIFY_CODEX_HUMAN_APPROVAL=false
+NOTIFY_CODEX_USER_INPUT=false
 # LINE_ENABLED=false       # Future extension
 ```
 
@@ -102,9 +116,9 @@ User runs: bash scripts/notify/telegram/install.sh
 Step 1  Guide user to create Telegram Bot via @BotFather
 Step 2  Read and validate Bot Token (Telegram API call)
 Step 3  Auto-detect Chat ID (getUpdates API call)
-Step 4  Choose NOTIFY_LEVEL
+Step 4  Edit grouped category switches and confirm summary
 Step 5  Write ~/.config/ai-notify/config (chmod 600)
-Step 6  Deploy hook: copy hook.sh → ~/.config/ai-notify/hooks/telegram-notify.sh
+Step 6  Deploy hook + common config library + checker; provision isolated dependency only if selected
 Step 7  Register Claude plus detected Codex and Antigravity hooks; attempt approval observation safely
 Step 8  Optionally register Copilot CLI hooks in .github/hooks/hooks.json [y/N]
 Step 9  Send test notification to confirm end-to-end
@@ -131,8 +145,10 @@ bash ~/.config/ai-notify/hooks/telegram-notify.sh <event-type> [tool-name]
         ├─ PROJECT_DIR from payload cwd/workspace, CLAUDE_PROJECT_DIR, or PWD
         ├─ SESSION_LABEL from session/conversation payload or Copilot env
         ├─ update Antigravity approval state and parse terminal reason
-        ├─ classify completion / action_required / failure
-        ├─ apply the semantic NOTIFY_LEVEL gate
+        ├─ for Codex permission/sync-question hooks: independently start opt-in inspection
+        ├─ for Codex async-question results: validate accepted=true without daemon inspection
+        ├─ classify completion / action_required / failure / human_approval / user_input
+        ├─ apply explicit category switch, using NOTIFY_LEVEL only as legacy fallback
         ├─ check TELEGRAM_ENABLED and credentials (skipped in dry-run)
         ├─ return the provider-neutral control response
         ├─ build message (title includes session label when available)
@@ -175,7 +191,9 @@ AI CLI 工具透過 `stdin` 將 JSON payload 傳遞給 Hook 腳本。
 | `normalize_notify_level VALUE` | Return `all` or `attention_required`, including the legacy alias |
 | `read_config` | Source the config file into current shell |
 | `write_config KEY=VAL ...` | Create/overwrite config with given pairs (chmod 600) |
-| `update_config_key KEY VAL` | Update a single key; leave others intact |
+| `update_config_key KEY VAL` | Atomically update one key; preserve other lines |
+| `update_config_keys KEY VAL ...` | Atomically apply a whole draft, preserving other keys |
+| `notify_category_value KEY` | Resolve an explicit category or its legacy default |
 | `remove_config_keys_by_prefix PREFIX` | Remove all keys matching a prefix |
 
 ### `scripts/notify/lib/registry.sh`
@@ -186,7 +204,7 @@ AI CLI 工具透過 `stdin` 將 JSON payload 傳遞給 Hook 腳本。
 | `unregister_hook <hook_path>` | Remove owned global hook entries without affecting other hooks |
 | `register_hook_copilot <hook_path>` | Write `sessionEnd` + `userPromptSubmitted` entries to `.github/hooks/hooks.json` (idempotent) |
 | `unregister_hook_copilot <hook_path>` | Remove Copilot hook entries from `.github/hooks/hooks.json` |
-| `register_hook_codex <hook_path>` | Add neutral `Stop` + `PermissionRequest` hooks to `~/.codex/hooks.json` |
+| `register_hook_codex <hook_path>` | Add neutral `Stop`, `PermissionRequest`, question `PreToolUse` / `PostToolUse` hooks |
 | `register_hook_antigravity <hook_path>` | Add the named global Antigravity `Stop` hook |
 | `register_hook_antigravity_statusline <hook_path>` | Add approval-state observation without overwriting another command |
 | `show_hook_status <hook_path>` | Report provider registration without reading credentials |
@@ -209,7 +227,7 @@ Non-managed Codex command hooks have three independent runtime states:
 2. trusted in `/hooks`;
 3. enabled with an `[x]` checkbox in `/hooks`.
 
-Both `Stop` and `PermissionRequest` must be trusted and enabled. `Trust:
+All four owned definitions must be trusted and enabled. `Trust:
 Trusted` does not override an unchecked `[ ] Hook 1`; that hook remains
 disabled. `show_hook_status` reports only whether the owned commands exist in
 configuration because Codex does not expose trust and enablement through the
@@ -217,6 +235,22 @@ registry file.
 
 The approval message contains only the canonical tool name. Raw commands,
 arguments, prompts, descriptions, and transcript paths are not forwarded.
+
+---
+
+## Codex On-demand Inspection
+
+PermissionRequest delivery and daemon inspection are independent. The old event follows NOTIFY_ACTION_REQUIRED. The two new categories are opt-in and never use an extra PermissionRequest-specific switch. PreToolUse retains the `^(request_user_input|request_user_input_async)$` matcher for existing installations; the async tool returns neutrally without starting inspection, while synchronous questions start the checker.
+
+Async questions are emitted as messages and do not raise waitingOnUserInput. A separate PostToolUse handler matches `^request_user_input_async$`, validates the native event/tool name and accepted=true result (JSON object or JSON string), then reuses the user-input category and sanitized renderer. Missing, malformed, rejected and disabled results remain silent. This means a question was posted, not that generation is blocked. No question text or raw tool output is persisted or forwarded, and no daemon is needed for this path.
+
+The hook sends only session_id, turn_id and cwd to `codex-wait.py start`, then returns neutral JSON. An inherited advisory lock coalesces workers by CODEX_HOME/session. A sanitized trigger mailbox hands new-turn hooks to an existing worker without losing them during shutdown. Atomic state holds only turn/PID, wait flags and generic diagnostics. No raw tool input or transcript is retained.
+
+The checker uses websocket-client over a socketpair connected to `codex app-server proxy`; the CLI resolves its own control socket. It never starts a daemon and never calls thread/resume. RPCs are limited to initialize, thread/read with includeTurns=false, and thread/turns/list with itemsView=notLoaded. Waiting flags are sampled at one-second intervals and validated against the triggering turn before notification. No flag means no human-wait message, even during automatic review.
+
+Continuous waiting episodes are independently deduplicated for waitingOnApproval and waitingOnUserInput. Explicit absence re-arms notification; reconnect retains the last notified flags. A worker exits at turn completion/change without a new trigger, thread unload, disabled settings, or bounded transport recovery failure. There is no LaunchAgent. Notification delivery is attempted once per episode; a network timeout does not cause repeated attempts for that wait.
+
+Status probes report metadata connectivity separately from live hook/delivery coverage. Approval and synchronous-input inspection require the existing local daemon; async question-posted notifications use native hooks. General prose questions are not inferred. See [setup and limitations](/docs/notify/telegram.md).
 
 ---
 
@@ -274,7 +308,7 @@ Copilot CLI uses a repository-local hook file rather than global host settings.
 | Copilot CLI event | Mapped to | Message type |
 |-------------------|-----------|-------------|
 | `sessionEnd` | `stop` (task complete) | 🟢 Task Complete |
-| `userPromptSubmitted` | `notification` (action required) | 🟠 Action Required |
+| `userPromptSubmitted` | `notification` (action required) | 🟡 Action Required |
 
 ### Tool name in hook.sh
 
@@ -329,7 +363,7 @@ bash scripts/notify/telegram/uninstall.sh
 
 Uninstall removes owned Claude, Codex, and Antigravity hook entries, any
 notification-owned legacy Gemini commands, Antigravity notification state,
-`TELEGRAM_*` keys, and the deployed hook. It removes repository-local Copilot
+`TELEGRAM_*` keys, and the deployed hook. It cooperatively stops owned Codex checkers, disables the new categories and removes their isolated runtime/state. It removes repository-local Copilot
 entries only after separate confirmation. Unrelated hooks and settings remain
 unchanged.
 
@@ -341,3 +375,6 @@ the config value back to its legacy spelling, `notify_only`.
 [1] [OpenAI Codex Hooks](https://developers.openai.com/codex/hooks)
 [2] [Google Antigravity Hooks](https://antigravity.google/docs/hooks)
 [3] [Google Antigravity Status Line](https://antigravity.google/docs/cli/statusline)
+
+[4] [OpenAI Codex App Server](https://learn.chatgpt.com/docs/app-server)
+[5] [websocket-client custom sockets](https://websocket-client.readthedocs.io/en/latest/examples.html#connecting-with-custom-sockets)

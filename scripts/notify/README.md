@@ -42,7 +42,7 @@ source ~/.config/ai-notify/config 2>/dev/null || true
 [[ "${LINE_ENABLED}" != "true" ]] && exit 0
 
 # 3. Read event type from $1 (with jq fallback for stdin)
-# 4. Apply NOTIFY_LEVEL logic
+# 4. Apply the explicit category switch, using NOTIFY_LEVEL as legacy fallback
 # 5. Call your provider API silently (curl --silent --max-time 4 ... || true)
 ```
 
@@ -68,12 +68,16 @@ Examples:
 - `LINE_ENABLED=false`
 - `LINE_NOTIFY_TOKEN="..."`
 
-`NOTIFY_LEVEL` is global and shared across all providers:
+`NOTIFY_LEVEL` supplies legacy defaults across all providers when explicit category keys are absent:
 - `all` — send completion, action-required, and failure events
 - `attention_required` — send action-required and failure events; suppress successful completion
 
 Existing `notify_only` configs remain a read-time alias for
 `attention_required`. Setup and update persist only canonical values.
+
+Five boolean category keys are supported: `NOTIFY_COMPLETION`, `NOTIFY_ACTION_REQUIRED` (including Codex PermissionRequest), `NOTIFY_FAILURE`, `NOTIFY_CODEX_HUMAN_APPROVAL`, and `NOTIFY_CODEX_USER_INPUT`. The last two default false and bypass the legacy action-required gate. No extra PermissionRequest-specific key exists.
+
+Use `bash scripts/notify/telegram/update.sh types` for grouped Traditional Chinese settings, and `status` for support/connection diagnostics. Codex inspection is hook-triggered and turn-scoped, with no LaunchAgent. It never launches/resumes Codex or reads full transcripts. Approval and synchronous-input inspection require the local daemon. Async questions notify from a successful `request_user_input_async` PostToolUse result without daemon access; plain-text questions are unsupported.
 
 ### 4. Use shared libraries
 
@@ -106,7 +110,7 @@ Gemini entries are removed when found; no new Gemini hooks are registered.
 Copilot remains repository-local and opt-in.
 
 Codex registration only writes `~/.codex/hooks.json`. Users must also open
-`/hooks`, trust both owned definitions, and enable both checkboxes before the
+`/hooks`, trust all four owned definitions, and enable their checkboxes before the
 commands run. Registry status cannot verify those Codex-managed runtime states.
 
 Host event mappings belong in the existing deployed hook and registry. Do not
@@ -121,6 +125,10 @@ create a second destination directory merely to support another CLI.
   config                      # Shell-sourceable key=value (chmod 600)
   hooks/
     telegram-notify.sh        # Deployed from scripts/notify/telegram/hook.sh
+    codex-wait.py             # Optional on-demand daemon inspector
+  lib/config.sh              # Shared category logic
+  runtime/codex-wait/         # Isolated dependency when new categories are enabled
+  state/codex-*              # Owned locks, sanitized requests and diagnostics
     <provider-name>.sh        # Your provider's deployed hook
 ```
 
@@ -136,4 +144,11 @@ echo '{"hook_event_name":"Stop"}' \
 # Test Notification event
 echo '{"hook_event_name":"Notification","message":"Please approve this action"}' \
   | CLAUDE_PROJECT_DIR=$(pwd) bash ~/.config/ai-notify/hooks/<provider-name>.sh notification
+```
+
+Run both suites before delivery:
+
+```bash
+bash scripts/notify/telegram/test.sh
+python3 -m unittest discover -s scripts/notify/tests -v
 ```

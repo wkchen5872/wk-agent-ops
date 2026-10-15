@@ -11,6 +11,10 @@ LIB_DIR="${SCRIPT_DIR}/../lib"
 source "${LIB_DIR}/config.sh"
 # shellcheck source=../notify/lib/registry.sh
 source "${LIB_DIR}/registry.sh"
+# shellcheck source=../lib/settings.sh
+source "${LIB_DIR}/settings.sh"
+# shellcheck source=../lib/runtime.sh
+source "${LIB_DIR}/runtime.sh"
 
 HOOK_DEPLOY_DIR="${HOME}/.config/ai-notify/hooks"
 DEPLOYED_HOOK="${HOOK_DEPLOY_DIR}/telegram-notify.sh"
@@ -80,7 +84,7 @@ echo "This wizard will:"
 echo "  1. Guide you through creating a Telegram Bot"
 echo "  2. Validate your Bot Token"
 echo "  3. Auto-detect your Chat ID"
-echo "  4. Set your notification level"
+echo "  4. 選擇共用與 Codex 專用通知類型，確認摘要後儲存"
 echo "  5. Write the notification config"
 echo "  6. Deploy the hook to ~/.config/ai-notify/"
 echo "  7. Register supported hooks, including Antigravity approval when available"
@@ -148,46 +152,29 @@ else
     echo "✓ Found: ${NEW_CHAT_ID}"
   else
     echo "✗ Could not auto-detect."
-    echo "  Manual fallback: visit https://api.telegram.org/bot${NEW_TOKEN}/getUpdates"
+    echo "  請確認已傳訊給 Bot，或手動輸入 Chat ID。"
     prompt NEW_CHAT_ID "Enter your Chat ID manually"
   fi
 fi
 
 # ── Step 4: Notify Level ───────────────────────────────────────────────────────
-print_step 4 "Choose Notification Level"
-echo ""
-echo "  all                — completion + action required + failure"
-echo "  attention_required — action required + failure; suppress successful completion"
-echo ""
-
-CURRENT_LEVEL="${NOTIFY_LEVEL:-all}"
-NEW_LEVEL=""
-while true; do
-  prompt NEW_LEVEL "Notification level (all / attention_required)" "${CURRENT_LEVEL}"
-  if [[ "${NEW_LEVEL}" == "all" || "${NEW_LEVEL}" == "attention_required" ]]; then
-    break
-  fi
-  echo "  Invalid choice. Please enter 'all' or 'attention_required'."
-  NEW_LEVEL=""
-done
+print_step 4 "選擇通知類型（共用＋Codex 專用）"
+echo '亦可選用舊版預設 all / attention_required；Codex 新項目仍需自行開啟。'
+if ! edit_notify_types; then exit 0; fi
+NEW_LEVEL="${NOTIFY_DRAFT_LEVEL}"
 
 # ── Step 5: Write config ───────────────────────────────────────────────────────
 print_step 5 "Write Config"
 
-write_config \
-  "TELEGRAM_ENABLED=true" \
-  "TELEGRAM_BOT_TOKEN=\"${NEW_TOKEN}\"" \
-  "TELEGRAM_CHAT_ID=\"${NEW_CHAT_ID}\"" \
-  "NOTIFY_LEVEL=${NEW_LEVEL}"
+save_notify_draft TELEGRAM_ENABLED true TELEGRAM_BOT_TOKEN "${NEW_TOKEN}" TELEGRAM_CHAT_ID "${NEW_CHAT_ID}"
 
 echo "  ✓ Config written to ${AI_NOTIFY_CONFIG} (chmod 600)"
 
 # ── Step 6: Deploy hook ────────────────────────────────────────────────────────
 print_step 6 "Deploy Hook Script"
 
-mkdir -p "${HOOK_DEPLOY_DIR}"
-cp "${SCRIPT_DIR}/hook.sh" "${DEPLOYED_HOOK}"
-chmod +x "${DEPLOYED_HOOK}"
+deploy_notify_files
+ensure_codex_runtime || true
 echo "  ✓ Hook deployed to ${DEPLOYED_HOOK}"
 
 # ── Step 7: Register in AI CLI settings ───────────────────────────────────────

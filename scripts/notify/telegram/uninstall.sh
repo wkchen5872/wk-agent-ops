@@ -11,6 +11,8 @@ LIB_DIR="${SCRIPT_DIR}/../lib"
 source "${LIB_DIR}/config.sh"
 # shellcheck source=../notify/lib/registry.sh
 source "${LIB_DIR}/registry.sh"
+# shellcheck source=../lib/runtime.sh
+source "${LIB_DIR}/runtime.sh"
 
 DEPLOYED_HOOK="${HOME}/.config/ai-notify/hooks/telegram-notify.sh"
 
@@ -23,6 +25,9 @@ echo "  • Remove owned Codex and Antigravity hook entries"
 echo "  • Remove notification-owned legacy Gemini hook entries"
 echo "  • Remove TELEGRAM_* keys from ~/.config/ai-notify/config"
 echo "  • Delete ${DEPLOYED_HOOK}"
+echo "  • 關閉 Codex 新通知，合作式停止自有按需檢查器"
+echo "  • 移除 ~/.config/ai-notify/hooks/codex-wait.py 與其 requirements 檔"
+echo "  • 移除 ~/.config/ai-notify/runtime/codex-wait/ 與自有 codex 狀態檔"
 echo ""
 read -rp "Continue? [y/N]: " confirm
 [[ "${confirm}" =~ ^[Yy]$ ]] || { echo "Aborted."; exit 0; }
@@ -44,6 +49,7 @@ fi
 # 3. Remove owned Antigravity approval state
 clear_antigravity_notify_state
 echo "✓ Removed Antigravity notification state"
+remove_codex_notify_runtime
 
 # 4. Remove TELEGRAM_* config keys
 remove_config_keys_by_prefix "TELEGRAM_"

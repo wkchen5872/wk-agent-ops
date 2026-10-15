@@ -231,13 +231,19 @@ bash scripts/notify/telegram/install.sh
 ### 管理設定
 
 ```bash
-bash scripts/notify/telegram/update.sh       # 更新 token / chat_id / level
-bash scripts/notify/telegram/update.sh status # 檢查各 CLI 是否已註冊
+bash scripts/notify/telegram/update.sh       # 分組設定選單
+bash scripts/notify/telegram/update.sh types # 共用通知＋Codex 專用通知開關
+bash scripts/notify/telegram/update.sh status # 註冊、依賴與 daemon 連線狀態
 bash scripts/notify/telegram/uninstall.sh    # 移除 hook 與 config
 ```
 
-Codex 顯示 `registered` 只代表設定已寫入；還需要在 `/hooks` 將 `Stop` 與
-`PermissionRequest` 兩個 hook 設為 `Trusted` 並勾選 `[x]` 啟用。
+既有 Codex `PermissionRequest` 跟隨共用操作提醒開關；新增「等待你授權／回答」
+預設關閉，啟用後由 hook 按需查看既有 daemon，不安裝 LaunchAgent。授權與同步
+問題需該 daemon 的 session；非同步題目成功送出即提醒，一般文字問句不偵測。
+
+Codex 顯示 `registered` 只代表設定已寫入；還需要在 `/hooks` 將 `Stop`、
+`PermissionRequest`、同步問題的 `PreToolUse` 與非同步問題的 `PostToolUse` owned hooks 設為 `Trusted`
+並勾選 `[x]` 啟用。daemon 可連線不代表人工等待端到端流程已實測。
 
 詳細說明：[Provider hooks](docs/hooks/index.md) · [Telegram setup](docs/notify/telegram.md) · [Notification architecture](docs/notify/architecture.md)
 

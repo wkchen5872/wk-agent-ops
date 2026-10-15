@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Update individual Telegram Notify config settings.
-# Usage: bash scripts/notify/telegram/update.sh [token|chat_id|notify_level|fix-hooks|copilot-hooks|status]
+# Usage: bash scripts/notify/telegram/update.sh [token|chat_id|types|notify_level|fix-hooks|copilot-hooks|status]
 # fix-hooks: re-registers hooks with the correct format (use to fix format issues).
 set -euo pipefail
 
@@ -11,6 +11,10 @@ LIB_DIR="${SCRIPT_DIR}/../lib"
 source "${LIB_DIR}/config.sh"
 # shellcheck source=../notify/lib/registry.sh
 source "${LIB_DIR}/registry.sh"
+# shellcheck source=../lib/settings.sh
+source "${LIB_DIR}/settings.sh"
+# shellcheck source=../lib/runtime.sh
+source "${LIB_DIR}/runtime.sh"
 
 # Load existing config for current-value hints
 read_config 2>/dev/null || true
@@ -21,21 +25,26 @@ DEPLOYED_HOOK="${HOME}/.config/ai-notify/hooks/telegram-notify.sh"
 
 show_menu() {
   echo ""
-  echo "── Telegram Notify — Update Settings ──"
+  echo "── Telegram 通知設定 ──"
   echo ""
-  echo "  1) Bot Token"
-  echo "  2) Chat ID"
-  echo "  3) Notification Level (current: ${NOTIFY_LEVEL:-all})"
-  echo "  4) Fix hook registration (re-register with correct format)"
-  echo "  5) Register Copilot CLI hooks"
-  echo "  6) Show provider status"
-  echo "  q) Quit"
+  echo "通知"
+  echo "  1) 通知類型（共用＋Codex 專用）"
+  echo "  2) 工具支援與按需檢查狀態"
+  echo "Telegram 連線設定"
+  echo "  3) Bot Token"
+  echo "  4) Chat ID"
+  echo "測試與修復"
+  echo "  5) 修復與更新 hook"
+  echo "  6) 註冊 Copilot CLI hooks"
+  echo "  7) 執行離線通知測試"
+  echo "  q) 離開"
   echo ""
 }
 
 update_token() {
   echo ""
-  echo "Current token ends in: ...${TELEGRAM_BOT_TOKEN: -4}"
+  local current_token="${TELEGRAM_BOT_TOKEN:-}"
+  echo "Current token ends in: ...${current_token: -4}"
   read -rp "New Bot Token: " new_token
   if [[ -z "${new_token}" ]]; then
     echo "Aborted — no change made."
@@ -65,15 +74,30 @@ update_notify_level() {
   echo "Current level: ${NOTIFY_LEVEL:-all}"
   local new_level=""
   while true; do
-    read -rp "New level (all / attention_required) [${NOTIFY_LEVEL:-all}]: " new_level
+    read -rp "New level (all / attention_required) [${NOTIFY_LEVEL:-all}]: " new_level || return 0
     new_level="${new_level:-${NOTIFY_LEVEL:-all}}"
     if [[ "${new_level}" == "all" || "${new_level}" == "attention_required" ]]; then
       break
     fi
     echo "Invalid. Please enter 'all' or 'attention_required'."
   done
-  update_config_key "NOTIFY_LEVEL" "${new_level}"
+  local completion=true
+  [[ "${new_level}" == attention_required ]] && completion=false
+  update_config_keys NOTIFY_LEVEL "${new_level}" NOTIFY_COMPLETION "${completion}" NOTIFY_ACTION_REQUIRED true NOTIFY_FAILURE true
+  NOTIFY_LEVEL="${new_level}"
+  NOTIFY_COMPLETION="${completion}"; NOTIFY_ACTION_REQUIRED=true; NOTIFY_FAILURE=true
   echo "✓ NOTIFY_LEVEL updated to ${new_level}."
+}
+
+update_notify_types() {
+  if edit_notify_types; then
+    save_notify_draft
+    deploy_notify_files
+    ensure_codex_runtime || true
+    register_hook "${DEPLOYED_HOOK}"
+    echo '✓ 通知類型已儲存。'
+    echo 'Codex 新 hook 需在 /hooks 信任並啟用；可用 status 查看支援狀態。'
+  fi
 }
 
 fix_hooks() {
@@ -88,8 +112,8 @@ fix_hooks() {
   fi
 
   # Re-deploy hook script from source
-  cp "${SCRIPT_DIR}/hook.sh" "${DEPLOYED_HOOK}"
-  chmod +x "${DEPLOYED_HOOK}"
+  deploy_notify_files
+  ensure_codex_runtime || true
   echo "  ✓ Hook script updated at ${DEPLOYED_HOOK}"
 
   # Unregister old/broken entries, then re-register with correct native formats.
@@ -131,6 +155,9 @@ show_status() {
   echo "── Telegram Notify — Provider Status ──"
   echo ""
   show_hook_status "${DEPLOYED_HOOK}"
+  init_notify_draft
+  show_notify_draft
+  show_codex_wait_status
 }
 
 # Handle direct key argument
@@ -138,6 +165,7 @@ case "${KEY}" in
   token)          update_token;          exit 0 ;;
   chat_id)        update_chat_id;        exit 0 ;;
   notify_level)   update_notify_level;   exit 0 ;;
+  types)          update_notify_types;   exit 0 ;;
   fix-hooks)      fix_hooks;             exit 0 ;;
   copilot-hooks)  register_copilot_hooks; exit 0 ;;
   status)         show_status;            exit 0 ;;
@@ -145,14 +173,15 @@ case "${KEY}" in
     # Interactive menu
     while true; do
       show_menu
-      read -rp "Select option: " choice
+      read -rp "選擇：" choice || exit 0
       case "${choice}" in
-        1) update_token ;;
-        2) update_chat_id ;;
-        3) update_notify_level ;;
-        4) fix_hooks ;;
-        5) register_copilot_hooks ;;
-        6) show_status ;;
+        1) update_notify_types ;;
+        2) show_status ;;
+        3) update_token ;;
+        4) update_chat_id ;;
+        5) fix_hooks ;;
+        6) register_copilot_hooks ;;
+        7) bash "${SCRIPT_DIR}/test.sh" ;;
         q|Q) echo ""; echo "Done."; exit 0 ;;
         *) echo "Invalid choice." ;;
       esac
@@ -160,7 +189,7 @@ case "${KEY}" in
     ;;
   *)
     echo "Unknown key: ${KEY}"
-    echo "Usage: $0 [token|chat_id|notify_level|fix-hooks|copilot-hooks|status]"
+    echo "Usage: $0 [token|chat_id|types|notify_level|fix-hooks|copilot-hooks|status]"
     exit 1
     ;;
 esac
