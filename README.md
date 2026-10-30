@@ -144,12 +144,29 @@ wt-done feature123 --base main
 | `.agents/skills/git-commit-writer/` | 跨 Provider 的 `git-commit-writer` skill |
 | `.codex/agents/git-commit-writer-agent.toml` | Codex custom agent（`gpt-5.6-luna`、medium） |
 | `.codex/agents/doc-updater-agent.toml` | Codex custom agent（`gpt-5.6-terra`、medium） |
+| `work-items/AGENTS.md` | Work Item 協作紀錄規範（managed，重跑 installer 會更新） |
+| `.claude/rules/work-items.md` | Work Item 規範的 Provider 原生載入入口 |
+| `.agents/rules/work-items.md` | 同一入口的跨 Provider 鏡像 |
+| `.gitignore` 的 `/work-items/WI-*/` | 讓臨時紀錄不被 `git add -A` 暫存 |
 
 `scripts/skills/install.sh` 管理 `.claude/`、複數 `.agents/`，以及兩個
 project-owned `.codex/agents/` custom agents。它不接管 `.codex/config.toml`、
 `.codex/skills/` 或單數 `.agent/`；OpenSpec provider setup 產生的原生檔案
 仍屬於另一個分發邊界。完整路徑與呼叫規則見
 [OpenSpec Commit 工作流](docs/workflow/commit.md)。
+
+### Work Item 協作紀錄
+
+跨 Session 的臨時協作紀錄放在目標專案根目錄的 `work-items/WI-*/`，不納入
+Git；完整規範是 managed 的 `work-items/AGENTS.md`，也是這套規則的唯一來源。
+Installer 會把忽略規則合併進專案版控的 `.gitignore`，並以 Git 實際效果雙向
+驗證：臨時紀錄確實被忽略，規範檔仍可追蹤。效果只來自 `.git/info/exclude`
+或個人 `core.excludesFile` 時不算達成，因為專案本身沒有帶規則。既有已被
+追蹤的紀錄只會被回報，installer 不修改 Git index。
+
+只讀 `AGENTS.md` 的工具透過「實際載入的根指示檔 → `docs/agent-protocol.md`
+→ `work-items/AGENTS.md`」這條鏈取得規範。Installer 會檢查這條鏈並在斷鏈時
+回報該補的段落，但不會覆寫專案自己的 `AGENTS.md`。
 
 ### Python Profile
 
@@ -203,6 +220,7 @@ wk-agent-ops/
 │   ├── skills/
 │   │   └── install.sh          ← 安裝擴充套件到目標專案
 │   └── workflow/               ← wt-* / pm-start 等流程管理腳本
+├── tests/                      ← installer 與規範的行為測試
 ├── docs/
 │   ├── workflow/               ← 多 Agent 協作與 Commit 流程說明
 │   ├── notify/                 ← 通知系統架構與 Telegram 安裝說明

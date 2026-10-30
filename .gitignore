@@ -7,3 +7,6 @@
 .github/hooks
 
 graphify-out/cache/
+
+# Local, disposable Work Item records
+/work-items/WI-*/

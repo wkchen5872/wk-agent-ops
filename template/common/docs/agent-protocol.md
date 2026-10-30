@@ -17,7 +17,7 @@ timestamp: 2026-09-15T00:00:00+08:00
 
 | Field   | Value                                                     |
 | ------- | --------------------------------------------------------- |
-| Version | 2.4.0                                                     |
+| Version | 2.5.0                                                     |
 | Scope   | Operational framework for all AI agent tasks in this repo |
 
 ---
@@ -30,6 +30,9 @@ timestamp: 2026-09-15T00:00:00+08:00
   `openspec/specs/` — source of truth for requirements.
 - **When the task touches `docs/`:** `docs/okf-conventions.md` — doc authoring
   rules. (Not needed for code-only tasks.)
+- **When the task needs cross-session temporary collaboration records:**
+  `work-items/AGENTS.md` — the Work Item convention, and the single source of its
+  rules. (Not needed otherwise; records are local and disposable.)
 
 ## 2. Hard Prohibitions (apply to every task, no exceptions)
 

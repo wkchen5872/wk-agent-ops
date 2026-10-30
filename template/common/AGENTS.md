@@ -18,3 +18,8 @@ the task-scale protocol, and the done criteria.
 
 That file is managed by wk-agent-ops and refreshed by re-running the installer; do
 not edit it here. Keep project-specific rules in this file or under `docs/`.
+
+## Work Item 協作紀錄
+
+需要保存跨回合／跨 Session 的臨時協作紀錄時，先讀 `work-items/AGENTS.md`；
+該文件是這套規範的唯一來源。

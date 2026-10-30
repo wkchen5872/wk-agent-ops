@@ -137,17 +137,26 @@ if [[ -f "$COMMON/AGENTS.md" && ! -f "$TARGET/AGENTS.md" ]]; then
   echo ">f+++++++ AGENTS.md"
 fi
 
-# --- docs/: managed vs seed ---
-# Managed docs are shared upstream standards: always overwritten so a re-run of
-# install.sh propagates updates to already-installed repos. Add new shared
-# standards to MANAGED_DOCS. Everything else in docs/ is seed (project-fill):
-# copied only if absent, never overwritten.
+# --- Managed vs seed files ---
+# Managed files are shared upstream standards: always overwritten so a re-run of
+# install.sh propagates updates to already-installed repos. Paths are target-root
+# relative, so a managed file may live outside docs/. Add new shared standards to
+# MANAGED_FILES. Everything else in docs/ is seed (project-fill): copied only if
+# absent, never overwritten.
+MANAGED_FILES=(
+  docs/agent-protocol.md
+  docs/okf-conventions.md
+  docs/mutation-testing.md
+  docs/openspec-workflow.md
+  work-items/AGENTS.md
+)
+for f in "${MANAGED_FILES[@]}"; do
+  [[ -f "$COMMON/$f" ]] || continue
+  mkdir -p "$TARGET/$(dirname "$f")"
+  rsync -a --itemize-changes "$COMMON/$f" "$TARGET/$f"
+done
 if [[ -d "$COMMON/docs" ]]; then
   mkdir -p "$TARGET/docs"
-  MANAGED_DOCS=(agent-protocol.md okf-conventions.md mutation-testing.md openspec-workflow.md)
-  for d in "${MANAGED_DOCS[@]}"; do
-    [[ -f "$COMMON/docs/$d" ]] && rsync -a --itemize-changes "$COMMON/docs/$d" "$TARGET/docs/$d"
-  done
   rsync -a --ignore-existing --itemize-changes "$COMMON/docs/" "$TARGET/docs/"
 fi
 
@@ -183,6 +192,201 @@ if [[ -f "$TARGET/.gitignore" ]]; then
   IGNORE_TMP="$(mktemp)"
   grep -vFx 'openspec/.entropy-state' "$TARGET/.gitignore" > "$IGNORE_TMP" || true
   mv "$IGNORE_TMP" "$TARGET/.gitignore"
+fi
+
+# --- Work Item records: versioned ignore rule and effect verification ---
+WI_RULE='/work-items/WI-*/'
+
+# The paths whose ignore status decides whether records are protected: a generic
+# probe, which covers a target holding no records yet or an empty record directory,
+# plus every file that actually exists inside each record directory. One
+# representative path per directory is not enough, because an exception can be
+# written for a single file such as context.md or a file under agents/.
+wi_record_paths() {
+  printf '%s\n' 'work-items/WI-00000000-probe/README.md'
+  local d f had
+  for d in "$TARGET"/work-items/WI-*/; do
+    [[ -d "$d" ]] || continue
+    had=0
+    while IFS= read -r f; do
+      if [[ -n "$f" ]]; then
+        printf '%s\n' "${f#"$TARGET"/}"
+        had=1
+      fi
+    done < <(find "$d" -type f 2>/dev/null)
+    if [[ "$had" -eq 0 ]]; then
+      printf 'work-items/%s/README.md\n' "$(basename "$d")"
+    fi
+  done
+}
+
+# One Git call for every record path. `-n` also reports non-matching paths, so a
+# path that is not ignored shows up in one of two forms: an empty `::` field when
+# no pattern covers it at all, or the negation pattern itself when a `!` rule
+# re-includes it. Both must count as unprotected.
+wi_scan() {
+  wi_record_paths | git -C "$TARGET" check-ignore --no-index -v -n --stdin 2>/dev/null || true
+}
+
+# $1 is the "<source>:<line>:<pattern>" field produced above.
+wi_rule_leaves_path_unignored() {
+  local pat="${1#*:*:}"
+  [[ -z "$pat" || "$pat" == '!'* ]]
+}
+
+wi_pattern_ignored() { git -C "$TARGET" check-ignore -q --no-index -- "$1" 2>/dev/null; }
+wi_match()           { git -C "$TARGET" check-ignore -v --no-index -- "$1" 2>/dev/null | awk -F'\t' 'NR==1{print $1}'; }
+wi_match_source()    { wi_match "$1" | awk -F: 'NR==1{print $1}'; }
+
+# A directory-level negation may leave child paths unmatched; locate its rule for diagnostics.
+wi_negation_line() {
+  [[ -f "$TARGET/.gitignore" ]] || return 0
+  local n=0 line pat hit=""
+  while IFS= read -r line; do
+    n=$((n + 1))
+    case "$line" in
+      '!'*) ;;
+      *) continue ;;
+    esac
+    pat="${line#!}"
+    pat="${pat#/}"
+    pat="${pat%/}"
+    [[ -n "$pat" ]] || continue
+    case "$1" in
+      # Git lets the last matching pattern win, so keep looking instead of
+      # reporting the first negation that happens to cover the path.
+      $pat | $pat/*) hit=".gitignore:$n:$line" ;;
+    esac
+  done < "$TARGET/.gitignore"
+  if [[ -n "$hit" ]]; then printf '%s\n' "$hit"; fi
+  return 0
+}
+
+# A literal rule line is already there: never append a second one, even when a
+# later negation makes it ineffective. That case is reported, not rewritten.
+wi_rule_line_present() {
+  [[ -f "$TARGET/.gitignore" ]] && grep -qE '^/?work-items/WI-\*/(\*\*)?$' "$TARGET/.gitignore"
+}
+
+# Equivalent protection is already supplied by the versioned .gitignore when every
+# record path is ignored, every match comes from that file, and the convention stays
+# trackable. This accepts any equivalent spelling while still rejecting exclusion
+# from .git/info/exclude or a personal core.excludesFile, which report a different
+# source: the project would carry no rule and a fresh clone would be unprotected.
+wi_versioned_effect() {
+  local line rule
+  while IFS= read -r line; do
+    [[ -n "$line" ]] || continue
+    rule="${line%%$'\t'*}"
+    if wi_rule_leaves_path_unignored "$rule"; then return 1; fi
+    if [[ "${rule%%:*}" != ".gitignore" ]]; then return 1; fi
+  done < <(wi_scan)
+  if wi_pattern_ignored 'work-items/AGENTS.md'; then return 1; fi
+  return 0
+}
+
+if ! wi_rule_line_present && ! wi_versioned_effect; then
+  if [[ -f "$TARGET/.gitignore" ]]; then
+    # Keep the file newline-terminated so the appended block cannot join a line.
+    if [[ -n "$(tail -c 1 "$TARGET/.gitignore")" ]]; then
+      printf '\n' >> "$TARGET/.gitignore"
+    fi
+    printf '\n# Local, disposable Work Item records\n%s\n' "$WI_RULE" >> "$TARGET/.gitignore"
+  else
+    printf '# Local, disposable Work Item records\n%s\n' "$WI_RULE" > "$TARGET/.gitignore"
+  fi
+  echo ">f+++++++ .gitignore (Work Item rule)"
+fi
+
+# Verify the outcome with Git rather than the presence of a rule line: over every
+# record path, and in both directions. check-ignore never reports a tracked path as
+# ignored, so the index is consulted separately below.
+WI_PROTECTED=true
+while IFS= read -r wi_line; do
+  [[ -n "$wi_line" ]] || continue
+  wi_rule="${wi_line%%$'\t'*}"
+  wi_p="${wi_line#*$'\t'}"
+  if wi_rule_leaves_path_unignored "$wi_rule"; then
+    echo "⚠️  Work Item record path is not ignored: $wi_p"
+    # Git names the negation when one matched the path itself; when nothing
+    # matched it reports an empty field, and the responsible directory-level
+    # negation is then located by scanning the versioned .gitignore.
+    WI_M="$wi_rule"
+    if [[ -z "${WI_M#*:*:}" ]]; then
+      WI_M="$(wi_negation_line "$wi_p" || true)"
+    fi
+    if [[ -n "$WI_M" ]]; then
+      echo "      matched by: $WI_M"
+    else
+      echo "      no rule matches this path"
+    fi
+    WI_PROTECTED=false
+  fi
+done < <(wi_scan)
+
+if wi_pattern_ignored 'work-items/AGENTS.md'; then
+  WI_CONV_M="$(wi_match 'work-items/AGENTS.md' || true)"
+  echo "⚠️  work-items/AGENTS.md is ignored by ${WI_CONV_M:-an existing rule};"
+  echo "    the convention cannot be tracked, so the two-way condition fails."
+  WI_PROTECTED=false
+fi
+
+if [[ "$WI_PROTECTED" != true ]]; then
+  echo "    Existing rules were left unchanged. Work Item ignore protection is NOT in effect."
+fi
+
+WI_TRACKED="$(git -C "$TARGET" ls-files -- 'work-items/WI-*' 2>/dev/null || true)"
+if [[ -n "$WI_TRACKED" ]]; then
+  echo "⚠️  Work Item records are already tracked in Git; protection is not in force for them:"
+  while IFS= read -r wi_line; do
+    if [[ -n "$wi_line" ]]; then echo "      $wi_line"; fi
+  done <<< "$WI_TRACKED"
+  echo "    The Git index was not modified. Untrack them yourself if that is intended."
+fi
+
+# --- Activation entry reachability ---
+# A tool that reads only AGENTS.md discovers project instructions from the project
+# root down to its launch directory, loading at most one file per directory, with an
+# override file taking precedence. So check the file that would actually load rather
+# than AGENTS.md by name. Provider rules directories do not reach such a tool, and a
+# project-owned instruction file is never modified here.
+WI_ROOT_INSTRUCTION=""
+for wi_candidate in AGENTS.override.md AGENTS.md; do
+  if [[ -s "$TARGET/$wi_candidate" ]]; then
+    WI_ROOT_INSTRUCTION="$wi_candidate"
+    break
+  fi
+done
+
+if [[ -z "$WI_ROOT_INSTRUCTION" ]]; then
+  echo "⚠️  No non-empty root instruction file (AGENTS.override.md or AGENTS.md) was found."
+  echo "    Work Item activation is UNVERIFIED for tools that read only AGENTS.md."
+elif ! grep -q 'docs/agent-protocol.md' "$TARGET/$WI_ROOT_INSTRUCTION"; then
+  echo "⚠️  $WI_ROOT_INSTRUCTION is the root instruction that loads, and it does not point"
+  echo "    at docs/agent-protocol.md. Managed files were installed, but Work Item"
+  echo "    activation is NOT active for tools that read only AGENTS.md."
+  echo "    Installed provider rules do not reach such a tool. Add this section to"
+  echo "    $WI_ROOT_INSTRUCTION yourself — the installer does not modify it:"
+  echo ""
+  echo "      ## Agent Operating Protocol"
+  echo "      Before any task, read \`docs/agent-protocol.md\`."
+  echo ""
+else
+  WI_CHAIN_MISSING=""
+  for wi_link in docs/agent-protocol.md work-items/AGENTS.md; do
+    if [[ ! -f "$TARGET/$wi_link" ]]; then
+      WI_CHAIN_MISSING="$WI_CHAIN_MISSING $wi_link"
+    fi
+  done
+  if ! grep -q 'work-items/AGENTS.md' "$TARGET/docs/agent-protocol.md" 2>/dev/null; then
+    WI_CHAIN_MISSING="$WI_CHAIN_MISSING protocol-pointer"
+  fi
+  if [[ -n "$WI_CHAIN_MISSING" ]]; then
+    echo "⚠️  Activation chain incomplete; missing:$WI_CHAIN_MISSING"
+    echo "    Work Item activation is NOT active for tools that read only AGENTS.md."
+  else
+    echo "✓ Work Item activation chain: $WI_ROOT_INSTRUCTION → docs/agent-protocol.md → work-items/AGENTS.md"
+  fi
 fi
 
 # Remove the retired wk-agent-ops mutation skills. Third-party replacements are

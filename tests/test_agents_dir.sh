@@ -105,11 +105,26 @@ fi
   && ok "retired openspec commit rule removed" || bad "retired openspec commit rule removed"
 if [[ ! -e "$T/.claude/skills/entropy-check" \
   && ! -e "$T/.agents/skills/entropy-check" \
-  && ! -e "$T/openspec/.entropy-state" \
-  && "$(cat "$T/.gitignore")" == "keep-me" ]]; then
-  ok "retired entropy artifacts removed without changing unrelated ignores"
+  && ! -e "$T/openspec/.entropy-state" ]]; then
+  ok "retired entropy artifacts removed"
 else
-  bad "retired entropy artifacts removed without changing unrelated ignores"
+  bad "retired entropy artifacts removed"
+fi
+# .gitignore is checked property by property. The installer both removes the retired
+# entropy rule and appends the Work Item records rule, so an exact-equality assertion
+# on the whole file would fail even when every required property holds.
+if grep -qxF 'keep-me' "$T/.gitignore" \
+  && ! grep -qxF 'openspec/.entropy-state' "$T/.gitignore" \
+  && [[ "$(grep -cxF '/work-items/WI-*/' "$T/.gitignore" | tr -d ' ')" == 1 ]]; then
+  ok "unrelated ignore kept, retired rule removed, Work Item rule added once"
+else
+  bad "unrelated ignore kept, retired rule removed, Work Item rule added once"
+fi
+if git -C "$T" check-ignore -q --no-index -- 'work-items/WI-20260101-x/README.md' \
+  && ! git -C "$T" check-ignore -q --no-index -- 'work-items/AGENTS.md'; then
+  ok "records effectively ignored and convention trackable"
+else
+  bad "records effectively ignored and convention trackable"
 fi
 rm -rf "$T"
 

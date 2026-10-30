@@ -61,9 +61,11 @@ template/common/
 │   └── workflows/        ← Antigravity workflows
 ├── .codex/
 │   └── agents/           ← Codex custom agents（.toml）
-├── AGENTS.md             ← 跨工具 managed protocol 入口
+├── AGENTS.md             ← 跨工具 managed protocol 入口（seed，只在不存在時複製）
 ├── docs/
-│   └── agent-protocol.md ← 跨工具共用規範
+│   └── agent-protocol.md ← 跨工具共用規範（managed）
+├── work-items/
+│   └── AGENTS.md         ← Work Item 協作紀錄規範（managed）
 ├── skills/
 │   └── <skill-name>/
 │       └── SKILL.md      ← Skill 定義
@@ -154,6 +156,7 @@ git commit -m "chore(agents): add/update <agent-name>"
 | Skills | `template/common/skills/` | `.claude/skills/`、`.agents/skills/` | 兩個位置需要相同 |
 | Rules | `template/common/.claude/rules/` | `.claude/rules/`、`.agents/rules/` | 單一 template source |
 | Commands | `template/common/.claude/commands/` | `.claude/commands/` | CC 專用 |
+| Work Item 規範 | `template/common/work-items/AGENTS.md` | `work-items/AGENTS.md` | managed；重跑 installer 會覆寫 |
 
 **重要：** 修改後務必確認三個位置內容一致。使用 `diff` 或 `git diff` 檢查：
 
@@ -347,6 +350,8 @@ not edit it here. Keep project-specific rules in this file or under `docs/`.
 ## 相關文件
 
 - `scripts/skills/install.sh` — 安裝腳本
+- `template/common/work-items/AGENTS.md` — Work Item 協作紀錄規範（managed；唯一來源）
+- `tests/test_work_items.sh` — Work Item 投遞、忽略規則與啟用鏈的行為測試
 - `docs/architecture.md` — 專案架構與模組邊界
 - `docs/conventions.md` — Bash 腳本規範
 - `docs/workflow/guide.md` — PM/RD 協作完整指南
