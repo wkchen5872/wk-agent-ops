@@ -210,6 +210,7 @@ Codex 版本：`.codex/agents/doc-updater-agent.toml`（`gpt-5.6-terra`、medium
 - **Mode A**（有未 commit 的變更）：掃描 `git diff HEAD`，更新文件並留在工作區，與 feature 一起 commit
 - **Mode B**（工作區乾淨）：掃描最近 N 個 commit（詢問使用者，預設 1），更新文件留在工作區
 - 只改相關 section，不重寫無關段落
+- 引用 `docs/okf-conventions.md` 的 OKF v0.2、分類寫作與 SVG／HTML 規範，涵蓋巢狀文件、範例、圖稿與連結
 - 支援新 agent/skill、workflow 變更、新 profile 等多種情境
 - **不自動建立 commit**——文件更新永遠留在工作區
 - 以高品質模型（如 Claude Sonnet）執行，確保文件理解與撰寫品質

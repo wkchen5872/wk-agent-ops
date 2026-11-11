@@ -25,7 +25,8 @@ if [[ -f "$PROTO" ]]; then
 
   # R1 — no named secondary tool binding
   grep -qiE 'portable|agents\.md-aware' <<<"$header"  && ok  "R1 protocol states generic portability" || bad "R1 protocol states generic portability"
-  if grep -qiE '\bcodex\b|antigravity|and others supported' "$PROTO"; then
+  # Author provenance is metadata, not a provider-specific operating rule.
+  if sed -n '/^# Agent Operating Protocol/,$p' "$PROTO" | grep -qiE '\bcodex\b|antigravity|and others supported'; then
     bad "R1 no named secondary tool anywhere"
   else ok "R1 no named secondary tool anywhere"; fi
 

@@ -14,6 +14,10 @@
 設計與任務，不以 Claude Code、Codex 或 Antigravity 的原生計畫取代。
 兩份文件都會安裝至目標 repo，並在重新安裝時更新。
 
+[文件與圖稿規範](docs/okf-conventions.md) 採 OKF v0.2，提供 API、操作及設計文件要求；
+靜態圖稿優先 SVG，UX 互動使用 HTML。Claude Code、Codex、Antigravity 共用此規範，
+既有 `doc-updater` 會引用它。舊文件在實質更新時漸進遷移，不批次重寫。
+
 ---
 
 ## 快速開始

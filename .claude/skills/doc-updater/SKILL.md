@@ -10,7 +10,7 @@ license: MIT
 compatibility: Requires git.
 metadata:
   author: wkchen
-  version: "1.1"
+  version: "1.2"
 ---
 
 # Doc Updater
@@ -25,6 +25,19 @@ metadata:
 **立即執行，不需確認。**
 
 ---
+
+## Shared authoring contract
+
+Before editing, read `docs/okf-conventions.md` and apply its document-type,
+OKF migration and visual-delivery requirements. Discover affected nested module
+docs, examples, diagrams and links as well as root docs; read their current
+contents before choosing minimal edits. Reconcile stale or duplicate affected
+statements and diagram labels without adding conversation history. Keep design,
+implementation, deployment and verification status distinct.
+
+Use the shared policy as the single source of these rules. Report actual checks
+and unperformed visual/runtime checks separately. Inspect the diff for every
+changed documentation or diagram path, including paths outside root docs.
 
 ## Optional input
 

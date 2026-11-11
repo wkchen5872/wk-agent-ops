@@ -3,7 +3,7 @@ type: Reference
 title: Agent Operating Protocol
 description: Shared task classification, implementation, verification, and completion rules for AI agents.
 tags: [agents, protocol, testing]
-timestamp: 2026-09-15T00:00:00+08:00
+generated: { by: codex/GPT-6, at: 2026-11-11T12:07:41+08:00 }
 ---
 
 <!-- Managed by wk-agent-ops · do not edit here — re-running install.sh overwrites this file. -->
@@ -17,7 +17,7 @@ timestamp: 2026-09-15T00:00:00+08:00
 
 | Field   | Value                                                     |
 | ------- | --------------------------------------------------------- |
-| Version | 2.5.0                                                     |
+| Version | 2.6.0                                                     |
 | Scope   | Operational framework for all AI agent tasks in this repo |
 
 ---
@@ -28,8 +28,11 @@ timestamp: 2026-09-15T00:00:00+08:00
   `docs/conventions.md` (style, naming, prohibited patterns).
 - **When the task touches `openspec/`:** the relevant specs in
   `openspec/specs/` — source of truth for requirements.
-- **When the task touches `docs/`:** `docs/okf-conventions.md` — doc authoring
-  rules. (Not needed for code-only tasks.)
+- **When authoring documentation or diagrams:** `docs/okf-conventions.md` —
+  shared writing, OKF and visual delivery rules, including README, nested module docs
+  and Work Item diagrams (also read `work-items/AGENTS.md` for their storage
+  and handoff rules). Schema-owned artifacts retain their own format.
+  (Not needed for code-only tasks.)
 - **When the task needs cross-session temporary collaboration records:**
   `work-items/AGENTS.md` — the Work Item convention, and the single source of its
   rules. (Not needed otherwise; records are local and disposable.)
@@ -156,8 +159,8 @@ implementation is complete only when the applicable gates below pass:
       reason plus replayable acceptance evidence when automation is impractical.
 - [ ] Focused tests and affected suites pass; the project-defined full required
       checks pass before seal or commit.
-- [ ] Docs synced with changes. If any file under `docs/` was touched, it
-      conforms to the rules in `docs/okf-conventions.md`.
+- [ ] Related docs, examples, diagrams and links synced with changes, following
+      `docs/okf-conventions.md`; report unperformed visual or runtime checks.
 
 Archive and commit according to the requested delivery scope and project workflow.
 If the user asks to review first, leave the work uncommitted and the change
