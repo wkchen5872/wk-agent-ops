@@ -7,12 +7,17 @@ Let an agent review a published OpenSpec change from a PR, produce attributable 
 ## ADDED Requirements
 
 ### Requirement: Review resolves an explicit phase and version
-The review entry SHALL accept a PR reference and explicit design or implementation phase, resolve the associated repository, Issue, Change, base, and head, and obtain the corresponding artifacts. Ambiguity or unavailable required content MUST block a verdict for that scope. Published PR review SHALL exclude unpublished local changes from its pass claim.
+The review entry SHALL accept a PR reference, design or implementation phase, and an optional expected head. It SHALL resolve the repository, Issue, Change, base, head, and required artifacts. An expected-head mismatch or missing or ambiguous required content MUST block progression for that target. Published review SHALL exclude unpublished changes from its pass claim and distinguish the review tool's source from the reviewed content.
 
 #### Scenario: Several Changes are linked
 - **WHEN** a PR links multiple plausible Changes without selecting the review target
 - **THEN** the reviewer reports the ambiguity and obtains a target before reviewing
 - **AND** it does not pick the first Change or infer it from a local Work Item
+
+#### Scenario: A target is selected while another linked Change is unfinished
+- **WHEN** the caller selects one Change and the PR also contains planning for another unfinished Change
+- **THEN** the review evaluates the selected Change and its actual dependencies
+- **AND** unrelated unfinished tasks do not become missing implementation in the selected scope
 
 #### Scenario: Checkout is dirty or mismatched
 - **WHEN** the available checkout differs from the PR head or contains unpublished changes
@@ -23,6 +28,16 @@ The review entry SHALL accept a PR reference and explicit design or implementati
 - **WHEN** the PR head changes after the reviewed snapshot was selected
 - **THEN** the report remains attributed to its actual reviewed revision
 - **AND** it cannot represent that result as a pass for the new head without rechecking the affected scope
+
+#### Scenario: Caller supplies a head different from the current PR
+- **WHEN** an explicit expected head does not match the actual PR head
+- **THEN** the reviewer reports the mismatch and obtains a corrected target before proceeding
+- **AND** it does not silently review the latest branch revision instead
+
+#### Scenario: A new Skill is tested against an earlier PR revision
+- **WHEN** the Review Skill source is newer than or uncommitted relative to the selected target
+- **THEN** the evidence separately identifies the Skill source revision or fingerprint and the actual reviewed checkout
+- **AND** a dirty Skill-development checkout does not attest tests of a different published target head
 
 ### Requirement: Design review checks implementability and acceptance
 Design review SHALL assess requirements, scope, interfaces, dependencies, feasibility, material risks, and executable acceptance criteria. It MUST NOT fail solely because implementation tasks are not yet complete. A technical design pass SHALL remain distinct from human design approval and implementation acceptance.
@@ -36,6 +51,16 @@ Design review SHALL assess requirements, scope, interfaces, dependencies, feasib
 - **WHEN** a required external-data acceptance condition has no defined observation window or pass criterion
 - **THEN** design review identifies the concrete acceptance gap with the affected requirement
 - **AND** it requests a specification correction rather than inventing a runtime test result
+
+#### Scenario: Approval has date-only precision
+- **WHEN** the human approval date is known but its time is not
+- **THEN** the reviewer follows the shared contract and preserves YYYY-MM-DD without fabricating a time or replacing it with recorded_at
+- **AND** approved_by identifies the human GitHub account and an honestly dated approval is not rejected solely for lacking an exact time
+
+#### Scenario: Approval recorder has access but lacks authorization
+- **WHEN** a comment author can write the repository but has no trusted authorization to attest the human's approval
+- **THEN** that attestation does not authorize Apply, even if the candidate PR names the author as a recorder
+- **AND** readonly review and separately authorized technical report publication remain possible with the approval limitation stated
 
 ### Requirement: Implementation review uses a self-contained verification baseline
 Implementation review SHALL compare the selected revision with OpenSpec artifacts, inspect connected code and tests, and execute required checks using a self-contained baseline checklist. Available verification Skills SHALL supplement that baseline. Optional quality Skills MUST NOT be required solely by this workflow. The report SHALL record evidence and limits; missing mandatory evidence MUST NOT produce a pass.
@@ -54,6 +79,19 @@ Implementation review SHALL compare the selected revision with OpenSpec artifact
 - **WHEN** implementation checks pass but the Change requires an observation period that is not complete
 - **THEN** the report distinguishes the passing checks from pending formal acceptance
 - **AND** the workflow does not report the whole Change accepted, close its Issue, or mark required tasks complete
+
+### Requirement: Integration separates dependency readiness from acceptance
+Integration SHALL require an obtainable version of the shared handoff contract, not a prior final pass from the Skill being introduced. Reviewing the upstream PR MAY serve as a real integration case. The upstream verdict and the Review Skill's own acceptance SHALL remain separate; neither an automatic pass nor an artificial defect is required to exercise the workflow.
+
+#### Scenario: Upstream final review is deferred to the new Skill
+- **WHEN** the upstream contract is delivered and its final review is the selected integration case
+- **THEN** the Skill can be implemented and tested without pretending that upstream review has already passed
+- **AND** a report about the upstream target does not certify the Review Skill's own implementation
+
+#### Scenario: The real target has no demonstrated defect
+- **WHEN** the live integration target satisfies the selected review scope
+- **THEN** its report reflects that evidence without inventing a finding or changing the target to force a repair round
+- **AND** deterministic repair-loop coverage uses fixtures or a separately authorized disposable target, with any untested live branch disclosed
 
 ### Requirement: Findings require evidence and stable identity
 Every finding SHALL identify a concrete impact, requirement or location, evidence, severity, stable ID, and status. Blocking findings SHALL concern demonstrated defects, security or data risks, unmet requirements, or required verification gaps. Style preferences and out-of-scope extensions MUST remain nonblocking. Repeated rounds SHALL preserve finding identity and the evidence for status changes.
@@ -99,6 +137,11 @@ Review reports SHALL follow the shared schema, native-tool operation checks, opt
 - **WHEN** the first write has an unknown result
 - **THEN** the reviewer reconciles the actual PR report state before retrying through any channel
 - **AND** it does not duplicate the report or invent a successful URL
+
+#### Scenario: Write reports success but readback cannot confirm it
+- **WHEN** a tool returns success and a report URL but readback fails or the stored target, review ID, phase, head, or content differs
+- **THEN** publication is recorded as possibly completed but unconfirmed, separately from the technical verdict
+- **AND** the reviewer reconciles state before retrying and does not announce verified remote handoff
 
 ### Requirement: Agent verdicts do not impersonate platform approval
 The report SHALL distinguish pass, changes-required, and blocked from GitHub review events and repository merge rules. When an account cannot submit a valid native approval or request-changes review, the reviewer SHALL use an available authorized comment form and state its limitations. Multiple agents sharing one account MUST NOT be described as separate platform approvers.

@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1455" viewBox="0 0 1600 1455" role="img" aria-labelledby="title desc">
+<title id="title">PR Review、修正與複審</title><desc id="desc">每次呼叫完成一輪；通知後以新版本／新證據明確接續。</desc>
+<defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="#566879"/></marker></defs>
+<style>text{font-family:Inter,"PingFang TC","Noto Sans CJK TC",sans-serif;fill:#182c40}.title{font-size:35px;font-weight:700}.sub{font-size:21px;fill:#53677b}.heading{font-size:25px;font-weight:650}.body{font-size:22px}.note{font-size:20px;fill:#53677b}.box{fill:white;stroke:#96aabd;stroke-width:2}.blue{fill:#ecf5ff;stroke:#5481bd;stroke-width:2}.gold{fill:#fff6df;stroke:#ae8733;stroke-width:2}.green{fill:#eaf7f0;stroke:#5c9273;stroke-width:2}.line{fill:none;stroke:#566879;stroke-width:2.5;marker-end:url(#arrow)}.dash{fill:none;stroke:#8194a7;stroke-width:2;stroke-dasharray:7 6}</style>
+<rect width="1600" height="1455" fill="#f5f8fb"/>
+<text x="80" y="68" class="title">PR Review、修正與複審</text>
+<text x="80" y="108" class="sub">每次呼叫完成一輪；通知後以新版本／新證據明確接續。</text>
+<rect x="80" y="170" width="850" height="118" rx="16" class="box"/>
+<text x="104" y="208" class="heading">01　指定 PR、phase 與可選前輪報告</text>
+<text x="104" y="242" class="body">核對 repo、Change、base／head 與 expected-head</text>
+<text x="104" y="272" class="body">原 Work Item 不存在也能接手</text>
+<path d="M505 288 V328" class="line"/>
+<rect x="80" y="328" width="850" height="118" rx="16" class="blue"/>
+<text x="104" y="366" class="heading">02　固定版本並審查</text>
+<text x="104" y="400" class="body">design 檢查可行性；implementation 採自帶基線</text>
+<text x="104" y="430" class="body">外部品質 Skill 可選；列明實際檢查與限制</text>
+<path d="M505 446 V486" class="line"/>
+<rect x="80" y="486" width="850" height="118" rx="16" class="blue"/>
+<text x="104" y="524" class="heading">03　選定工具發布本輪報告</text>
+<text x="104" y="558" class="body">核對目標／能力，發布後回讀 URL／版本</text>
+<text x="104" y="588" class="body">自己的報告獨立保存，不改產品或 commit／push</text>
+<path d="M505 604 V644" class="line"/>
+<rect x="80" y="644" width="850" height="118" rx="16" class="gold"/>
+<text x="104" y="682" class="heading">04　changes-required：交接實作者</text>
+<text x="104" y="716" class="body">先有 PR 報告，再交付 URL、head、Finding IDs</text>
+<text x="104" y="746" class="body">預設可轉交訊息；可用且授權時才直送 Session</text>
+<path d="M505 762 V802" class="line"/>
+<rect x="80" y="802" width="850" height="118" rx="16" class="box"/>
+<text x="104" y="840" class="heading">05　實作者修正、測試、發布版本</text>
+<text x="104" y="874" class="body">讀 PR，依授權 commit／push 到原分支</text>
+<text x="104" y="904" class="body">這是實作／發布流程，不由 Reviewer 代做</text>
+<path d="M505 920 V960" class="line"/>
+<rect x="80" y="960" width="850" height="118" rx="16" class="box"/>
+<text x="104" y="998" class="heading">06　逐項回覆，再交接 Reviewer</text>
+<text x="104" y="1032" class="body">回覆修正 commit、測試結果與新 head</text>
+<text x="104" y="1062" class="body">通知已送出不代表接收或啟動</text>
+<path d="M505 1078 V1118" class="line"/>
+<rect x="80" y="1118" width="850" height="118" rx="16" class="green"/>
+<text x="104" y="1156" class="heading">07　明確接續新一輪複審</text>
+<text x="104" y="1190" class="body">驗證修正與受影響行為；沿用穩定 Finding IDs</text>
+<text x="104" y="1220" class="body">Reviewer 有證據後才確認 Resolved</text>
+<rect x="1050" y="330" width="470" height="140" rx="16" class="gold"/>
+<text x="1074" y="368" class="heading">blocked：必要條件不足</text>
+<text x="1074" y="402" class="body">版本／需求／環境／資料不足</text>
+<text x="1074" y="432" class="body">無新證據爭議交人裁決</text>
+<rect x="1050" y="488" width="470" height="140" rx="16" class="green"/>
+<text x="1074" y="526" class="heading">pass：僅該階段與版本通過</text>
+<text x="1074" y="560" class="body">不代表人類批准、merge 或 deploy</text>
+<text x="1074" y="590" class="body">未完成的真實資料驗收仍需追蹤</text>
+<rect x="1050" y="804" width="470" height="140" rx="16" class="box"/>
+<text x="1074" y="842" class="heading">摘要更新另走純 update</text>
+<text x="1074" y="876" class="body">PR 放摘要與報告索引</text>
+<text x="1074" y="906" class="body">Issue 放依賴、等待條件與下一步</text>
+<path d="M930 518 H982 V400 H1035" class="line"/>
+<path d="M930 570 H1035" class="line"/>
+<path d="M80 1177 H28 V389 H80" class="line"/>
+<text x="1050" y="1015" class="note">Skill 不常駐輪詢，不新增通知器。</text>
+<text x="1050" y="1050" class="note">平台批准與 Agent verdict 分開記錄。</text>
+<text x="80" y="1320" class="note">複審沿左側箭頭返回版本確認。head 改變後，舊報告仍綁舊版，不自動繼承 pass。</text>
+<text x="80" y="1355" class="note">若報告無法發布或通知未完成，明記交接缺口；不捏造遠端 URL、送達或修復結果。</text>
+<text x="80" y="1380" class="note">受測 Skill 來源與待審 head 分開記錄；上游複審可作整合案例，不等於 Skill 自身已驗收。</text>
+<text x="80" y="1415" class="note">圖例：藍色＝Reviewer 的版本核對、審查與發布；金色＝交接與 blocked；綠色＝複審與 pass；白色＝實作者或其他操作。</text>
+</svg>

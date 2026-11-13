@@ -350,6 +350,8 @@ Delivery: <已透過 <工具> 送達 <Session>｜未送達，需由使用者轉�
 - 已 Accepted 但尚未處理的必要 Finding，須連到對應的 OpenSpec task 或專案正式的風險
   機制，並附 PR 證據連結。PR 上的詳細報告不取代正式待辦，也不能據此把工作標為完成。
   純粹的可選建議不必擴張 tasks。
+- 審查的執行步驟（固定版本、階段檢查清單、發布回讀與修正交接）由已安裝的 `change-review`
+  Skill 提供；它沿用本節與第 6.4 節的格式，不另定 schema。
 - Reviewer 以當下可用的 `gh` 或 MCP 發布自己的 Review 或留言，依第 3 節核對目標與
   能力，發布後回讀。發報告不使用 PR 的 create／publish 操作。
 

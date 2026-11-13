@@ -211,7 +211,7 @@ archive 的交付順序另有明確斷點：一般 implementation Review／verif
 1. 本次使用者已要求更新此方向並交由 Claude 調整；此授權涵蓋本版目標／工具／可選帳號限制的設計與實作，不新增 commit／push／merge／archive 授權。PR 舊批准事件須保留並標明不涵蓋本次實質修訂；依既有具名代記規則另記新版本與範圍，不能挪用舊 revision。
 2. 依 tasks 在 template 實作，更新 installer 清單及局部 docs，先在暫存 target 驗證，再透過 installer 安裝本 repo。
 3. 現有 Issue／PR 不批次改寫，首次明確 update 時才採用受管理區塊；本機 Work Item 不搬移或刪除。
-4. 第一個 Change 驗收後，第二個 Change 才整合 Review Skill。若回退，回復本 Change 的 template／installer 修改並重裝；不自動刪除遠端 Issue、PR、留言或使用者配置。
+4. 共用契約與入口已有明確的可取得版本即可整合 Review Skill；本 Change 的最終複審可作該 Skill 的驗收案例，不以複審先通過形成循環前提，也不因此宣稱本 Change 已驗收。若回退，回復本 Change 的 template／installer 修改並重裝；不自動刪除遠端 Issue、PR、留言或使用者配置。
 
 ## Open Questions
 

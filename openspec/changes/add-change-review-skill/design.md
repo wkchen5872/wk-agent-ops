@@ -2,7 +2,7 @@
 
 ## Context
 
-這是待人類審閱的目標設計，尚未實作。動機見 [proposal.md](proposal.md)。共用契約的設計由 `add-github-change-handoff` 持有，對應 capability 為 `github-change-handoff`；實作時必須取得該 Change 已交付的契約版本，不能依賴暫存 Work Item 或固定的活動 Change 路徑。
+這是待人類審閱的目標設計，尚未實作。動機見 [proposal.md](proposal.md)。共用契約由 `add-github-change-handoff` 持有，對應 capability 為 `github-change-handoff`；目前參照已交付的 `dee0855d1bdb026ef238b64374f80ea8275346d7` 版本，實作時須明記實際使用的契約版本，不能依賴暫存 Work Item 或固定的活動 Change 路徑。
 
 已讀取的現況有兩個重要限制。
 
@@ -28,7 +28,7 @@
 
 ### 1. 單一 Skill 的兩個階段，加可選複審上下文
 
-來源為 `template/common/skills/change-review/SKILL.md`。入口語意是 PR reference 加 `phase=design|implementation`；複審額外提供上一輪 report reference，通知目標為可選輸入。這是語意契約，不保證所有工具有同一種命令列參數語法。
+來源為 `template/common/skills/change-review/SKILL.md`。入口語意是 PR reference 加 `phase=design|implementation`；可選 expected-head 固定呼叫者指定的版本，Change 有歧義時需明確指定。複審可提供上一輪 report reference，通知目標為可選輸入。這是語意契約，不保證所有工具有同一種命令列參數語法。
 
 三種 Agent 遵守同一上游操作契約，可使用已配置且具所需能力的 gh 或 GitHub MCP。每輪固定完整 host／owner／repo、實際 PR／head 與發布意圖，使用該工具本身可提供的連線／權限資訊。沒有預設指定帳號或可信 script blob 前提；只有上游明示帳號限制適用時才嚴格核對，不符或無法核對則停止該操作。讀取 repo 不代表可寫 Review；權限資訊不完整時不新增探測寫入，以已授權發布的實際回應與回讀判定，不把另一機器／工具登入當證據。
 
@@ -36,9 +36,13 @@ phase 缺漏而上下文無法唯一判定時先釐清，不從 Draft／Ready �
 
 ### 2. 每輪先固定範圍與版本
 
-由 PR 取得實際 repo、Issue／Change 關聯、base／head 及 artifact revision，確認可取得的程式／文件與測試環境。已有匹配且安全的 checkout 就使用；不匹配時取得經授權的隔離 review context，保留原 dirty checkout，無法做到則 blocked。
+由 PR 取得實際 repo、Issue／Change 關聯、base／head 及 artifact revision，確認可取得的程式／文件與測試環境。 PR 含其他 Change 的規劃時，只對明確選定的 Change 驗收；其他 Change 未完成的 tasks 不挪作本次的阻擋項。已有匹配且安全的 checkout 就使用；不匹配時取得經授權的隔離 review context，保留原 dirty checkout，無法做到則 blocked。
+
+呼叫者提供 expected-head 時，先與 GitHub 實際 PR head 比對；不符就回報版本衝突，不默默改審最新 head。沒有提供時才在起始讀取並固定當時 head。完成前仍重讀 remote head，移動時按既有 stale 規則處理。
 
 PR 報告只涵蓋已發布的審查內容。本地未提交檢查若有參考價值，另標為草稿／未版本化，不能掛同一 head 冒稱遠端通過。審查結束前重讀 remote head；移動時保留舊版報告並標示 stale，不將 pass 套到新版。
+
+受測 Review Skill 的來源版本與被審查 PR 是兩個不同基準。實際檢查紀錄需寫 Skill／共用契約的 source revision；尚未提交時記錄所用來源檔清單、內容指紋與算法。這放在既有範圍／實際檢查欄位，不另定 schema。待審程式的 Checkout HEAD 必須對應 reviewed head；不能把含新 Skill 實作的 dirty checkout 檢查當成舊 PR 版本通過。需要隔離環境時依既有授權取得，不覆寫原工作區。
 
 獨立首輪依使用者需求、正式 artifacts 與程式先形成初版結論，再交叉比較其他 Reviewer 未確認分析。複審明確使用上一輪 Findings 與實作者回覆，不把前人觀點冒稱新的獨立發現。
 
@@ -61,11 +65,15 @@ Finding 的 ID、verdict、狀態及基礎欄位只引用上游 `github-handoff.
 
 遠端揭露預設引用上游已確認政策：保留工具、已知模型與原生 Session ID；機器僅用已配置別名或 null，不抓 hostname。具名批准代記的效力也由上游契約持有，本 Skill 不另設更嚴的「人類必須再次到 GitHub 留言」條件。
 
+批准欄位只引用目前共用契約，不保存第二份範本。重播須包含：approved_by 只填人類 GitHub 帳號；approved_at 可保留已知的 YYYY-MM-DD，不補造午夜或以 recorded_at 取代，連日期都未知才 null；recorded_at 仍記實際發布時間與時區。核對 source_ref 的實際作者及獨立的記錄者授權，repo 寫入權限或候選 PR 自行宣告不能授權代記。批准未能核對代表不能以它授權 Apply，不阻止唯讀 Review 或已獲授權的技術報告發布；技術 verdict 與批准狀態分開記錄。
+
 本 Skill 負責用實際檢查決定狀態及阻塞性。純風格偏好、可選微優化、範圍外功能不阻塞；安全、Bug、資料風險、未達正式要求或必要驗證缺口才形成相應的 blocking 結論。Accepted 且未處理的必要事項依上游規則移入正式 task／risk 追蹤，不只留在 PR。
 
 ### 5. 報告發布與 PR 說明維護分開
 
 Reviewer 發布前依上游契約確認明確 PR、操作能力、授權與適用的帳號限制，不執行共用 identity script。工具支援時預設提交綁定 reviewed commit 的 COMMENT Review；否則使用同樣獲授權、正文明記 head／phase 的一般留言，保留形式限制。三種 Agent verdict 都在報告內，不要求各 Agent 使用不同 GitHub 帳號。寫入結果回讀，記實際 URL、版本及可得 actor；沒有發布成功便保留草稿／回傳報告。結果不明時先 reconciliation，不能換另一工具盲目重送。
+
+工具回成功及 URL 後，仍須回讀同一目標的報告，核對 Review-ID、phase、reviewed head 與實際儲存內容。回讀失敗或內容不符時，只能記「可能已發布／尚未確認」，不宣布 publication 或正式交接完成，不直接重送，也不轉交成已驗證報告；先 reconciliation。技術 verdict 仍使用三種既有值，發布確認是獨立狀態。
 
 共用契約區分 Agent verdict 與平台事件。同一 GitHub 帳號不能假裝多位平台 approver；只有帳號與權限允許、且另有明確意圖時才使用 APPROVE／REQUEST_CHANGES，不把它們列為預設必經分支。COMMENT、commit_id 與其他事件的 API 形狀已由 [GitHub Review 官方文件](https://docs.github.com/en/rest/pulls/reviews#create-a-review-for-a-pull-request)確認，實際帳號及工具支援仍須整合測試，不宣稱 required review 已滿足。
 
@@ -76,7 +84,7 @@ Reviewer 發布前依上游契約確認明確 PR、操作能力、授權與適�
 [修正複審 SVG](diagrams/review-loop.svg) 展示以下流程。
 
 1. Reviewer 對三種結論都保存報告到 PR，取得可核對的 report URL 與 reviewed head；因無目標 PR／權限等原因無法發布時返回報告並標記缺口。
-2. changes-required 時，預設回傳可轉交原實作者的訊息，內容含 PR／報告 URL、head、Findings 與下一步。若呼叫者另指定已確認可用的 Session 定向工具且已授權，才直接發送並記實際結果；repo 的通知人機制不當成 Session 工具。這次不新增通知器。
+2. changes-required 時，預設回傳可轉交原實作者的訊息，內容含 PR／報告 URL、head、Findings 與下一步。若呼叫者另指定已確認可用的 Session 定向工具且已授權，才直接發送並記實際結果；管理工具 Session ID 與 Agent 原生 Session ID 需分清，使用該工具接受且已核對的目標，不互換或猜測；repo 的通知人機制不當成 Session 工具。這次不新增通知器。
 3. 實作者按自己的授權讀 PR、修正／測試、透過版本發布流程 push，逐項回覆修正 commit／證據，再通知 Reviewer。
 4. Reviewer 再執行一輪，確認新 head、逐項驗證與受影響行為，保留前輪結果，發布 pass／changes-required／blocked。
 
@@ -84,9 +92,13 @@ Reviewer 發布前依上游契約確認明確 PR、操作能力、授權與適�
 
 人類設計批准的可恢復紀錄、實質設計變更後重新批准，以及 archive／doc 更新後必須發布並複審最終 head，均依上游契約執行。發現 active Change 已 archive 時，從 PR 的精確關聯取得 archived artifacts 及正式 spec，不把目錄搬移當作需求遺失。只有可證明為純交付整理的差異才縮小最後複審範圍。
 
-### 7. 單向依賴，獨立驗收
+### 7. 依賴可取得的契約，不依賴先有最終 Review pass
 
-先交付 `add-github-change-handoff` 的共用契約、Issue／PR 入口與 Work Item 分流規則，再整合本 Skill。前一 Change 用人工 Review 報告驗收，所以不依賴本 Skill。上游若已 archive，以已安裝契約／正式 capability 為準，不要求活動 Change 目錄還在。
+`add-github-change-handoff` 的共用契約、Issue／PR 入口及 Work Item 分流規則已交付，可作本 Skill 的實作基準。開始本 Change 不要求上游先通過本 Skill 將承接的最終複審，也不宣稱上游已驗收。上游若已 archive，以已交付契約與精確版本為準，不要求活動目錄仍存在。
+
+本次整合案例是 PR https://github.com/wkchen5872/wk-agent-ops/pull/2、Change add-github-change-handoff、phase implementation、expected-head `dee0855d1bdb026ef238b64374f80ea8275346d7`。此組資料只屬設計驗收 fixture，不硬編碼進通用 Skill。執行時核對實際 PR head；使用者回報的 10 支測試、strict validate 與 diff check 是待核對證據，不是本 Skill 已執行的結果。
+
+Review Skill 在其實作版本進行安裝／功能驗收，與 PR #2 待審版本分開。對 PR #2 產生報告可證明 Skill 的一次實際操作，不能據此自動宣布 Review Skill 自身已驗收，也不能把上游預設判成 pass。真實 PR 若無缺陷就如實通過，若有缺陷就如實回報；changes-required→修正→複審的固定流程先用離線案例驗證，不為了湊輪次在正式 PR 注入 Bug。另需真實失敗／修正往返時，只能使用已有真實 Finding，或另外明確授權的可丟棄測試 PR，未測分支明列限制。
 
 ## Risks / Trade-offs
 
@@ -106,15 +118,15 @@ Skill 為指令文件，沿用上游人工重播方法，不新增 harness。案
 
 Review 圖稿及案例都在 `template/common/skills/change-review/references/`，安裝後由 Skill 相對路徑引用；第二次安裝必須一併更新，不在 seed docs 留另一份圖。共用操作入口仍由 managed `docs/github-handoff.md` 引用 Skill，避免建立另一份功能手冊。
 
-跨 Session 測試使用明確指定的測試 PR 與通知對象，重播「報告 → 通知 → 新 head／修正回覆 → 複審」。真實跨機器、三種工具 runtime 及 required-review 行為若未執行，分別明列未測；不為了跑測試而建立新的通知基礎設施。
+跨 Session 測試使用第 7 節的固定案例與已授權通知對象，分別記錄 Skill 來源／待審 head，重播「報告 → 通知 → 新 head／修正回覆 → 複審」。真實跨機器、三種工具 runtime 及 required-review 行為若未執行，分別明列未測；不為了跑測試而建立新的通知基礎設施。
 
 ## Migration Plan
 
-1. 人類審閱設計，確認上游契約已交付且可取得。依 tasks 在 template 實作，不手改安裝目標。
+1. 人類審閱本次補充設計，確認上游契約的明確版本可取得；不要求上游先通過延後至本 Skill 的複審。依 tasks 在 template 實作，不手改安裝目標。
 2. 先在暫存 repo 安裝驗證，再透過既有 installer 安裝本 repo；更新 README／操作入口，保留原有 verify 和品質 Review 的獨立使用方式。
 3. 不批次改寫既有報告。首次複審時引用其原版本與 ID，必要時建立有來源的對照，不冒充原始作者。
 4. 回退時回復本 Change 的來源修改並重裝，不刪除既有 PR 報告或更改第三方 Skill。
 
 ## Open Questions
 
-各工具的測試 PR、Session 目標與可用通知通道在測試前提供。缺少時報告相應整合未測或 blocked，不改變本 Change 的介面、流程或交付範圍；GitHub 通道依可用能力選擇，無自訂腳本或 blob bootstrap 前提。
+第一個實際待審 PR／版本已由第 7 節指定；執行前仍須核對目標與實際 head。通知 Session、可用通道及任何額外可丟棄測試 PR 的授權在測試前確認。缺少時報告相應整合未測或 blocked，不改變本 Change 的介面、流程或交付範圍；GitHub 通道依可用能力選擇，無自訂腳本或 blob bootstrap 前提。

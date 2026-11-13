@@ -7,7 +7,7 @@
 <text x="80" y="108" class="sub">目標設計，尚未實作。每次呼叫完成一輪；通知後以新版本／新證據明確接續。</text>
 <rect x="80" y="170" width="850" height="118" rx="16" class="box"/>
 <text x="104" y="208" class="heading">01　指定 PR、phase 與可選前輪報告</text>
-<text x="104" y="242" class="body">以可用工具確認 repo、Change、base／head</text>
+<text x="104" y="242" class="body">核對 repo、Change、base／head 與 expected-head</text>
 <text x="104" y="272" class="body">原 Work Item 不存在也能接手</text>
 <path d="M505 288 V328" class="line"/>
 <rect x="80" y="328" width="850" height="118" rx="16" class="blue"/>
@@ -58,4 +58,5 @@
 <text x="1050" y="1050" class="note">平台批准與 Agent verdict 分開記錄。</text>
 <text x="80" y="1320" class="note">複審沿左側箭頭返回版本確認。head 改變後，舊報告仍綁舊版，不自動繼承 pass。</text>
 <text x="80" y="1355" class="note">若報告無法發布或通知未完成，明記交接缺口；不捏造遠端 URL、送達或修復結果。</text>
+<text x="80" y="1380" class="note">受測 Skill 來源與待審 head 分開記錄；上游複審可作整合案例，不等於 Skill 自身已驗收。</text>
 </svg>

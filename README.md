@@ -154,6 +154,7 @@ wt-done feature123 --base main
 | `.gitignore` 的 `/work-items/WI-*/` | 讓臨時紀錄不被 `git add -A` 暫存 |
 | `docs/github-handoff.md`、`docs/diagrams/github-handoff.svg` | GitHub 交接契約與流程圖（managed，重跑 installer 會更新） |
 | `.claude/skills/github-issue/`、`.claude/skills/github-pr/` | Issue／PR 交接入口 skill |
+| `.claude/skills/change-review/`、`.agents/skills/change-review/` | PR 審查、修正交接與複審 skill（含案例、檢查清單與流程圖） |
 | `.agents/skills/github-issue/`、`.agents/skills/github-pr/` | 同兩個入口的跨 Provider 副本 |
 | `.claude/rules/github-handoff.md`、`.agents/rules/github-handoff.md` | 交接契約的 Provider 原生載入入口與鏡像 |
 
@@ -190,6 +191,19 @@ repository 與分支），寫入後回讀結果。預設不限制帳號；只有
 限制時才核對，不符就停止，不代為切換帳號或修改設定，也不輸出任何 credential。這是規範
 與入口的行為，不是 hook，不會攔截手動執行的指令。Claude Code、Codex 與 Antigravity 取得同一份契約：前者
 另有 rule 入口，只讀 `AGENTS.md` 的工具經由 `docs/agent-protocol.md` 到達。
+
+PR 的審查使用 `change-review` Skill：提供 PR、phase（`design` 或 `implementation`），以及
+需要時的 Change、`expected-head` 與上一輪報告。它先固定要審的 head，依階段檢查清單審查，
+預設以綁定該 commit 的 COMMENT Review 發布並回讀，再回傳給實作者的交接訊息；每次呼叫只做
+一輪，不改產品程式、不 commit／push，也不走 PR 的 create／publish。
+
+| 工具 | 呼叫方式 |
+| --- | --- |
+| Claude Code | `/change-review`，或以自然語言要求 review PR |
+| Codex | `$change-review`，或以自然語言要求 review PR |
+| Antigravity | 從 `.agents/skills/change-review/` 載入，或以自然語言要求 |
+
+`ponytail-review`、`openspec-verify-change` 是可選加強，沒有安裝時改用 Skill 內建的基線。
 
 ### Python Profile
 
