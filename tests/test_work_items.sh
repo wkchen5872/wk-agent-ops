@@ -260,7 +260,7 @@ echo "3.2 protocol pointer"
 PROTO="$COMMON/docs/agent-protocol.md"
 grep -q 'work-items/AGENTS.md' "$PROTO" 2>/dev/null \
   && ok "protocol references the convention" || bad "protocol references the convention"
-grep -qE '^\| Version \| 2\.6\.0' "$PROTO" 2>/dev/null \
+grep -qE '^\| Version \| 2\.7\.0' "$PROTO" 2>/dev/null \
   && ok "protocol version bumped" || bad "protocol version bumped"
 # every repo-relative reference the protocol makes must ship into a target
 T="$(new_target)"; run_install "$T"

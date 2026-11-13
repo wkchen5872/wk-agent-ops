@@ -148,6 +148,9 @@ MANAGED_FILES=(
   docs/okf-conventions.md
   docs/mutation-testing.md
   docs/openspec-workflow.md
+  docs/github-handoff.md
+  docs/diagrams/github-handoff.svg
+  scripts/github/check-identity.sh
   work-items/AGENTS.md
 )
 for f in "${MANAGED_FILES[@]}"; do

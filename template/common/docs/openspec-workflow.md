@@ -68,6 +68,15 @@ For review-first work, leave changes unarchived and uncommitted and report what
 was verified and what remains. Archival, commit, merge, and deployment are
 separate actions; completing one does not imply completing the others.
 
+## GitHub handoff (optional)
+
+A project may use GitHub Issues and pull requests to hand work between sessions
+or machines. This is optional: no Change requires an Issue or PR. When it is
+used, follow [GitHub 交接契約](github-handoff.md) for association, identity
+checks, templates, and the human design-approval record. OpenSpec remains the
+authority for requirements; an Issue or PR edit alone approves nothing, and each
+stage in section 5 still needs its own evidence and authorization.
+
 ## Integration entrypoints
 
 Use the installed integration for each stage: explore, new/fast-forward/continue,

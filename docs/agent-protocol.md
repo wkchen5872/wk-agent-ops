@@ -17,7 +17,7 @@ generated: { by: codex/GPT-6, at: 2026-11-11T12:07:41+08:00 }
 
 | Field   | Value                                                     |
 | ------- | --------------------------------------------------------- |
-| Version | 2.6.0                                                     |
+| Version | 2.7.0                                                     |
 | Scope   | Operational framework for all AI agent tasks in this repo |
 
 ---
@@ -36,6 +36,12 @@ generated: { by: codex/GPT-6, at: 2026-11-11T12:07:41+08:00 }
 - **When the task needs cross-session temporary collaboration records:**
   `work-items/AGENTS.md` — the Work Item convention, and the single source of its
   rules. (Not needed otherwise; records are local and disposable.)
+- **When the task creates or updates a GitHub Issue or pull request, publishes a
+  review report, or commits or pushes for such a handoff:**
+  `docs/github-handoff.md` — the shared handoff contract. Before each write, run
+  its per-operation identity preflight (`scripts/github/check-identity.sh`) and
+  continue only on `pass`. This is policy, not a hook. (Not needed when the
+  project does not use this optional workflow.)
 
 ## 2. Hard Prohibitions (apply to every task, no exceptions)
 

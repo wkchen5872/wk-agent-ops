@@ -152,6 +152,11 @@ wt-done feature123 --base main
 | `.claude/rules/work-items.md` | Work Item 規範的 Provider 原生載入入口 |
 | `.agents/rules/work-items.md` | 同一入口的跨 Provider 鏡像 |
 | `.gitignore` 的 `/work-items/WI-*/` | 讓臨時紀錄不被 `git add -A` 暫存 |
+| `docs/github-handoff.md`、`docs/diagrams/github-handoff.svg` | GitHub 交接契約與流程圖（managed，重跑 installer 會更新） |
+| `scripts/github/check-identity.sh` | 寫入前的共用唯讀身分檢查（managed，可執行） |
+| `.claude/skills/github-issue/`、`.claude/skills/github-pr/` | Issue／PR 交接入口 skill |
+| `.agents/skills/github-issue/`、`.agents/skills/github-pr/` | 同兩個入口的跨 Provider 副本 |
+| `.claude/rules/github-handoff.md`、`.agents/rules/github-handoff.md` | 交接契約的 Provider 原生載入入口與鏡像 |
 
 `scripts/skills/install.sh` 管理 `.claude/`、複數 `.agents/`，以及兩個
 project-owned `.codex/agents/` custom agents。它不接管 `.codex/config.toml`、
@@ -171,6 +176,21 @@ Installer 會把忽略規則合併進專案版控的 `.gitignore`，並以 Git �
 只讀 `AGENTS.md` 的工具透過「實際載入的根指示檔 → `docs/agent-protocol.md`
 → `work-items/AGENTS.md`」這條鏈取得規範。Installer 會檢查這條鏈並在斷鏈時
 回報該補的段落，但不會覆寫專案自己的 `AGENTS.md`。
+
+### GitHub 交接（選用）
+
+要讓另一個 Session 或另一台機器只靠 GitHub Issue／PR 接手某個 OpenSpec Change 時，
+使用 `github-issue`（create／update）與 `github-pr`（create／publish／update）。
+兩個入口只負責操作順序；範本、關聯鍵、provenance、人類設計批准與完整流程都在
+managed 的 [`docs/github-handoff.md`](docs/github-handoff.md)。GitHub 操作一律走
+`gh`，commit／push 走 `git`，本版不使用 GitHub MCP。
+
+每次寫入前，入口會依操作（api／commit／push）執行
+`scripts/github/check-identity.sh`，把實際身分與專案 `AGENTS.md` 中
+`## GitHub handoff identity` 區塊（或使用者本次輸入）的預期值比對；結果不是 pass
+就停止該次寫入，不代為切換帳號或修改設定。這是規範與入口的行為，不是 hook，
+不會攔截手動執行的指令。Claude Code、Codex 與 Antigravity 取得同一份契約：前者
+另有 rule 入口，只讀 `AGENTS.md` 的工具經由 `docs/agent-protocol.md` 到達。
 
 ### Python Profile
 
@@ -221,6 +241,7 @@ wk-agent-ops/
 ├── template/                   ← 擴充套件來源（單一維護點）
 ├── scripts/
 │   ├── notify/                 ← 通知系統共用庫與 Telegram 實作
+│   ├── github/                 ← check-identity.sh（由 template 安裝的 managed 副本）
 │   ├── skills/
 │   │   └── install.sh          ← 安裝擴充套件到目標專案
 │   └── workflow/               ← wt-* / pm-start 等流程管理腳本
@@ -290,3 +311,4 @@ mkdir -p template/<profile>/hooks
 - Node.js / npm（語言 profile 透過 `npx` 安裝 testland/qa skills）
 - Claude Code CLI（`wt-work` 預設 Provider；亦支援 Codex、Antigravity、Copilot）
 - bash 4+、rsync、git 2.5+（worktree 支援）
+- [GitHub CLI](https://cli.github.com/) `gh`（僅 GitHub 交接入口需要；`check-identity.sh` 相容 bash 3.2）

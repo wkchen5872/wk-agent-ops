@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1780" viewBox="0 0 1600 1780" role="img" aria-labelledby="title desc">
+<title id="title">OpenSpec × GitHub 交接流程</title><desc id="desc">人工啟動各階段；GitHub 操作使用 gh，commit／push 使用 git，寫入前使用共用唯讀帳號檢查。</desc>
+<defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="#566879"/></marker></defs>
+<style>text{font-family:Inter,"PingFang TC","Noto Sans CJK TC",sans-serif;fill:#182c40}.title{font-size:35px;font-weight:700}.sub{font-size:21px;fill:#53677b}.heading{font-size:25px;font-weight:650}.body{font-size:22px}.note{font-size:20px;fill:#53677b}.box{fill:white;stroke:#96aabd;stroke-width:2}.blue{fill:#ecf5ff;stroke:#5481bd;stroke-width:2}.gold{fill:#fff6df;stroke:#ae8733;stroke-width:2}.green{fill:#eaf7f0;stroke:#5c9273;stroke-width:2}.line{fill:none;stroke:#566879;stroke-width:2.5;marker-end:url(#arrow)}.dash{fill:none;stroke:#8194a7;stroke-width:2;stroke-dasharray:7 6}</style>
+<rect width="1600" height="1780" fill="#f5f8fb"/>
+<text x="80" y="68" class="title">OpenSpec × GitHub 交接流程</text>
+<text x="80" y="108" class="sub">人工啟動各階段；GitHub 用 gh，commit／push 用 git；共用腳本先查身分。</text>
+<text x="80" y="154" class="note">本機／Agent 操作</text><text x="1050" y="154" class="note">遠端紀錄與責任界線</text>
+<rect x="80" y="176" width="850" height="118" rx="16" class="box"/>
+<text x="104" y="214" class="heading">01　建立 OpenSpec Change</text>
+<text x="104" y="248" class="body">proposal、specs、design、tasks</text>
+<text x="104" y="278" class="body">正式需求與驗收條件由 OpenSpec 管理</text>
+<path d="M505 294 V334" class="line"/>
+<rect x="80" y="334" width="850" height="118" rx="16" class="blue"/>
+<text x="104" y="372" class="heading">02　github-issue create</text>
+<text x="104" y="406" class="body">共用 api preflight → 查關聯 → gh 建立 Issue</text>
+<text x="104" y="436" class="body">Issue 追蹤依賴、負責人、下一步</text>
+<path d="M505 452 V492" class="line"/>
+<rect x="80" y="492" width="850" height="118" rx="16" class="blue"/>
+<text x="104" y="530" class="heading">03　github-pr create</text>
+<text x="104" y="564" class="body">檢查提交範圍，按操作跑 preflight，按需委派 writer</text>
+<text x="104" y="594" class="body">commit → push → 核對 remote head → Draft PR</text>
+<path d="M505 610 V650" class="line"/>
+<rect x="80" y="650" width="850" height="118" rx="16" class="gold"/>
+<text x="104" y="688" class="heading">04　design Review，再由人類批准</text>
+<text x="104" y="722" class="body">可由已授權 Agent 具名代記，綁定來源、範圍與 revision</text>
+<text x="104" y="752" class="body">Agent 技術通過不代表人類已批准實作</text>
+<path d="M505 768 V808" class="line"/>
+<rect x="80" y="808" width="850" height="118" rx="16" class="box"/>
+<text x="104" y="846" class="heading">05　openspec-apply-change</text>
+<text x="104" y="880" class="body">依已批准設計實作、測試</text>
+<text x="104" y="910" class="body">本機完成後仍需發布新版本</text>
+<path d="M505 926 V966" class="line"/>
+<rect x="80" y="966" width="850" height="118" rx="16" class="blue"/>
+<text x="104" y="1004" class="heading">06　github-pr publish</text>
+<text x="104" y="1038" class="body">核對範圍與帳號；按需 commit／push</text>
+<text x="104" y="1068" class="body">沿同一 PR 更新實作版本及驗證摘要</text>
+<path d="M505 1084 V1124" class="line"/>
+<rect x="80" y="1124" width="850" height="118" rx="16" class="gold"/>
+<text x="104" y="1162" class="heading">07　implementation Review</text>
+<text x="104" y="1196" class="body">api preflight → gh 保存 Review／留言 → 交接</text>
+<text x="104" y="1226" class="body">需修正時逐項回覆、新 head，再明確複審</text>
+<path d="M505 1242 V1282" class="line"/>
+<rect x="80" y="1282" width="850" height="118" rx="16" class="box"/>
+<text x="104" y="1320" class="heading">08　交付整理後，複審最終 head</text>
+<text x="104" y="1354" class="body">授權 archive／doc／commit → publish → 新 head 複審</text>
+<text x="104" y="1384" class="body">merge、deploy、真實資料驗收分開；等待時 Issue 不關閉</text>
+<path d="M505 1400 V1440" class="line"/>
+<rect x="80" y="1440" width="850" height="118" rx="16" class="green"/>
+<text x="104" y="1478" class="heading">09　確認完成條件，再依授權結案</text>
+<text x="104" y="1512" class="body">Issue close 與 OpenSpec archive 是獨立動作</text>
+<text x="104" y="1542" class="body">Review pass 或日期到達都不等於全部完成</text>
+<rect x="1050" y="176" width="470" height="140" rx="16" class="blue"/>
+<text x="1074" y="214" class="heading">Issue 是工作入口</text>
+<text x="1074" y="248" class="body">Change／PR 關聯與依賴解除條件</text>
+<text x="1074" y="278" class="body">本機 WI 只作補充，不是必要入口</text>
+<rect x="1050" y="492" width="470" height="140" rx="16" class="blue"/>
+<text x="1074" y="530" class="heading">PR 是版本與 Review 紀錄</text>
+<text x="1074" y="564" class="body">設計及實作各自綁定 reviewed head</text>
+<text x="1074" y="594" class="body">第一版示範同張 PR 的兩個階段</text>
+<rect x="1050" y="808" width="470" height="140" rx="16" class="box"/>
+<text x="1074" y="846" class="heading">純 update 不改 Git</text>
+<text x="1074" y="880" class="body">PR／Issue 摘要更新保留人工內容</text>
+<text x="1074" y="910" class="body">Review 發報告不走 create／publish</text>
+<rect x="1050" y="1124" width="470" height="140" rx="16" class="gold"/>
+<text x="1074" y="1162" class="heading">修正複審由 Reviewer 明確啟動</text>
+<text x="1074" y="1196" class="body">報告發布 ≠ Session 已收到通知</text>
+<text x="1074" y="1226" class="body">無新證據或必要環境不足時 blocked</text>
+<rect x="1050" y="1440" width="470" height="140" rx="16" class="box"/>
+<text x="1074" y="1478" class="heading">共用腳本先核對身分</text>
+<text x="1074" y="1512" class="body">api／commit／push 依操作分別檢查</text>
+<text x="1074" y="1542" class="body">不擅改 remote、登入或全域配置</text>
+<text x="80" y="1652" class="note">設計 Review／實作 Review 不通過時，返回相應規格修訂或修正流程；不能直接進入下一個通過階段。</text>
+<text x="80" y="1685" class="note">本圖為標準路徑摘要；分開設計 PR 需明確關聯，關聯條件與授權見 github-handoff.md 第 10 節。</text>
+<text x="80" y="1720" class="note">圖例：藍色＝遠端紀錄／發布；金色＝審查／交接；綠色＝該階段完成；白色＝本機或交付操作。</text>
+<text x="80" y="1750" class="note">必要驗收未完成不能提前 archive；若已先 merge，後續交付變更須另有授權的 PR 與審查。</text>
+</svg>

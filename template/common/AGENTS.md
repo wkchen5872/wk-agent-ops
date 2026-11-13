@@ -23,3 +23,8 @@ not edit it here. Keep project-specific rules in this file or under `docs/`.
 
 需要保存跨回合／跨 Session 的臨時協作紀錄時，先讀 `work-items/AGENTS.md`；
 該文件是這套規範的唯一來源。
+
+## GitHub 交接（選用）
+
+使用 GitHub Issue／PR 交接 Change 時，先讀 `docs/github-handoff.md`；預期身分的
+宣告格式與寫入前檢查都以該文件為準。
