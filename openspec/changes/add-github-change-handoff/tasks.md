@@ -2,7 +2,7 @@
 
 本清單只追蹤實作與驗證。開始前須取得本 Change 設計的人類審閱；建立 artifacts 不等於批准實作。第一版 GitHub 操作統一 gh，Git commit／push 使用 git；帳號腳本與 installer 用測試先行，Skill 指令採 design 的人工重播方法。純文字 contract 不能冒充操作驗收，去敏正式證據落在專案 `docs/verification/github-handoff/<run-id>.md`。
 
-驗證證據：[2026-11-13-apply-r01](../../../docs/verification/github-handoff/2026-11-13-apply-r01.md)。重播案例由 Agent 子 Session 執行、實作 Session 比對，尚無人類比對；5.1 未執行，5.2 的檢查已在目前工作區通過，待 5.1 之後重跑並交付 Review。
+驗證證據：[2026-11-13-apply-r01](../../../docs/verification/github-handoff/2026-11-13-apply-r01.md)（自動測試與離線重播）、[2026-11-13-gh-r02](../../../docs/verification/github-handoff/2026-11-13-gh-r02.md)（真實 gh 驗收，Issue #1／Draft PR #2）。重播與接手測試由 Agent 子 Session 執行、實作 Session 判讀，尚無人類比對；implementation Review 尚未進行。
 
 ## 1. 共用契約與正式交接邊界
 
@@ -29,8 +29,8 @@
 
 ## 5. 整體交接驗收
 
-- [ ] 5.1 在明確授權的測試 repo 透過 gh 完成 Issue／Draft PR 建立、重試查重、更新保留人工內容、git 發布版本與另一 Session 無 WI 接手。測試要求：記錄 gh 版本、api／commit／push preflight 結果、實際各 actor、Issue／PR URL、remote head；不足時保留未完成，不以 stub／人工模擬代替，不要求 MCP 驗收分支。
-- [ ] 5.2 執行必要專案檢查、`openspec validate add-github-change-handoff --strict`、`git diff --check` 及文件／SVG 檢查，確認各生命週期分開。測試要求：正式 run 文件採 OKF Reference 與必要 metadata／sources，保留歷史結果；記實際命令、限制及跨機器是否實測，完成後提供設計與驗收 Review。
+- [x] 5.1 在明確授權的測試 repo 透過 gh 完成 Issue／Draft PR 建立、重試查重、更新保留人工內容、git 發布版本與另一 Session 無 WI 接手。測試要求：記錄 gh 版本、api／commit／push preflight 結果、實際各 actor、Issue／PR URL、remote head；不足時保留未完成，不以 stub／人工模擬代替，不要求 MCP 驗收分支。
+- [x] 5.2 執行必要專案檢查、`openspec validate add-github-change-handoff --strict`、`git diff --check` 及文件／SVG 檢查，確認各生命週期分開。測試要求：正式 run 文件採 OKF Reference 與必要 metadata／sources，保留歷史結果；記實際命令、限制及跨機器是否實測，完成後提供設計與驗收 Review。
 
 ## Workflow follow-up
 

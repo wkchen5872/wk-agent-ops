@@ -205,7 +205,10 @@ is a different operation.
    updating it, or you are not its owner, do not edit it: put your content in
    your own review or comment and ask the user to name one writer. Reading the
    latest body first does not make concurrent edits safe.
-5. Change only the requested section and add one provenance line. Earlier
+5. Parse the body out of the JSON output rather than printing it with
+   `--jq .body`, which appends a newline that would accumulate after the block
+   on every update. Change only the requested section and add one provenance
+   line. Earlier
    provenance, other sections, and all text outside the markers stay as they
    were. Another reviewer's report is indexed by one line in the reviews
    section; it is never copied in, edited, or re-judged.

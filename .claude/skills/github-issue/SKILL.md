@@ -125,8 +125,16 @@ gh issue view <number> -R <host>/<owner>/<repo> --json body,url
 Confirm the stored body carries both exact keys, then report the URL.
 
 If the create call times out or its result is unknown, go back to Step 3 and
-look again before any retry — a blind resend is how duplicates appear. If the
-second look is still inconclusive, report that instead of retrying.
+look again before any retry — a blind resend is how duplicates appear. Search
+can lag just after a write, so on this second look also list the Issues and
+match the body directly:
+
+```bash
+gh issue list -R <host>/<owner>/<repo> --state all --limit 200 --json number,url,body \
+  --jq '[.[] | select(.body | contains("openspec-change: <change-id>")) | {number, url}]'
+```
+
+If it is still inconclusive, report that instead of retrying.
 
 ## Operation: update
 
@@ -164,7 +172,10 @@ gh issue edit <number> -R <host>/<owner>/<repo> --body-file <file>
 gh issue view <number> -R <host>/<owner>/<repo> --json body
 ```
 
-Confirm the text outside the markers is unchanged.
+Confirm the text outside the markers is unchanged. Take the body from the JSON
+output and parse it; printing it with `--jq .body` appends a newline, and a
+read-modify-write through that grows the text after the block by one line each
+time.
 
 ## Reporting
 
