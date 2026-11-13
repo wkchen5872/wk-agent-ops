@@ -114,8 +114,9 @@ branch 完成。每個 Worktree 同一時間只能有一個 active writer，跨 
 - **GitHub handoff has one contract** — `docs/github-handoff.md` owns the Issue, PR,
   and review schema and the write-time checks (full repository target, operation,
   authorization, readback); the `github-issue` and `github-pr` skills and the thin rule
-  only reference it. GitHub calls use an available gh or GitHub MCP and Git owns commit,
-  push, and authentication; there is no custom identity script. No hook enforces this
+  only reference it. GitHub calls use an available gh or GitHub MCP. Neither skill commits
+  or pushes: Git publication is a separately authorized step, and Git owns commit, push,
+  and authentication; there is no custom identity script. No hook enforces this
 - **common/ rules apply to all profiles** — language profiles extend, never override common
 - **language profile → testland/qa runner + common triage** — installer selects
   one runner per profile and one deduplicated `mutant-survival-triage`; no

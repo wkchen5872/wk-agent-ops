@@ -20,11 +20,11 @@ metadata:
 
 One invocation performs one review round of one OpenSpec Change on one PR: it
 fixes exactly which revision is reviewed, checks it for the requested phase,
-publishes a report that another agent can pick up, and says what happens next.
-The report schema, provenance rules, write-time checks, and the design-approval
-rules all live in `docs/github-handoff.md`. **Read sections 3–10 of that contract
-first** and take every template and field from it; this skill only adds the
-review procedure.
+publishes a short reply that another agent can pick up, and says what happens
+next. The reviewer reply template (section 6.2), finding identity (section 8),
+write-time checks, and the design-approval rules all live in
+`docs/github-handoff.md`. **Read sections 3–10 of that contract first** and take
+every template and field from it; this skill only adds the review procedure.
 
 [Review, repair, and re-review loop](references/review-loop.svg) shows the whole
 cycle; this skill covers the Reviewer's boxes.
@@ -47,10 +47,11 @@ them and ask. These are semantic inputs; each tool passes them its own way.
 ## What this skill never does
 
 It does not change the reviewed product code, stage, commit, push, merge,
-archive, close an Issue, or switch Draft/Ready. It never takes the `github-pr`
-create／publish path. It does not overwrite anyone else's report. Updating a PR
-summary or an Issue is a separate request handled by `github-pr update` or
-`github-issue update`. There is no identity script, credential parser, or extra
+archive, close an Issue or a PR, or switch Draft/Ready. Of the `github-pr`
+operations it uses only reply — never the create／update／close paths, and it
+keeps no review index in the PR description. It does not overwrite anyone
+else's report. Changing a PR description or an Issue is a separate request for
+those skills. There is no identity script, credential parser, or extra
 adapter: GitHub calls go through `gh` or a configured GitHub MCP, and their
 authentication stays theirs.
 
@@ -97,8 +98,11 @@ Two baselines exist and must not be mixed:
 - **Reviewed content** — the reviewed head and the Checkout HEAD where checks ran.
 
 A dirty skill-development checkout never vouches for tests of a different
-published head. Both baselines go in the Scope and Baseline fields the contract
-already defines; there is no extra schema.
+published head. The reviewed head always goes in the reply; when the skill
+source or the checkout differs from it in a way that matters, say so in the
+reply's checks and limits, and put longer evidence in the optional full baseline
+(contract section 6.4) or a published verification document. There is no extra
+schema.
 
 ## Step 4 — Stay independent on a first round
 
@@ -151,22 +155,26 @@ or the publication of a technical report.
   to the reviewed head, mark it stale, and say the new head needs its own
   review; never carry a `pass` forward.
 
-Write the report in the contract's review template, Scope and Baseline first,
-with the session fields filled honestly: a native Session ID only when known and
-publishable, a separate alias, and `null` with the reason otherwise.
+Write the report as the reviewer reply of contract section 6.2: the reviewed
+head and phase, the Review-ID and verdict, each finding as an actionable item
+(impact, location or evidence, how to tell it is fixed) that a reader without
+the local records understands, then the checks run and the limits. No findings
+means no filler items. Author carries `SESSION-ID`: the native ID only when known
+and publishable, otherwise `null` with the reason in your report; an alias is
+never written as the Session ID.
 
 ## Step 7 — Publish, then read back
 
 Publish only when the user asked for it and Step 1 found no blocker.
 
-- Default form: a COMMENT pull request review anchored to the reviewed commit
-  (`commit_id` = reviewed head). Use APPROVE or REQUEST_CHANGES only on a
-  separate explicit request and only when the account may; an Agent verdict is
-  not a platform approval, and agents sharing one account are not separate
-  approvers.
-- If the tool cannot create a review, use an equally authorized PR comment whose
-  first line states phase, Review-ID, and reviewed head. A comment is never a
-  way around a denial or an account restriction.
+- Default form: a `github-pr reply` — one new top-level PR conversation comment
+  whose Review line states the reviewed head, phase, Review-ID, and verdict.
+  Earlier rounds stay as they are. Use a platform APPROVE or REQUEST_CHANGES only
+  on a separate explicit request and only when the account may; an Agent verdict
+  is not a platform approval, and agents sharing one account are not separate
+  approvers. Older COMMENT reviews remain readable history.
+- A denial or an account restriction is never worked around by switching the
+  form of the report or the tool.
 - After the tool reports success, **回讀** the stored report by its URL and
   compare target, Review-ID, phase, reviewed head, and body. Only a match counts
   as published. If readback fails or differs, record publication as

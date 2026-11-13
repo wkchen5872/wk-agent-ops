@@ -23,7 +23,7 @@ design 階段的正常狀態，不能因此判 changes-required 或 blocked。
 
 - design `pass` 不是人類批准，也不代表任何測試已執行。報告要寫明 Apply 仍需適用的人類批准。
 - 批准紀錄無法核對（例如記錄者沒有獨立授權）只代表「不能依這筆代記 Apply」；它不阻止本輪的
-  技術審查，也不阻止已獲授權的報告發布。把它寫在 Summary and Limitations，必要時列為 Finding。
+  技術審查，也不阻止已獲授權的報告發布。把它寫在回覆的限制說明，必要時列為 Finding。
 - 有已安裝的 `openspec-verify-change` 時，不要在 design 階段整套套用它：它把未完成的 tasks 報為
   CRITICAL，那是 implementation 的標準。
 

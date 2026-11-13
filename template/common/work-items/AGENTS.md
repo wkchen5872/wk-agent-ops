@@ -66,6 +66,7 @@ Work Item 是**目前專案工作目錄內、可丟棄、不納入專案 Git 的
 - 判斷依據是專案版控的 `.gitignore`。效果只來自 `.git/info/exclude` 或個人 `core.excludesFile` 時，專案本身沒有帶規則，別人 clone 後不會有保護，視為未達成；規則仍須寫進專案版控的 `.gitignore`，且不因此修改個人或 repo-local 的 Git 設定。
 - 若紀錄已被追蹤，回報並依專案授權處理，不把新增忽略規則當成已完成取消追蹤，也不自行修改 Git index。
 - 不建立 repo 外共享儲存、獨立紀錄版本庫、全域索引或跨 worktree 同步機制。
+- 不上傳、同步或公開整個 Work Item；必要成果依第 8 節交接至正式產物。
 - 不建立空的 `agents/`、`reviews/`，不為每個對話回合建立新檔。
 
 ### 文件與圖稿
@@ -263,22 +264,6 @@ Review 先寫在**當前目錄的 Work Item** 內，不另建永久 Review 系�
 - 換到其他 worktree，或原 Work Item 已刪除：先讀正式規格；需要紀錄時建立本地 Work Item，指向同一個 Change。
 - 不為了 Review 搬移、還原或同步原本的討論歷史。
 - 檔名採 `<agent>-<session>-rNN.md`，由各 Session 維護自己的序號，不依賴全域流水號。
-
-### 專案採用 GitHub 交接時
-
-以上本地模式是預設，沒有採用 GitHub 交接的任務照常使用；不因為有 Work Item 就必須
-建立 Issue 或 PR。專案採用 [GitHub 交接契約](../docs/github-handoff.md) 時：
-
-- Review 報告與修正證據可以直接發布到對應的 PR，作為正式交接紀錄；格式、識別與
-  發布前檢查以該契約為準。此時本地 Work Item 只是選用的草稿。
-- 沒有原 Work Item 的 Reviewer（例如在另一台機器）依已發布的 Change 與 PR 版本審查並
-  發布自己的報告，不需要還原或複製原紀錄；新建的本地草稿仍遵守本文件的目錄與忽略規則。
-- `github-issue` 可以指定 Work Item 作為來源，只發布整理後的工作說明與 ID，不貼入
-  原始紀錄；Work Item 不需要為此新增欄位。
-- 不上傳、同步或公開整個 Work Item。遠端實作者需要的已確認 Finding、審查版本、證據與
-  下一步，在授權範圍內發布到正式交接位置；交接不依賴本機絕對路徑或 Work Item 繼續存在。
-- 已確認但尚未完成的必要修正、風險或驗證，仍須連到對應的 OpenSpec task 或正式風險
-  機制；PR 上的詳細報告不取代正式追蹤，也不能據此把工作標為完成。
 
 每份 Review 至少包含：
 

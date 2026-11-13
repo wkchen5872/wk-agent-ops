@@ -52,6 +52,13 @@ else
   ok "convention names no secondary tool"
 fi
 
+echo "1.3 local record policy is independent of publication"
+if grep -qiE 'github|github-(issue|pr|handoff)' "$CONVENTION"; then
+  bad "Work Item convention contains no GitHub workflow or contract dependency"
+else
+  ok "Work Item convention contains no GitHub workflow or contract dependency"
+fi
+
 # ── 1.2 Convention states the two boundaries ─────────────────────────────────
 echo "1.2 convention boundaries"
 grep -q 'active writer' "$CONVENTION" 2>/dev/null \

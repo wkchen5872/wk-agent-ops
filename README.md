@@ -180,13 +180,16 @@ Installer 會把忽略規則合併進專案版控的 `.gitignore`，並以 Git �
 ### GitHub 交接（選用）
 
 要讓另一個 Session 或另一台機器只靠 GitHub Issue／PR 接手某個 OpenSpec Change 時，
-使用 `github-issue`（create／update）與 `github-pr`（create／publish／update）。
+使用 `github-issue`（create／update）與 `github-pr`（create／update／reply／close）。
 `github-issue` 可從指定的 Work Item、Change、兩者、目前分支的關聯或目前 Session 整理出
-精簡的 Issue；之後的迭代以新增留言保存，不改寫正文。
+精簡的 Issue；之後的迭代以新增留言保存，不改寫正文。`github-pr` 用同樣的素材說明已發布
+的分支：create 開 Draft PR、update 改說明、reply 新增審查或修正回覆、close 不 merge 地關閉
+PR 與它直接處理的 Issue。
 兩個入口只負責操作順序；範本、關聯鍵、provenance、人類設計批准與完整流程都在
 managed 的 [`docs/github-handoff.md`](docs/github-handoff.md)。GitHub 操作使用當下
-可用且已配置的 `gh` 或 GitHub MCP；commit／push 使用本機 Git，SSH／HTTPS 認證交給
-Git 與本機設定。
+可用且已配置的 `gh` 或 GitHub MCP。兩個入口都不 commit、不 push：Git 發布是另外授權的
+步驟，使用專案既有的 Git／commit 流程，SSH／HTTPS 認證交給 Git 與本機設定。舊的
+`github-pr publish` 已移除，push 之後以 `github-pr update` 說明新版本。
 
 每次寫入前，入口會核對完整的 host／owner／repo、操作與使用者授權（PR 另核對 base／head
 repository 與分支），寫入後回讀結果。預設不限制帳號；只有使用者或可信專案規範明示
@@ -196,8 +199,8 @@ repository 與分支），寫入後回讀結果。預設不限制帳號；只有
 
 PR 的審查使用 `change-review` Skill：提供 PR、phase（`design` 或 `implementation`），以及
 需要時的 Change、`expected-head` 與上一輪報告。它先固定要審的 head，依階段檢查清單審查，
-預設以綁定該 commit 的 COMMENT Review 發布並回讀，再回傳給實作者的交接訊息；每次呼叫只做
-一輪，不改產品程式、不 commit／push，也不走 PR 的 create／publish。
+預設以 `github-pr reply` 發布一則寫明 reviewed head 的回覆並回讀，再回傳給實作者的交接訊息；
+每次呼叫只做一輪，不改產品程式、不 commit／push，也不走 PR 的 create／update／close。
 
 | 工具 | 呼叫方式 |
 | --- | --- |

@@ -3,7 +3,7 @@
 # the shared contract and its diagram are managed assets that reinstall refreshes;
 # the retired identity-check script is no longer shipped, required, or called, and
 # an unmodified legacy copy is removed while anything else is left and reported;
-# the thin rule, protocol and Work Item convention point at the single contract;
+# the thin rule and protocol point at the single contract; Work Items stay independent;
 # and the two entry skills reference it instead of restating its schema.
 # Maps to openspec/changes/add-github-change-handoff specs.
 #
@@ -177,7 +177,8 @@ grep -qE '^\| Version \| 2\.7\.0' "$PROTO" 2>/dev/null \
   && ok "protocol version bumped" || bad "protocol version bumped"
 want "$WORKFLOW" 'github-handoff.md' "OpenSpec workflow links the contract"
 want "$WORKFLOW" 'optional' "OpenSpec workflow keeps GitHub handoff optional"
-want "$CONVENTION" '../docs/github-handoff.md' "Work Item convention links the contract"
+deny "$CONVENTION" '../docs/github-handoff.md' "Work Item convention does not depend on the GitHub contract"
+deny "$DOC" '../work-items/AGENTS.md' "GitHub contract owns its schema without importing Work Item policy"
 want "$CONVENTION" 'Review 先寫在**當前目錄的 Work Item** 內' "local Review mode remains the default"
 want "$CONVENTION" '不上傳、同步或公開整個 Work Item' "Work Item is not uploaded or synchronized"
 want "$CONVENTION" '不跨 worktree 自動搬移、複製、搜尋補回或同步' "existing no-sync rule preserved"
@@ -210,17 +211,20 @@ for op in create update; do
   grep -qE "^## .*\b$op\b" "$ISSUE_SKILL/SKILL.md" 2>/dev/null \
     && ok "github-issue defines $op" || bad "github-issue defines $op"
 done
-for op in create publish update; do
+for op in create update reply close; do
   grep -qE "^## .*\b$op\b" "$PR_SKILL/SKILL.md" 2>/dev/null \
     && ok "github-pr defines $op" || bad "github-pr defines $op"
 done
-want "$PR_SKILL/SKILL.md" 'git remote get-url --push' "github-pr checks the actual push destination"
+# simplify-github-pr: PR operations never publish Git content (old push-destination check retired).
+grep -qE '^## .*\bpublish\b' "$PR_SKILL/SKILL.md" 2>/dev/null \
+  && bad "github-pr no longer defines a publish operation" || ok "github-pr no longer defines a publish operation"
 # Review codex-handoff-impl-s01-r01/W-01: the head repository is evidence, not an assumption.
 for field in headRepository headRepositoryOwner baseRefName isCrossRepository; do
   want "$PR_SKILL/SKILL.md" "$field" "github-pr reads $field for candidates and results"
 done
 want "$PR_SKILL/SKILL.md" '--head <head-owner>:<head-branch>' "github-pr create names the head owner"
-want "$PR_SKILL/references/acceptance-cases.md" '### GP-19' "github-pr has a fork replay case"
+grep -E '^### GP-[0-9]+' "$PR_SKILL/references/acceptance-cases.md" 2>/dev/null | grep -qF 'fork' \
+  && ok "github-pr has a fork replay case" || bad "github-pr has a fork replay case"
 
 # ── simplify-github-issue 1.1: sources, minimal Issue body, Author ───────────
 # Maps to openspec/changes/simplify-github-issue specs/github-issue.
@@ -325,6 +329,118 @@ issue_section | grep -qF '不照搬實作計畫的群組' \
 want "$ISSUE_SKILL/SKILL.md" 'stop and ask the user to confirm' "a missing named source halts before any remote call"
 doc_section 3 4 | grep -qF '另一個已配置' \
   && ok "§3 lets another configured tool cover a missing capability" || bad "§3 lets another configured tool cover a missing capability"
+
+# ── simplify-github-pr 1.x: sources, minimal PR frame, no Git writes ─────────
+# Maps to openspec/changes/simplify-github-pr specs/github-pr.
+echo "SGP-1 PR sources, frame and Git boundary"
+PR_CASES="$PR_SKILL/references/acceptance-cases.md"
+pr_section() { awk '/^### 6\.2 /{f=1;next} /^### 6\.3 /{f=0} f' "$DOC" 2>/dev/null; }
+pr_fence() { pr_section | awk -v n="$1" '/^```/{c++; next} c==2*n-1 && /^## /{print}'; }
+body="$(pr_fence 1 | tr '\n' '|')"
+[[ "$body" == '## Handoff|'*'## Author|' ]] \
+  && ok "PR body starts with Handoff and ends with Author" || bad "PR body starts with Handoff and ends with Author ($body)"
+for field in '- branch:' 'Co-Authored-By:' 'AI-Assisted-By:' 'SESSION-ID:'; do
+  pr_section | grep -qF -- "$field" && ok "PR template has '$field'" || bad "PR template has '$field'"
+done
+for field in '- brach:' 'wk-agent-ops:handoff:start' '### Provenance' '### design-approval' '### Reviews' '- phase:' '- owner:'; do
+  pr_section | grep -qF -- "$field" && bad "PR template drops '$field'" || ok "PR template drops '$field'"
+done
+if instructions "$PR_SKILL/SKILL.md" | grep -qE 'git push|git commit|git add|git-commit-writer|commit writer'; then
+  bad "github-pr instructs no staging, commit, push or commit-writer delegation"
+else
+  ok "github-pr instructs no staging, commit, push or commit-writer delegation"
+fi
+want "$PR_SKILL/SKILL.md" 'Git publication is a separate step' "github-pr explains the removed publish boundary"
+want "$PR_SKILL/SKILL.md" 'Always merge the relevant current-session discussion' "github-pr merges session decisions into named sources"
+want "$PR_SKILL/SKILL.md" 'work-items/WI-*/README.md' "github-pr reads Work Items directly"
+want "$PR_SKILL/SKILL.md" 'SESSION-ID' "github-pr fills the Author Session ID"
+for label in '來源實文：' '產出 PR：' '內容判定：'; do
+  n="$(grep -cF -- "- $label" "$PR_CASES" 2>/dev/null | tr -d ' ')"
+  [[ "${n:-0}" -ge 3 ]] && ok "at least 3 PR source-to-content cases state '$label' (${n:-0})" \
+    || bad "at least 3 PR source-to-content cases state '$label' (${n:-0})"
+done
+for t in '對話新決策' '未發布' '設計 PR' '沒有追蹤資料' '唯一既有 PR' '多個 PR' '缺少遠端分支' '空 diff' \
+         'dirty checkout' 'plain body' 'legacy markers' '並行' '後補 Issue' '舊 publish' '未知 Session'; do
+  grep -E '^### GP-[0-9]+' "$PR_CASES" 2>/dev/null | grep -qF -- "$t" \
+    && ok "github-pr has a case for '$t'" || bad "github-pr has a case for '$t'"
+done
+
+# Replay r01 gaps: plan enumeration, approval discovery, review next step, merged-PR close.
+want "$PR_SKILL/SKILL.md" 'without enumerating its groups' "github-pr links a task plan without enumerating it"
+want "$PR_SKILL/SKILL.md" 'comments,reviews' "github-pr reads reviews when looking for approval events"
+want "$PR_SKILL/SKILL.md" 'Apply still needs' "a design pass reminds that Apply still needs human approval"
+pr_section | grep -qF '下一步：' && ok "review reply template has a next step" || bad "review reply template has a next step"
+want "$PR_SKILL/SKILL.md" 'already merged or closed counts as ended' "close treats an already ended PR as confirmed"
+
+# ── simplify-github-pr 2.x: replies and independent approval events ─────────
+echo "SGP-2 PR replies and approval events"
+review="$(pr_fence 2 | tr '\n' '|')"; changes="$(pr_fence 3 | tr '\n' '|')"
+[[ "$review" == '## Handoff|## Review|## Author|' ]] && ok "reviewer reply is Handoff → Review → Author" \
+  || bad "reviewer reply is Handoff → Review → Author ($review)"
+[[ "$changes" == '## Handoff|## Changes|## Author|' ]] && ok "implementer reply is Handoff → Changes → Author" \
+  || bad "implementer reply is Handoff → Changes → Author ($changes)"
+pr_section | grep -qF -- '- pull-request:' && ok "reply Handoff names the PR" || bad "reply Handoff names the PR"
+reply_part() { sed -n '/^## Operation: reply/,/^## Operation: close/p' "$PR_SKILL/SKILL.md" 2>/dev/null; }
+reply_part | grep -qF 'gh pr comment' && ok "reply posts a top-level comment" || bad "reply posts a top-level comment"
+reply_part | grep -qF 'reviewed head' && ok "reply binds review content to the reviewed head" || bad "reply binds review content to the reviewed head"
+for label in '產出回覆：'; do
+  n="$(grep -cF -- "- $label" "$PR_CASES" 2>/dev/null | tr -d ' ')"
+  [[ "${n:-0}" -ge 2 ]] && ok "at least 2 reply generation cases (${n:-0})" || bad "at least 2 reply generation cases (${n:-0})"
+done
+for t in 'Reviewer 回覆' '實作者回覆' '沒有 finding' '無法完成' '既有留言'; do
+  grep -E '^### GP-[0-9]+' "$PR_CASES" 2>/dev/null | grep -qF -- "$t" \
+    && ok "github-pr has a case for '$t'" || bad "github-pr has a case for '$t'"
+done
+awk '/^### 6\.3 /{f=1;next} /^### 6\.4 /{f=0} f' "$DOC" | grep -qF -- '- status:' \
+  && ok "approval event carries its own status" || bad "approval event carries its own status"
+doc_section 9 10 | grep -qF '沒有正文批准區塊' \
+  && ok "§9 finds approval events without a body block" || bad "§9 finds approval events without a body block"
+doc_section 9 10 | grep -qF 'source_ref' \
+  && ok "§9 still accepts a legacy body source_ref" || bad "§9 still accepts a legacy body source_ref"
+
+# ── simplify-github-pr 3.x: close and uniform result checks ──────────────────
+echo "SGP-3 close and result checks"
+close_part() { sed -n '/^## Operation: close/,/^## Reporting/p' "$PR_SKILL/SKILL.md" 2>/dev/null; }
+close_part | grep -qF 'gh pr close' && ok "close closes the PR" || bad "close closes the PR"
+close_part | grep -qF 'gh issue close' && ok "close closes confirmed corresponding Issues" || bad "close closes confirmed corresponding Issues"
+if instructions "$PR_SKILL/SKILL.md" | grep -qE 'gh pr merge|--delete-branch|gh pr reopen|gh issue reopen'; then
+  bad "github-pr never instructs merge, branch deletion or reopen"
+else
+  ok "github-pr never instructs merge, branch deletion or reopen"
+fi
+for t in '直接 Issue 與依賴' '沒有 Issue' '關聯歧義' '多個直接 Issue' 'PR close 失敗' 'Issue 部分失敗' '已 closed' '已 merged'; do
+  grep -E '^### GP-[0-9]+' "$PR_CASES" 2>/dev/null | grep -qF -- "$t" \
+    && ok "github-pr has a close case for '$t'" || bad "github-pr has a close case for '$t'"
+done
+for op in create update reply close; do
+  for t in '回讀失敗' '結果不明'; do
+    grep -E '^### GP-[0-9]+' "$PR_CASES" 2>/dev/null | grep -F -- "$op" | grep -qF -- "$t" \
+      && ok "github-pr has a '$op $t' case" || bad "github-pr has a '$op $t' case"
+  done
+done
+
+# codex-simplify-pr-r02/F-01: a cancelled Issue was stored as closed/completed.
+echo "SGP-4 Issue close reason follows the evidence"
+close_part | grep -qE 'gh issue close .*--reason' && ok "close sets an explicit Issue close reason" \
+  || bad "close sets an explicit Issue close reason"
+close_part | grep -qF '"not planned"' && ok "cancelled or superseded work closes as not planned" \
+  || bad "cancelled or superseded work closes as not planned"
+close_part | grep -qF 'stateReason' && ok "close reads back the stored close reason" || bad "close reads back the stored close reason"
+close_part | grep -qF 'state_reason' && ok "close names the MCP state_reason field" || bad "close names the MCP state_reason field"
+if instructions "$PR_SKILL/SKILL.md" | grep -E 'gh issue close' | grep -vqF -- '--reason'; then
+  bad "every github-pr Issue close command carries --reason"
+else
+  ok "every github-pr Issue close command carries --reason"
+fi
+if grep -E '^- 預期呼叫：' "$PR_CASES" 2>/dev/null | grep -E 'gh issue close [0-9]+' | grep -vqF -- '--reason'; then
+  bad "every expected Issue close call in the cases carries --reason"
+else
+  ok "every expected Issue close call in the cases carries --reason"
+fi
+grep -qF 'stateReason: NOT_PLANNED' "$PR_CASES" && ok "a case reads back NOT_PLANNED" || bad "a case reads back NOT_PLANNED"
+grep -qF 'stateReason: COMPLETED' "$PR_CASES" && ok "a case keeps COMPLETED for finished work" || bad "a case keeps COMPLETED for finished work"
+doc_section 10 11 | grep -qF 'not planned' && ok "contract §10 ties Issue close reason to evidence" \
+  || bad "contract §10 ties Issue close reason to evidence"
 
 # ── 4.1 Managed delivery and legacy script retirement ────────────────────────
 echo "4.1 managed delivery"

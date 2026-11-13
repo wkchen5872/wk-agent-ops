@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Verifies the change-review capability: the cross-tool Skill exists with its
 # phase and version entry, references the shared handoff contract instead of
-# restating its schema, never takes the PR create/publish or commit/push paths,
+# restating its schema, never takes the PR create/update/close or commit/push paths,
 # ships its replay cases, checklists and diagram, and reaches Claude Code and the
 # .agents mirror through the existing installer.
 # Maps to openspec/changes/add-change-review-skill specs.
@@ -56,8 +56,16 @@ want "$CONTRACT" 'change-review' "contract points reviewers at the Skill"
 # ── 1.4 / 3.1 Native tools and publication boundaries ────────────────────────
 echo "1.4 / 3.1 tools and publication"
 want "$SKILL" 'MCP' "Skill allows a configured GitHub MCP"
-want "$SKILL" 'COMMENT' "default report form is a COMMENT review"
-want "$SKILL" 'commit_id' "COMMENT review is anchored to the reviewed commit"
+# simplify-github-pr: reports go out as a github-pr reply bound to the reviewed head.
+want "$SKILL" 'github-pr reply' "default report form is a github-pr reply"
+deny "$SKILL" 'Scope and Baseline first' "remote report no longer requires the full baseline table"
+want "$CASES" 'github-pr reply' "cases publish through github-pr reply"
+for v in pass changes-required blocked; do want "$SKILL" "$v" "Skill keeps the '$v' verdict"; done
+if grep -vE '^- (禁止|Forbidden)：' "$SKILL" "$CHECKS" 2>/dev/null | grep -qE 'github-pr (create|update|close|publish)|Reviews 索引'; then
+  bad "Reviewer path invokes no PR create, update, close or review index"
+else
+  ok "Reviewer path invokes no PR create, update, close or review index"
+fi
 want "$SKILL" '回讀' "publication is read back"
 want "$SKILL" '尚未確認' "unconfirmed publication is a separate state"
 if grep -qE 'check-identity|policy[_-]source|script-blob' "$SKILL" "$CASES" "$CHECKS" 2>/dev/null; then
@@ -66,12 +74,12 @@ else
   ok "no identity script, policy or blob prerequisite"
 fi
 # Prohibition lines may name these; instructions must not use them.
-if grep -vE '^- (禁止|Forbidden)：' "$SKILL" 2>/dev/null | grep -qE 'gh pr create|gh pr merge|git push|git commit|git add|github-pr (create|publish)'; then
-  bad "Skill instructs no PR create/publish, merge, commit or push"
+if grep -vE '^- (禁止|Forbidden)：' "$SKILL" 2>/dev/null | grep -qE 'gh pr create|gh pr merge|git push|git commit|git add|github-pr (create|publish|update|close)'; then
+  bad "Skill instructs no PR create/update/close, merge, commit or push"
 else
-  ok "Skill instructs no PR create/publish, merge, commit or push"
+  ok "Skill instructs no PR create/update/close, merge, commit or push"
 fi
-want "$SKILL" 'create／publish' "Skill states the create/publish boundary explicitly"
+want "$SKILL" 'create／update／close' "Skill states the create/update/close boundary explicitly"
 
 # ── 2.x Phase checklists and findings ────────────────────────────────────────
 echo "2.x checklists and findings"

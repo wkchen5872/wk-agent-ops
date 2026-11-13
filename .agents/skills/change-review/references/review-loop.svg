@@ -48,9 +48,9 @@
 <text x="1074" y="560" class="body">不代表人類批准、merge 或 deploy</text>
 <text x="1074" y="590" class="body">未完成的真實資料驗收仍需追蹤</text>
 <rect x="1050" y="804" width="470" height="140" rx="16" class="box"/>
-<text x="1074" y="842" class="heading">摘要更新另走純 update</text>
-<text x="1074" y="876" class="body">PR 放摘要與報告索引</text>
-<text x="1074" y="906" class="body">Issue 放依賴、等待條件與下一步</text>
+<text x="1074" y="842" class="heading">報告以 github-pr reply 發布</text>
+<text x="1074" y="876" class="body">每輪一則留言，不維護報告索引</text>
+<text x="1074" y="906" class="body">PR 說明與 Issue 另由各自入口更新</text>
 <path d="M930 518 H982 V400 H1035" class="line"/>
 <path d="M930 570 H1035" class="line"/>
 <path d="M80 1177 H28 V389 H80" class="line"/>
