@@ -16,8 +16,8 @@ Xirp 管理 ID `xirp-42`（`CHIRP_SESSION_ID`），兩者都屬於本次貼文 S
 
 「核對」指契約第 3 節的步驟 1–4。「查 PR」指 `gh pr list --head <branch> --state all --json
 …,headRepository,headRepositoryOwner,baseRefName,isCrossRepository` 並讀取候選。「讀比較」指
-`gh api repos/acme/widgets/compare/main...<head-owner>:<branch>`。所有 `gh` 呼叫都帶
-`-R github.com/acme/widgets`。所有案例的共同禁止：`gh pr merge`、`git push --force`、
+`gh api --hostname github.com repos/acme/widgets/compare/main...<head-owner>:<branch>`。其他
+`gh` 呼叫都帶 `-R github.com/acme/widgets`（`gh api` 以 `--hostname` 指定 host）。所有案例的共同禁止：`gh pr merge`、`git push --force`、
 `--no-verify`、刪除分支、reopen、改 remote 或認證設定。update、reply、close 的案例另外禁止
 任何 `git add`、`git commit`、`git push` 與 commit writer。create 在需要時做的 commit 與 push
 只能包含本次工作，並遵守「create 的必要發布」一節的規則。
@@ -446,10 +446,10 @@ Xirp 管理 ID `xirp-42`（`CHIRP_SESSION_ID`），兩者都屬於本次貼文 S
 
 ### GP-82 兩者都有
 
-- Fixture：要以 reply 發布審查回覆（同 GP-40）。兩個 ID 都由 runtime 提供。
+- Fixture：要以 reply 發布審查回覆（同 GP-40）。這個 Reviewer Session 的兩個 ID 都由 runtime 提供：`sess-9001` 與 `xirp-51`；被審查的實作者 Author 是 `sess-7781`／`xirp-42`。
 - 模擬回覆：同 GP-40。
 - 預期呼叫：讀取兩個鍵 → 其餘同 GP-40。
-- 禁止：共同禁止；只寫其中一個；把 Xirp ID 寫成 `SESSION-ID: xirp-42 (xirp)`。
+- 禁止：共同禁止；只寫其中一個；把 Xirp ID 寫成 `SESSION-ID: xirp-51 (xirp)`；填入實作者的 `sess-7781` 或 `xirp-42`。
 - 判定：兩個欄位分別填入，都是本次 Reviewer Session 的值，而不是被審查的實作者。
 
 ### GP-83 只有原生

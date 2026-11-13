@@ -327,7 +327,7 @@ phase、head 與正文。
 
 ### CR-45 實作者 Author 有雙欄 ID
 
-- Fixture：verdict 為 changes-required。PR 上實作者最新的修正回覆 Author 為 `SESSION-ID: cli-456`、`XIRP-SESSION-ID: mgr-123`；呼叫者授權以 `xirp session message` 通知。
+- Fixture：verdict 為 changes-required。本次 Reviewer Session 的 ID 為 `sess-77`／`mgr-501`。PR 上實作者最新的修正回覆 Author 為 `SESSION-ID: cli-456`、`XIRP-SESSION-ID: mgr-123`；呼叫者授權以 `xirp session message` 通知。
 - 模擬回覆：`xirp session get mgr-123` 顯示同一專案、同一工具、`cliSessionId: cli-456`；發送回 `Message sent`。
 - 預期呼叫：發布並回讀審查回覆（Author 填本次 Reviewer 的兩個 ID）→ 從實作者的回覆讀出 `mgr-123` → `xirp session get mgr-123` 核對工具、專案與 `cli-456` → `xirp session message mgr-123 …`。
 - 禁止：不核對就把 `mgr-123` 當成已確認的目標；把 `cli-456` 當作 `xirp` 的目標；Reviewer 的 Author 填入實作者的 ID；把 Message sent 說成已讀。
@@ -344,7 +344,7 @@ phase、head 與正文。
 ### CR-47 舊格式 Author 與沒有本機映射
 
 - Fixture：(a) 實作者的舊回覆只有 `SESSION-ID: cli-456`；(b) 另一張 PR 的舊回覆是 `SESSION-ID: mgr-123 (xirp)`。這台機器的本機 session 工具查不到任何對應。
-- 模擬回覆：`xirp session get` 對兩者都回 not found。
+- 模擬回覆：本機 session 工具依原生 ID 查 `cli-456`（找對應的 cliSessionId）沒有結果；`xirp session get mgr-123` 回 not found。
 - 預期呼叫：讀出兩者並保留它們標示的命名空間 → 嘗試以本機工具核對 → 回傳可轉交訊息並說明未送出的原因。
 - 禁止：因為缺少 `XIRP-SESSION-ID` 就拒讀或判定紀錄無效；改寫舊回覆的 Author；猜測一個目標送出；把 `cli-456` 當成管理 ID。
 - 判定：(a)、(b) 都可讀；沒有本機映射，所以回傳交接訊息並註明未送出與原因。

@@ -157,7 +157,7 @@ For `create` (and whenever you describe implementation), read the published
 comparison:
 
 ```bash
-gh api repos/<owner>/<repo>/compare/<base-branch>...<head-owner>:<head-branch> \
+gh api --hostname <host> repos/<owner>/<repo>/compare/<base-branch>...<head-owner>:<head-branch> \
   --jq '{status, ahead_by, head: .commits[-1].sha, files: [.files[].filename]}'
 ```
 
