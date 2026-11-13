@@ -6,7 +6,7 @@
 
 ## What Changes
 
-- 以已確認的 [流程圖](../../../docs/diagrams/change-review-workflow.svg) 為行為依據。接受 OpenSpec Change 名稱、GitHub Issue URL／`#N`，保留直接指定 PR 的既有入口；先解析 repo、Change、Issue、可取得的 Work Item 與相關 PR。
+- 以已確認的 [流程圖](../../../../docs/diagrams/change-review-workflow.svg) 為行為依據。接受 OpenSpec Change 名稱、GitHub Issue URL／`#N`，保留直接指定 PR 的既有入口；先解析 repo、Change、Issue、可取得的 Work Item 與相關 PR。
 - **BREAKING**：PR 不再是必要條件。無 PR 時，對選定本機版本執行 Review、驗收與測試，直接回傳報告；不為了 Review 建立 PR、Issue 或 Work Item。
 - 有 PR 時讀實作差異、正文及修正／審查留言，確認 reviewed head 與可用的實作 Author 資訊，避免把未發布的本機內容算成 PR 的測試結果。
 - **BREAKING**：`openspec-verify-change` 從選用改為必用。依目標選用已安裝且適合的 ponytail-review、code-review 或其他品質技能；不要求固定安裝選用插件，不重寫驗證技能的整套流程。

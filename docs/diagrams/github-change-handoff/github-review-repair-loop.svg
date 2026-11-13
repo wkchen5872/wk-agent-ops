@@ -1,0 +1,184 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2020" height="2370" viewBox="0 0 2020 2370" role="img" aria-labelledby="title desc">
+<title id="title">實作 Review 未通過：PR 報告與 Session 修正交接</title><desc id="desc">使用者已確認的交接方式，整合尚未實作。Reviewer 先將未通過的報告保存在 PR，再使用既有 Session 通知方式將報告連結交給原實作者。實作者讀 PR、確認版本、修正及測試、push 同一 PR 分支，逐項回覆證據，再通知 Reviewer。Reviewer fetch 新 head 複審，通過才更新 Finding 狀態；未通過則進入下一輪。原 Session 不可用時可由新 Agent 從 PR 接手。</desc>
+<defs>
+<marker id="arrow-ink" viewBox="0 0 10 10" refX="8.8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#14263d"/></marker>
+<marker id="arrow-blue" viewBox="0 0 10 10" refX="8.8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#355fcb"/></marker>
+<marker id="arrow-teal" viewBox="0 0 10 10" refX="8.8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#087e83"/></marker>
+<marker id="arrow-purple" viewBox="0 0 10 10" refX="8.8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#7554aa"/></marker>
+<marker id="arrow-amber" viewBox="0 0 10 10" refX="8.8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#a36a12"/></marker>
+<marker id="arrow-rose" viewBox="0 0 10 10" refX="8.8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#aa4056"/></marker>
+</defs>
+<style>text{font-family:Inter,"PingFang TC","Noto Sans CJK TC","Microsoft JhengHei",sans-serif} .edge{fill:none;stroke-linejoin:round;stroke-linecap:round} .node{fill:#fff;stroke-width:1.6}</style>
+<rect width="2020" height="2370" fill="#f8fafc"/>
+<text x="70" y="74" font-size="40" font-weight="750" fill="#14263d" text-anchor="start">實作 Review 未通過：報告、通知、修復與複審</text>
+<a href="github-handoff-workflow.svg" aria-label="返回完整交接流程圖"><text x="1950" y="74" font-size="24" font-weight="600" fill="#355fcb" text-anchor="end" text-decoration="underline">回主流程</text></a>
+<text x="70" y="119" font-size="23" font-weight="400" fill="#52647a" text-anchor="start">交接方式已確認｜沿用原 Session 通知；PR 保存每輪證據｜整合尚未實作或驗證</text>
+<rect x="70" y="165" width="440" height="55" rx="12" fill="#f1ecf8" stroke="none" stroke-width="1.5"/>
+<text x="92" y="201" font-size="24" font-weight="650" fill="#7554aa" text-anchor="start">Reviewer 本機</text>
+<rect x="70" y="235" width="440" height="1860" rx="16" fill="#f1ecf8" stroke="none" stroke-width="1.5"/>
+<rect x="550" y="165" width="440" height="55" rx="12" fill="#edf1fc" stroke="none" stroke-width="1.5"/>
+<text x="572" y="201" font-size="24" font-weight="650" fill="#355fcb" text-anchor="start">GitHub PR：共享紀錄</text>
+<rect x="550" y="235" width="440" height="1860" rx="16" fill="#edf1fc" stroke="none" stroke-width="1.5"/>
+<rect x="1030" y="165" width="440" height="55" rx="12" fill="#fff4e2" stroke="none" stroke-width="1.5"/>
+<text x="1052" y="201" font-size="24" font-weight="650" fill="#a36a12" text-anchor="start">Session 通知通道</text>
+<rect x="1030" y="235" width="440" height="1860" rx="16" fill="#fff4e2" stroke="none" stroke-width="1.5"/>
+<rect x="1510" y="165" width="440" height="55" rx="12" fill="#eaf5f4" stroke="none" stroke-width="1.5"/>
+<text x="1532" y="201" font-size="24" font-weight="650" fill="#087e83" text-anchor="start">實作 Agent 本機</text>
+<rect x="1510" y="235" width="440" height="1860" rx="16" fill="#eaf5f4" stroke="none" stroke-width="1.5"/>
+<g class="diagram-node" data-node="01">
+<rect x="110" y="270" width="360" height="180" rx="16" fill="#ffffff" stroke="#7554aa" stroke-width="1.5"/>
+<rect x="128" y="288" width="35" height="29" rx="7" fill="#7554aa" stroke="none" stroke-width="1.5"/>
+<text x="145.5" y="309" font-size="16" font-weight="700" fill="#ffffff" text-anchor="middle">01</text>
+<text x="177" y="310" font-size="26" font-weight="650" fill="#14263d" text-anchor="start">驗收不通過</text>
+<text x="133" y="348" font-size="22" font-weight="400" fill="#52647a" text-anchor="start">Reviewer 確認本輪問題</text>
+<text x="133" y="378" font-size="22" font-weight="400" fill="#52647a" text-anchor="start">記錄審查版本、Finding ID</text>
+<text x="133" y="408" font-size="22" font-weight="400" fill="#52647a" text-anchor="start">保留重現／測試證據</text>
+<text x="133" y="434" font-size="18" font-weight="600" fill="#7554aa" text-anchor="start">本輪 head A 僅為示意</text>
+</g>
+<g class="diagram-node" data-node="02">
+<rect x="590" y="270" width="360" height="180" rx="16" fill="#ffffff" stroke="#355fcb" stroke-width="1.5"/>
+<rect x="608" y="288" width="35" height="29" rx="7" fill="#355fcb" stroke="none" stroke-width="1.5"/>
+<text x="625.5" y="309" font-size="16" font-weight="700" fill="#ffffff" text-anchor="middle">02</text>
+<text x="657" y="310" font-size="26" font-weight="650" fill="#14263d" text-anchor="start">發布本輪報告</text>
+<text x="613" y="348" font-size="22" font-weight="400" fill="#52647a" text-anchor="start">phase＝implementation</text>
+<text x="613" y="378" font-size="22" font-weight="400" fill="#52647a" text-anchor="start">base／head、問題與限制</text>
+<text x="613" y="408" font-size="22" font-weight="400" fill="#52647a" text-anchor="start">取得報告／評論的直接連結</text>
+<text x="613" y="434" font-size="18" font-weight="600" fill="#355fcb" text-anchor="start">先保存成功，再通知實作者</text>
+</g>
+<path class="edge" d="M 470 360 L 590 360" stroke="#355fcb" stroke-width="2.7" marker-end="url(#arrow-blue)"/>
+<text x="530" y="337" font-size="19" font-weight="550" fill="#355fcb" text-anchor="middle" stroke="#f8fafc" stroke-width="7" paint-order="stroke" stroke-linejoin="round">發布</text>
+<path class="edge" d="M 290 450 L 290 500 L 1250 500 L 1250 570" stroke="#a36a12" stroke-width="2.7" marker-end="url(#arrow-amber)"/>
+<text x="775" y="479" font-size="21" font-weight="550" fill="#a36a12" text-anchor="middle" stroke="#f8fafc" stroke-width="7" paint-order="stroke" stroke-linejoin="round">報告發布成功後，Reviewer 主動通知</text>
+<g class="diagram-node" data-node="03">
+<rect x="1070" y="570" width="360" height="180" rx="16" fill="#ffffff" stroke="#a36a12" stroke-width="1.5"/>
+<rect x="1088" y="588" width="35" height="29" rx="7" fill="#a36a12" stroke="none" stroke-width="1.5"/>
+<text x="1105.5" y="609" font-size="16" font-weight="700" fill="#ffffff" text-anchor="middle">03</text>
+<text x="1137" y="610" font-size="26" font-weight="650" fill="#14263d" text-anchor="start">通知原 Session</text>
+<text x="1093" y="648" font-size="22" font-weight="400" fill="#52647a" text-anchor="start">指定原實作 Agent 的 Session</text>
+<text x="1093" y="678" font-size="22" font-weight="400" fill="#52647a" text-anchor="start">傳 PR URL＋本輪報告連結</text>
+<text x="1093" y="708" font-size="22" font-weight="400" fill="#52647a" text-anchor="start">附審查 head A 與待修 IDs</text>
+<text x="1093" y="734" font-size="18" font-weight="600" fill="#a36a12" text-anchor="start">沿用既有通知方式；未新增派工服務</text>
+</g>
+<g class="diagram-node" data-node="04">
+<rect x="1550" y="570" width="360" height="180" rx="16" fill="#ffffff" stroke="#087e83" stroke-width="1.5"/>
+<rect x="1568" y="588" width="35" height="29" rx="7" fill="#087e83" stroke="none" stroke-width="1.5"/>
+<text x="1585.5" y="609" font-size="16" font-weight="700" fill="#ffffff" text-anchor="middle">04</text>
+<text x="1617" y="610" font-size="26" font-weight="650" fill="#14263d" text-anchor="start">讀 PR、核對版本</text>
+<text x="1573" y="648" font-size="22" font-weight="400" fill="#52647a" text-anchor="start">實際開啟本輪報告</text>
+<text x="1573" y="678" font-size="22" font-weight="400" fill="#52647a" text-anchor="start">核對 head A 與目前分支</text>
+<text x="1573" y="708" font-size="22" font-weight="400" fill="#52647a" text-anchor="start">確認自己要處理的 Findings</text>
+<text x="1573" y="734" font-size="18" font-weight="600" fill="#087e83" text-anchor="start">接手後在合適 checkout 工作</text>
+</g>
+<path class="edge" d="M 1430 660 L 1550 660" stroke="#a36a12" stroke-width="2.7" marker-end="url(#arrow-amber)"/>
+<text x="1490" y="637" font-size="19" font-weight="550" fill="#a36a12" text-anchor="middle" stroke="#f8fafc" stroke-width="7" paint-order="stroke" stroke-linejoin="round">通知</text>
+<path class="edge" d="M 1730 750 L 1730 870" stroke="#087e83" stroke-width="2.7" marker-end="url(#arrow-teal)"/>
+<text x="1730" y="818" font-size="21" font-weight="550" fill="#087e83" text-anchor="middle" stroke="#f8fafc" stroke-width="7" paint-order="stroke" stroke-linejoin="round">依報告修正</text>
+<g class="diagram-node" data-node="05">
+<rect x="1550" y="870" width="360" height="180" rx="16" fill="#ffffff" stroke="#087e83" stroke-width="1.5"/>
+<rect x="1568" y="888" width="35" height="29" rx="7" fill="#087e83" stroke="none" stroke-width="1.5"/>
+<text x="1585.5" y="909" font-size="16" font-weight="700" fill="#ffffff" text-anchor="middle">05</text>
+<text x="1617" y="910" font-size="26" font-weight="650" fill="#14263d" text-anchor="start">修正與本機測試</text>
+<text x="1573" y="948" font-size="22" font-weight="400" fill="#52647a" text-anchor="start">依 Finding 修正與重現</text>
+<text x="1573" y="978" font-size="22" font-weight="400" fill="#52647a" text-anchor="start">執行相關測試及受影響檢查</text>
+<text x="1573" y="1008" font-size="22" font-weight="400" fill="#52647a" text-anchor="start">commit 修正，保留執行結果</text>
+<text x="1573" y="1034" font-size="18" font-weight="600" fill="#087e83" text-anchor="start">實作者負責修復；Reviewer 再確認</text>
+</g>
+<g class="diagram-node" data-node="06">
+<rect x="590" y="870" width="360" height="180" rx="16" fill="#ffffff" stroke="#355fcb" stroke-width="1.5"/>
+<rect x="608" y="888" width="35" height="29" rx="7" fill="#355fcb" stroke="none" stroke-width="1.5"/>
+<text x="625.5" y="909" font-size="16" font-weight="700" fill="#ffffff" text-anchor="middle">06</text>
+<text x="657" y="910" font-size="26" font-weight="650" fill="#14263d" text-anchor="start">更新同一張 PR</text>
+<text x="613" y="948" font-size="22" font-weight="400" fill="#52647a" text-anchor="start">push 至原 PR 分支</text>
+<text x="613" y="978" font-size="22" font-weight="400" fill="#52647a" text-anchor="start">遠端取得修正 commit</text>
+<text x="613" y="1008" font-size="22" font-weight="400" fill="#52647a" text-anchor="start">PR 的 head 更新為 B</text>
+<text x="613" y="1034" font-size="18" font-weight="600" fill="#355fcb" text-anchor="start">head B 是實際可取得的新版本</text>
+</g>
+<path class="edge" d="M 1550 960 L 950 960" stroke="#355fcb" stroke-width="2.7" marker-end="url(#arrow-blue)"/>
+<text x="1250" y="936" font-size="21" font-weight="550" fill="#355fcb" text-anchor="middle" stroke="#f8fafc" stroke-width="7" paint-order="stroke" stroke-linejoin="round">Git push：修正 commit／新 head B</text>
+<path class="edge" d="M 770 1050 L 770 1105 L 1730 1105 L 1730 1170" stroke="#355fcb" stroke-width="2.7" marker-end="url(#arrow-blue)"/>
+<text x="1250" y="1084" font-size="21" font-weight="550" fill="#355fcb" text-anchor="middle" stroke="#f8fafc" stroke-width="7" paint-order="stroke" stroke-linejoin="round">確認遠端 head B 已更新，再逐項回覆</text>
+<g class="diagram-node" data-node="07">
+<rect x="1550" y="1170" width="360" height="180" rx="16" fill="#ffffff" stroke="#087e83" stroke-width="1.5"/>
+<rect x="1568" y="1188" width="35" height="29" rx="7" fill="#087e83" stroke="none" stroke-width="1.5"/>
+<text x="1585.5" y="1209" font-size="16" font-weight="700" fill="#ffffff" text-anchor="middle">07</text>
+<text x="1617" y="1210" font-size="26" font-weight="650" fill="#14263d" text-anchor="start">逐項回覆 Findings</text>
+<text x="1573" y="1248" font-size="22" font-weight="400" fill="#52647a" text-anchor="start">列出修正 commit 與處理方式</text>
+<text x="1573" y="1278" font-size="22" font-weight="400" fill="#52647a" text-anchor="start">附測試結果或反證</text>
+<text x="1573" y="1308" font-size="22" font-weight="400" fill="#52647a" text-anchor="start">未解決事項保持可追蹤</text>
+<text x="1573" y="1334" font-size="18" font-weight="600" fill="#087e83" text-anchor="start">回覆「已修正」不等於驗收通過</text>
+</g>
+<g class="diagram-node" data-node="08">
+<rect x="590" y="1170" width="360" height="180" rx="16" fill="#ffffff" stroke="#355fcb" stroke-width="1.5"/>
+<rect x="608" y="1188" width="35" height="29" rx="7" fill="#355fcb" stroke="none" stroke-width="1.5"/>
+<text x="625.5" y="1209" font-size="16" font-weight="700" fill="#ffffff" text-anchor="middle">08</text>
+<text x="657" y="1210" font-size="26" font-weight="650" fill="#14263d" text-anchor="start">保留修正證據</text>
+<text x="613" y="1248" font-size="22" font-weight="400" fill="#52647a" text-anchor="start">PR 保存逐項回覆與連結</text>
+<text x="613" y="1278" font-size="22" font-weight="400" fill="#52647a" text-anchor="start">保留原報告與版本關係</text>
+<text x="613" y="1308" font-size="22" font-weight="400" fill="#52647a" text-anchor="start">取得本輪修正回覆的連結</text>
+<text x="613" y="1334" font-size="18" font-weight="600" fill="#355fcb" text-anchor="start">下一位 Agent 可由同一 PR 接手</text>
+</g>
+<path class="edge" d="M 1550 1260 L 950 1260" stroke="#355fcb" stroke-width="2.7" marker-end="url(#arrow-blue)"/>
+<text x="1250" y="1236" font-size="21" font-weight="550" fill="#355fcb" text-anchor="middle" stroke="#f8fafc" stroke-width="7" paint-order="stroke" stroke-linejoin="round">Web／gh／MCP：逐項回覆</text>
+<path class="edge" d="M 1730 1350 L 1730 1405 L 1250 1405 L 1250 1470" stroke="#a36a12" stroke-width="2.7" marker-end="url(#arrow-amber)"/>
+<text x="1490" y="1383" font-size="20" font-weight="550" fill="#a36a12" text-anchor="middle" stroke="#f8fafc" stroke-width="7" paint-order="stroke" stroke-linejoin="round">回覆發布後，實作者主動通知 Reviewer</text>
+<g class="diagram-node" data-node="09">
+<rect x="1070" y="1470" width="360" height="180" rx="16" fill="#ffffff" stroke="#a36a12" stroke-width="1.5"/>
+<rect x="1088" y="1488" width="35" height="29" rx="7" fill="#a36a12" stroke="none" stroke-width="1.5"/>
+<text x="1105.5" y="1509" font-size="16" font-weight="700" fill="#ffffff" text-anchor="middle">09</text>
+<text x="1137" y="1510" font-size="26" font-weight="650" fill="#14263d" text-anchor="start">通知 Reviewer</text>
+<text x="1093" y="1548" font-size="22" font-weight="400" fill="#52647a" text-anchor="start">指定原 Reviewer 的 Session</text>
+<text x="1093" y="1578" font-size="22" font-weight="400" fill="#52647a" text-anchor="start">傳 PR URL＋修正回覆連結</text>
+<text x="1093" y="1608" font-size="22" font-weight="400" fill="#52647a" text-anchor="start">附新 head B 與複審範圍</text>
+<text x="1093" y="1634" font-size="18" font-weight="600" fill="#a36a12" text-anchor="start">通知送出不代表已開始複審</text>
+</g>
+<g class="diagram-node" data-node="10">
+<rect x="110" y="1470" width="360" height="180" rx="16" fill="#ffffff" stroke="#7554aa" stroke-width="1.5"/>
+<rect x="128" y="1488" width="35" height="29" rx="7" fill="#7554aa" stroke="none" stroke-width="1.5"/>
+<text x="145.5" y="1509" font-size="16" font-weight="700" fill="#ffffff" text-anchor="middle">10</text>
+<text x="177" y="1510" font-size="26" font-weight="650" fill="#14263d" text-anchor="start">取得新版本複審</text>
+<text x="133" y="1548" font-size="22" font-weight="400" fill="#52647a" text-anchor="start">fetch 指定的新 head B</text>
+<text x="133" y="1578" font-size="22" font-weight="400" fill="#52647a" text-anchor="start">驗證修正與受影響行為</text>
+<text x="133" y="1608" font-size="22" font-weight="400" fill="#52647a" text-anchor="start">記錄實際檢查與剩餘限制</text>
+<text x="133" y="1634" font-size="18" font-weight="600" fill="#7554aa" text-anchor="start">不直接沿用 head A 的通過結論</text>
+</g>
+<path class="edge" d="M 1070 1560 L 470 1560" stroke="#a36a12" stroke-width="2.7" marker-end="url(#arrow-amber)"/>
+<text x="770" y="1536" font-size="21" font-weight="550" fill="#a36a12" text-anchor="middle" stroke="#f8fafc" stroke-width="7" paint-order="stroke" stroke-linejoin="round">PR／修正回覆連結＋head B</text>
+<path class="edge" d="M 290 1650 L 290 1700" stroke="#7554aa" stroke-width="2.7" marker-end="url(#arrow-purple)"/>
+<polygon points="290,1700.0 440.0,1765 290,1830.0 140.0,1765" fill="#fff7e8" stroke="#a36a12" stroke-width="2"/>
+<text x="290" y="1773" font-size="24" font-weight="650" fill="#14263d" text-anchor="middle">本輪驗收通過？</text>
+<path class="edge" d="M 440 1765 L 770 1765 L 770 1880" stroke="#087e83" stroke-width="2.7" marker-end="url(#arrow-teal)"/>
+<text x="770" y="1738" font-size="20" font-weight="550" fill="#087e83" text-anchor="middle" stroke="#f8fafc" stroke-width="7" paint-order="stroke" stroke-linejoin="round">是：確認修正與驗證證據</text>
+<g class="diagram-node" data-node="11">
+<rect x="590" y="1880" width="360" height="180" rx="16" fill="#ffffff" stroke="#355fcb" stroke-width="1.5"/>
+<rect x="608" y="1898" width="35" height="29" rx="7" fill="#355fcb" stroke="none" stroke-width="1.5"/>
+<text x="625.5" y="1919" font-size="16" font-weight="700" fill="#ffffff" text-anchor="middle">11</text>
+<text x="657" y="1920" font-size="26" font-weight="650" fill="#14263d" text-anchor="start">更新驗收結論</text>
+<text x="613" y="1958" font-size="22" font-weight="400" fill="#52647a" text-anchor="start">Reviewer 更新 Finding 狀態</text>
+<text x="613" y="1988" font-size="22" font-weight="400" fill="#52647a" text-anchor="start">確認解決才標為 Resolved</text>
+<text x="613" y="2018" font-size="22" font-weight="400" fill="#52647a" text-anchor="start">記錄 head B 與驗證結果</text>
+<text x="613" y="2044" font-size="18" font-weight="600" fill="#355fcb" text-anchor="start">通過不自動代表合併或部署</text>
+</g>
+<path class="edge" d="M 140 1765 L 40 1765 L 40 360 L 110 360" stroke="#aa4056" stroke-width="2.7" marker-end="url(#arrow-rose)"/>
+<text x="26" y="1040" transform="rotate(-90 26 1040)" font-size="19" font-weight="600" fill="#aa4056" text-anchor="middle">未通過：以新版本進入下一輪，重新發布報告並通知</text>
+<rect x="1070" y="1810" width="840" height="205" rx="16" fill="#ffffff" stroke="#d1dbe7" stroke-width="1.5"/>
+<text x="1095" y="1851" font-size="25" font-weight="650" fill="#14263d" text-anchor="start">阻塞時保留下一步，不持續空轉</text>
+<text x="1095" y="1891" font-size="21" font-weight="400" fill="#52647a" text-anchor="start">需求有歧義、環境不可用、等待資料，或重複修正沒有新證據時，</text>
+<text x="1095" y="1923" font-size="21" font-weight="400" fill="#52647a" text-anchor="start">在 PR／Issue 保存阻塞原因、負責角色與下一個可執行動作。</text>
+<text x="1095" y="1955" font-size="21" font-weight="400" fill="#52647a" text-anchor="start">本圖確認交接方式；自動通知觸發、重試與執行器仍待設計。</text>
+<rect x="70" y="2140" width="600" height="165" rx="16" fill="#ffffff" stroke="#d1dbe7" stroke-width="1.5"/>
+<text x="95" y="2180" font-size="25" font-weight="650" fill="#14263d" text-anchor="start">PR 保存紀錄，通知交付工作</text>
+<text x="95" y="2218" font-size="21" font-weight="400" fill="#52647a" text-anchor="start">發布報告與通知 Session 是兩個明確動作。</text>
+<text x="95" y="2248" font-size="21" font-weight="400" fill="#52647a" text-anchor="start">PR 留言不會自行啟動另一台機器的 Agent。</text>
+<text x="95" y="2278" font-size="21" font-weight="400" fill="#52647a" text-anchor="start">圖中 head A／B 只是示意，實際必須記錄 SHA。</text>
+<rect x="710" y="2140" width="600" height="165" rx="16" fill="#ffffff" stroke="#d1dbe7" stroke-width="1.5"/>
+<text x="735" y="2180" font-size="25" font-weight="650" fill="#14263d" text-anchor="start">原 Session 不在，也能接手</text>
+<text x="735" y="2218" font-size="21" font-weight="400" fill="#52647a" text-anchor="start">可開新 Agent，提供同一 PR 與本輪報告連結。</text>
+<text x="735" y="2248" font-size="21" font-weight="400" fill="#52647a" text-anchor="start">先取得正確版本、正式規格與必要環境。</text>
+<text x="735" y="2278" font-size="21" font-weight="400" fill="#52647a" text-anchor="start">工作紀錄不以原 Session 存活為前提。</text>
+<rect x="1350" y="2140" width="600" height="165" rx="16" fill="#fff7e8" stroke="#dfc18c" stroke-width="1.5"/>
+<text x="1375" y="2180" font-size="25" font-weight="650" fill="#a36a12" text-anchor="start">確認範圍</text>
+<text x="1375" y="2218" font-size="21" font-weight="400" fill="#52647a" text-anchor="start">已確認的是交接流程，尚未建置 PR 通知整合。</text>
+<text x="1375" y="2248" font-size="21" font-weight="400" fill="#52647a" text-anchor="start">尚未執行遠端發文、Session 通知或修復作業。</text>
+<text x="1375" y="2278" font-size="21" font-weight="400" fill="#52647a" text-anchor="start">主流程與其他未決設計沒有因此全部批准。</text>
+<text x="70" y="2348" font-size="19" font-weight="400" fill="#52647a" text-anchor="start">2026-11-13｜對應歷史主流程步驟 08 的修正複審｜現行文件入口見 README.md</text>
+</svg>

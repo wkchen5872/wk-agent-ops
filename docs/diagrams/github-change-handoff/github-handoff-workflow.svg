@@ -1,0 +1,198 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2080" height="1880" viewBox="0 0 2080 1880" role="img" aria-labelledby="title desc">
+<title id="title">GitHub Issue／PR 歷史交接流程</title><desc id="desc">2026-11-13 探索階段的三條泳道流程圖，呈現本機、GitHub 和 Reviewer／人類。此圖保留當時的 Draft PR、phase 與發布流程，不是現行操作契約。</desc>
+<defs>
+<marker id="arrow-ink" viewBox="0 0 10 10" refX="8.8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#14263d"/></marker>
+<marker id="arrow-blue" viewBox="0 0 10 10" refX="8.8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#355fcb"/></marker>
+<marker id="arrow-teal" viewBox="0 0 10 10" refX="8.8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#087e83"/></marker>
+<marker id="arrow-purple" viewBox="0 0 10 10" refX="8.8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#7554aa"/></marker>
+<marker id="arrow-amber" viewBox="0 0 10 10" refX="8.8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#a36a12"/></marker>
+<marker id="arrow-rose" viewBox="0 0 10 10" refX="8.8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#aa4056"/></marker>
+</defs>
+<style>text{font-family:Inter,"PingFang TC","Noto Sans CJK TC","Microsoft JhengHei",sans-serif} .edge{fill:none;stroke-linejoin:round;stroke-linecap:round} .node{fill:#fff;stroke-width:1.6}</style>
+<rect width="2080" height="1880" fill="#f8fafc"/>
+<text x="70" y="74" font-size="42" font-weight="750" fill="#14263d" text-anchor="start">GitHub Issue／PR 歷史交接流程</text>
+<text x="70" y="119" font-size="24" font-weight="400" fill="#52647a" text-anchor="start">2026-11-13 探索流程｜保留當時的 Draft PR、phase 與發布設計；非現行操作契約</text>
+<rect x="70" y="157" width="520" height="58" rx="12" fill="#eaf5f4" stroke="none"/>
+<text x="94" y="195" font-size="25" font-weight="650" fill="#087e83" text-anchor="start">本機 Local：規劃與實作</text>
+<rect x="780" y="157" width="520" height="58" rx="12" fill="#edf1fc" stroke="none"/>
+<text x="804" y="195" font-size="25" font-weight="650" fill="#355fcb" text-anchor="start">GitHub：Issue、分支與 PR</text>
+<rect x="1490" y="157" width="520" height="58" rx="12" fill="#f1ecf8" stroke="none"/>
+<text x="1514" y="195" font-size="25" font-weight="650" fill="#7554aa" text-anchor="start">Reviewer／人類：審查與批准</text>
+<rect x="70" y="231" width="520" height="1405" rx="16" fill="#f0f8f7" stroke="none"/>
+<rect x="780" y="231" width="520" height="1405" rx="16" fill="#f0f3fc" stroke="none"/>
+<rect x="1490" y="231" width="520" height="1405" rx="16" fill="#f6f2fa" stroke="none"/>
+
+<!-- Row 1: Step 01 & Step 02 -->
+<g class="diagram-node" data-node="01">
+<rect x="110" y="260" width="440" height="150" rx="16" fill="#ffffff" stroke="#087e83" stroke-width="1.6"/>
+<rect x="128" y="278" width="35" height="29" rx="7" fill="#087e83" stroke="none"/>
+<text x="145.5" y="299" font-size="16" font-weight="700" fill="#ffffff" text-anchor="middle">01</text>
+<text x="177" y="300" font-size="25" font-weight="650" fill="#14263d" text-anchor="start">建立 Change</text>
+<text x="133" y="338" font-size="21" font-weight="400" fill="#52647a" text-anchor="start">proposal、specs、design、tasks</text>
+<text x="133" y="367" font-size="21" font-weight="400" fill="#52647a" text-anchor="start">正式需求、架構與任務由 OpenSpec 管理</text>
+<text x="133" y="394" font-size="17" font-weight="600" fill="#087e83" text-anchor="start">既有 OpenSpec 規劃流程；Work Item 為本地補充</text>
+</g>
+
+<g class="diagram-node" data-node="02">
+<rect x="820" y="260" width="440" height="150" rx="16" fill="#ffffff" stroke="#355fcb" stroke-width="1.6"/>
+<rect x="838" y="278" width="35" height="29" rx="7" fill="#355fcb" stroke="none"/>
+<text x="855.5" y="299" font-size="16" font-weight="700" fill="#ffffff" text-anchor="middle">02</text>
+<text x="887" y="300" font-size="25" font-weight="650" fill="#14263d" text-anchor="start">登錄工作 (選用)</text>
+<text x="843" y="338" font-size="21" font-weight="400" fill="#52647a" text-anchor="start">github-issue create：選來源、核對目標</text>
+<text x="843" y="367" font-size="21" font-weight="400" fill="#52647a" text-anchor="start">寫入 Change ID、規格位置、依賴與下一步</text>
+<text x="843" y="394" font-size="17" font-weight="600" fill="#355fcb" text-anchor="start">精確鍵查重；選用步驟，不強制前置</text>
+</g>
+
+<path class="edge" d="M 550 335 L 820 335" stroke="#355fcb" stroke-width="2.7" marker-end="url(#arrow-blue)"/>
+<text x="685" y="315" font-size="19" font-weight="550" fill="#355fcb" text-anchor="middle" stroke="#f8fafc" stroke-width="7" paint-order="stroke" stroke-linejoin="round">可選：登錄 Issue</text>
+
+<!-- Row 2: Step 03 & Step 04 -->
+<path class="edge" d="M 1040 410 L 1040 480" stroke="#355fcb" stroke-width="2.7" marker-end="url(#arrow-blue)"/>
+<path class="edge" d="M 330 410 L 330 445 L 820 540" stroke="#7554aa" stroke-width="2.2" stroke-dasharray="8 6" marker-end="url(#arrow-purple)"/>
+<text x="545" y="465" font-size="18" font-weight="550" fill="#7554aa" text-anchor="middle" stroke="#f8fafc" stroke-width="7" paint-order="stroke" stroke-linejoin="round">不開 Issue 亦可直接發布 PR</text>
+
+<g class="diagram-node" data-node="03">
+<rect x="820" y="480" width="440" height="150" rx="16" fill="#ffffff" stroke="#355fcb" stroke-width="1.6"/>
+<rect x="838" y="498" width="35" height="29" rx="7" fill="#355fcb" stroke="none"/>
+<text x="855.5" y="519" font-size="16" font-weight="700" fill="#ffffff" text-anchor="middle">03</text>
+<text x="887" y="520" font-size="25" font-weight="650" fill="#14263d" text-anchor="start">發布規格 (Draft PR)</text>
+<text x="843" y="558" font-size="21" font-weight="400" fill="#52647a" text-anchor="start">github-pr create (phase: design)</text>
+<text x="843" y="587" font-size="21" font-weight="400" fill="#52647a" text-anchor="start">盤點未提交、原生 push、開立 Draft PR</text>
+<text x="843" y="614" font-size="17" font-weight="600" fill="#355fcb" text-anchor="start">建立 managed 區塊；不 commit、不推測 SHA</text>
+</g>
+
+<g class="diagram-node" data-node="04">
+<rect x="1530" y="480" width="440" height="150" rx="16" fill="#ffffff" stroke="#7554aa" stroke-width="1.6"/>
+<rect x="1548" y="498" width="35" height="29" rx="7" fill="#7554aa" stroke="none"/>
+<text x="1565.5" y="519" font-size="16" font-weight="700" fill="#ffffff" text-anchor="middle">04</text>
+<text x="1597" y="520" font-size="25" font-weight="650" fill="#14263d" text-anchor="start">設計審查與批准</text>
+<text x="1553" y="558" font-size="21" font-weight="400" fill="#52647a" text-anchor="start">design Review：檢查驗收標準與可行性</text>
+<text x="1553" y="587" font-size="21" font-weight="400" fill="#52647a" text-anchor="start">人類批准：PR 留言或已授權 Agent 具名代記</text>
+<text x="1553" y="614" font-size="17" font-weight="600" fill="#7554aa" text-anchor="start">status 轉為 approved，綁定 revision</text>
+</g>
+
+<path class="edge" d="M 1260 555 L 1530 555" stroke="#7554aa" stroke-width="2.7" marker-end="url(#arrow-purple)"/>
+<text x="1395" y="535" font-size="19" font-weight="550" fill="#7554aa" text-anchor="middle" stroke="#f8fafc" stroke-width="7" paint-order="stroke" stroke-linejoin="round">規格已發布，請求設計審查</text>
+
+<!-- Row 3: Decision Diamond 04 -->
+<path class="edge" d="M 1750 630 L 1750 670" stroke="#7554aa" stroke-width="2.7" marker-end="url(#arrow-purple)"/>
+<polygon points="1750,670 1920,730 1750,790 1580,730" fill="#fff7e8" stroke="#a36a12" stroke-width="2"/>
+<text x="1750" y="738" font-size="24" font-weight="650" fill="#14263d" text-anchor="middle">設計已批准？</text>
+
+<path class="edge" d="M 1580 730 L 330 730 L 330 410" stroke="#aa4056" stroke-width="2.7" marker-end="url(#arrow-rose)"/>
+<text x="955" y="710" font-size="21" font-weight="550" fill="#aa4056" text-anchor="middle" stroke="#f8fafc" stroke-width="7" paint-order="stroke" stroke-linejoin="round">否：修改規格，再次 push 同 PR 並重審</text>
+
+<path class="edge" d="M 1750 790 L 1750 820 L 330 820 L 330 850" stroke="#087e83" stroke-width="2.7" marker-end="url(#arrow-teal)"/>
+<text x="1040" y="802" font-size="21" font-weight="550" fill="#087e83" text-anchor="middle" stroke="#f8fafc" stroke-width="7" paint-order="stroke" stroke-linejoin="round">是：取得具名批准憑據，授權開始實作</text>
+
+<!-- Row 4: Step 05, 06, 07 -->
+<g class="diagram-node" data-node="05">
+<rect x="110" y="850" width="440" height="150" rx="16" fill="#ffffff" stroke="#087e83" stroke-width="1.6"/>
+<rect x="128" y="868" width="35" height="29" rx="7" fill="#087e83" stroke="none"/>
+<text x="145.5" y="889" font-size="16" font-weight="700" fill="#ffffff" text-anchor="middle">05</text>
+<text x="177" y="890" font-size="25" font-weight="650" fill="#14263d" text-anchor="start">實作與本機測試</text>
+<text x="133" y="928" font-size="21" font-weight="400" fill="#52647a" text-anchor="start">openspec-apply-change ＋ TDD</text>
+<text x="133" y="957" font-size="21" font-weight="400" fill="#52647a" text-anchor="start">更新程式、單元／整合測試與 tasks.md</text>
+<text x="133" y="984" font-size="17" font-weight="600" fill="#087e83" text-anchor="start">通過本機測試；變更仍在工作區，尚未發布</text>
+</g>
+
+<g class="diagram-node" data-node="06">
+<rect x="820" y="850" width="440" height="150" rx="16" fill="#ffffff" stroke="#355fcb" stroke-width="1.6"/>
+<rect x="838" y="868" width="35" height="29" rx="7" fill="#355fcb" stroke="none"/>
+<text x="855.5" y="889" font-size="16" font-weight="700" fill="#ffffff" text-anchor="middle">06</text>
+<text x="887" y="890" font-size="25" font-weight="650" fill="#14263d" text-anchor="start">發布實作版本</text>
+<text x="843" y="928" font-size="21" font-weight="400" fill="#52647a" text-anchor="start">github-pr publish (同一張 PR)</text>
+<text x="843" y="957" font-size="21" font-weight="400" fill="#52647a" text-anchor="start">盤點 dirty、commit／push 到同一分支</text>
+<text x="843" y="984" font-size="17" font-weight="600" fill="#355fcb" text-anchor="start">更新 PR 摘要與驗證清單；標為 Ready</text>
+</g>
+
+<g class="diagram-node" data-node="07">
+<rect x="1530" y="850" width="440" height="150" rx="16" fill="#ffffff" stroke="#7554aa" stroke-width="1.6"/>
+<rect x="1548" y="868" width="35" height="29" rx="7" fill="#7554aa" stroke="none"/>
+<text x="1565.5" y="889" font-size="16" font-weight="700" fill="#ffffff" text-anchor="middle">07</text>
+<text x="1597" y="890" font-size="25" font-weight="650" fill="#14263d" text-anchor="start">實作 Review</text>
+<text x="1553" y="928" font-size="21" font-weight="400" fill="#52647a" text-anchor="start">change-review (phase: implementation)</text>
+<text x="1553" y="957" font-size="21" font-weight="400" fill="#52647a" text-anchor="start">fetch 固定 head、執行自帶基線檢查</text>
+<a href="github-review-repair-loop.svg" aria-label="開啟 PR 報告與 Session 通知的修正複審子流程"><text x="1553" y="984" font-size="17" font-weight="600" fill="#7554aa" text-anchor="start" text-decoration="underline">PR 留言＋Session 通知；開啟修正子流程</text></a>
+</g>
+
+<path class="edge" d="M 550 925 L 820 925" stroke="#355fcb" stroke-width="2.7" marker-end="url(#arrow-blue)"/>
+<text x="685" y="905" font-size="19" font-weight="550" fill="#355fcb" text-anchor="middle" stroke="#f8fafc" stroke-width="7" paint-order="stroke" stroke-linejoin="round">Git push＋更新同張 PR</text>
+
+<path class="edge" d="M 1260 925 L 1530 925" stroke="#7554aa" stroke-width="2.7" marker-end="url(#arrow-purple)"/>
+<text x="1395" y="905" font-size="19" font-weight="550" fill="#7554aa" text-anchor="middle" stroke="#f8fafc" stroke-width="7" paint-order="stroke" stroke-linejoin="round">實作已發布，請求驗收審查</text>
+
+<!-- Row 5: Decision Diamond 07 -->
+<path class="edge" d="M 1750 1000 L 1750 1040" stroke="#7554aa" stroke-width="2.7" marker-end="url(#arrow-purple)"/>
+<polygon points="1750,1040 1920,1100 1750,1160 1580,1100" fill="#fff7e8" stroke="#a36a12" stroke-width="2"/>
+<text x="1750" y="1108" font-size="24" font-weight="650" fill="#14263d" text-anchor="middle">實作審查通過？</text>
+
+<path class="edge" d="M 1580 1100 L 330 1100 L 330 1000" stroke="#aa4056" stroke-width="2.7" marker-end="url(#arrow-rose)"/>
+<text x="955" y="1080" font-size="21" font-weight="550" fill="#aa4056" text-anchor="middle" stroke="#f8fafc" stroke-width="7" paint-order="stroke" stroke-linejoin="round">否：PR 留 Finding 證據；實作者修正、push 新 head 並逐項回覆 (D-002)</text>
+
+<path class="edge" d="M 1750 1160 L 1750 1195 L 330 1195 L 330 1230" stroke="#087e83" stroke-width="2.7" marker-end="url(#arrow-teal)"/>
+<text x="1040" y="1178" font-size="21" font-weight="550" fill="#087e83" text-anchor="middle" stroke="#f8fafc" stroke-width="7" paint-order="stroke" stroke-linejoin="round">是：實作驗收 pass，授權交付整理</text>
+
+<!-- Row 6: Step 08 交付整理與最終複審 -->
+<g class="diagram-node" data-node="08">
+<rect x="110" y="1230" width="440" height="150" rx="16" fill="#ffffff" stroke="#087e83" stroke-width="1.6"/>
+<rect x="128" y="1248" width="35" height="29" rx="7" fill="#087e83" stroke="none"/>
+<text x="145.5" y="1269" font-size="16" font-weight="700" fill="#ffffff" text-anchor="middle">08</text>
+<text x="177" y="1270" font-size="25" font-weight="650" fill="#14263d" text-anchor="start">交付整理 (Archive &amp; Doc)</text>
+<text x="133" y="1308" font-size="21" font-weight="400" fill="#52647a" text-anchor="start">依授權 openspec archive 歸檔 Change</text>
+<text x="133" y="1337" font-size="21" font-weight="400" fill="#52647a" text-anchor="start">doc-updater 更新文件，撰寫最終 commit</text>
+<text x="133" y="1364" font-size="17" font-weight="600" fill="#087e83" text-anchor="start">保持純交付收尾，不含業務行為修改</text>
+</g>
+
+<rect x="820" y="1230" width="440" height="150" rx="16" fill="#ffffff" stroke="#355fcb" stroke-width="1.6"/>
+<text x="843" y="1270" font-size="25" font-weight="650" fill="#14263d" text-anchor="start">發布最終 head</text>
+<text x="843" y="1308" font-size="21" font-weight="400" fill="#52647a" text-anchor="start">github-pr publish 推送最終 commit</text>
+<text x="843" y="1337" font-size="21" font-weight="400" fill="#52647a" text-anchor="start">更新 PR 說明為已歸檔／待結案狀態</text>
+<text x="843" y="1364" font-size="17" font-weight="600" fill="#355fcb" text-anchor="start">核對 remote head 與本地 commit SHA 一致</text>
+
+<rect x="1530" y="1230" width="440" height="150" rx="16" fill="#ffffff" stroke="#7554aa" stroke-width="1.6"/>
+<text x="1553" y="1270" font-size="25" font-weight="650" fill="#14263d" text-anchor="start">最終 head 差異複審</text>
+<text x="1553" y="1308" font-size="21" font-weight="400" fill="#52647a" text-anchor="start">Reviewer 對最終 head 執行差異複審</text>
+<text x="1553" y="1337" font-size="21" font-weight="400" fill="#52647a" text-anchor="start">確認變更僅限 archive／spec 同步／文件</text>
+<text x="1553" y="1364" font-size="17" font-weight="600" fill="#7554aa" text-anchor="start">無語意異動則縮小檢查，報告綁定最終 head</text>
+
+<path class="edge" d="M 550 1305 L 820 1305" stroke="#355fcb" stroke-width="2.7" marker-end="url(#arrow-blue)"/>
+<text x="685" y="1285" font-size="19" font-weight="550" fill="#355fcb" text-anchor="middle" stroke="#f8fafc" stroke-width="7" paint-order="stroke" stroke-linejoin="round">push 最終 commit</text>
+
+<path class="edge" d="M 1260 1305 L 1530 1305" stroke="#7554aa" stroke-width="2.7" marker-end="url(#arrow-purple)"/>
+<text x="1395" y="1285" font-size="19" font-weight="550" fill="#7554aa" text-anchor="middle" stroke="#f8fafc" stroke-width="7" paint-order="stroke" stroke-linejoin="round">最終 head 複審</text>
+
+<!-- Row 7: Step 09 確認完成條件與結案 -->
+<path class="edge" d="M 1040 1380 L 1040 1460" stroke="#355fcb" stroke-width="2.7" marker-end="url(#arrow-blue)"/>
+<text x="1040" y="1425" font-size="19" font-weight="550" fill="#355fcb" text-anchor="middle" stroke="#f8fafc" stroke-width="7" paint-order="stroke" stroke-linejoin="round">完成交付審查，依授權結案</text>
+
+<rect x="110" y="1460" width="440" height="155" rx="16" fill="#fff7e8" stroke="#dfc18c" stroke-width="1.6"/>
+<text x="133" y="1498" font-size="24" font-weight="650" fill="#a36a12" text-anchor="start">合併與驗收責任分開</text>
+<text x="133" y="1535" font-size="20" font-weight="400" fill="#52647a" text-anchor="start">Review pass 不等於自動合併或部署</text>
+<text x="133" y="1563" font-size="20" font-weight="400" fill="#52647a" text-anchor="start">若需線上資料驗收，Issue 保持開啟 (Waiting)</text>
+<text x="133" y="1591" font-size="20" font-weight="400" fill="#52647a" text-anchor="start">不 merge 時可 github-pr close 直接結案</text>
+
+<g class="diagram-node" data-node="09">
+<rect x="820" y="1460" width="440" height="155" rx="16" fill="#ffffff" stroke="#087e83" stroke-width="2"/>
+<rect x="838" y="1478" width="35" height="29" rx="7" fill="#087e83" stroke="none"/>
+<text x="855.5" y="1499" font-size="16" font-weight="700" fill="#ffffff" text-anchor="middle">09</text>
+<text x="887" y="1500" font-size="25" font-weight="650" fill="#14263d" text-anchor="start">確認完成條件與結案</text>
+<text x="843" y="1538" font-size="21" font-weight="400" fill="#52647a" text-anchor="start">依平台規則與授權 Merge PR（或 close）</text>
+<text x="843" y="1567" font-size="21" font-weight="400" fill="#52647a" text-anchor="start">若有真實資料驗收：Issue 保持 Waiting 狀態</text>
+<text x="843" y="1594" font-size="17" font-weight="600" fill="#087e83" text-anchor="start">確認無剩餘待辦後，依授權關閉 Issue</text>
+</g>
+
+<rect x="1530" y="1460" width="440" height="155" rx="16" fill="#ffffff" stroke="#7554aa" stroke-width="1.6"/>
+<text x="1553" y="1498" font-size="24" font-weight="650" fill="#7554aa" text-anchor="start">完整交接證據</text>
+<text x="1553" y="1535" font-size="20" font-weight="400" fill="#52647a" text-anchor="start">Issue 記錄目標、依賴、責任與下一步</text>
+<text x="1553" y="1563" font-size="20" font-weight="400" fill="#52647a" text-anchor="start">PR 保存版本歷史、批准代記與 Review 報告</text>
+<text x="1553" y="1591" font-size="20" font-weight="400" fill="#52647a" text-anchor="start">跨機器／跨 Session 可完全依賴 GitHub 追溯</text>
+
+<!-- Bottom Summary Box -->
+<rect x="70" y="1660" width="1940" height="175" rx="16" fill="#ffffff" stroke="#d1dbe7" stroke-width="1.6"/>
+<text x="98" y="1700" font-size="24" font-weight="650" fill="#14263d" text-anchor="start">讀圖規則與操作界線</text>
+<text x="98" y="1735" font-size="21" font-weight="400" fill="#52647a" text-anchor="start">實線：建議主流程與交接。紫色虛線：可選直通 PR 路徑。紅色：Review 未通過之修訂／修正回路。</text>
+<text x="98" y="1765" font-size="21" font-weight="400" fill="#52647a" text-anchor="start">PR 與 Issue 高度解耦：Issue 負責工作追蹤與依賴；PR 負責規格／程式碼版本、Review 報告與人類設計批准。</text>
+<text x="98" y="1795" font-size="21" font-weight="400" fill="#52647a" text-anchor="start">GitHub 操作使用可用 gh 或 MCP，認證與 push 交由本機 Git 原生管理；審查未通過時走修正複審回路 (github-review-repair-loop.svg)。</text>
+<text x="98" y="1823" font-size="18" font-weight="550" fill="#7554aa" text-anchor="start">2026-11-13 歷史圖稿｜現行操作入口見 README.md</text>
+</svg>
