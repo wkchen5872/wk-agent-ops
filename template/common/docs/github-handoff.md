@@ -204,8 +204,8 @@ managed 區塊的內容，區塊外的文字屬於其他作者。
 
 ### design-approval
 - status: <pending｜approved｜superseded>
-- approved_by: <人類批准者｜null>
-- approved_at: <含時區｜null>
+- approved_by: <人類批准者的 GitHub 帳號｜null>
+- approved_at: <含時區的時間｜只知道日期時寫 YYYY-MM-DD｜null>
 - approved_scope: <批准涵蓋的 Change／artifacts 範圍>
 - artifact_revision: <被批准的設計 commit；必要時加文件指紋>
 - source_kind: <human-github｜agent-attested-user-instruction>
@@ -234,8 +234,8 @@ managed 區塊的內容，區塊外的文字屬於其他作者。
 <!-- wk-agent-ops:design-approval -->
 ## Design approval
 
-- approved_by: <人類批准者>
-- approved_at: <含時區；未知則 null>
+- approved_by: <人類批准者的 GitHub 帳號>
+- approved_at: <含時區的時間；只知道日期時寫 YYYY-MM-DD；完全未知則 null>
 - approved_scope: <Change／artifacts 範圍>
 - artifact_revision: <被批准的設計 commit；必要時加文件指紋>
 - source_kind: agent-attested-user-instruction
@@ -364,7 +364,8 @@ Apply（開始實作）之前，相關設計必須有人類批准，而且能從
 代記的規則：
 
 - 如實寫出人類批准者、範圍、版本與來源類型。不能由 Agent 的技術審查 `pass` 推導，
-  也不冒稱是人類本人在平台上留言。時間未知就寫 `null`；不偽造時間、批准者或私有
+  也不冒稱是人類本人在平台上留言。`approved_by` 只寫批准者的 GitHub 帳號，不另加註解。
+  在對話中批准時通常只知道日期：寫 `YYYY-MM-DD`；連日期都不知道才寫 `null`；不偽造時間、批准者或私有
   transcript URL。
 - 可信的記錄者由已信任的專案批准規範或使用者明確授權指定（第 4.3 節），不能由
   repository 權限推導。候選 PR 自己修改的規範不能授權新的記錄者。

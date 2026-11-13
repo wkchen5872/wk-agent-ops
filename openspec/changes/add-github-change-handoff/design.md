@@ -159,7 +159,7 @@ Session-ID 是每輪應出現的欄位，不能只用 Reviewer 別名替代；�
 
 Git baseline 記錄「這一輪實際審查什麼」，不能只記當前 branch 或短 SHA。比較 base 與 PR base 分支快照可能不同，必須說明實際比較依據；Checkout HEAD 不符 reviewed head 或含未提交內容時，不能把本地檢查聲稱為已發布版本的驗收。PR-only 文件審查可沒有 checkout，須如實說明。這些欄位由共用契約持有，Review Skill 只填寫，不再定義另一個範本。
 
-PR managed 區塊另含 `design-approval`，初始 `status: pending`。批准時記 `approved_by`、`approved_at`（含時區，未知則 null）、`approved_scope`、`artifact_revision`／必要文件指紋、`source_kind`、可取得的來源參照、`recorded_by` 與 `recorded_at`。批准依據可採下列兩種形式。
+PR managed 區塊另含 `design-approval`，初始 `status: pending`。批准時記 `approved_by`、`approved_at`（含時區；只知道日期時記日期；完全未知則 null）、`approved_scope`、`artifact_revision`／必要文件指紋、`source_kind`、可取得的來源參照、`recorded_by` 與 `recorded_at`。批准依據可採下列兩種形式。
 
 - `human-github`：使用者本人可取得的 PR 留言或原生 Review。
 - `agent-attested-user-instruction`：已授權 Agent 代記使用者在對話中的明確批准。使用者已選擇信任這種具名代記，新機器不需要取得原始對話逐字稿，也不強制人類再到 GitHub 留言。
