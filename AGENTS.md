@@ -238,8 +238,10 @@ Codex 版本：`.codex/agents/doc-updater-agent.toml`（`gpt-5.6-terra`、medium
 
 **位置：** `template/common/skills/github-issue/`、`template/common/skills/github-pr/`
 
-**用途：** 以 GitHub Issue／PR 交接 OpenSpec Change 的兩個薄入口。`github-issue`
-提供 create／update；`github-pr` 提供 create／publish／update，並可代記人類的設計批准。
+**用途：** 以 GitHub Issue／PR 交接工作的兩個薄入口。`github-issue` 提供 create／update：
+來源可為指定的 Work Item、OpenSpec Change、兩者、目前分支的關聯，或沒有本機紀錄時的
+目前 Session；create 寫精簡的 Handoff／Goal／Author 正文，update 只新增 Changes 留言、
+不改寫正文。`github-pr` 提供 create／publish／update，並可代記人類的設計批准。
 
 - 範本、關聯鍵、provenance、Review 格式與流程只存在於 managed
   `docs/github-handoff.md`；兩個 Skill 與之後的 Review Skill 都只引用，不各存一份。

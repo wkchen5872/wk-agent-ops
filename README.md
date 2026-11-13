@@ -181,6 +181,8 @@ Installer 會把忽略規則合併進專案版控的 `.gitignore`，並以 Git �
 
 要讓另一個 Session 或另一台機器只靠 GitHub Issue／PR 接手某個 OpenSpec Change 時，
 使用 `github-issue`（create／update）與 `github-pr`（create／publish／update）。
+`github-issue` 可從指定的 Work Item、Change、兩者、目前分支的關聯或目前 Session 整理出
+精簡的 Issue；之後的迭代以新增留言保存，不改寫正文。
 兩個入口只負責操作順序；範本、關聯鍵、provenance、人類設計批准與完整流程都在
 managed 的 [`docs/github-handoff.md`](docs/github-handoff.md)。GitHub 操作使用當下
 可用且已配置的 `gh` 或 GitHub MCP；commit／push 使用本機 Git，SSH／HTTPS 認證交給

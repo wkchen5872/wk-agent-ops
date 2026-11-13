@@ -222,6 +222,110 @@ done
 want "$PR_SKILL/SKILL.md" '--head <head-owner>:<head-branch>' "github-pr create names the head owner"
 want "$PR_SKILL/references/acceptance-cases.md" '### GP-19' "github-pr has a fork replay case"
 
+# ── simplify-github-issue 1.1: sources, minimal Issue body, Author ───────────
+# Maps to openspec/changes/simplify-github-issue specs/github-issue.
+echo "SGI-1 Issue sources and initial body"
+ISSUE_CASES="$ISSUE_SKILL/references/acceptance-cases.md"
+issue_section() { awk '/^### 6\.1 /{f=1;next} /^### 6\.2 /{f=0} f' "$DOC" 2>/dev/null; }
+fence_headings() {                 # $1 = Nth fenced block in §6.1 → its "## " headings, one per line
+  issue_section | awk -v n="$1" '/^```/{c++; next} c==2*n-1 && /^## /{print}'
+}
+initial="$(fence_headings 1 | tr '\n' '|')"
+[[ "$initial" == '## Handoff|'*'## Goal|'*'## Author|' ]] \
+  && ok "initial Issue body starts with Handoff, has Goal, ends with Author" \
+  || bad "initial Issue body starts with Handoff, has Goal, ends with Author ($initial)"
+for field in '- openspec-change:' '- work-item:' '- pull-request:' 'Co-Authored-By:' 'AI-Assisted-By:'; do
+  issue_section | grep -qF -- "$field" && ok "Issue template has '$field'" || bad "Issue template has '$field'"
+done
+for field in 'wk-agent-ops:handoff:start' '- repository:' '### Provenance' 'Machine-Alias' 'Session:' '- owner:' '- next-action:'; do
+  issue_section | grep -qF -- "$field" && bad "Issue template drops '$field'" || ok "Issue template drops '$field'"
+done
+want "$ISSUE_SKILL/SKILL.md" 'Work Item' "github-issue accepts a Work Item source"
+want "$ISSUE_SKILL/SKILL.md" 'Session-only' "github-issue allows session-only creation"
+want "$ISSUE_SKILL/SKILL.md" 'work-items/WI-*/README.md' "github-issue reads Work Items directly, not via ignore-aware search"
+want "$ISSUE_SKILL/SKILL.md" 'null' "github-issue fills absent identifiers with null"
+sed -n '/^description:/,/^[a-z]*:/p' "$ISSUE_SKILL/SKILL.md" | grep -q 'Work Item' \
+  && ok "github-issue description names Work Item sources" || bad "github-issue description names Work Item sources"
+for t in 'Work Item 單獨' 'Change 單獨' 'Work Item 與 Change' '分支唯一' '分支歧義' '指定來源不存在' \
+         'Session-only' '主題不足' '未知模型' 'local-only' '完整 tasks'; do
+  grep -E '^### GI-[0-9]+' "$ISSUE_CASES" 2>/dev/null | grep -qF -- "$t" \
+    && ok "github-issue has a case for '$t'" || bad "github-issue has a case for '$t'"
+done
+
+# ── simplify-github-issue 2.1: comment-only update, legacy Issues, association ─
+echo "SGI-2 Issue update appends a comment"
+comment="$(fence_headings 2 | tr '\n' '|')"
+[[ "$comment" == '## Handoff|## Changes|## Author|' ]] \
+  && ok "update comment is Handoff → Changes → Author" || bad "update comment is Handoff → Changes → Author ($comment)"
+update_part() { sed -n '/^## Operation: update/,/^## Reporting/p' "$ISSUE_SKILL/SKILL.md" 2>/dev/null; }
+update_part | grep -qF 'gh issue comment' && ok "github-issue update posts a comment" || bad "github-issue update posts a comment"
+update_part | grep -qF 'comments' && ok "github-issue update reads existing comments" || bad "github-issue update reads existing comments"
+# Body edits may appear only as prohibitions; no instruction or expected call may use them.
+for f in "$ISSUE_SKILL/SKILL.md" "$ISSUE_CASES" "$ISSUE_SKILL/references/examples.md"; do
+  if instructions "$f" | grep -qE 'gh issue edit|issue comment .*--edit|--edit-last'; then
+    bad "${f#"$ROOT"/} never instructs an Issue body or comment edit"
+  else
+    ok "${f#"$ROOT"/} never instructs an Issue body or comment edit"
+  fi
+done
+if grep -qiE 'adopt|接管|wk-agent-ops:handoff' "$ISSUE_SKILL/SKILL.md" "$ISSUE_SKILL/references/examples.md" 2>/dev/null; then
+  bad "github-issue has no managed-block adoption"; else ok "github-issue has no managed-block adoption"; fi
+for t in '人工正文' '完整標記' '破損標記' '連續兩輪' '留言關聯' 'null 不是' '多個候選' 'ID 衝突' \
+         '只有 comment' '留言逾時' '回讀失敗' '指定 Issue'; do
+  grep -E '^### GI-[0-9]+' "$ISSUE_CASES" 2>/dev/null | grep -qF -- "$t" \
+    && ok "github-issue has a case for '$t'" || bad "github-issue has a case for '$t'"
+done
+
+# ── simplify-github-issue 3.1: shared rules separate Issue from PR / Review ──
+echo "SGI-3 shared contract scopes managed-body rules to PR"
+doc_section() { awk -v s="^## $1\\\\." -v e="^## $2\\\\." '$0~s{f=1} $0~e{f=0} f' "$DOC" 2>/dev/null; }
+doc_section 5 6 | grep -qF '已知明確的 Issue／PR URL' \
+  && bad "§5 exact-key lookup no longer covers Issues" || ok "§5 exact-key lookup no longer covers Issues"
+doc_section 7 8 | grep -qF '第 6.1 節' \
+  && ok "§7 provenance names the Issue Author exception" || bad "§7 provenance names the Issue Author exception"
+doc_section 11 12 | grep -qF '第 6.1 節' \
+  && ok "§11 body-update rules exclude Issues" || bad "§11 body-update rules exclude Issues"
+deny "$DOC" 'Issue 的 `Waiting` 區段' "§10 no longer relies on an Issue Waiting block"
+deny "$DOC" '`artifacts` 為 `local-only／待發布`' "Issue create case uses References, not artifacts"
+for f in "$DOC" "$PR_SKILL/SKILL.md" "$PR_SKILL/references/acceptance-cases.md" \
+         "$COMMON/skills/change-review/SKILL.md" "$COMMON/skills/change-review/references/acceptance-cases.md" \
+         "$COMMON/skills/change-review/references/checklists.md" "$RULE"; do
+  if instructions "$f" | grep -qE 'gh issue edit|Waiting 區段'; then
+    bad "${f#"$ROOT"/} asks for no Issue body rewrite"
+  else
+    ok "${f#"$ROOT"/} asks for no Issue body rewrite"
+  fi
+done
+
+# ── simplify-github-issue 5.x: sources are material, the Issue is a rewritten task ─
+echo "SGI-4 source-to-content quality"
+for label in '來源實文：' '產出 Issue：' '內容判定：'; do
+  n="$(grep -cF -- "- $label" "$ISSUE_CASES" 2>/dev/null | tr -d ' ')"
+  [[ "${n:-0}" -ge 3 ]] && ok "at least 3 source-to-content cases state '$label' (${n:-0})" \
+    || bad "at least 3 source-to-content cases state '$label' (${n:-0})"
+done
+grep -E '^### GI-[0-9]+' "$ISSUE_CASES" 2>/dev/null | grep -qF '對話新決策' \
+  && ok "github-issue has a case where the session overrides a recorded decision" \
+  || bad "github-issue has a case where the session overrides a recorded decision"
+deny "$ISSUE_CASES" '18 項細節任務' "no content case stands on a task count without the tasks"
+deny "$ISSUE_SKILL/SKILL.md" 'stop at the first that applies' "explicit records do not exclude the session discussion"
+want "$ISSUE_SKILL/SKILL.md" 'Always merge the relevant current-session discussion' "github-issue merges session decisions into named sources"
+issue_section | grep -qF '不沿用 Work Item 的紀錄格式' \
+  && ok "§6.1 requires rewriting sources into a task, not the record layout" \
+  || bad "§6.1 requires rewriting sources into a task, not the record layout"
+deny "$ISSUE_SKILL/references/examples.md" 'issues/7 合併' "example dependency names a mergeable PR, not an Issue"
+want "$ISSUE_SKILL/references/examples.md" '/pull/' "example dependency links the PR whose merge releases it"
+
+# Review r06 replay: a Change's task plan became Issue Tasks group-for-group.
+want "$ISSUE_SKILL/SKILL.md" "not the plan's groups" "github-issue turns a task plan into checkable outcomes"
+issue_section | grep -qF '不照搬實作計畫的群組' \
+  && ok "§6.1 Tasks are outcomes, not the implementation plan" || bad "§6.1 Tasks are outcomes, not the implementation plan"
+
+# Review r06 replay: a missing named source must halt; §3 must allow the C-20 fallback.
+want "$ISSUE_SKILL/SKILL.md" 'stop and ask the user to confirm' "a missing named source halts before any remote call"
+doc_section 3 4 | grep -qF '另一個已配置' \
+  && ok "§3 lets another configured tool cover a missing capability" || bad "§3 lets another configured tool cover a missing capability"
+
 # ── 4.1 Managed delivery and legacy script retirement ────────────────────────
 echo "4.1 managed delivery"
 T="$(new_target)"

@@ -52,7 +52,8 @@ Review 報告都引用這裡，不各自保存一份格式。
    或 repository role 足夠，不代表這個 token／App 能建立這筆 Issue、PR 或 Review。唯讀
    資訊只能證明它實際涵蓋的部分。
 4. **已知的障礙就停止**。工具未登入、目標衝突、權限被明確拒絕或缺少必要能力時，停止
-   受影響的操作並回報。權限資訊不完整本身不構成阻擋：目標與授權都清楚、也沒有已知的
+   受影響的操作並回報。只是缺少能力時，另一個已配置且具備該能力的工具，可以在同一授權內
+   重新依本節核對後使用；權限被明確拒絕不換工具重送。權限資訊不完整本身不構成阻擋：目標與授權都清楚、也沒有已知的
    拒絕時，執行原本已授權的操作，以實際回應判定；不額外建立 Issue、PR、commit 或
    push 來探測權限。
 5. **回讀結果**。依實際回傳的 URL、編號或 ref 讀回目標、正文或 remote head，核對無誤
@@ -106,7 +107,7 @@ key，以及 credential helper 的設定內容都不得寫入輸出、報告、I
 
 ## 5. 關聯與 managed 區塊
 
-Issue 與 PR 正文中由本流程維護的內容，放在固定的起訖註解之間：
+PR 正文中由本流程維護的內容，放在固定的起訖註解之間（Issue 的關聯另見本節最後）：
 
 ```markdown
 <!-- wk-agent-ops:handoff:start -->
@@ -123,62 +124,122 @@ repository: <host>/<owner>/<repo>
 
 查找既有紀錄的規則：
 
-1. 已知明確的 Issue／PR URL 或剛建立時回傳的編號時，直接讀取它。
+1. 已知明確的 PR URL 或剛建立時回傳的編號時，直接讀取它。
 2. 否則用選定的工具（`gh` 或 MCP）搜尋候選，再**逐一讀取正文**比對兩個精確鍵、目標
-   repository，以及 PR 的 head repository、owner 與分支。標題相似或搜尋命中都不算關聯成立。
+   repository，以及 head repository、owner 與分支。標題相似或搜尋命中都不算關聯成立。
 3. 唯一確認 → 沿用。沒有 → 才可建立。多個合理候選 → 列出候選並停止，不取第一個，
    也不再建立新的。
 4. 建立請求逾時或結果不明時，先重新查找，不直接重送建立，也不換工具重送；仍無法確認
    就回報。搜尋索引在
    剛寫入後可能延遲，重新查找時另外列出紀錄並直接比對正文，不只依賴搜尋。
 
+**Issue 的關聯**不用 managed 區塊與 `repository` 鍵：目標 repository 由 Issue 的 GitHub
+URL／metadata 核對，關聯由第 6.1 節 Handoff 的非 `null` ID 構成。
+
+1. 已知明確的 Issue URL 時直接讀取它。否則在已確認的 repository 以每個非 `null` 的
+   Change／Work Item ID 搜尋候選，再逐一讀取**正文與相關留言**（後補的關聯在留言）。
+   舊版 Issue 區塊中的 `openspec-change` 與 `repository` 仍可作為證據，不需遷移。
+2. 唯一確認 → 沿用，重複的 create 只回傳 URL。多個候選，或某個已知 ID 與候選衝突 →
+   列出並停止，澄清後才寫入。
+3. `null` 不是識別碼，`null` 相等與標題相似都不構成關聯。Session-only 的工作沒有穩定鍵：
+   優先沿用本次 Session 已知的 URL；否則讀取近期／相關 Issue 排除明顯重複，有合理疑似
+   對象就詢問，沒有才建立。
+4. 建立或留言逾時、結果不明時，依原目標列出近期 Issue 或該 Issue 的留言，比對預備的
+   內容與可得的作者、時間；能唯一確認就回報，仍不明就停止，不重送也不換工具重送。
+   沒有穩定鍵的寫入不宣稱 exactly-once。
+5. 回讀：建立後依回傳的編號讀回 Issue；留言後依回傳的 URL／id 讀回該則留言，核對
+   repository、父 Issue 與內容，回報留言 URL，不把留言說成建立了 Issue。
+
 正式紀錄不依賴本機 Work Item，也不另建 Change↔Issue 對照檔。規格尚未 push 時，
-`artifacts` 填 `local-only／待發布`，不編造 commit 連結；發布後再更新為遠端連結。
+PR 的 `artifacts` 填 `local-only／待發布`、Issue 的 References 標明 local-only，不編造 commit 連結；發布後 PR 更新為遠端連結，Issue 以新留言補上。
 路徑一律使用 repo-relative 形式，不寫入本機絕對路徑。
 
 ## 6. 範本
 
-尖括號是待填值；不適用的區段整段省略，未知的值寫 `null` 或依第 7 節處理。範本只規定
-managed 區塊的內容，區塊外的文字屬於其他作者。
+尖括號是待填值；不適用的區段整段省略，未知的值寫 `null` 或依第 7 節處理。PR 範本只規定
+managed 區塊的內容，區塊外的文字屬於其他作者；Issue 的正文與留言見第 6.1 節。
 
 ### 6.1 Issue
 
+Issue 不使用 managed 區塊，也不套用第 7 節的完整 provenance。它的正文是工作的起點，
+之後的迭代以新增留言保存；PR 與 Review 的格式不受影響。
+
+#### 初始正文
+
 ```markdown
-<!-- wk-agent-ops:handoff:start -->
 ## Handoff
 
-- openspec-change: <change-id>
-- repository: <host>/<owner>/<repo>
-- artifacts: <repo-relative 路徑>@<已發布 revision 連結｜local-only／待發布>
-- pull-request: <PR URL｜none>
-- work-item: <WI ID｜none>
-- owner: <目前負責人>
-- next-action: <下一步與負責方>
+- openspec-change: <已確認的 Change ID｜null>
+- work-item: <已確認的 Work Item ID｜null>
+- pull-request: <已確認的 PR URL｜null>
 
-### Goal
-<目標摘要；細節以 OpenSpec artifacts 為準，不複製 tasks.md>
+## Goal
 
-### Relations
-- parent: <Issue URL｜none>
-- child: <change-id> → <Issue／PR URL>
-- depends-on: <Issue／PR URL> · release: <design-approval｜merge｜deployment｜acceptance> · <說明>
+<問題、理解它所需的背景，以及預期結果>
 
-### Waiting
-- started: <起始事件與版本>
-- earliest-check: <最早可檢查時間，含時區>
-- data-window: <需要的資料區間>
-- acceptance: <驗收條件> · evidence: <證據位置>
-- delivery-status: <已交付到哪一步> · acceptance-status: <pending｜passed｜failed>
+## Tasks
 
-### Provenance
-- <role> · Agent-Tool: <工具> · AI-Assisted-By: <模型> · Session: <reference>（<type>） · Machine-Alias: <別名｜null> · <含時區時間> · <revision｜unpublished>
-<!-- wk-agent-ops:handoff:end -->
+- [ ] <有意義的工作或完成條件>
+
+## References
+
+- <有用的連結，或標明 local-only／尚未發布的 repo-relative 路徑>
+
+## Author
+
+Co-Authored-By: <本次貼文工具>
+AI-Assisted-By: <已知的當下 root-session model>
 ```
 
-- `child` 每個子 Change 一行；`depends-on` 必須寫出解除條件，不能只寫另一個工作的名稱。
-- `Waiting` 只在驗收需要等待真實資料時出現。`earliest-check` 是最早可檢查的時間，
-  時間到、Review 通過或 PR 合併都不代表驗收完成，也不自動關閉 Issue。
-- `work-item` 是本機補充資訊，不是必要入口。
+- **Handoff、Goal、Author 必須出現**，Handoff 在最前、Author 在最後。三個 Handoff 欄位
+  只填已讀取並核對過的值，沒有就寫 `null`；不為了補欄位建立 Work Item、Change、分支或 PR。
+- Tasks、References 有內容才保留；其他中間段落（例如未決事項、依賴、等待資料）依工作
+  需要加入，不放空白段落。標題直接描述工作目的，不強制加 Change ID 前綴。
+- **Work Item、Change 與 Session 是素材，不是貼文。** 讀取後重組成一份只讀 Issue 的人
+  也能理解、可以交辦的任務：問題與影響、範圍（含不處理的事項）、要做的工作、完成條件
+  與未決事項，依素材實際有的內容寫清楚。這是內容標準，不是每篇都要有的固定章節。
+- 不沿用 Work Item 的紀錄格式（Sessions、Coordinator、決策編號、各 Agent 的下一步），
+  不把內部清單刪短後貼出，不只貼 ID，也不搬整份 `tasks.md` 或 Session 逐字稿。
+- Tasks 寫可檢查的結果或完成條件，從使用者或維運者看得到的行為描述；不照搬實作計畫的群組、
+  編號或實作步驟（endpoint、job、儲存、逐項測試）。實作計畫留在 Change，以 References 連結。
+- 指定的紀錄與本輪對話一起整合：對話中使用者後來確認的決策取代紀錄中的舊值；無法判定
+  何者為準時才詢問。沒有人確認的想法寫成未決事項；不捏造素材沒有的決策、數字、負責人
+  或日期。實作、驗證、部署與驗收狀態分開寫。
+- 尚未發布的來源寫 repo-relative 路徑並標明 local-only／尚未發布，不編造遠端連結，也不
+  寫本機絕對路徑。
+- 依賴寫出解除條件（例如等待哪個 Issue／PR 的批准、合併、部署或驗收），不能只寫另一個
+  工作的名稱。需要等待真實資料時，寫出所需的資料區間、證據、負責人與下一步；時間到、
+  Review 通過或 PR 合併都不代表驗收完成，也不自動關閉 Issue。
+- **Author** 只記本次貼文的工具與已知的當下 root-session model，name-only，不加 provider
+  email，也不套用 commit trailer 的 email 規則。模型未知時省略 `AI-Assisted-By` 並在回報
+  中說明，不從來源紀錄或其他 Agent 推測。Author 不代表來源紀錄的全部作者。
+
+#### 更新留言
+
+```markdown
+## Handoff
+
+- openspec-change: <已確認的 Change ID｜null>
+- work-item: <已確認的 Work Item ID｜null>
+- pull-request: <已確認的 PR URL｜null>
+
+## Changes
+
+<這一輪改變了什麼、為什麼重要>
+
+## Author
+
+Co-Authored-By: <本次貼文工具>
+AI-Assisted-By: <已知的當下 root-session model>
+```
+
+- 更新**永遠是新增一則頂層留言**，不改 Issue 的正文、標題、狀態、label、assignee，也不
+  編輯或刪除先前的留言。正文是人工撰寫、舊版 managed 格式或標記破損都一樣，不需要採用或
+  遷移。
+- 寫之前讀取正文與相關留言，Changes 只寫這一輪的新內容（決策、進度、測試結果、阻礙、
+  下一步，依實際情況），不重貼初始目標或已發布的更新。
+- Handoff 沿用 Issue 已確認的關聯。確認是同一件工作後，新的 ID 寫在這則留言；之後查找
+  關聯必須連同留言一起讀，不只看正文。
 
 ### 6.2 PR
 
@@ -320,19 +381,22 @@ Delivery: <已透過 <工具> 送達 <Session>｜未送達，需由使用者轉�
 
 ## 7. Provenance
 
-每筆規劃、實作、發布與 Review 紀錄分別記下參與者，並保留先前作者的紀錄。
+每筆 PR、批准事件與 Review 紀錄分別記下參與者，並保留先前作者的紀錄。**Issue 例外**：
+Issue 正文與更新留言只用第 6.1 節的 Author（本次貼文工具與已知的當下 root-session
+model），不記 role、Session、Machine-Alias、時間或 revision，也不累積多輪 provenance；
+本節的揭露與不推測規則仍適用。
 
 | 欄位 | 規則 |
 | --- | --- |
 | role | planner、implementer、publisher、reviewer 等；代發時分別寫作者與 publisher |
-| `Agent-Tool` | 實際執行的工具。用於 Issue／PR 事件；commit 仍使用既有的 `Co-Authored-By` trailer |
+| `Agent-Tool` | 實際執行的工具。用於 PR 事件；commit 仍使用既有的 `Co-Authored-By` trailer |
 | `AI-Assisted-By` | 當次已知的 root-session model。未知時省略並回報，不猜更細的版本；已知就不省略 |
 | Session reference 與 type | 原生 ID 須已知且允許發布，type 為 `runtime` 或 `user-provided`；否則用明示的 alias，或 `unavailable`／`withheld` |
 | `Machine-Alias` | 只用已設定的中性別名；沒有就 `null`。不讀取也不發布原始 hostname |
 | 時間 | 含時區 |
 | revision | 已發布的 commit，或明確的 `unpublished` |
 
-預設揭露範圍：Issue、PR 與 Review 保留實際工具、已知模型與已知原生 Session ID，並註明
+預設揭露範圍：PR 與 Review 保留實際工具、已知模型與已知原生 Session ID，並註明
 來源。專案或使用者另有明確的不公開要求時，把該值標為 `withheld` 並保留可用的 alias。
 未知的值不從歷史、環境變數或他人紀錄推測。不發布本機絕對路徑、credential，或自行編造
 的 provider email。後來的 publisher 或 implementer 不改寫原作者；轉發他人撰寫的報告時
@@ -405,7 +469,7 @@ Apply（開始實作）之前，相關設計必須有人類批准，而且能從
 | 步驟 | 操作 | 產生的紀錄 | 不代表 |
 | --- | --- | --- | --- |
 | 01 建立 Change | OpenSpec 流程 | proposal、specs、design、tasks | 設計已批准 |
-| 02 登錄工作 | `github-issue create` | Issue 與關聯 | 規格已發布 |
+| 02 登錄工作 | `github-issue create`；之後的進展以 `github-issue update` 新增留言 | Issue 與關聯、迭代留言 | 規格已發布 |
 | 03 發布規格 | `github-pr create`（phase: design） | commit、push、Draft PR | 設計已審查 |
 | 04 設計審查與批准 | design Review，再由人類批准 | Review 報告、批准事件 | 實作已驗收 |
 | 05 實作 | OpenSpec apply | 本機變更與測試 | 已發布 |
@@ -426,8 +490,8 @@ Apply（開始實作）之前，相關設計必須有人類批准，而且能從
 - 修正複審：Reviewer 先在 PR 發布報告，再把第 6.5 節的訊息交給實作者。實作者修正、
   測試、push 並逐項回覆 commit 與證據後，通知 Reviewer 以新 head 複審。實作者聲稱
   已修正不等於驗收通過。
-- 等待真實資料時，Issue 的 `Waiting` 區段分開記錄交付與驗收狀態。即使實作 Review
-  通過，也要確認是否還有部署或資料驗收責任。
+- 等待真實資料時，以 Issue 的更新留言寫明所需資料區間、證據、負責人與下一步，交付與
+  驗收狀態分開寫。即使實作 Review 通過，也要確認是否還有部署或資料驗收責任。
 
 ### 交付整理的順序
 
@@ -444,6 +508,8 @@ Apply（開始實作）之前，相關設計必須有人類批准，而且能從
 審查或合併。範圍沒有改變的設計批准仍可引用原紀錄。
 
 ## 11. 共用正文的更新規則
+
+本節只適用於 PR 正文。Issue 不改寫正文，更新一律新增留言（第 6.1 節）。
 
 - 更新前讀取**最新**正文，保留區塊外的內容與先前的 provenance，只改自己負責的區段或
   被要求的欄位，再以選定的工具寫回完整正文。
@@ -511,7 +577,7 @@ sources:
 | 讀得到 repo，但建立或更新被拒 | token／App 沒有寫入權限 | 回報實際的拒絕，不宣稱成功，不換帳號或改認證 |
 | `git push` 因認證失敗 | 本機 SSH key 或 credential helper 的問題 | 回報 Git 的錯誤，交給使用者處理；不讀取或修改認證設定 |
 | 明示的帳號限制無法證實 | 工具取不到實際帳號，或帳號不符 | 停止該操作並回報限制與缺少的證據 |
-| 找不到或重複的起訖標記 | 正文被改寫，或尚未採用區塊 | 回報並停止更新，不整段取代 |
+| PR 正文找不到或重複的起訖標記 | 正文被改寫，或尚未採用區塊 | 回報並停止更新，不整段取代。Issue 不受影響，照常新增留言 |
 | 建立逾時、不知道是否成功 | 遠端回應不明 | 先依第 5 節重新查找，再決定是否重試；查清楚前不換工具重送 |
 | 專案裡還有舊的 `scripts/github/check-identity.sh` | 舊版安裝留下、且被改過的檔案 | 本流程已不使用它；由使用者決定是否刪除 |
 
@@ -623,9 +689,9 @@ Change 為 `add-export`，PR #12 由 `feature/add-export` 指向 `main`，對應
 
 - Fixture：`github-issue create`，Change artifacts 只存在本機，尚未 commit 或 push。
 - 模擬回覆：查找無既有 Issue；`gh issue create` 回傳 `…/issues/7`。
-- 預期呼叫：核對目標與能力 → 查找 → `gh issue create` → 回讀，`artifacts` 為 `local-only／待發布`。
-- 禁止：編造 commit 或 blob 連結；為了取得連結而自行 commit 或 push。
-- 判定：Issue 明示規格尚未發布；之後發布時再更新為遠端連結。
+- 預期呼叫：核對目標與能力 → 查找 → `gh issue create` → 回讀，References 以 repo-relative 路徑標明 local-only／尚未發布。
+- 禁止：編造 commit 或 blob 連結；寫入本機絕對路徑；為了取得連結而自行 commit 或 push。
+- 判定：Issue 明示規格尚未發布；發布後以 `github-issue update` 新增留言補上遠端連結，不改正文。
 
 ### C-14 缺少人類批准
 
@@ -670,16 +736,16 @@ Change 為 `add-export`，PR #12 由 `feature/add-export` 指向 `main`，對應
 ### C-19 `gh` 不可用，但 MCP 可用
 
 - Fixture：使用者要求為 `add-export` 建立 Issue。這台機器沒有 `gh`；已配置的 GitHub MCP 連得上 `acme/widgets`，具有搜尋與建立 Issue 的工具。
-- 模擬回覆：`command -v gh` 無結果；MCP 搜尋與讀取後沒有含兩個精確鍵的 Issue；MCP 建立回傳 `…/issues/7`；MCP 讀回正文含兩個精確鍵。
+- 模擬回覆：`command -v gh` 無結果；MCP 搜尋並讀取候選的正文與留言後，沒有帶 `openspec-change: add-export` 的 Issue；MCP 建立回傳 `…/issues/7`；MCP 讀回正文的 Handoff 含 `openspec-change: add-export`。
 - 預期呼叫：確認 `gh` 不可用 → 以 MCP 核對目標與能力 → MCP 搜尋並讀取候選 → MCP 建立 Issue → MCP 讀回。
 - 禁止：安裝 `gh` 或要求先登入 `gh`；要求先建立身分政策或檢查腳本；只憑搜尋結果判定無重複。
 - 判定：以 MCP 完成建立與回讀，回報使用的工具與 URL。
 
 ### C-20 只有另一個工具登入
 
-- Fixture：使用者要求更新 Issue #7。選定的 MCP 沒有更新 Issue 的工具；`gh` 已登入 `octo-dev`。
-- 模擬回覆：MCP 的工具清單沒有更新 Issue 的能力；`gh issue view 7 --json body` 回傳正文，標記一組完整；`gh issue edit` 成功；回讀相符。
-- 預期呼叫：發現 MCP 缺少能力 → 改用 `gh` 並重新核對目標與能力 → `gh issue view 7 --json body` → `gh issue edit 7 --body-file …` → 回讀。
+- Fixture：使用者要求更新 Issue #7。選定的 MCP 沒有建立 Issue 留言的工具；`gh` 已登入 `octo-dev`。
+- 模擬回覆：MCP 的工具清單沒有建立留言的能力；`gh issue view 7 --json body,url,comments` 回傳正文與留言；`gh issue comment 7` 回傳留言 URL；讀回該留言相符。
+- 預期呼叫：發現 MCP 缺少能力 → 改用 `gh` 並重新核對目標與能力 → `gh issue view 7 --json body,url,comments` → `gh issue comment 7 --body-file …` → 讀回該留言。
 - 禁止：把 `gh` 的登入當作 MCP 能執行的證據；宣稱 MCP 已完成更新；擴大授權範圍。
 - 判定：在同一授權內以 `gh` 完成，回報 MCP 缺少的能力與實際使用的工具。
 
@@ -710,7 +776,7 @@ Change 為 `add-export`，PR #12 由 `feature/add-export` 指向 `main`，對應
 ### C-24 逾時後換工具前先查核
 
 - Fixture：使用者要求為 `add-export` 建立 Issue。`gh issue create` 逾時，沒有回傳 URL。MCP 也可用。
-- 模擬回覆：以 MCP 重新查找，並列出 Issue 直接比對正文，找到 #8 且兩個精確鍵相符。
+- 模擬回覆：以 MCP 重新查找，並列出近期 Issue 直接比對正文，找到 #8，正文與預備內容相同。
 - 預期呼叫：`gh issue create`（逾時）→ 查找（搜尋並直接比對正文）→ 讀取 #8。
 - 禁止：逾時後直接以 `gh` 或 MCP 再建立一次。
 - 判定：回報 #8 是這次建立的結果，沒有產生重複的 Issue。

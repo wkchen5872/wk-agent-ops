@@ -13,8 +13,8 @@
 <path d="M505 294 V334" class="line"/>
 <rect x="80" y="334" width="850" height="118" rx="16" class="blue"/>
 <text x="104" y="372" class="heading">02　github-issue create</text>
-<text x="104" y="406" class="body">核對 repo／能力 → 查關聯 → 建 Issue 並回讀</text>
-<text x="104" y="436" class="body">Issue 追蹤依賴、負責人、下一步</text>
+<text x="104" y="406" class="body">選來源 → 核對 repo／能力 → 查關聯 → 建 Issue 並回讀</text>
+<text x="104" y="436" class="body">之後的進展以 github-issue update 新增留言</text>
 <path d="M505 452 V492" class="line"/>
 <rect x="80" y="492" width="850" height="118" rx="16" class="blue"/>
 <text x="104" y="530" class="heading">03　github-pr create</text>
@@ -52,15 +52,15 @@
 <text x="104" y="1542" class="body">Review pass 或日期到達都不等於全部完成</text>
 <rect x="1050" y="176" width="470" height="140" rx="16" class="blue"/>
 <text x="1074" y="214" class="heading">Issue 是工作入口</text>
-<text x="1074" y="248" class="body">Change／PR 關聯與依賴解除條件</text>
-<text x="1074" y="278" class="body">本機 WI 只作補充，不是必要入口</text>
+<text x="1074" y="248" class="body">正文說明工作，迭代記在留言</text>
+<text x="1074" y="278" class="body">來源：WI、Change 或 Session</text>
 <rect x="1050" y="492" width="470" height="140" rx="16" class="blue"/>
 <text x="1074" y="530" class="heading">PR 是版本與 Review 紀錄</text>
 <text x="1074" y="564" class="body">設計及實作各自綁定 reviewed head</text>
 <text x="1074" y="594" class="body">第一版示範同張 PR 的兩個階段</text>
 <rect x="1050" y="808" width="470" height="140" rx="16" class="box"/>
 <text x="1074" y="846" class="heading">純 update 不改 Git</text>
-<text x="1074" y="880" class="body">PR／Issue 摘要更新保留人工內容</text>
+<text x="1074" y="880" class="body">PR 摘要保留人工內容；Issue 只加留言</text>
 <text x="1074" y="910" class="body">Review 發報告不走 create／publish</text>
 <rect x="1050" y="1124" width="470" height="140" rx="16" class="gold"/>
 <text x="1074" y="1162" class="heading">修正複審由 Reviewer 明確啟動</text>

@@ -234,7 +234,7 @@ Reviewer 的 Session alias 為 `rev-s01`，原生 Session ID 由 runtime 提供�
 ### CR-27 等待真實資料
 
 - Fixture：implementation review。所有檢查通過，但 Change 要求部署後 14 天的真實資料驗收。
-- 模擬回覆：測試全部通過；Issue #7 的 Waiting 區段 `acceptance-status: pending`。
+- 模擬回覆：測試全部通過；Issue #7 的最新更新留言寫明真實資料驗收仍 pending。
 - 預期呼叫：固定版本 → 審查 → 發布 pass，並分開寫明正式驗收仍待資料。
 - 禁止：宣稱整個 Change 已驗收；建議關閉 Issue；把 acceptance 相關 task 標為完成。
 - 判定：verdict 為 `pass`（implementation 檢查範圍），報告寫明真實資料驗收仍 pending。
