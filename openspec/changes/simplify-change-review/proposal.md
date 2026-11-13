@@ -19,11 +19,16 @@
 
 ### New Capabilities
 
-- `change-review`: 以 Change／Issue／PR 為入口，協調必要驗證、選用品質審查、失敗回覆與本機實作者修正交接。
+無。`change-review` 的主規格已存在（`openspec/specs/change-review/spec.md`），本 change 改為修改它。
 
 ### Modified Capabilities
 
-目前主規格沒有 `change-review`。同名能力位於尚未封存的 `add-change-review-skill`，`simplify-github-pr` 又已調整發布路徑；本 change 規劃其下一版行為，不修改那些歷史規劃。封存前必須依當時主規格調和：若上游已同步，改為對相同 capability 的完整 MODIFIED／必要 REMOVED deltas，不得留下「PR 必填」「verify 選用」等相反有效條款。
+- `change-review`：以 Change／Issue／PR 進入、PR 改為選用、`openspec-verify-change` 必用、目的判讀、未通過才以 github-pr reply 發布，以及通知可核對的本機實作者。delta 依主規格的完整 requirement block 調和：
+  - RENAMED＋MODIFIED：「Review resolves an explicit phase and version」改為「A PR review is bound to its actual implementation version」，保留版本、expected-head、head 移動與 Skill 來源的情境，移除 PR／phase 必填。
+  - REMOVED：「Implementation review uses a self-contained verification baseline」（verify 改為必用；必要測試與真實資料 pending 的情境移到新的 verify requirement）、「Repair handoff persists the report before notification」（改為核對後通知本機實作者，可轉交訊息成為退路）。
+  - MODIFIED：「Agent verdicts do not impersonate platform approval」（預設以 github-pr reply 發布）、「Re-review verifies the new version and affected behavior」與「Review execution is bounded and preserves scope」（pass 直接回報，使用者要求才發布）。
+  - 不變：設計審查、整合與驗收分離、Finding 證據與穩定 ID、依共用契約發布報告。
+  - 主規格的 Purpose 仍寫「from a PR」；deltas 不含 Purpose，封存時需一併更新為 Change／Issue／PR 入口。
 
 ## Impact
 

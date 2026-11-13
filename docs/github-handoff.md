@@ -498,10 +498,13 @@ PR 見第 6.2 節（另加 `SESSION-ID` 與 `XIRP-SESSION-ID`）。它們不記 
 - 已 Accepted 但尚未處理的必要 Finding，須連到對應的 OpenSpec task 或專案正式的風險
   機制，並附 PR 證據連結。PR 上的詳細報告不取代正式待辦，也不能據此把工作標為完成。
   純粹的可選建議不必擴張 tasks。
-- 審查的執行步驟（固定版本、階段檢查清單、發布回讀與修正交接）由已安裝的 `change-review`
-  Skill 提供；它沿用本節與第 6.2 節的審查回覆，不另定 schema。
-- Reviewer 以 `github-pr reply`（當下可用的 `gh` 或 MCP）發布自己的審查回覆，依第 3 節
-  核對目標與能力，發布後回讀。發報告不使用 PR 的 create／update／close 操作，也不需要在
+- 審查的執行步驟由已安裝的 `change-review` Skill 提供：從 Change、Issue 或 PR 解析目標、固定
+  受審版本、必用 `openspec-verify-change` 與選用的品質技能、依結果回報或發布，以及通知可核對的
+  本機實作者。PR 不是必要條件；`phase` 依請求判定（預設 implementation），不要求每次指定。
+  它沿用本節與第 6.2 節的審查回覆，不另定 schema。
+- 沒有 PR 或結論為 `pass` 時直接回報（使用者要求時才把 pass 發布到 PR，且不通知修正）；有 PR 且結論為 `changes-required` 或 `blocked` 時，
+  Reviewer 以 `github-pr reply`（當下可用的 `gh` 或 MCP）發布自己的審查回覆，依第 3 節
+  核對目標與能力，發布後回讀，確認後才通知實作者。發報告不使用 PR 的 create／update／close 操作，也不需要在
   PR 正文維護 Review 索引。
 
 ## 9. 人類設計批准

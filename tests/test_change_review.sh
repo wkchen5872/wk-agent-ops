@@ -88,6 +88,41 @@ want "$SKILL" 'lookup hint' "a Xirp ID is only a local lookup hint"
 want "$CASES" 'XIRP-SESSION-ID' "cases cover dual-field Author"
 want "$CASES" '(xirp)' "cases keep legacy single-field Author readable"
 
+# ── simplify-change-review: Change/Issue entry, mandatory verify, reply, notify ─
+# Maps to openspec/changes/simplify-change-review specs/change-review.
+echo "SCR-1 entry, versions and PR-optional review"
+if grep -qE '^\| (PR reference|phase) \| yes \|' "$SKILL" 2>/dev/null; then
+  bad "PR and phase are no longer required inputs"; else ok "PR and phase are no longer required inputs"; fi
+for term in 'Issue URL' '#N' 'Change name' 'no PR' 'unknown' 'local version'; do
+  want "$SKILL" "$term" "Skill covers '$term'"
+done
+echo "SCR-2 verification and quality skills"
+want "$SKILL" 'openspec-verify-change is mandatory' "openspec-verify-change is mandatory"
+deny "$CHECKS" '有已安裝的 `openspec-verify-change` 時' "checklists no longer treat verify as optional"
+for inv in '/openspec-verify-change' '$openspec-verify-change' '/code-review:code-review' '$ponytail:ponytail-review' '/ponytail:ponytail-review'; do
+  want "$SKILL" "$inv" "Skill names the host invocation '$inv'"
+done
+want "$SKILL" 'original grading' "verify results keep their original grading"
+echo "SCR-3 results, publication and notification"
+want "$SKILL" 'returned directly' "pass and no-PR results are returned directly"
+want "$SKILL" 'implementation Author' "notification targets the implementation Author"
+want "$SKILL" 'transferable message' "unreachable implementers get a transferable message"
+want "$SKILL" 'local-only' "explicit local-only requests are respected"
+for label in '產出報告：'; do
+  c="$(grep -cF -- "- $label" "$CASES" 2>/dev/null | tr -d ' ')"
+  [[ "${c:-0}" -ge 4 ]] && ok "at least 4 full report cases (${c:-0})" || bad "at least 4 full report cases (${c:-0})"
+done
+for t in 'Change 名稱入口' 'Issue URL 入口' '#N 入口' '直接 PR 入口' 'PR 查找不明' 'repo 不明' '多個 Change' \
+         'Issue 無 Change' 'Work Item 缺少' 'verify 缺少' '選用技能缺少' 'PR-only' '設計審查未勾 tasks' \
+         '必要測試不能跑' '無 PR 報告' 'PR 失敗可通知' 'PR blocked 無法通知' 'PR pass' 'reply 被拒' \
+         '多位實作者' 'session 不在本機' 'local-only' '複驗'; do
+  grep -E '^### CR-[0-9]+' "$CASES" 2>/dev/null | grep -qF -- "$t" \
+    && ok "change-review has a case for '$t'" || bad "change-review has a case for '$t'"
+done
+want "$SVG" 'openspec-verify-change' "skill diagram shows the mandatory verify"
+want "$SVG" '無 PR' "skill diagram shows the no-PR branch"
+deny "$ROOT/README.md" '提供 PR、phase（`design` 或 `implementation`）' "README no longer requires PR and phase"
+
 # ── 2.x Phase checklists and findings ────────────────────────────────────────
 echo "2.x checklists and findings"
 [[ -f "$CHECKS" ]] && ok "phase checklists exist" || bad "phase checklists exist"

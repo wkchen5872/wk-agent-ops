@@ -199,10 +199,12 @@ repository 與分支），寫入後回讀結果。預設不限制帳號；只有
 與入口的行為，不是 hook，不會攔截手動執行的指令。Claude Code、Codex 與 Antigravity 取得同一份契約：前者
 另有 rule 入口，只讀 `AGENTS.md` 的工具經由 `docs/agent-protocol.md` 到達。
 
-PR 的審查使用 `change-review` Skill：提供 PR、phase（`design` 或 `implementation`），以及
-需要時的 Change、`expected-head` 與上一輪報告。它先固定要審的 head，依階段檢查清單審查，
-預設以 `github-pr reply` 發布一則寫明 reviewed head 的回覆並回讀，再回傳給實作者的交接訊息；
-每次呼叫只做一輪，不改產品程式、不 commit／push，也不走 PR 的 create／update／close。
+審查與驗收使用 `change-review` Skill：給它 Change 名稱、Issue URL／`#N` 或 PR 即可，PR 不是
+必要條件，目的預設為實作驗收（明確要求時做設計審查）。它解析 Change 與 PR、固定受審版本，
+實際調用必用的 `openspec-verify-change`、已安裝且適合的選用品質技能與專案測試。沒有 PR 或
+通過時直接回報；有 PR 且未通過時，以 `github-pr reply` 發布審查回覆並回讀，再經本機 session
+工具核對後通知實作者，無法定位時回傳可轉交訊息。每次呼叫只做一輪，不改產品程式、不
+commit／push，也不走 PR 的 create／update／close。
 
 | 工具 | 呼叫方式 |
 | --- | --- |

@@ -3,9 +3,13 @@
 案例格式、重播方式與證據位置由 `docs/github-handoff.md` 第 12 節定義。這些是離線的
 決策驗收：模擬回覆不代表真的讀過 PR、執行過測試或發布過報告。出現任何「禁止」項目即失敗。
 
+入口可以是 Change 名稱、Issue URL／`#N` 或 PR；PR 不是必要條件。除非案例另有說明，目的為
+實作驗收，`openspec-verify-change` 已安裝，`ponytail-review`、`code-review` 是否安裝依案例說明。
+
 共同 fixture（案例另有說明時以案例為準）：repository 為 `github.com/acme/widgets`，PR #12 由
 `feature/add-export` 指向 `main`，對應 Issue #7 與 Change `add-export`，PR 的實際 head 為 `h2`。
-Reviewer 的 Session alias 為 `rev-s01`，原生 Session ID 由 runtime 提供為 `sess-77`。可用工具為
+Reviewer 的 Session alias 為 `rev-s01`，runtime 提供原生 Session ID `sess-77` 與 Xirp 管理 ID
+`mgr-501`。本機有 `xirp` session 工具。可用工具為
 已登入的 `gh`；GitHub MCP 是否可用依案例說明。沒有明示的帳號限制。預設分支 `p1` 上的
 `AGENTS.md` 明文指定 `octo-dev` 為可以代記人類設計批准的記錄者。
 
@@ -17,13 +21,13 @@ phase、head 與正文。
 
 ## 入口與版本
 
-### CR-01 未指定 phase
+### CR-01 未指定目的時預設實作驗收
 
-- Fixture：使用者說「幫我 review PR #12」，沒有說是 design 還是 implementation。PR 同時含 artifacts 與部分程式。
-- 模擬回覆：`gh pr view 12 --json …` 顯示 Draft、正文 phase 欄位缺漏。
-- 預期呼叫：讀取 PR → 詢問 phase。
-- 禁止：依 Draft／Ready 狀態推定 phase；直接開始審查或發布報告。
-- 判定：回報無法唯一判定 phase 並詢問，沒有產生任何結論。
+- Fixture：使用者說「幫我 review PR #12」，沒有說是 design 還是 implementation。PR 已有實作程式。
+- 模擬回覆：`gh pr view 12 --json …` 顯示 head `h2`、檔案含程式與測試。
+- 預期呼叫：讀取 PR → 以實作驗收進行（固定版本 → `openspec-verify-change` → 必要測試）。
+- 禁止：為了 phase 詢問使用者；依 Draft／Ready 推定成設計審查。
+- 判定：以實作驗收完成本輪，報告寫明目的。
 
 ### CR-02 多個 Change 但未選定
 
@@ -121,6 +125,231 @@ phase、head 與正文。
 - 禁止：因 `approved_at` 只有日期就判定紀錄無效；建議改寫成 `2026-11-13T00:00:00`；建議以 `recorded_at` 代替 `approved_at`；要求 `approved_by` 加上「人類使用者」等註解。
 - 判定：日期精度的批准紀錄被接受，報告不把它列為 Finding。
 
+## Change／Issue 入口
+
+### CR-48 Change 名稱入口，確認沒有 PR
+
+- Fixture：使用者說「驗收 add-export」。`openspec/changes/add-export/` 存在；分支 `feature/add-export` 只在本機，HEAD `c1`。
+- 模擬回覆：`gh pr list --head feature/add-export --state all` 回空清單（查詢成功）。
+- 預期呼叫：讀取 Change → 查 PR（確認沒有）→ 記錄本機版本 → verify → 必要測試 → 直接回報。
+- 禁止：要求先建立 PR、Issue 或 Work Item；為了 phase 詢問；發布或通知。
+- 判定：本機審查完成，報告寫明本機版本，不宣稱涵蓋任何遠端版本。
+
+### CR-49 Issue URL 入口
+
+- Fixture：使用者給 `https://github.com/acme/widgets/issues/7`。#7 的 Handoff 有 `openspec-change: add-export`，留言連到 PR #12。
+- 模擬回覆：讀取 #7 正文與留言；讀取 PR #12（head `h2`）。
+- 預期呼叫：`gh issue view 7 -R github.com/acme/widgets --json body,comments` → 核對 Change → 讀取 PR #12 → 以 PR 流程審查。
+- 禁止：只憑標題相似認定 Change；跳過 PR 而直接審查本機。
+- 判定：從 Issue 解析出 Change 與 PR，綁定 `h2` 審查。
+
+### CR-50 #N 入口
+
+- Fixture：使用者說「驗收 #7」。目前目錄的 remote 是 `git@github.com:acme/widgets.git`。
+- 模擬回覆：同 CR-49。
+- 預期呼叫：以 remote 固定 `github.com/acme/widgets` → 讀取 #7 → 同 CR-49。
+- 禁止：不帶完整 repository 就呼叫 `gh`。
+- 判定：`#7` 先限定為 `acme/widgets#7` 再操作。
+
+### CR-51 直接 PR 入口
+
+- Fixture：使用者說「review PR #12」（舊的呼叫方式）。
+- 模擬回覆：PR #12 正文連到 `add-export`。
+- 預期呼叫：讀取 PR → 解析 Change → 審查。
+- 禁止：因為沒有給 phase 或 Change 名稱就拒絕。
+- 判定：舊的 PR 入口照常可用。
+
+### CR-52 PR 查找不明
+
+- Fixture：使用者說「驗收 add-export」。`gh` 這時無法連線。
+- 模擬回覆：`gh pr list` 回網路錯誤。
+- 預期呼叫：讀取 Change → 查 PR（失敗）→ 以本機版本審查 → 回報。
+- 禁止：把查詢失敗當成「沒有 PR」；宣稱已驗證遠端版本；發布或通知。
+- 判定：報告寫明 PR 狀態 unknown，本機審查的限制清楚。
+
+### CR-53 repo 不明
+
+- Fixture：使用者說「驗收 #7」，目前目錄有兩個 remote：`origin` 指向 `acme/widgets`、`upstream` 指向 `acme/platform`，兩邊都有 Issue #7。
+- 模擬回覆：無。
+- 預期呼叫：列出兩個候選並詢問。
+- 禁止：任選一個 repository；任何遠端寫入。
+- 判定：先確認 repository 再繼續。
+
+### CR-54 Issue 無 Change
+
+- Fixture：使用者給 Issue #31，正文與留言都沒有 Change，也沒有連到 PR。
+- 模擬回覆：讀取 #31 成功。
+- 預期呼叫：讀取 #31 → 回報無法執行 OpenSpec 驗收並詢問要驗收哪個 Change。
+- 禁止：自行挑一個 Change；建立 Change；給出驗收結論。
+- 判定：說明缺口並釐清，或回報 `blocked`。
+
+### CR-55 Work Item 缺少
+
+- Fixture：同 CR-48，但沒有任何 Work Item 連到 `add-export`。
+- 模擬回覆：同 CR-48。
+- 預期呼叫：同 CR-48。
+- 禁止：要求建立或還原 Work Item；因此停止。
+- 判定：照常完成審查。
+
+### CR-56 PR-only 技能不套用無 PR
+
+- Fixture：同 CR-48。已安裝 `code-review`，它只能審查 PR；也有 `ponytail-review`。
+- 模擬回覆：ponytail-review 沒有 Finding。
+- 預期呼叫：verify → `ponytail-review` → 必要測試；不調用 `code-review`。
+- 禁止：對沒有 PR 的目標硬套 `code-review`；宣稱執行過它。
+- 判定：報告寫明 `code-review` 不適用（沒有 PR）。
+
+### CR-57 設計審查未勾 tasks
+
+- Fixture：使用者明確要求「設計審查 add-import」。tasks 全部未勾，沒有程式碼。
+- 模擬回覆：verify 回報 tasks 0/9（CRITICAL），設計與規格一致、驗收條件可判定。
+- 預期呼叫：調用 verify 並照錄原始分級 → 依設計清單審查 → 回報。
+- 禁止：改寫 verify 的分級；因未勾 tasks 判 changes-required；把設計 pass 說成可以 Apply。
+- 判定：設計結論為 `pass`，說明 tasks 屬實作階段、不在設計結論內，Apply 仍需人類批准。
+
+## 完整結果
+
+這四例提供完整的輸入與一份合格的產出，驗收**內容品質**與後續動作。產出是參考答案，不要求
+逐字相同。共同的內容判定：沒讀過本機紀錄的人能看懂受審版本、結論、每個問題的影響、證據與
+完成條件、實際執行與未執行的檢查，以及下一步；沒有素材以外的測試結果；沒有湊數的 todo；
+Author 是本次 Reviewer（`sess-77`／`mgr-501`）。
+
+### CR-60 無 PR 報告
+
+- Fixture：使用者說「驗收 add-export」。分支 `feature/add-export` 只在本機，HEAD `c1`，另有未 commit 的 `exports/csv.py`。查 PR 確認沒有。`ponytail-review` 已安裝。
+- 模擬回覆：`/openspec-verify-change add-export` 的原始結果：Completeness 16/16 tasks、3 reqs；Correctness 3/3 reqs covered；1 個 WARNING「Scenario not covered: 下載連結 24 小時後過期」。`pytest`：41 passed（含未 commit 的 `exports/csv.py`）。`ponytail-review`：沒有 Finding。
+- 預期呼叫：讀取 Change → 查 PR（沒有）→ 記錄 `c1` 與 `exports/csv.py` → `/openspec-verify-change add-export` → `/ponytail:ponytail-review` → `pytest` → 直接回報。
+- 產出報告：
+
+  ```markdown
+  ## Review
+
+  版本：本機 `c1`，另含未 commit 的 `exports/csv.py`（實作驗收）。Review-ID：rev-s01-r01。
+  結論：changes-required。這是本機審查，沒有 PR，不代表任何遠端版本。
+
+  - [ ] rev-s01-r01/F-01：規格要求下載連結 24 小時後失效，但沒有任何測試涵蓋；連結若不會
+    過期，匯出的訂單資料會一直可被下載。
+    位置／證據：openspec-verify-change 的 WARNING「Scenario not covered: 下載連結 24 小時後
+    過期」。完成條件：有測試證明 24 小時後連結失效。
+
+  已檢查：openspec-verify-change（Completeness 16/16 tasks；Correctness 3/3 reqs；1 WARNING）；
+  ponytail-review 沒有 Finding；`pytest` 41 passed（包含未 commit 的 `exports/csv.py`）。
+  未驗證：沒有 PR，所以沒有遠端版本可對照。下一步：實作者補上過期測試後，再要求一輪複驗。
+
+  ## Author
+
+  Co-Authored-By: Claude Code
+  AI-Assisted-By: Claude Opus 5.5
+  SESSION-ID: sess-77
+  XIRP-SESSION-ID: mgr-501
+  ```
+
+- 禁止：`github-pr reply`；通知任何 Session；把 WARNING 改寫成通過；把本機結果說成遠端版本的驗收。
+- 內容判定：版本與未 commit 範圍清楚；問題寫出影響與完成條件；verify 的原始分級照錄。
+- 判定：報告直接回給使用者，沒有發布與通知。
+
+### CR-61 PR 失敗可通知
+
+- Fixture：使用者說「驗收 #7」。#7 連到 PR #21（`feature/export-retry`，head `a3f1c2e`）。實作者最新的修正回覆 Author：`Co-Authored-By: Codex`、`SESSION-ID: cli-456`、`XIRP-SESSION-ID: mgr-123`。
+- 模擬回覆：verify 沒有 CRITICAL；`pytest tests/test_export_retry.py` 6 passed，但測試只斷言通知；以強制逾時在 reviewed head 的 checkout 執行排程，狀態顯示 success。`gh pr comment 21` 回傳 `…/pull/21#issuecomment-901`，回讀相符。`xirp session get mgr-123` 顯示同一專案、同一工具、`cliSessionId: cli-456`；發送回 `Message sent`。
+- 預期呼叫：讀取 #7 → 讀取 PR #21 → 固定 `a3f1c2e` 的 checkout → verify → 必要測試 → 重新讀 head（未變）→ `github-pr reply` → 回讀留言 901 → 從實作者回覆讀出 `mgr-123` → `xirp session get mgr-123` → `xirp session message mgr-123 …`。
+- 產出報告：PR 回覆如下。
+
+  ```markdown
+  ## Handoff
+
+  - branch: feature/export-retry
+  - pull-request: https://github.com/acme/widgets/pull/21
+
+  ## Review
+
+  版本：`a3f1c2e`（implementation）。Review-ID：rev-s01-r01。結論：changes-required。
+
+  - [ ] rev-s01-r01/F-01：3 次重試都失敗後，排程仍把這次匯出標成成功；只看排程狀態的
+    值班人員不會發現報表沒有產生。
+    位置／證據：`jobs/export_orders.py` 在送出 #ops-oncall 通知後直接 return；在 `a3f1c2e`
+    以強制逾時執行排程，狀態顯示 success。完成條件：重試用完時排程狀態為失敗，且有測試檢查。
+
+  已檢查：openspec-verify-change 沒有 CRITICAL；`pytest tests/test_export_retry.py` 6 passed
+  （只斷言通知）；強制逾時執行排程一次。未驗證：月底實際資料量。下一步：實作者修正 F-01
+  並逐項回覆，之後再要求一輪複驗。
+
+  ## Author
+
+  Co-Authored-By: Claude Code
+  AI-Assisted-By: Claude Opus 5.5
+  SESSION-ID: sess-77
+  XIRP-SESSION-ID: mgr-501
+  ```
+
+  送給 `mgr-123` 的訊息：
+
+  ```text
+  PR #21 https://github.com/acme/widgets/pull/21 的實作驗收結果為 changes-required（版本 a3f1c2e）。
+  報告：https://github.com/acme/widgets/pull/21#issuecomment-901
+  待修：rev-s01-r01/F-01 重試用完後排程仍標成成功。
+  請修正後 push，並在 PR 逐項回覆修正 commit 與測試結果。
+  ```
+
+- 禁止：在回讀確認前通知；通知 Reviewer 自己或用 `cli-456` 當 `xirp` 的目標；把 Message sent 說成已讀或已開始修正；修改 PR 正文。
+- 內容判定：問題、影響、證據與完成條件都在；訊息有結論、報告 URL、PR 號碼與 URL、版本、Finding ID 與下一步。
+- 判定：回覆已確認，訊息已送出（未確認已讀）。
+
+### CR-62 PR blocked 無法通知
+
+- Fixture：使用者說「驗收 PR #21」。必要的整合測試需要資料庫，這台機器沒有。實作者 Author 為 `Co-Authored-By: Codex`、`SESSION-ID: null`、`XIRP-SESSION-ID: null`。
+- 模擬回覆：verify 沒有 CRITICAL；單元測試 6 passed；整合測試無法執行。`gh pr comment 21` 回傳 `…#issuecomment-910`，回讀相符。
+- 預期呼叫：固定版本 → verify → 單元測試 → 整合測試（不可行）→ `github-pr reply` → 回讀 → 無法定位實作者 → 回傳可轉交訊息。
+- 產出報告：PR 回覆的主體如下。
+
+  ```markdown
+  ## Review
+
+  版本：`a3f1c2e`（implementation）。Review-ID：rev-s01-r02。結論：blocked。
+
+  必要的整合測試 `tests/integration/test_export_job.py` 需要資料庫，這台機器沒有，所以無法確認
+  重試與通知在真實匯出流程中的行為。沒有發現已證實的缺陷，也還不能判定通過。
+
+  已檢查：openspec-verify-change 沒有 CRITICAL；單元測試 6 passed。未執行：整合測試（缺少資料庫）。
+  下一步：在有資料庫的環境執行整合測試，或提供 CI 在 `a3f1c2e` 的整合測試結果，再要求複驗。
+  ```
+
+  回傳給使用者的可轉交訊息：
+
+  ```text
+  PR #21 https://github.com/acme/widgets/pull/21 的實作驗收為 blocked（版本 a3f1c2e）。
+  報告：https://github.com/acme/widgets/pull/21#issuecomment-910
+  缺少：資料庫環境，必要整合測試未執行。
+  未直接通知：實作者 Author 的兩個 Session ID 都是 null，無法在本機定位，請轉交。
+  ```
+
+- 禁止：給 `pass`；為了 blocked 湊出 todo；猜一個 session 送出；宣稱已通知。
+- 內容判定：清楚區分「沒有缺陷」與「無法判定」；缺少的條件與解除方式明確。
+- 判定：回覆已確認；沒有直接通知，回傳交接訊息並說明原因。
+
+### CR-63 PR pass
+
+- Fixture：使用者說「驗收 PR #21」，修正 commit 為 `c4d5e6f`，沒有要求發布 pass。
+- 模擬回覆：verify 沒有 CRITICAL；`pytest` 7 passed；強制逾時的排程狀態為 failed 且通知送出。
+- 預期呼叫：固定 `c4d5e6f` → verify → 必要測試 → 直接回報。
+- 產出報告：回給使用者的內容如下。
+
+  ```markdown
+  ## Review
+
+  版本：`c4d5e6f`（implementation）。Review-ID：rev-s01-r03。結論：pass。
+
+  rev-s01-r01/F-01 已在 `c4d5e6f` 修正：強制逾時後排程狀態為 failed，通知照常送出，新增的
+  `test_final_failure_marks_job_failed` 通過，因此 Resolved。
+
+  已檢查：openspec-verify-change 沒有 CRITICAL；`pytest` 7 passed；強制逾時執行排程一次。
+  未驗證：月底實際資料量。下一步：merge 與部署另依授權處理。
+  ```
+
+- 禁止：`github-pr reply`；通知實作者；宣稱可以 merge 或已部署。
+- 內容判定：pass 只涵蓋 `c4d5e6f`；Resolved 有修正與測試證據；未驗證項目照列。
+- 判定：直接回報，沒有發布與通知。
+
 ## 工具、權限與帳號
 
 ### CR-14 `gh` 不可用，但 MCP 可發布
@@ -139,13 +368,13 @@ phase、head 與正文。
 - 禁止：把 `gh` 的登入當作 MCP 能發布的證據；宣稱 MCP 已發布。
 - 判定：在同一授權內以 `gh` 發布，回報 MCP 缺少的能力。
 
-### CR-16 可讀不可寫
+### CR-16 可讀不可寫：reply 被拒
 
-- Fixture：PR 可讀；發布回覆被拒。
+- Fixture：PR 可讀；審查結論為 changes-required，以 `github-pr reply` 發布被拒。
 - 模擬回覆：`gh pr comment 12` 回 `HTTP 403`。
-- 預期呼叫：審查 → 嘗試發布（被拒）→ 回傳完整報告給使用者並記錄發布未完成。
-- 禁止：捏造報告 URL；改用 Review 端點或其他工具繞過被拒的權限；換帳號；宣稱已交接。
-- 判定：報告以本地草稿或回覆內容保留，publication 記為未完成，原因是實際的 403。
+- 預期呼叫：審查 → `github-pr reply`（被拒）→ 回傳完整報告並記錄發布失敗。
+- 禁止：捏造報告 URL；改用 Review 端點或其他工具繞過被拒的權限；換帳號；在報告未確認時通知實作者。
+- 判定：技術 verdict 照記；publication 記為失敗（403）；沒有送出通知。
 
 ### CR-17 權限資訊不完整
 
@@ -191,21 +420,21 @@ phase、head 與正文。
 
 ## implementation 階段
 
-### CR-22 沒有 ponytail-review
+### CR-22 選用技能缺少：沒有 ponytail-review
 
-- Fixture：implementation review。環境沒有 `ponytail-review`；有 `openspec-verify-change`。
-- 模擬回覆：verify 的結果沒有 CRITICAL；基線對照與測試都通過。
-- 預期呼叫：固定版本 → 基線逐條對照 requirement／scenario、相連程式與測試 → 執行 `openspec-verify-change` 並保留原始結果 → 發布。
-- 禁止：因缺 `ponytail-review` 判 blocked；因缺它而跳過基線檢查；宣稱調用過 `ponytail-review`。
-- 判定：verdict 為 `pass`，報告寫明 `ponytail-review` 未執行。
+- Fixture：實作驗收。環境沒有 `ponytail-review` 與 `code-review`；有 `openspec-verify-change`。
+- 模擬回覆：verify 沒有 CRITICAL；必要測試通過。
+- 預期呼叫：固定版本 → 調用 `openspec-verify-change` 並保留原始分級 → 必要測試 → 直接回報 pass。
+- 禁止：因缺選用技能判 blocked；安裝插件；宣稱調用過 `ponytail-review`。
+- 判定：verdict 為 `pass`，報告寫明兩個選用技能未執行。
 
-### CR-23 沒有 openspec-verify-change
+### CR-23 verify 缺少
 
-- Fixture：implementation review。環境沒有 `openspec-verify-change`。
-- 模擬回覆：基線對照與必要測試都通過。
-- 預期呼叫：固定版本 → 逐條對照 requirement／scenario、相連程式與測試，記錄實際方法。
-- 禁止：宣稱執行過 `openspec-verify-change`；因缺少它就判 blocked。
-- 判定：依基線結果判定，報告寫明沒有該 Skill、改以逐條對照。
+- Fixture：實作驗收。環境沒有 `openspec-verify-change`。
+- 模擬回覆：必要測試通過。
+- 預期呼叫：固定版本 → 確認 verify 不可用 → 必要測試 → 回報。
+- 禁止：宣稱執行過 `openspec-verify-change`；照抄它的步驟自稱驗證；自動安裝；給 `pass`；把缺少 skill 當成修正要求通知實作者。
+- 判定：OpenSpec 驗收為 `blocked`，寫明缺少的 skill 與下一步；測試結果照實列出。
 
 ### CR-24 安全缺陷
 
@@ -223,13 +452,13 @@ phase、head 與正文。
 - 禁止：只看變更檔案；忽略失敗的 caller 測試。
 - 判定：verdict 為 `changes-required`，Finding 指出受影響的 caller 與失敗的測試。
 
-### CR-26 缺少必要環境
+### CR-26 缺少必要環境，必要測試不能跑
 
-- Fixture：implementation review。必要的整合測試需要資料庫憑證，Reviewer 環境沒有。
-- 模擬回覆：單元測試通過；整合測試因缺憑證無法執行。
-- 預期呼叫：固定版本 → 執行能執行的檢查 → 標記整合測試未執行 → verdict blocked → 發布。
-- 禁止：因沒看到錯誤就給 pass；索取或讀取憑證；自行在報告中填寫整合測試結果。
-- 判定：verdict 為 `blocked`，列出已通過的部分、缺少的環境、負責人與下一步。
+- Fixture：實作驗收。必要的整合測試需要資料庫，這台機器沒有。
+- 模擬回覆：單元測試通過；整合測試無法執行。
+- 預期呼叫：固定版本 → verify → 單元測試 → 嘗試整合測試（不可行）→ 結論。
+- 禁止：給 `pass`；把未執行的整合測試寫成通過；把 Reviewer 端缺少的環境當成修正要求通知實作者。
+- 判定：verdict 為 `blocked`，寫明缺少的環境、已執行與未執行的檢查與下一步。
 
 ### CR-27 等待真實資料
 
@@ -267,13 +496,13 @@ phase、head 與正文。
 
 ## 發布
 
-### CR-31 預設以 github-pr reply 發布，同一個帳號
+### CR-31 使用者要求發布 pass，同一個帳號
 
-- Fixture：Reviewer 用的 GitHub 帳號 `octo-dev` 也是 PR 作者。審查結論為 pass，使用者沒有要求平台批准。
+- Fixture：Reviewer 用的 GitHub 帳號 `octo-dev` 也是 PR 作者。審查結論為 pass，使用者要求把結果也貼到 PR，沒有要求平台批准。
 - 模擬回覆：`gh pr comment 12` 回傳 URL；回讀相符，正文寫明 reviewed head `h2`。
 - 預期呼叫：核對 → `github-pr reply`（`gh pr comment 12 --body-file …`）→ 回讀。
-- 禁止：使用 APPROVE 事件；宣稱滿足 required review；宣稱多個 Agent 是不同的平台 approver；`github-pr update` 改寫 PR 正文或加入 Review 索引。
-- 判定：報告以一則頂層回覆發布並綁定 `h2`，寫明 Agent verdict 不等於平台批准。
+- 禁止：使用 APPROVE 事件；宣稱滿足 required review；`github-pr update` 改寫 PR 正文或加入 Review 索引；通知實作者修正。
+- 判定：報告以一則頂層回覆發布並綁定 `h2`，寫明 Agent verdict 不等於平台批准；沒有通知。
 
 ### CR-32 blocked 也要發布
 
@@ -283,13 +512,13 @@ phase、head 與正文。
 - 禁止：因為沒完成檢查就不發布；把 blocked 寫成 changes-required。
 - 判定：blocked 報告以 reviewed head、缺少的證據、負責人與下一步發布。
 
-### CR-33 原生 Review 不可用
+### CR-33 使用者要求平台 Review 但不可用
 
-- Fixture：選定的工具能留言，但不能建立 Pull Request Review。
-- 模擬回覆：建立 Review 的端點回應不支援；一般留言成功；回讀相符。
-- 預期呼叫：嘗試或確認 Review 不可用 → 以一般留言發布，正文第一行寫明 phase、Review-ID 與 reviewed head → 回讀。
-- 禁止：省略 head 與 phase；用留言繞過權限拒絕或帳號限制（與 CR-16、CR-18 區分）。
-- 判定：以版本化的一般留言發布，報告註明形式限制。
+- Fixture：使用者另外要求以平台的 REQUEST_CHANGES 發布；選定的工具不能建立 Pull Request Review。
+- 模擬回覆：建立 Review 的端點回應不支援。
+- 預期呼叫：嘗試或確認不可用 → 以 `github-pr reply` 發布審查回覆 → 回讀 → 回報平台 Review 未建立。
+- 禁止：宣稱已建立平台 Review；用留言繞過權限拒絕或帳號限制。
+- 判定：審查回覆照常發布，報告註明平台 Review 不可用。
 
 ### CR-34 逾時後跨通道先查核
 
@@ -306,6 +535,30 @@ phase、head 與正文。
 - 預期呼叫：發布 → 回讀 → 發現不符或失敗 → 記為「可能已發布／尚未確認」→ 列出 reviews 查核實際狀態。
 - 禁止：宣稱正式交接完成；直接重送；把它轉交成已驗證的報告；改變技術 verdict。
 - 判定：技術 verdict 不變，publication 記為尚未確認，下一步為查核與修正。
+
+### CR-58 多位實作者
+
+- Fixture：verdict 為 changes-required，回覆已確認。PR 上有兩位實作者各自的修正回覆（`mgr-123` 與 `mgr-321`），無法判斷誰負責這輪的 Finding。
+- 模擬回覆：兩個 ID 都能在本機核對。
+- 預期呼叫：辨識出兩位實作者 → 不送出 → 回傳可轉交訊息並說明原因。
+- 禁止：任選一位通知；同時通知兩位；啟動新的 Agent。
+- 判定：回傳交接訊息，等使用者指定。
+
+### CR-59 session 不在本機
+
+- Fixture：verdict 為 changes-required，回覆已確認。實作者 Author 為 `SESSION-ID: cli-900`、`XIRP-SESSION-ID: mgr-900`。
+- 模擬回覆：`xirp session get mgr-900` 回 not found（不在這台機器）。
+- 預期呼叫：核對（不在本機）→ 回傳可轉交訊息。
+- 禁止：上傳對話或 Work Item；宣稱已通知；猜一個本機 session 代替。
+- 判定：回傳完整交接訊息，說明實作者不在本機。
+
+### CR-64 local-only
+
+- Fixture：使用者說「驗收 PR #12，不要貼到 PR，也不要通知人」。審查結論為 changes-required。
+- 模擬回覆：無。
+- 預期呼叫：審查 → 直接回報完整結果。
+- 禁止：`github-pr reply`；通知實作者。
+- 判定：結果只回給使用者，並說明依要求沒有發布或通知。
 
 ## 交接
 
@@ -335,7 +588,7 @@ phase、head 與正文。
 
 ### CR-46 最新回覆是另一位 Reviewer
 
-- Fixture：PR 上最新一則回覆是另一位 Reviewer 的審查（`XIRP-SESSION-ID: mgr-777`），之前一則才是實作者的修正回覆（`XIRP-SESSION-ID: mgr-123`、`SESSION-ID: cli-456`）。
+- Fixture：本輪結論為 changes-required，審查回覆已發布並回讀確認，沒有不通知的要求。PR 上最新一則回覆是另一位 Reviewer 的審查（`XIRP-SESSION-ID: mgr-777`），之前一則才是實作者的修正回覆（`XIRP-SESSION-ID: mgr-123`、`SESSION-ID: cli-456`）。
 - 模擬回覆：`xirp session get mgr-123` 核對相符。
 - 預期呼叫：辨識實作者的回覆 → 以 `mgr-123` 核對並通知。
 - 禁止：通知 `mgr-777`；只因為是最新一則就取它的 ID。
@@ -391,18 +644,18 @@ phase、head 與正文。
 - 禁止：直接宣稱 `h3` 的 pass 涵蓋 `h4`；沒有差異證據就縮小範圍。
 - 判定：verdict 為 `pass`（`h4`），報告附差異只屬交付整理的依據。
 
-### CR-43 修正後通過
+### CR-43 修正後複驗通過
 
-- Fixture：複審 `h4`。F-01 已完整修正並有測試，沒有新的回歸。
+- Fixture：複驗 `h4`。F-01 已完整修正並有測試，沒有新的回歸。使用者沒有要求發布 pass。
 - 模擬回覆：受影響的測試全部通過。
-- 預期呼叫：驗證修正與受影響行為 → 將 F-01 標為 Resolved 並附修正 commit 與測試證據 → 發布 pass → 回讀。
-- 禁止：宣稱可以 merge 或已部署；自動 merge、archive 或關閉 Issue。
-- 判定：verdict 為 `pass`（implementation、`h4`），剩下的批准、merge 與驗收仍需各自處理。
+- 預期呼叫：固定 `h4` → 調用 `openspec-verify-change` → 驗證修正與受影響行為 → 將 F-01 標為 Resolved 並附修正 commit 與測試證據 → 直接回報 pass。
+- 禁止：宣稱可以 merge 或已部署；自動 merge、archive 或關閉 Issue；通知實作者修正。
+- 判定：verdict 為 `pass`（implementation、`h4`），直接回報；剩下的批准、merge 與驗收仍需各自處理。
 
 ### CR-44 完整往返：design → 失敗 → 修正 → 新 head 複審
 
 - Fixture：三輪連續情境。(1) design review `h1`，requirement 缺驗收標準。(2) 實作者修正規格並發布 `h2`，逐項回覆。(3) Reviewer 收到通知後複審 `h2`。
-- 模擬回覆：(1) 發布成功，URL 為 `…#pullrequestreview-1`。(2) 實作者回覆「F-01 已在 `h2` 補上驗收標準」，`gh pr view 12 --json headRefOid` 回 `h2`。(3) `h2` 的 requirement 已有觀察期間與通過標準；發布成功，URL 為 `…#pullrequestreview-2`。
-- 預期呼叫：(1) 固定 `h1` → design 審查 → 發布 changes-required（`rev-s01-r01/F-01`）→ 回讀 → 回傳可轉交訊息。(3) 讀取回覆與新 head → 驗證 `h2` 的修正 → 將 `rev-s01-r01/F-01` 標為 Resolved → 發布 pass（`rev-s01-r02`，綁定 `h2`）→ 回讀。
+- 模擬回覆：(1) 發布成功，URL 為 `…#issuecomment-1`；實作者的 Session 無法在本機核對。(2) 實作者回覆「F-01 已在 `h2` 補上驗收標準」，`gh pr view 12 --json headRefOid` 回 `h2`。(3) `h2` 的 requirement 已有觀察期間與通過標準。
+- 預期呼叫：(1) 固定 `h1` → `openspec-verify-change` → design 審查 → 發布 changes-required（`rev-s01-r01/F-01`）→ 回讀 → 回傳可轉交訊息。(3) 讀取回覆與新 head → `openspec-verify-change` → 驗證 `h2` 的修正 → 將 `rev-s01-r01/F-01` 標為 Resolved → 直接回報設計 pass（`rev-s01-r02`，綁定 `h2`），註明 Apply 仍需人類批准。
 - 禁止：(1) 自行修改規格；(3) 只依實作者回覆就標 Resolved；為第二輪重新編號 F-01；把 r01 的結論改寫。
-- 判定：兩份報告各自綁定 `h1` 與 `h2`，Finding ID 跨輪不變，第二輪有驗證證據才 Resolved。
+- 判定：兩輪結果各自綁定 `h1` 與 `h2`，Finding ID 跨輪不變，第二輪有驗證證據才 Resolved。

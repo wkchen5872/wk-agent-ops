@@ -37,24 +37,6 @@ A PR SHALL NOT be required to review a resolved Change. Without a corresponding 
 - **THEN** it reports discovery as unknown and can perform supported local checks with that limit stated
 - **AND** it does not equate failed lookup with no PR or claim a full remote-version verification
 
-### Requirement: A PR review is bound to its actual implementation version
-With a PR, the workflow SHALL read its actual base and head, diff, description and relevant implementation, repair and review comments. Checks SHALL identify the tested content and exclude unpublished local work from a remote-head pass. An explicit expected-head mismatch MUST stop target progression, and a moving head MUST NOT inherit an earlier result.
-
-#### Scenario: Implementation is newer locally
-- **WHEN** the local checkout contains changes absent from the selected PR head
-- **THEN** the reviewer uses a safe matching review context or reports the verification limit
-- **AND** it does not discard local work or attribute local test results to the PR head
-
-#### Scenario: PR head differs or moves
-- **WHEN** the expected head differs from the PR or the head moves during review
-- **THEN** the workflow reports the mismatch or marks the old-head result stale
-- **AND** it does not silently certify the new head
-
-#### Scenario: PR contains several work scopes
-- **WHEN** the selected PR contains other Changes or prior repair rounds
-- **THEN** the workflow evaluates the selected Change and actual dependencies, using relevant implementation and fix information
-- **AND** unrelated unfinished tasks do not become findings in this scope
-
 ### Requirement: OpenSpec verification is mandatory and quality extensions are optional
 The workflow SHALL invoke the installed openspec-verify-change skill for a resolved, accessible Change and record its actual results. It SHALL select only available quality-review skills suitable for the target. Missing mandatory verification MUST prevent an unqualified pass; absent optional extensions MUST NOT by themselves block review or cause fabricated execution claims.
 
@@ -72,6 +54,16 @@ The workflow SHALL invoke the installed openspec-verify-change skill for a resol
 - **WHEN** openspec-verify-change is unavailable or its required Change artifacts cannot be accessed
 - **THEN** the affected acceptance is blocked with the missing prerequisite and next action stated
 - **AND** other supported review results remain reportable without substituting an invented successful verification
+
+#### Scenario: Necessary tests cannot run
+- **WHEN** required tests lack credentials, environment, or real data
+- **THEN** the report identifies the missing checks and marks the affected acceptance scope blocked
+- **AND** the absence of an observed bug does not become a passing result
+
+#### Scenario: Real-data acceptance is still pending
+- **WHEN** implementation checks pass but the Change requires an observation period that is not complete
+- **THEN** the report distinguishes the passing checks from pending formal acceptance
+- **AND** the workflow does not report the whole Change accepted, close its Issue, or mark required tasks complete
 
 ### Requirement: Review purpose controls the interpretation of evidence
 The workflow SHALL determine the purpose from the request without requiring a phase argument on every invocation. Implementation acceptance SHALL assess actual implementation and required tests. Explicit design review SHALL remain supported; verifier results SHALL retain their original grading, with purpose-specific applicability explained rather than silently rewritten.
@@ -155,3 +147,87 @@ The workflow SHALL perform one bounded round. Re-review SHALL resume on explicit
 - **WHEN** a failed review has been published and its repair message sent
 - **THEN** the workflow reports the completed round and next action and ends
 - **AND** it does not start an automatic repair, polling or re-review loop
+
+## RENAMED Requirements
+
+- FROM: `### Requirement: Review resolves an explicit phase and version`
+- TO: `### Requirement: A PR review is bound to its actual implementation version`
+
+## MODIFIED Requirements
+
+### Requirement: A PR review is bound to its actual implementation version
+With a PR, the workflow SHALL read its actual base and head, diff, description and relevant implementation, repair and review comments, and an optional expected head. Checks SHALL identify the tested content and exclude unpublished local work from a remote-head pass. An expected-head mismatch MUST stop progression for that target, a moving head MUST NOT inherit an earlier result, and the review tool's source SHALL be kept distinct from the reviewed content.
+
+#### Scenario: Several Changes are linked
+- **WHEN** a PR links multiple plausible Changes without selecting the review target
+- **THEN** the reviewer reports the ambiguity and obtains a target before reviewing
+- **AND** it does not pick the first Change or infer it from a local Work Item
+
+#### Scenario: A target is selected while another linked Change is unfinished
+- **WHEN** the caller selects one Change and the PR also contains planning for another unfinished Change
+- **THEN** the review evaluates the selected Change and its actual dependencies
+- **AND** unrelated unfinished tasks do not become missing implementation in the selected scope
+
+#### Scenario: Checkout is dirty or mismatched
+- **WHEN** the available checkout differs from the PR head or contains unpublished changes
+- **THEN** the reviewer obtains a safe matching review context or reports the version limitation
+- **AND** it does not discard local work, commit it, or attribute its test results to the published head
+
+#### Scenario: Head moves during review
+- **WHEN** the PR head changes after the reviewed snapshot was selected
+- **THEN** the report remains attributed to its actual reviewed revision and is marked stale
+- **AND** it cannot represent that result as a pass for the new head without rechecking the affected scope
+
+#### Scenario: Caller supplies a head different from the current PR
+- **WHEN** an explicit expected head does not match the actual PR head
+- **THEN** the reviewer reports the mismatch to the caller and obtains a corrected target before proceeding
+- **AND** it does not silently review the latest branch revision, post the mismatch to the PR, or notify anyone
+
+#### Scenario: A new Skill is tested against an earlier PR revision
+- **WHEN** the Review Skill source is newer than or uncommitted relative to the selected target
+- **THEN** the evidence separately identifies the Skill source revision or fingerprint and the actual reviewed checkout
+- **AND** a dirty Skill-development checkout does not attest tests of a different published target head
+
+### Requirement: Agent verdicts do not impersonate platform approval
+The report SHALL distinguish pass, changes-required, and blocked from GitHub review events and repository merge rules. A remote report SHALL be a github-pr reply conversation comment unless the user separately requests a platform review event the account may submit. Multiple agents sharing one account MUST NOT be described as separate platform approvers.
+
+#### Scenario: Default report publication
+- **WHEN** an authorized reviewer publishes a report without a separate request for platform approval or request changes
+- **THEN** it posts a github-pr reply that states the reviewed version and verdict
+- **AND** the Agent verdict remains in the report and does not imply a required platform approval
+
+#### Scenario: Reviewer uses the PR author's account
+- **WHEN** the selected GitHub actor is the PR author
+- **THEN** the agent publishes a report using an allowed form without claiming an independent platform approval
+- **AND** a technical pass is not reported as satisfying required-review rules
+
+### Requirement: Re-review verifies the new version and affected behavior
+Re-review SHALL use the implementer's per-finding replies, fixing commits, test evidence, and the new version. The reviewer SHALL run the mandatory verification and verify fixes and affected behavior before updating findings and reporting a new conclusion. A previous pass MUST NOT automatically apply to changed scope; prior rounds SHALL remain traceable.
+
+#### Scenario: New head includes a repair and a related regression
+- **WHEN** a new revision fixes a reported line but changes connected behavior
+- **THEN** the reviewer checks the affected behavior and records any evidenced regression
+- **AND** it does not resolve the original handoff solely from the implementer's statement
+
+### Requirement: Review execution is bounded and preserves scope
+One invocation SHALL perform one review round and report the result and next action. Repeated repair rounds SHALL resume explicitly after new evidence or revision is available. Repeated disagreement without new evidence, requirement conflict, missing environment, or required future data SHALL stop progression as blocked with an owner and next action. Review SHALL not silently expand scope, poll, or merge, deploy, archive, or close work.
+
+#### Scenario: Same disagreement has no new evidence
+- **WHEN** a re-review finds the same unresolved dispute without a changed revision or new evidence
+- **THEN** it records the dispute as blocked for human resolution
+- **AND** it does not keep repeating automatic requests or invent additional requirements
+
+#### Scenario: Repair passes the selected scope
+- **WHEN** the reviewed revision satisfies the selected review scope with sufficient evidence
+- **THEN** the reviewer reports pass for that purpose and revision, posting it only when the user asks
+- **AND** any remaining human approval, deployment, acceptance, or closure action remains explicit
+
+## REMOVED Requirements
+
+### Requirement: Implementation review uses a self-contained verification baseline
+**Reason**: openspec-verify-change becomes mandatory instead of supplementing a self-contained baseline checklist.
+**Migration**: Use "OpenSpec verification is mandatory and quality extensions are optional", which keeps the optional-extension, necessary-test and pending real-data scenarios; the checklist now covers only what invoked skills do not.
+
+### Requirement: Repair handoff persists the report before notification
+**Reason**: Notification is no longer a caller-named option with a transferable message as the default; a confirmed failed PR review now notifies the verified local implementer.
+**Migration**: Use "Implementer identity is verified from implementation Author context" and "Confirmed PR feedback precedes local implementer notification"; a transferable message remains the fallback when the implementer cannot be verified or reached.
