@@ -2,7 +2,7 @@
 
 本版是使用者要求的工具／認證責任調整，需由 Claude 依新設計修改既有實作。舊版 13 項完成與歷史證據不代表本版已驗收；下列受影響工作重新開啟。保留舊報告與證據，不回寫成新版通過。這次授權包含設計調整與實作交接，不自動新增 commit／push／merge／archive 授權。
 
-歷史證據：[apply-r01](../../../docs/verification/github-handoff/2026-11-13-apply-r01.md)、[gh-r02](../../../docs/verification/github-handoff/2026-11-13-gh-r02.md)。本版證據：[native-r03](../../../docs/verification/github-handoff/2026-11-13-native-r03.md)（自動測試、63 案重播、唯讀真實 gh；尚未發布）。舊 head 922d29a 的 implementation Review 有三個 identity-script 缺陷及 fork 核對缺口；本版採移除 credential reconstruction 解決前者，不再擴充 parser。修正後須對實際新版本複審。
+歷史證據：[apply-r01](../../../docs/verification/github-handoff/2026-11-13-apply-r01.md)、[gh-r02](../../../docs/verification/github-handoff/2026-11-13-gh-r02.md)。本版證據：[native-r03](../../../docs/verification/github-handoff/2026-11-13-native-r03.md)（自動測試、63 案重播、唯讀真實 gh）、[native-gh-r04](../../../docs/verification/github-handoff/2026-11-13-native-gh-r04.md)（發布、新版批准代記、Issue 查重與保留人工內容、無 WI 接手；GitHub MCP 未實測）。新版 head 待原 Reviewer 複審。舊 head 922d29a 的 implementation Review 有三個 identity-script 缺陷及 fork 核對缺口；本版採移除 credential reconstruction 解決前者，不再擴充 parser。修正後須對實際新版本複審。
 
 ## 1. 共用契約與簡化操作檢查
 
@@ -20,7 +20,7 @@
 
 - [x] 3.1 更新 github-pr create／publish：先盤點完整 dirty 與 base-to-head scope，按需沿用 writer，使用原生 Git 非 force push，核對實際目的 repo／ref 及 remote head，再用選定 GitHub 工具建立／更新。先驗混合 dirty、commit／hook／push 失敗、既有 commit 重用、原生 SSH／HTTPS 不需 principal parser、實際發布後版本回讀；不得自行 stash、reset、改認證或製造空 commit。
 - [x] 3.2 保留純 update 無 Git 副作用、既有 PR create 只回傳、publish 才發布新版本與正文 ownership；以 gh／MCP 可用能力逐案重播。W-01 必須核對實際 headRepository、head owner、base／head branch，fork create 明確表達目的；工具無法表達則停止，不靠同名分支、正文或 SHA 冒充 repo 身分。
-- [ ] 3.3 同步生命週期手冊與正式 SVG、批准事件及 Review 發布方式。保留設計批准／實作 Review／merge／部署／資料驗收／archive 分離，依新設計回讀事件作者；本次實質修訂的新批准版本與範圍須如實另記，舊事件不改寫。Review 發布不經 create／publish，通知送出不等於接收。
+- [x] 3.3 同步生命週期手冊與正式 SVG、批准事件及 Review 發布方式。保留設計批准／實作 Review／merge／部署／資料驗收／archive 分離，依新設計回讀事件作者；本次實質修訂的新批准版本與範圍須如實另記，舊事件不改寫。Review 發布不經 create／publish，通知送出不等於接收。
 
 ## 4. 安裝與一致性
 
@@ -29,8 +29,8 @@
 
 ## 5. 本版整體驗收與交接
 
-- [ ] 5.1 先保存新情境／預期／禁止，再用 Agent 重播 gh、MCP 等價決策、能力不足、指定帳號、秘密不輸出、timeout reconciliation 及無 WI 接手。在既有授權測試 repo，以任一可用通道真實驗證建立、查重、保留人工內容、原生 Git 發布、remote head 與接手；另一通道未具備時列未實測，不為湊驗收安裝／登入。記工具／版本、可得 actor、URL、實際回應與限制。
-- [ ] 5.2 執行必要專案檢查、openspec validate add-github-change-handoff --strict、git diff --check、連結與 SVG XML／實際渲染。去敏證據使用 docs/verification/github-handoff/<run-id>.md 的 OKF Reference，對應當次版本，不修改舊 run。依既有授權發布修訂內容並交回 Reviewer，逐項說明 F-01／F-02／F-03／W-01 如何在新實作解決，重新審查實際新 head。
+- [x] 5.1 先保存新情境／預期／禁止，再用 Agent 重播 gh、MCP 等價決策、能力不足、指定帳號、秘密不輸出、timeout reconciliation 及無 WI 接手。在既有授權測試 repo，以任一可用通道真實驗證建立、查重、保留人工內容、原生 Git 發布、remote head 與接手；另一通道未具備時列未實測，不為湊驗收安裝／登入。記工具／版本、可得 actor、URL、實際回應與限制。
+- [x] 5.2 執行必要專案檢查、openspec validate add-github-change-handoff --strict、git diff --check、連結與 SVG XML／實際渲染。去敏證據使用 docs/verification/github-handoff/<run-id>.md 的 OKF Reference，對應當次版本，不修改舊 run。依既有授權發布修訂內容並交回 Reviewer，逐項說明 F-01／F-02／F-03／W-01 如何在新實作解決，重新審查實際新 head。
 
 ## Workflow follow-up
 
