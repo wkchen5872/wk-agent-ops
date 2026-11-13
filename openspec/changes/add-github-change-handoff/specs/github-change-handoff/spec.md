@@ -19,68 +19,74 @@ The handoff workflow SHALL use OpenSpec as the authority for requirements, desig
 - **THEN** the workflow returns the change to OpenSpec and the applicable human design approval
 - **AND** editing an Issue or PR alone does not approve the new criteria
 
-### Requirement: Writes verify the target and actual actor
-Before a remote write the workflow SHALL verify the intended host, repository, and actual API actor against trusted project expectations or explicit user input. Commit and push operations SHALL additionally verify effective author and committer identities and the actual push destination and authenticated actor. Unknown or conflicting identity MUST stop the affected write without changing account, remote, key, or global configuration.
+### Requirement: Writes verify the target and operation context
+Before a write, the workflow SHALL verify the full repository target, intended operation, user-authorized scope, and available evidence from the executing tool. It SHALL stop on a known conflict or denial and verify the stored result. Read access MUST NOT imply write permission; incomplete permission metadata alone SHALL NOT require a probe write or block an otherwise authorized operation.
 
-#### Scenario: Git identity differs from API authentication
-- **WHEN** Git author email is configured but the current gh API actor is unverified
-- **THEN** the workflow does not use that email or a different gh execution context as actor evidence
-- **AND** it stops the remote write and reports the missing verification without exposing credentials
+#### Scenario: Repository is readable but the write is denied
+- **WHEN** the tool can read a repository but its token or App cannot create the requested Issue or PR
+- **THEN** the workflow reports the actual denial and does not claim the write succeeded
+- **AND** it does not change authentication or treat read access as write permission
 
-#### Scenario: Expected actors intentionally differ
-- **WHEN** trusted project expectations name different commit, push, and API actors and each actual actor matches its expectation
-- **THEN** the workflow accepts the declared arrangement without requiring all actors to match
+#### Scenario: Permission metadata is incomplete
+- **WHEN** the target and authorization are clear and there is no known denial but the native tool cannot fully preflight endpoint permissions
+- **THEN** the workflow may perform the requested authorized operation and validate its response and stored result
+- **AND** it does not create extra Issues, PRs, commits, or pushes solely to probe permission
 
-#### Scenario: Push principal cannot be established
-- **WHEN** a selected SSH or HTTPS push route cannot be safely attributed to the expected principal
-- **THEN** push is blocked and the missing evidence is reported
-- **AND** the workflow neither switches authentication nor dumps credential output
+#### Scenario: The host matches but the repository does not
+- **WHEN** an intended operation targets another owner or repository on the same host
+- **THEN** the workflow stops before that write and reports the full target mismatch
+- **AND** matching github.com alone is not accepted
 
-### Requirement: Identity checks share an operation-scoped executable
-The workflow SHALL provide one read-only identity-check script reused before API, commit, and push writes. It SHALL compare actual evidence with the trusted expected identity for the selected operation, return pass, mismatch, unverified, or error with distinct exit codes and sanitized evidence, and perform no write or authentication change. Only pass SHALL permit an already authorized operation to continue.
+#### Scenario: A fork has the same branch name
+- **WHEN** base and head repositories differ and another repository contains the same head branch name or SHA
+- **THEN** discovery, creation, publication, and readback verify the actual base and head repository identities and refs
+- **AND** a tool unable to express the selected fork reports the limitation instead of guessing
 
-#### Scenario: API actor matches but push actor does not
-- **WHEN** the api check passes and the later push check identifies another actor
-- **THEN** the script reports mismatch for push and the Skill stops that push
-- **AND** the api result is not reused as proof of the push identity
+### Requirement: Operation checks use native clients without credential reconstruction
+The workflow SHALL reuse native Git, gh, or an available GitHub MCP for operation-scoped checks and result verification. Local tool installation, SSH or HTTPS authentication, keys, and credential helpers SHALL remain local configuration. The workflow MUST NOT reconstruct the push principal by parsing credential helpers or SSH greetings, expose credentials, or require a custom identity script or trusted script-blob bootstrap. One tool's login MUST NOT attest another tool's execution identity.
 
-#### Scenario: Evidence or required tool is unavailable
-- **WHEN** the script cannot establish required identity evidence or lacks a necessary tool
-- **THEN** it returns unverified rather than pass and reports the missing prerequisite without credentials
-- **AND** the Skill does not proceed with the affected write or silently change channels
+#### Scenario: Git uses an existing SSH or HTTPS configuration
+- **WHEN** an authorized publication uses a native Git push route with the verified destination repository and ref
+- **THEN** Git performs authentication and reports the push result, and the workflow verifies the actual remote head
+- **AND** no helper parser, credential fill, or SSH principal test is required
 
-#### Scenario: Rule requires a preflight check
-- **WHEN** a supported Agent starts a handoff operation
-- **THEN** it reaches the shared requirement through its installed protocol or thin rule and invokes the appropriate check before writing
-- **AND** rule delivery is not described as a universal runtime block or a new Git hook
+#### Scenario: Only another tool is authenticated
+- **WHEN** gh is authenticated but the selected MCP cannot perform the operation, or the reverse
+- **THEN** the other tool's login is not treated as proof that the selected connection works
+- **AND** a tool may be selected before a write only within the same existing authorization and after its own target and capability checks
 
-#### Scenario: Reviewed head changes the identity-check script
-- **WHEN** the candidate checkout contains a modified identity-check script
-- **THEN** the caller obtains a verified ordinary-file blob from the fixed trusted policy revision or an explicitly trusted installed snapshot
-- **AND** it runs that trusted content against the actual candidate checkout and records script-source and target evidence without executing the candidate script
+#### Scenario: No custom identity policy or script exists
+- **WHEN** the native tool is configured and no explicit account restriction applies
+- **THEN** the workflow can proceed with its normal target, authorization, and operation checks
+- **AND** it does not require creating an identity policy, installing an identity script, or pinning its blob
 
-#### Scenario: No trusted script exists yet
-- **WHEN** the trusted revision lacks the script and no explicitly trusted installed snapshot is available
-- **THEN** the workflow reports the bootstrap prerequisite and does not silently use the candidate version
-- **AND** a previously explicit authorization for an unchanged script snapshot can be reused
+#### Scenario: Diagnostic evidence is recorded
+- **WHEN** an operation reports its tool, actor, connection, or failure evidence
+- **THEN** only non-secret metadata is included and unknown actors are honestly marked unavailable
+- **AND** credential configuration, token values, keys, and helper command contents are not copied into output or handoff records
 
-#### Scenario: SSH authentication test identifies the push actor
-- **WHEN** a noninteractive authentication test using the actual push route and SSH settings returns a trusted GitHub greeting for the expected account
-- **THEN** that greeting is accepted as actor evidence even when the documented test exits with code 1
-- **AND** missing host trust, an interactive prompt, or mismatched settings blocks push without changing keys or host verification
+### Requirement: Account restrictions are explicit and optional
+The workflow SHALL allow a configured account unless a user or trusted project policy explicitly restricts the operation. An applicable restriction SHALL be checked in the executing context; conflict or unknown compliance SHALL stop that operation. Candidate PR content MUST NOT authorize relaxing trusted restrictions. Approval-recorder authorization SHALL remain independent of repository access and optional account restrictions.
 
-#### Scenario: HTTPS helper cannot be connected to API actor evidence
-- **WHEN** Git uses osxkeychain or another unverified credential path while a separate CLI reports a matching login
-- **THEN** the CLI result does not verify the push actor and push remains blocked
-- **AND** neither the credential secret nor a user statement is substituted for actual authentication evidence
+#### Scenario: API, commit, and push use different identities
+- **WHEN** the configured identities differ and no applicable explicit restriction forbids the arrangement
+- **THEN** the workflow does not block solely because they differ
+- **AND** it records known identities with their sources without inventing unavailable principals
 
-### Requirement: Expected identities come from a trusted policy snapshot
-Expected identities SHALL come from explicit user input or an explicitly trusted project policy revision fixed before reviewing the candidate head. The policy SHALL identify host, repository, API actor and, when applicable, commit identities and push route and actor. Candidate PR content MUST NOT silently replace that policy; unresolved source or profile ambiguity SHALL stop affected writes.
+#### Scenario: A project requires a particular account
+- **WHEN** an explicit trusted restriction requires a specific account and the selected operation uses another account or cannot establish compliance
+- **THEN** that operation stops and reports the restriction and missing or conflicting evidence
+- **AND** the workflow does not switch accounts or invent a custom credential parser to obtain a pass
 
-#### Scenario: PR changes its own identity policy
-- **WHEN** the reviewed head modifies the project's expected API or push account
-- **THEN** the reviewer continues to use the previously trusted policy snapshot
-- **AND** adopting the new policy requires explicit user authorization independent of the candidate content
+#### Scenario: Candidate changes an account restriction
+- **WHEN** the reviewed head changes an existing trusted account restriction
+- **THEN** the candidate change is not itself permission to bypass that restriction
+- **AND** adopting the changed restriction requires the applicable independent user authorization
+
+#### Scenario: Repository access is mistaken for approval authority
+- **WHEN** an account can write a repository but is not an authorized recorder of the human's approval
+- **THEN** that access does not authorize an approval attestation
+- **AND** approval-recorder authorization is verified independently before an attestation authorizes Apply
 
 ### Requirement: Issue operations preserve work identity
 The Issue entry SHALL offer explicit create and update operations, use the selected Change and repository to discover existing associations, and reuse a unique confirmed Issue. Ambiguous or contradictory associations MUST be resolved before writing. Parent work, child work, and dependencies SHALL remain distinct; dependency records SHALL state their release condition.
@@ -230,25 +236,30 @@ Archive and documentation commits after a review SHALL invalidate its applicabil
 - **THEN** the workflow requires an explicitly authorized follow-up PR or reports pending handoff
 - **AND** pushing to the old branch alone is not reported as completed review or merge
 
-### Requirement: GitHub CLI is the first-version execution layer
-Issue, PR, and Review operations SHALL use GitHub CLI gh in the verified host and repository context; commit and push SHALL use Git. The first version MUST NOT execute a GitHub MCP path or silently switch backends. Installation SHALL deliver the shared contract and identity-check script to Claude Code, Codex, and Antigravity without modifying third-party Skills or adding background automation.
+### Requirement: Execution channels preserve equivalent handoff guarantees
+Issue, PR, Review, and comment operations SHALL use an available, already configured gh or GitHub MCP with explicit target and operation context. Commit and push SHALL use native Git. Shared templates, duplicate reconciliation, ownership, version evidence, and user authorization SHALL remain equivalent across execution channels without requiring a new adapter framework. Missing capability SHALL be reported honestly; installation and authentication configuration MUST NOT be changed automatically.
 
-#### Scenario: GitHub CLI is unavailable or insufficient
-- **WHEN** gh is missing or lacks the required capability or permission
-- **THEN** the workflow reports the prerequisite or operation failure and stops the affected action
-- **AND** it does not install or log in automatically, switch to MCP, or claim success
+#### Scenario: gh is unavailable but MCP is usable
+- **WHEN** an authorized operation can be performed by an available configured MCP and gh is unavailable
+- **THEN** the workflow may select that MCP after verifying its own target and capability
+- **AND** gh or a custom preflight script is not an additional prerequisite
+
+#### Scenario: Neither channel can perform the operation
+- **WHEN** no available configured client has the required capability or the operation is explicitly denied
+- **THEN** the workflow reports the missing prerequisite or denial and stops the affected operation
+- **AND** it does not install a tool, change authentication, or claim success
 
 #### Scenario: Request is retried after uncertain remote response
-- **WHEN** a create request times out without a confirmed remote result
-- **THEN** the workflow reconciles existing Issue or PR associations before retrying
-- **AND** an unresolved result is reported instead of blindly repeating the create request
+- **WHEN** a write times out without a confirmed remote result
+- **THEN** the workflow reconciles existing Issue, PR, review, or remote-ref state before any retry, including a retry through another channel
+- **AND** an unresolved result is reported instead of blindly repeating the write
 
 #### Scenario: Managed documentation includes a diagram
 - **WHEN** the shared handoff documentation and its referenced workflow SVG change
 - **THEN** reinstalling updates both managed assets while preserving unrelated project-owned files
 - **AND** a copied-once diagram is not reported as an updated managed artifact
 
-#### Scenario: Shared identity script is installed or updated
-- **WHEN** the installer runs for a new or existing target project
-- **THEN** the common identity-check script is delivered with its executable mode and refreshed on reinstall
-- **AND** unrelated project scripts and local Work Items are preserved
+#### Scenario: Existing custom preflight is retired
+- **WHEN** the new workflow is installed for a new or existing project
+- **THEN** the old identity-check script is no longer installed or required by Skills, rules, or the protocol
+- **AND** unrelated or locally modified project scripts and authentication configuration are preserved rather than indiscriminately deleted

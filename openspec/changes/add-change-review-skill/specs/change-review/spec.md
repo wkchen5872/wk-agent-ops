@@ -68,11 +68,11 @@ Every finding SHALL identify a concrete impact, requirement or location, evidenc
 - **AND** the reviewer records the fixing revision and validation evidence when resolving it
 
 ### Requirement: Reports use the shared handoff contract
-Review reports SHALL use the shared handoff schema, identity-check script, provenance, and body-ownership rules. PR reads and report writes SHALL use gh; writes SHALL require a passing api preflight. Each round SHALL state phase, revision, scope, result, checks, limits, and finding status. The reviewer MUST NOT switch to GitHub MCP, overwrite another author's record, or invoke PR create or publish operations.
+Review reports SHALL follow the shared schema, native-tool operation checks, optional account restrictions, provenance, and ownership rules. An available configured gh or GitHub MCP SHALL perform PR operations without a custom identity script or blob. Each round SHALL record phase, revision, scope, verdict, checks, limits, findings, and verified publication results. The reviewer MUST NOT overwrite others' records or invoke PR create or publish.
 
 #### Scenario: Publishing feedback
 - **WHEN** review feedback is ready and remote publication is authorized
-- **THEN** the reviewer uses gh to submit the Review or comment after the shared script verifies the actual API actor
+- **THEN** the reviewer uses the selected available tool after confirming the target, authorization, required capability, and any applicable explicit account restriction
 - **AND** it does not stage, commit, push, change product code, or call the PR create or publish path
 
 #### Scenario: Blocked review can still be reported
@@ -85,10 +85,20 @@ Review reports SHALL use the shared handoff schema, identity-check script, prove
 - **THEN** the reviewer preserves an authorized local draft or returns the report and records publication as incomplete
 - **AND** it does not fabricate a report URL or announce that remote handoff completed
 
-#### Scenario: CLI or preflight prerequisite is missing
-- **WHEN** gh or the shared identity script is unavailable, or its api result is not pass
-- **THEN** the report remains unpublished with the concrete missing prerequisite or mismatch recorded
-- **AND** the reviewer does not fall back to GitHub MCP or another unverified account
+#### Scenario: gh is unavailable but MCP can publish
+- **WHEN** gh is unavailable but a configured MCP can perform the authorized review publication
+- **THEN** the reviewer may use that MCP after its own target and operation checks
+- **AND** the absence of a custom identity script or account policy does not block publication
+
+#### Scenario: Required capability or explicit account compliance is unavailable
+- **WHEN** no configured tool can publish, the write is explicitly denied, or a mandatory account restriction cannot be satisfied
+- **THEN** the report remains unpublished with the concrete limitation recorded
+- **AND** a different tool's login is not substituted for evidence about the selected connection
+
+#### Scenario: Publication times out and another channel is available
+- **WHEN** the first write has an unknown result
+- **THEN** the reviewer reconciles the actual PR report state before retrying through any channel
+- **AND** it does not duplicate the report or invent a successful URL
 
 ### Requirement: Agent verdicts do not impersonate platform approval
 The report SHALL distinguish pass, changes-required, and blocked from GitHub review events and repository merge rules. When an account cannot submit a valid native approval or request-changes review, the reviewer SHALL use an available authorized comment form and state its limitations. Multiple agents sharing one account MUST NOT be described as separate platform approvers.

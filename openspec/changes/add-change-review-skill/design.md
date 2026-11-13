@@ -22,7 +22,7 @@
 - 第一版不新增 Claude／Codex 專用 Agent 定義、通知後端、遠端啟動器或自動修復 worker。
 - 不把技術判斷等同人類設計批准、平台 required review、merge／deploy 或正式資料驗收。
 - Reviewer 不整理、提交或推送被審查的程式，不走 custom PR 的 create／publish 路徑。
-- 第一版 GitHub 存取只走 `gh`，不新增 MCP 適配或驗收分支，也不重寫上游帳號檢查腳本。
+- 重用可用 gh 或 GitHub MCP，不新增後端框架、credential parser 或專用帳號檢查腳本；認證由本機工具管理。
 
 ## Decisions
 
@@ -30,7 +30,7 @@
 
 來源為 `template/common/skills/change-review/SKILL.md`。入口語意是 PR reference 加 `phase=design|implementation`；複審額外提供上一輪 report reference，通知目標為可選輸入。這是語意契約，不保證所有工具有同一種命令列參數語法。
 
-三種 Agent 的 GitHub 讀取／報告發布統一使用 `gh`，可以使用其 `api` 能力提交具有精確 commit_id 的原生 Review。依上游 Decision 4a 從已固定的可信 revision 取得檢查腳本到專用暫存目錄，核對 script blob 後執行 api 檢查；目標 cwd 仍為真正操作的 PR checkout，不直接執行候選 head 的同名腳本。使用者已信任且指紋不變的既有安裝來源亦可沿用；無可信來源則回報 bootstrap 缺口。只有 pass 才繼續已授權的遠端寫入；缺少 gh、非 pass 或權限不足時不自動登入或切換 MCP。
+三種 Agent 遵守同一上游操作契約，可使用已配置且具所需能力的 gh 或 GitHub MCP。每輪固定完整 host／owner／repo、實際 PR／head 與發布意圖，使用該工具本身可提供的連線／權限資訊。沒有預設指定帳號或可信 script blob 前提；只有上游明示帳號限制適用時才嚴格核對，不符或無法核對則停止該操作。讀取 repo 不代表可寫 Review；權限資訊不完整時不新增探測寫入，以已授權發布的實際回應與回讀判定，不把另一機器／工具登入當證據。
 
 phase 缺漏而上下文無法唯一判定時先釐清，不從 Draft／Ready 狀態猜測。Change 若有多候選，要求選定。未來可另加 Agent runtime 配置，但這次不需要固定另一個模型或 provider。
 
@@ -65,7 +65,7 @@ Finding 的 ID、verdict、狀態及基礎欄位只引用上游 `github-handoff.
 
 ### 5. 報告發布與 PR 說明維護分開
 
-Reviewer 寫入前呼叫上游共用腳本，依固定的可信政策版本核對 repo／gh API actor，不信任被審查 head 改寫的帳號期望。預設以 `gh api` 提交 `event=COMMENT` 並明確指定 reviewed head，三種 Agent verdict 都寫在報告內；這不需要假設多位 Agent 使用不同 GitHub 帳號。若所需原生 Review 操作不可用但 gh 的一般 Conversation 留言可用且已授權，正文記明 head／phase 及形式限制。帳號不符時只保留授權的本地草稿或回傳報告，publication 標記未完成，不以留言繞過 actor 檢查。
+Reviewer 發布前依上游契約確認明確 PR、操作能力、授權與適用的帳號限制，不執行共用 identity script。工具支援時預設提交綁定 reviewed commit 的 COMMENT Review；否則使用同樣獲授權、正文明記 head／phase 的一般留言，保留形式限制。三種 Agent verdict 都在報告內，不要求各 Agent 使用不同 GitHub 帳號。寫入結果回讀，記實際 URL、版本及可得 actor；沒有發布成功便保留草稿／回傳報告。結果不明時先 reconciliation，不能換另一工具盲目重送。
 
 共用契約區分 Agent verdict 與平台事件。同一 GitHub 帳號不能假裝多位平台 approver；只有帳號與權限允許、且另有明確意圖時才使用 APPROVE／REQUEST_CHANGES，不把它們列為預設必經分支。COMMENT、commit_id 與其他事件的 API 形狀已由 [GitHub Review 官方文件](https://docs.github.com/en/rest/pulls/reviews#create-a-review-for-a-pull-request)確認，實際帳號及工具支援仍須整合測試，不宣稱 required review 已滿足。
 
@@ -90,7 +90,7 @@ Reviewer 寫入前呼叫上游共用腳本，依固定的可信政策版本核�
 
 ## Risks / Trade-offs
 
-- 各機器 gh／Git 認證與 provider 的 Session 通知能力可能不同。第一版維持 gh 單一路徑，逐機器記錄實際版本／actor；通知可降級為人工轉交，但不切換 GitHub 後端或以另一機器的登入代證。
+- 各機器工具、認證與 Session 通知能力不同。選擇可用 gh／MCP，不為補齊驗收安裝或登入；記實際執行工具／版本、可得 actor 與能力限制。通知可人工轉交，不把別的連線當成當前權限證據。
 - Review 使用錯誤 checkout 可能產生無效測試證據。每輪比對實際版本並在 head 移動後限制結論。
 - 只看原 Finding 的一行可能漏掉回歸。複審包含受影響的相連程式與必要檢查，未變輸入的證據可有理由重用。
 - 共享帳號不能證明平台上的獨立批准。報告記錄 Agent 身分，merge gate 另由 repository 管理。
@@ -98,7 +98,7 @@ Reviewer 寫入前呼叫上游共用腳本，依固定的可信政策版本核�
 
 ## TDD strategy and verification boundary
 
-Skill 為指令文件，沿用上游人工重播方法，不新增 harness。案例來源放在 `template/common/skills/change-review/references/acceptance-cases.md`，格式只引用共用契約。先保存 fixture、固定模擬回覆、預期的 preflight／gh 呼叫與禁止行為，再用正常啟動的 Agent Session 人工比對；記錄實際工具、模型與版本。覆蓋 missing gh／script、mismatch、unverified 皆不寫入且不切換 MCP。正式去敏證據放在專案 `docs/verification/change-review/<run-id>.md`，tasks／PR 連到該版本，不只存在 WI；離線決策不能宣稱 gh 已完成遠端操作。
+Skill 為指令文件，沿用上游人工重播方法，不新增 harness。案例來源放在 `template/common/skills/change-review/references/acceptance-cases.md`，格式只引用共用契約。先保存 fixture、固定模擬回覆、預期的原生工具呼叫與禁止行為，再用正常啟動的 Agent Session 人工比對；記錄實際工具、模型與版本。覆蓋 gh 缺少但 MCP 可用、無可用通道、可讀不可寫、權限 metadata 不完整、選用帳號限制衝突、timeout 後換通道先查核，以及未知 actor 誠實記錄。正式去敏證據放在專案 `docs/verification/change-review/<run-id>.md`，tasks／PR 連到該版本，不只存在 WI；離線決策不能宣稱工具已完成遠端操作。
 
 逐次驗證文件採上游規定的 OKF `type: Reference` 與必要 metadata／sources，作為有時間與版本的歷史 run 紀錄保存，不因後來修正而改寫舊結果。
 
@@ -117,4 +117,4 @@ Review 圖稿及案例都在 `template/common/skills/change-review/references/`�
 
 ## Open Questions
 
-各工具的測試 PR、Session 目標與可用通知通道在測試前提供。缺少時報告相應整合未測或 blocked，不改變本 Change 的介面、流程或交付範圍；GitHub 通道已固定為 gh，並非未決事項。
+各工具的測試 PR、Session 目標與可用通知通道在測試前提供。缺少時報告相應整合未測或 blocked，不改變本 Change 的介面、流程或交付範圍；GitHub 通道依可用能力選擇，無自訂腳本或 blob bootstrap 前提。

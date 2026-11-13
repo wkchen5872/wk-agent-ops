@@ -7,7 +7,7 @@
 - [ ] 1.1 先依共用格式保存固定案例、模擬工具回覆、預期決策／擬議呼叫與禁止行為，再新增 `template/common/skills/change-review/SKILL.md` 的 PR／phase 入口與版本檢查。測試要求：正常 Agent Session 人工比對未指定階段、多 Change、錯版／dirty、head 移動、缺 artifacts、候選 head 修改帳號政策的案例；記實際模型／工具與證據，不能 commit、丟棄他人工作或把模擬當真實操作。
 - [ ] 1.2 加入共用契約／provenance 引用與獨立首輪、複審上下文分流。測試要求：契約已 archive 後仍可從已安裝文件取得；首輪不借用其他 Reviewer 未確認結論，複審正確引用原 Findings；不另維護第二套 metadata schema。
 - [ ] 1.3 依上游範本輸出三個明確章節，填寫 Scope and Baseline 的 Session 與 Git 資訊，不另定 schema。測試要求：以使用者指定的本地 Review 形狀作結構參考，人工重播原生 ID 已知／未知／withheld、使用者提供 ID、錯版 checkout、未提交與未版本化文件，檢查來源標記、alias 分離及各版本證據一致。
-- [ ] 1.4 將 gh 與上游可信腳本取得流程列為前提，從已固定版本取普通檔案 blob 至暫存目錄、針對真正 PR checkout 執行 api preflight，不另寫檢查程式。測試要求：案例涵蓋候選腳本修改、可信來源／bootstrap 缺漏、來源 cwd 與目標分離、script→gh 順序及非 pass；不得執行候選腳本、寫入或切換 MCP，也不以另一機器結果代證。
+- [ ] 1.4 引用上游原生工具的目標／operation／可得權限與回讀規則，使用可用 gh 或 MCP，不依賴 identity script／blob。測試要求：先保存 gh 缺少但 MCP 可用、另一連線登入不能代證、可讀不可寫、權限 metadata 不完整、無帳號限制可工作、明示限制衝突則停止的案例；認證交工具管理，不另建 parser／adapter。
 
 ## 2. 階段檢查與 Findings
 
@@ -17,7 +17,7 @@
 
 ## 3. 報告發布與修正交接
 
-- [ ] 3.1 以 gh 讀取 PR／發布三種結論，先呼叫共用 api preflight；預設 gh api 的 COMMENT＋reviewed commit，必要時在同一 gh 通道發有版本的一般留言。測試要求：人工案例含同帳號、blocked 仍發布、原生 Review 不可用、錯 actor／非 pass、權限不足；不切換 MCP、不走 create／publish／commit／push，不以留言繞過身分檢查，未成功不捏造 URL。
+- [ ] 3.1 用選定 gh 或 MCP 讀 PR／發布三種結論，預設 COMMENT 綁 reviewed commit，能力不足時可用同樣獲授權的版本化一般留言。測試要求：重播同帳號、blocked 仍發布、原生 Review 不可用、權限拒絕、明示帳號限制、timeout 後跨通道先 reconciliation；不走 create／publish／commit／push，不以留言繞過限制，回讀後才回報 URL。
 - [ ] 3.2 實作預設可轉交訊息與可選的已驗證 Session 定向工具，保留報告先發布、實作者逐項回覆／新 head、再交 Reviewer 的順序。測試要求：訊息含 PR／報告 URL、head、Finding IDs；重播無 Session 工具、原 Session 消失、新 Agent 接手及直接通知失敗，沒有工具時只記待人工轉交，不冒稱 Telegram／人員提示可定向 Session。
 - [ ] 3.3 實作單輪結束與複審入口，保留歷史結論且檢查新 head 的受影響行為。測試要求：人工重播未修完、引入回歸、同爭議無新證據、archive／doc 提交後的最終差異與通過；僅有證據為純交付整理才縮小範圍，不能把先前 pass 套到新 head，無進展 blocked，不常駐或擴需求。
 
@@ -28,7 +28,7 @@
 
 ## 5. 整體 Review 往返驗收
 
-- [ ] 5.1 在授權的測試 PR／Session 用 gh 完成 design／implementation Review，至少一輪失敗、修正回覆、新 head 與成功複審。測試要求：保存 gh 版本、共用 api preflight 結果、報告 URL、SHA、實際交接／通知結果及另一 Session 無 WI 接手證據；不足保持未完成，不以離線 fixture 代替，不要求 MCP 驗收分支。
+- [ ] 5.1 在已授權測試 PR／Session 以任一可用通道完成 design／implementation Review、一輪失敗、修正回覆、新 head 與成功複審。測試要求：保存實際工具／版本、目標／操作證據、可得 actor、報告 URL、SHA、交接／通知與無 WI 接手證據；未具備另一通道就明列未實測，不自行安裝／登入，不以離線 fixture 代替真實操作。
 - [ ] 5.2 執行受影響 contract／安裝測試、必要專案檢查、`openspec validate add-change-review-skill --strict`、`git diff --check` 及文件檢查。測試要求：正式 run 採上游 OKF Reference／必要 metadata／sources，保留歷史結果；明列各工具 runtime、跨機器、真實資料與 required-review 是否實測，不誤報交付。
 
 ## Workflow follow-up

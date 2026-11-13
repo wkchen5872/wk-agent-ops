@@ -1,38 +1,39 @@
 # Tasks
 
-本清單只追蹤實作與驗證。開始前須取得本 Change 設計的人類審閱；建立 artifacts 不等於批准實作。第一版 GitHub 操作統一 gh，Git commit／push 使用 git；帳號腳本與 installer 用測試先行，Skill 指令採 design 的人工重播方法。純文字 contract 不能冒充操作驗收，去敏正式證據落在專案 `docs/verification/github-handoff/<run-id>.md`。
+本版是使用者要求的工具／認證責任調整，需由 Claude 依新設計修改既有實作。舊版 13 項完成與歷史證據不代表本版已驗收；下列受影響工作重新開啟。保留舊報告與證據，不回寫成新版通過。這次授權包含設計調整與實作交接，不自動新增 commit／push／merge／archive 授權。
 
-驗證證據：[2026-11-13-apply-r01](../../../docs/verification/github-handoff/2026-11-13-apply-r01.md)（自動測試與離線重播）、[2026-11-13-gh-r02](../../../docs/verification/github-handoff/2026-11-13-gh-r02.md)（真實 gh 驗收，Issue #1／Draft PR #2）。重播與接手測試由 Agent 子 Session 執行、實作 Session 判讀，尚無人類比對；implementation Review 尚未進行。
+歷史證據：[apply-r01](../../../docs/verification/github-handoff/2026-11-13-apply-r01.md)、[gh-r02](../../../docs/verification/github-handoff/2026-11-13-gh-r02.md)。舊 head 922d29a 的 implementation Review 有三個 identity-script 缺陷及 fork 核對缺口；本版採移除 credential reconstruction 解決前者，不再擴充 parser。修正後須對實際新版本複審。
 
-## 1. 共用契約與正式交接邊界
+## 1. 共用契約與簡化操作檢查
 
-- [x] 1.1 在共用契約定義範本／遠端 schema、IDs、provenance 預設、design-approval、可信政策及認證證據表，並定義共同人工案例與正式證據格式。測試要求：先保存 fixture／模擬回覆／預期及禁止呼叫；案例驗證已授權具名代記跨機器可用、實際 comment author 不符／Agent 自行宣告不能批准、superseded、候選 PR 改政策、SSH exit 1、HTTPS 證據缺漏、原生 Session 預設保留與未知／withheld；逐案比對，不輸出秘密。
-- [x] 1.2 局部更新 Work Item Review 邊界及 managed protocol／OpenSpec workflow，新增 `template/common/.claude/rules/github-handoff.md` 薄指標，要求本流程寫入前按操作跑共用 preflight，第一版不加 hook。測試要求：擴充 Work Item／入口 contract，證明本地模式有效、WI 不進 Git或同步、無 WI 可接手，rule mirror 與 Codex protocol 鏈可達；不以 rule 文件存在宣稱 runtime 全面攔截，規範修改前記錄預期失敗。
-- [x] 1.3 在共用契約落實 Work Item Review 章節與完整 Scope and Baseline，明列 Session-ID／source／alias、工具／模型、Git 分支／比較 base／reviewed head／checkout HEAD、未提交內容、快照與實際檢查。測試要求：人工案例與 contract 覆蓋已知原生 ID、user-provided、未知／withheld、alias 不冒充原生 ID、未版本化文件、detached checkout、base／head 不同與未提交內容；不能填造 SHA 或將錯版檢查當 pass。
-- [x] 1.4 先寫 `tests/test_github_identity.sh` 的 PATH stub 行為測試，再實作唯一腳本與可信版本取得流程，支援 api／commit／push 與預期值／policy_source。測試要求：Red 後驗證來源 blob／普通檔案類型、候選腳本被替換仍只執行可信內容、來源缺漏／bootstrap、目標 cwd 與來源分離、Git env 覆寫、gh actor、SSH exit 1、HTTPS 分流及各退出碼／去敏結果；不得 staging、commit／push、切換認證、credential fill 或回顯 token。
+- [ ] 1.1 更新共用契約為完整 host／owner／repo、operation、使用者授權、當次工具連線／可得權限與結果回讀。先保存 fixture：host 相同但 repo 不同、只有讀取權限、實際寫入拒絕、權限 metadata 不完整但授權操作可成功；不得為探權限額外建立 Issue／PR 或空 commit。
+- [ ] 1.2 移除必經 identity policy、可信 script blob、SSH 問候語與 HTTPS helper 解析；停用並移除舊 check-identity.sh 的來源／本 repo managed 副本與 installer 登錄，清除 protocol／rule／Skill／README／架構中的強制依賴。測試先驗舊前提造成的失敗，再驗無 script／policy 仍能使用原生工具；不動登入、keys、credential helper 或無關下游 scripts，不能安全刪除的遺留檔回報而不再呼叫。
+- [ ] 1.3 區分預設無帳號限制與明示限制；Git author／committer、API 與 push 不必相同。先保存案例：合法不同身分、實際 actor 不可得如實記錄、明示限制不符／無法核對則停止、候選 PR 不得放寬可信限制。人類批准記錄者授權仍獨立核對，不由 repo 權限推導。
+- [ ] 1.4 保留共用 Issue／PR／Review schema、完整 Scope and Baseline、provenance、Finding IDs 與單一 ownership，補操作工具與可得 actor 證據，不記 credential／helper 內容。F-01 以去除敏感來源與秘密不進輸出驗證；F-02／F-03 以不再執行 parser 及原生操作驗證，不要求修補舊 parser。新增正式修訂證據，保留原 Review 的歷史適用版本。
 
 ## 2. Issue 建立與更新入口
 
-- [x] 2.1 新增 `github-issue` Skill，解析 Change／repo、精確鍵查重，遠端寫入前呼叫共用 api preflight，再用 gh create／update 並核對結果；案例存 `references/acceptance-cases.md`。測試要求：人工重播新建、重複、多候選、相似標題鍵不符、gh／script 缺漏、非 pass、timeout 與部分成功，比對 script→gh 順序與禁止寫入，不切換 MCP，不自行 commit／push，模擬不冒稱執行。
-- [x] 2.2 加入父子、依賴解除條件與等待資料更新範例，以及首次接管既有正文的操作說明。測試要求：重播一個目標拆多個 Change、等待 N 天、marker 缺漏及人工新增正文；更新保留原內容，不複製 `tasks.md`，時間到不誤關 Issue。
+- [ ] 2.1 更新 github-issue：可用 gh 或 MCP，依同一精確關聯查重、建立／更新及結果回讀；使用各自實際上下文，不借用另一工具的登入證據，不新增 adapter。案例包含 gh 缺少但 MCP 可用、MCP 無能力、明確拒絕、timeout 後跨通道先查重、部分成功；不得擅自登入或盲目重送。
+- [ ] 2.2 重驗首次採用 managed 區塊、人工正文保留、父子與 dependency 區分、等待真實資料及 next-action；不複製 tasks、不因日期或 PR 合併自動關閉 Issue。
 
-## 3. PR 建立、版本發布與摘要更新
+## 3. PR 發布、更新與版本證據
 
-- [x] 3.1 新增 `github-pr` create／publish：核對 repo、base／head、可信政策及完整 diff，在各寫入前分別調用共用 commit／push／api preflight，再按需委派 writer、git push、gh 建立／更新 PR。測試要求：案例含乾淨已提交、混合 dirty／兩 Change／untracked、錯帳號／remote、missing gh／script、unsupported、hook／push 失敗；非 pass 不繼續，不重寫身分檢查或切換 MCP，人工案例不冒稱真實 staging。
-- [x] 3.2 實作 update-description 路徑與 shared-body 保留規則，獨立於 Git publication；已有 PR 的 create 回傳原 PR，publish 明確發布新版本。測試要求：重播人工正文、其他 Reviewer 報告、重複 marker、並行 ownership 衝突及既有 PR；update 呼叫序列不得包含 add／commit／push／merge／改 base／close。
-- [x] 3.3 在共用手冊記錄人工斷點、design-approval、兩階段 PR、預設可轉交訊息，以及授權 archive／doc-updater／commit 後 publish 再複審最終 head 的順序。正式圖來源為 `template/common/docs/diagrams/github-handoff.svg`。測試要求：人工案例涵蓋 local-only、批准遺漏、實質設計改變、archive 搬移／spec 同步、語意修訂及已 merged PR 需另授權 follow-up；圖稿另驗 XML、渲染、文字圖例與連結。
+- [ ] 3.1 更新 github-pr create／publish：先盤點完整 dirty 與 base-to-head scope，按需沿用 writer，使用原生 Git 非 force push，核對實際目的 repo／ref 及 remote head，再用選定 GitHub 工具建立／更新。先驗混合 dirty、commit／hook／push 失敗、既有 commit 重用、原生 SSH／HTTPS 不需 principal parser、實際發布後版本回讀；不得自行 stash、reset、改認證或製造空 commit。
+- [ ] 3.2 保留純 update 無 Git 副作用、既有 PR create 只回傳、publish 才發布新版本與正文 ownership；以 gh／MCP 可用能力逐案重播。W-01 必須核對實際 headRepository、head owner、base／head branch，fork create 明確表達目的；工具無法表達則停止，不靠同名分支、正文或 SHA 冒充 repo 身分。
+- [ ] 3.3 同步生命週期手冊與正式 SVG、批准事件及 Review 發布方式。保留設計批准／實作 Review／merge／部署／資料驗收／archive 分離，依新設計回讀事件作者；本次實質修訂的新批准版本與範圍須如實另記，舊事件不改寫。Review 發布不經 create／publish，通知送出不等於接收。
 
-## 4. 安裝與使用說明隨功能落地
+## 4. 安裝與一致性
 
-- [x] 4.1 將共用 doc、SVG、`scripts/github/check-identity.sh` 同列 installer managed 清單，沿用 Skill 同步及 rule mirror，更新必要 README／架構／入口。測試要求：暫存 repo 預期 Red 涵蓋第二次安裝同時更新三個 managed 檔及腳本可執行權限；再驗初裝、冪等、Skills／案例／契約／rule 一致、無關 scripts 與 WI 保留，執行受影響 installer／Work Item／handoff 測試。
-- [x] 4.2 暫存 target 驗證後執行 `scripts/skills/install.sh` 安裝本 repo，檢查 Claude Code、Codex、Antigravity 的入口與欄位規範。測試要求：比對來源與安裝副本、確認必要引用可解析；工具無法啟動時明記只驗證安裝／文件，不能宣稱 runtime 通過。
+- [ ] 4.1 先更新 installer／contract 的必要測試再改產品來源；保留 managed doc／SVG、rule mirror、Skills 同步與跨工具入口，不再安裝 identity script。暫存 target 驗初裝、重裝／冪等、無關 scripts／WI／本機認證配置保留；舊字串存在測試不能冒充操作驗收。
+- [ ] 4.2 透過 installer 更新本 repo，核對 template 與 managed 副本、引用與 Claude Code／Codex／Antigravity 的入口；未啟動的 runtime 如實標記。檢查任何保留的舊腳本不再被呼叫；不回復其他 Agent 的未提交內容。
 
-## 5. 整體交接驗收
+## 5. 本版整體驗收與交接
 
-- [x] 5.1 在明確授權的測試 repo 透過 gh 完成 Issue／Draft PR 建立、重試查重、更新保留人工內容、git 發布版本與另一 Session 無 WI 接手。測試要求：記錄 gh 版本、api／commit／push preflight 結果、實際各 actor、Issue／PR URL、remote head；不足時保留未完成，不以 stub／人工模擬代替，不要求 MCP 驗收分支。
-- [x] 5.2 執行必要專案檢查、`openspec validate add-github-change-handoff --strict`、`git diff --check` 及文件／SVG 檢查，確認各生命週期分開。測試要求：正式 run 文件採 OKF Reference 與必要 metadata／sources，保留歷史結果；記實際命令、限制及跨機器是否實測，完成後提供設計與驗收 Review。
+- [ ] 5.1 先保存新情境／預期／禁止，再用 Agent 重播 gh、MCP 等價決策、能力不足、指定帳號、秘密不輸出、timeout reconciliation 及無 WI 接手。在既有授權測試 repo，以任一可用通道真實驗證建立、查重、保留人工內容、原生 Git 發布、remote head 與接手；另一通道未具備時列未實測，不為湊驗收安裝／登入。記工具／版本、可得 actor、URL、實際回應與限制。
+- [ ] 5.2 執行必要專案檢查、openspec validate add-github-change-handoff --strict、git diff --check、連結與 SVG XML／實際渲染。去敏證據使用 docs/verification/github-handoff/<run-id>.md 的 OKF Reference，對應當次版本，不修改舊 run。依既有授權發布修訂內容並交回 Reviewer，逐項說明 F-01／F-02／F-03／W-01 如何在新實作解決，重新審查實際新 head。
 
 ## Workflow follow-up
 
-- `add-change-review-skill` 的 PR 整合依賴本 Change 的共用契約與已安裝入口；兩邊不得各維護一套 schema。
-- Archive、commit、push 正式交付、merge 與部署依當次使用者授權執行，不列為本清單的實作完成假設。
+- add-change-review-skill 只同步上游契約依賴，仍是另一份 Change；本次不順帶實作 Review Skill。
+- 本版沒有改 Issue／PR 的核心格式與既有 provenance 揭露決策；折疊歷史等精簡建議不藉此擴張。
+- 新版本需明確區分設計已修訂、實作已調整、已發布與已驗收；archive／merge／部署仍按當次授權。
