@@ -1,0 +1,37 @@
+# Tasks
+
+本清單只追蹤實作／驗證。實作前取得設計的人類審閱，並確認上游 `add-github-change-handoff` 契約與入口已交付；其上游驗收可用人工 Review，不形成循環依賴。情境驗證依上游共同人工方法，案例放 `template/common/skills/change-review/references/acceptance-cases.md`，去敏執行證據放專案 `docs/verification/change-review/<run-id>.md`，不新增 harness 或只存在 WI 的測試結果。
+
+## 1. 審查入口與版本固定
+
+- [ ] 1.1 先依共用格式保存固定案例、模擬工具回覆、預期決策／擬議呼叫與禁止行為，再新增 `template/common/skills/change-review/SKILL.md` 的 PR／phase 入口與版本檢查。測試要求：正常 Agent Session 人工比對未指定階段、多 Change、錯版／dirty、head 移動、缺 artifacts、候選 head 修改帳號政策的案例；記實際模型／工具與證據，不能 commit、丟棄他人工作或把模擬當真實操作。
+- [ ] 1.2 加入共用契約／provenance 引用與獨立首輪、複審上下文分流。測試要求：契約已 archive 後仍可從已安裝文件取得；首輪不借用其他 Reviewer 未確認結論，複審正確引用原 Findings；不另維護第二套 metadata schema。
+- [ ] 1.3 依上游範本輸出三個明確章節，填寫 Scope and Baseline 的 Session 與 Git 資訊，不另定 schema。測試要求：以使用者指定的本地 Review 形狀作結構參考，人工重播原生 ID 已知／未知／withheld、使用者提供 ID、錯版 checkout、未提交與未版本化文件，檢查來源標記、alias 分離及各版本證據一致。
+- [ ] 1.4 將 gh 與上游可信腳本取得流程列為前提，從已固定版本取普通檔案 blob 至暫存目錄、針對真正 PR checkout 執行 api preflight，不另寫檢查程式。測試要求：案例涵蓋候選腳本修改、可信來源／bootstrap 缺漏、來源 cwd 與目標分離、script→gh 順序及非 pass；不得執行候選腳本、寫入或切換 MCP，也不以另一機器結果代證。
+
+## 2. 階段檢查與 Findings
+
+- [ ] 2.1 實作 design 檢查清單與結果界線，文件附規格缺口及等待資料的例子。測試要求：spec-only PR 不因未完成實作任務失敗；缺驗收標準能指出具體 requirement；design pass 不代表人類批准或測試已執行。先保存預期失敗與通過案例，再檢查實際 Agent 回報。
+- [ ] 2.2 實作 implementation 自帶的規格／相連程式／測試基線，組合當時可用的 verification 與可選品質 Review，保留原方法限制。測試要求：人工重播缺 ponytail-review 仍完成基線、缺 OpenSpec verify 入口時如實逐條對照、安全／Bug 缺陷、caller 回歸、缺必要環境、等資料及可重用證據；可選擴充缺席不單獨 blocked，必要證據缺漏不得 pass。
+- [ ] 2.3 加入跨輪 Findings 的穩定來源 ID、狀態與複驗規則。測試要求：不同 Reviewer 的 F-01 不衝突，實作者自稱修復不會直接變 Resolved；提供反證可有理由 Rejected，修復及受影響檢查都有證據才 Resolved。
+
+## 3. 報告發布與修正交接
+
+- [ ] 3.1 以 gh 讀取 PR／發布三種結論，先呼叫共用 api preflight；預設 gh api 的 COMMENT＋reviewed commit，必要時在同一 gh 通道發有版本的一般留言。測試要求：人工案例含同帳號、blocked 仍發布、原生 Review 不可用、錯 actor／非 pass、權限不足；不切換 MCP、不走 create／publish／commit／push，不以留言繞過身分檢查，未成功不捏造 URL。
+- [ ] 3.2 實作預設可轉交訊息與可選的已驗證 Session 定向工具，保留報告先發布、實作者逐項回覆／新 head、再交 Reviewer 的順序。測試要求：訊息含 PR／報告 URL、head、Finding IDs；重播無 Session 工具、原 Session 消失、新 Agent 接手及直接通知失敗，沒有工具時只記待人工轉交，不冒稱 Telegram／人員提示可定向 Session。
+- [ ] 3.3 實作單輪結束與複審入口，保留歷史結論且檢查新 head 的受影響行為。測試要求：人工重播未修完、引入回歸、同爭議無新證據、archive／doc 提交後的最終差異與通過；僅有證據為純交付整理才縮小範圍，不能把先前 pass 套到新 head，無進展 blocked，不常駐或擴需求。
+
+## 4. 安裝與操作文件
+
+- [ ] 4.1 更新 README／共用交接文件的 Review 操作入口，提供 Claude Code、Codex、Antigravity 呼叫與工具限制說明，沿用 installer 安裝。測試要求：以暫存 target 驗證 Skill／引用送達、重裝一致、第三方 Skills 不被改寫；靜態 contract 只回報文件送達，不冒稱 runtime 行為。
+- [ ] 4.2 將修正複審 SVG 放在 `template/common/skills/change-review/references/review-loop.svg`，與案例一併由 Skill 引用，再以 installer 安裝本 repo。測試要求：暫存 target 的第二次安裝更新案例和 SVG，來源／副本一致、blocked 與 pass 都經發布報告後分流，另做 XML／渲染與連結檢查；無法啟動的 provider 明列未測。
+
+## 5. 整體 Review 往返驗收
+
+- [ ] 5.1 在授權的測試 PR／Session 用 gh 完成 design／implementation Review，至少一輪失敗、修正回覆、新 head 與成功複審。測試要求：保存 gh 版本、共用 api preflight 結果、報告 URL、SHA、實際交接／通知結果及另一 Session 無 WI 接手證據；不足保持未完成，不以離線 fixture 代替，不要求 MCP 驗收分支。
+- [ ] 5.2 執行受影響 contract／安裝測試、必要專案檢查、`openspec validate add-change-review-skill --strict`、`git diff --check` 及文件檢查。測試要求：正式 run 採上游 OKF Reference／必要 metadata／sources，保留歷史結果；明列各工具 runtime、跨機器、真實資料與 required-review 是否實測，不誤報交付。
+
+## Workflow follow-up
+
+- 是否建立 provider-native Review Agent 由後續具體需要決定，本 Change 不包含 Agent runtime 配置。
+- Archive、commit、push、merge 與部署按當次授權處理；不得因 Review pass 自動執行。
