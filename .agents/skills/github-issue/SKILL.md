@@ -2,17 +2,18 @@
 name: github-issue
 description: >
   Create or update the GitHub Issue that tracks an OpenSpec change, following the
-  project's shared handoff contract: exact-key duplicate detection, a read-only
-  identity check before every write, and body updates that keep other authors'
-  text. Use whenever the user asks to open, register, link, or update a GitHub
+  project's shared handoff contract: exact-key duplicate detection, a full
+  repository-target and authorization check before every write, readback of the
+  result, and body updates that keep other authors' text. Works through gh or a
+  configured GitHub MCP. Use whenever the user asks to open, register, link, or update a GitHub
   issue for a change, to record parent/child or dependency relations, or to note
   that acceptance is waiting on real data — for example "建立 issue", "開 issue",
   "更新 issue", "把這個 change 登錄到 GitHub", or just "git issue".
 license: MIT
-compatibility: "Requires git and GitHub CLI (gh) authenticated for the target host. Optional: openspec CLI."
+compatibility: "Requires git and either GitHub CLI (gh) or a GitHub MCP, already configured for the target host. Optional: openspec CLI."
 metadata:
   author: wkchen
-  version: "1.0"
+  version: "1.1"
 ---
 
 # GitHub Issue
@@ -36,51 +37,51 @@ the Issue, PR, and review records stay on one schema.
 It never stages, commits, pushes, closes or reopens an Issue, or replaces labels
 and assignees wholesale. Those need their own request.
 
-GitHub reads and writes go through `gh`, always with an explicit
-`-R <host>/<owner>/<repo>` so the CLI cannot pick another repository. There is no
-MCP path in this version: if `gh` is missing or lacks permission, stop and
-report it instead of installing, logging in, or switching to another client.
+GitHub reads and writes go through one available, already configured tool: `gh`
+or a GitHub MCP. The commands below are written for `gh`, always with an explicit
+`-R <host>/<owner>/<repo>` so the CLI cannot pick another repository; with an MCP,
+use its equivalent tools and pass the same full owner and repository. Do not add
+a wrapper or adapter around either one. If neither can do the operation, stop and
+report what is missing instead of installing a tool or logging in.
 
 If the request does not say which operation is meant and the intent cannot tell
 them apart, ask before doing anything.
 
 ## Shared steps
 
-### Step 1 — Resolve the target and the trusted policy
+### Step 1 — Fix the target, the operation, and the authorization
 
 1. Confirm the Change exists (`openspec list --json`, or its directory under
    `openspec/changes/`, including the archive).
-2. Take host, repository, and `api_actor` from the trusted identity policy
-   (contract section 3) or from the user's explicit input for this task. Fix
-   `policy_source` now: the full commit ID that holds the policy block, or
-   `user-input`.
-3. If the policy is missing, incomplete, or ambiguous, stop and ask. Do not
-   infer the account from `git config`, the remote URL, or an Issue's content.
+2. Fix the full target — host, owner, and repository. Matching the host alone is
+   not enough: a remote or a tool default that points at another repository on
+   the same host is a different target. When the request and the local context
+   disagree, stop and ask.
+3. Confirm the operation and that the user authorized it. Choosing a tool never
+   widens that authorization.
 
-### Step 2 — Run the api identity check
+### Step 2 — Choose the tool and check what it can do
 
-From the project root, before the first `gh` call:
+Pick `gh` or a configured GitHub MCP and check, in that tool's own context, that
+it reaches the target and has the operation you need. Read whatever permission
+information it offers, and use it only for what it actually covers: being able
+to read a public repository, or holding a repository role, does not prove this
+token or App can create or edit Issues. One tool's login is never evidence that
+another tool can act.
 
-```bash
-bash scripts/github/check-identity.sh --operation api \
-  --policy-source <policy_source> \
-  --host <host> --repo <owner/repo> --api-actor <expected login>
-```
+- **Known blocker** — not signed in, wrong target, missing capability, or an
+  explicit permission denial: stop and report it.
+- **Incomplete permission information, no known blocker** — go ahead with the
+  authorized operation and judge it by the actual response. Never create a test
+  Issue just to find out whether you may.
+- **Account restriction** — none by default. Only when the user or a trusted
+  project rule names an account for this operation, check the account the tool
+  actually uses; if it differs or cannot be shown, stop. Contract section 4.2.
 
-Continue only when it exits 0 with `status=pass`. On any other result, stop and
-report `status`, `reason`, and the expected and actual values it printed. The
-check exists because several accounts can be signed in on one machine, and a
-wrong one writes to the wrong place under the wrong name; "fixing" the result by
-switching accounts would defeat it, so leave login, tokens, and configuration
-alone and let the user decide.
-
-If the script is absent, stop and report that too; restoring it means re-running
-the project's installer, which is the user's call. Do not substitute your own
-commands for it. When the working copy of the script may have been changed by
-the work under review, obtain it as contract section 4.3 describes.
-
-Rerun the check if the environment, account, or repository changes before the
-write.
+Leave logins, tokens, and configuration alone; report authentication problems
+for the user to fix. Record the tool you used and, when the tool reports it, the
+acting account — or `unavailable`. Nothing from credential configuration goes
+into output or records.
 
 ## Operation: create
 
@@ -122,10 +123,13 @@ gh issue create -R <host>/<owner>/<repo> --title "<title>" --body-file <file>
 gh issue view <number> -R <host>/<owner>/<repo> --json body,url
 ```
 
-Confirm the stored body carries both exact keys, then report the URL.
+Read the Issue back by the number or URL the tool returned. Confirm it is in the
+intended repository and the stored body carries both exact keys, then report the
+URL. A denial is reported as a denial; nothing was created.
 
 If the create call times out or its result is unknown, go back to Step 3 and
-look again before any retry — a blind resend is how duplicates appear. Search
+look again before any retry, with either tool — a blind resend, or the same
+request through the other tool, is how duplicates appear. Search
 can lag just after a write, so on this second look also list the Issues and
 match the body directly:
 
@@ -172,8 +176,8 @@ gh issue edit <number> -R <host>/<owner>/<repo> --body-file <file>
 gh issue view <number> -R <host>/<owner>/<repo> --json body
 ```
 
-Confirm the text outside the markers is unchanged. Take the body from the JSON
-output and parse it; printing it with `--jq .body` appends a newline, and a
+Confirm the text outside the markers is unchanged. Take the body from the
+structured response and parse it; with `gh`, printing it with `--jq .body` appends a newline, and a
 read-modify-write through that grows the text after the block by one line each
 time.
 
@@ -188,5 +192,6 @@ A simulated or replayed run is never reported as a real write.
 ## Replay cases
 
 `references/acceptance-cases.md` holds the replayable cases for this skill
-(new, duplicate, several candidates, similar title, missing tool or script,
-non-pass check, timeout, partial success, split work, waiting, markers).
+(new, duplicate, several candidates, similar title, gh missing with MCP
+available, MCP without the capability, denial, restriction mismatch, timeout,
+partial success, split work, waiting, markers, secrets).

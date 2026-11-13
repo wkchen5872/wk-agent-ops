@@ -150,7 +150,6 @@ MANAGED_FILES=(
   docs/openspec-workflow.md
   docs/github-handoff.md
   docs/diagrams/github-handoff.svg
-  scripts/github/check-identity.sh
   work-items/AGENTS.md
 )
 for f in "${MANAGED_FILES[@]}"; do
@@ -186,6 +185,25 @@ sync_dir "$TARGET/.claude/rules" "$TARGET/.agents/rules"
 # Remove the retired OpenSpec commit rule from existing installations.
 rm -f "$TARGET/.claude/rules/openspec-commits.md" \
       "$TARGET/.agents/rules/openspec-commits.md"
+
+# Retire the GitHub handoff identity-check script. Only a byte-identical copy of
+# a version this installer shipped is removed; a modified or unknown file may hold
+# local work, so it is left in place and reported. Nothing reads its contents.
+LEGACY_ID_SCRIPT="scripts/github/check-identity.sh"
+LEGACY_ID_BLOBS=" e43ee68edf95d5a408df8687764d573a9414efae "
+if [[ -f "$TARGET/$LEGACY_ID_SCRIPT" && ! -L "$TARGET/$LEGACY_ID_SCRIPT" ]]; then
+  legacy_blob="$(git hash-object --no-filters -- "$TARGET/$LEGACY_ID_SCRIPT" 2>/dev/null || true)"
+  if [[ -n "$legacy_blob" && "$LEGACY_ID_BLOBS" == *" $legacy_blob "* ]]; then
+    rm -f "$TARGET/$LEGACY_ID_SCRIPT"
+    rmdir "$TARGET/scripts/github" "$TARGET/scripts" 2>/dev/null || true
+    echo "ℹ️  removed retired $LEGACY_ID_SCRIPT (unmodified managed copy)"
+  else
+    echo "⚠️  left $LEGACY_ID_SCRIPT in place: it differs from every shipped version."
+    echo "    The GitHub handoff no longer uses it; delete it yourself if it is not needed."
+  fi
+elif [[ -L "$TARGET/$LEGACY_ID_SCRIPT" ]]; then
+  echo "⚠️  left $LEGACY_ID_SCRIPT in place: it is a symlink. The GitHub handoff no longer uses it."
+fi
 
 # Remove the retired entropy audit from existing installations.
 rm -rf "$TARGET/.claude/skills/entropy-check" \

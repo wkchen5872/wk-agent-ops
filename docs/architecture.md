@@ -24,7 +24,7 @@ template/common/        ← Single source of truth
       ↓
 scripts/skills/install.sh
       ↓       ↓       ↓       ↓
-.claude/ .agents/ .codex/agents/ docs/ work-items/ scripts/github/  ← Installed tooling and managed policy
+.claude/ .agents/ .codex/agents/ docs/ work-items/  ← Installed tooling and managed policy
       ↓
 <target-project>/.claude/ .agents/ .codex/agents/ docs/ work-items/  ← Other projects
 
@@ -58,7 +58,6 @@ wk-agent-ops/
 │   │   ├── AGENTS.md          ← Thin pointer to docs/agent-protocol.md (seed, no-overwrite)
 │   │   ├── docs/              ← agent-protocol.md/okf-conventions.md (managed) + architecture/conventions starters (seed)
 │   │   │                         github-handoff.md + diagrams/github-handoff.svg (managed handoff contract)
-│   │   ├── scripts/github/    ← check-identity.sh, the shared read-only identity preflight (managed)
 │   │   └── work-items/        ← AGENTS.md Work Item convention (managed; no WI-* records)
 │   ├── python/                ← Python-specific: pytest hook, style guide
 │   ├── node/                  ← Node-specific: npm test hook
@@ -67,7 +66,6 @@ wk-agent-ops/
 │
 ├── scripts/
 │   ├── skills/install.sh      ← Propagates template/ to .claude/ and target projects
-│   ├── github/                ← Installed check-identity.sh (managed copy; edit the template)
 │   ├── workflow/              ← wt-work, wt-done, wt-resume, pm-start (global CLI tools)
 │   │   └── openspec-branch-creator/  ← PostToolUse hook: auto-creates feature branches
 │   └── notify/telegram/       ← Telegram notification hook setup
@@ -114,9 +112,10 @@ branch 完成。每個 Worktree 同一時間只能有一個 active writer，跨 
 - **Managed convention ≠ collaboration records** — the installer refreshes only
   `work-items/AGENTS.md`; it never creates, changes, or removes local `work-items/WI-*/` records
 - **GitHub handoff has one contract** — `docs/github-handoff.md` owns the Issue, PR,
-  review, and identity-policy schema; the `github-issue` and `github-pr` skills and the
-  thin rule only reference it. `scripts/github/check-identity.sh` collects evidence and
-  never writes; the skills decide whether an authorized write continues. No hook enforces this
+  and review schema and the write-time checks (full repository target, operation,
+  authorization, readback); the `github-issue` and `github-pr` skills and the thin rule
+  only reference it. GitHub calls use an available gh or GitHub MCP and Git owns commit,
+  push, and authentication; there is no custom identity script. No hook enforces this
 - **common/ rules apply to all profiles** — language profiles extend, never override common
 - **language profile → testland/qa runner + common triage** — installer selects
   one runner per profile and one deduplicated `mutant-survival-triage`; no
@@ -139,5 +138,4 @@ branch 完成。每個 Worktree 同一時間只能有一個 active writer，跨 
 | `diff template/common/.codex/agents/... .codex/agents/...` | Confirm Codex custom agents match their templates |
 | `diff template/common/docs/agent-protocol.md docs/agent-protocol.md` | Confirm managed policy matches source |
 | `diff template/common/work-items/AGENTS.md work-items/AGENTS.md` | Confirm the managed Work Item convention matches its source |
-| `bash tests/test_github_identity.sh` | Offline behavior tests for the identity preflight (PATH stubs) |
 | `bash tests/test_github_handoff.sh` | Contract presence and managed delivery of the GitHub handoff assets |

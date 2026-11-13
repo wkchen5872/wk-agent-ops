@@ -66,8 +66,6 @@ template/common/
 │   ├── agent-protocol.md ← 跨工具共用規範（managed）
 │   ├── github-handoff.md ← GitHub 交接契約（managed）
 │   └── diagrams/github-handoff.svg ← 交接流程圖（managed）
-├── scripts/
-│   └── github/check-identity.sh ← 寫入前的共用身分檢查（managed，可執行）
 ├── work-items/
 │   └── AGENTS.md         ← Work Item 協作紀錄規範（managed）
 ├── skills/
@@ -127,7 +125,7 @@ bash scripts/skills/install.sh --target <project-path>
 - 複製 `template/common/.codex/agents/` → `.codex/agents/`
 - Mirror `.claude/rules/` → `.agents/rules/`
 - 更新 managed `docs/agent-protocol.md`
-- 更新 managed `docs/github-handoff.md`、其流程圖與 `scripts/github/check-identity.sh`
+- 更新 managed `docs/github-handoff.md` 與其流程圖；移除未修改的舊版 `scripts/github/check-identity.sh`
 
 ### 4. 本地測試（可選）
 
@@ -163,7 +161,6 @@ git commit -m "chore(agents): add/update <agent-name>"
 | Commands | `template/common/.claude/commands/` | `.claude/commands/` | CC 專用 |
 | Work Item 規範 | `template/common/work-items/AGENTS.md` | `work-items/AGENTS.md` | managed；重跑 installer 會覆寫 |
 | GitHub 交接契約 | `template/common/docs/github-handoff.md`、`docs/diagrams/github-handoff.svg` | `docs/` 同路徑 | managed；兩個檔案一起更新 |
-| 身分檢查腳本 | `template/common/scripts/github/check-identity.sh` | `scripts/github/check-identity.sh` | managed；保留可執行權限 |
 
 **重要：** 修改後務必確認三個位置內容一致。使用 `diff` 或 `git diff` 檢查：
 
@@ -246,8 +243,9 @@ Codex 版本：`.codex/agents/doc-updater-agent.toml`（`gpt-5.6-terra`、medium
 
 - 範本、關聯鍵、provenance、Review 格式與流程只存在於 managed
   `docs/github-handoff.md`；兩個 Skill 與之後的 Review Skill 都只引用，不各存一份。
-- 每次寫入前依操作執行 `scripts/github/check-identity.sh`（api／commit／push），
-  只有 pass 才繼續；GitHub 操作統一 `gh`，commit／push 用 `git`，本版不走 MCP。
+- 每次寫入前核對完整 host／owner／repo、操作與授權，寫入後回讀；GitHub 操作使用可用的
+  `gh` 或 GitHub MCP，commit／push 用本機 Git，認證交給本機工具。預設不限制帳號，
+  明示限制才核對。舊的 `check-identity.sh` 已移除，installer 只刪未修改的舊副本。
 - 這是規範與入口行為，不是 hook。可重播案例在各 Skill 的
   `references/acceptance-cases.md`，正式驗證紀錄在 `docs/verification/github-handoff/`。
 
@@ -375,7 +373,6 @@ not edit it here. Keep project-specific rules in this file or under `docs/`.
 - `template/common/work-items/AGENTS.md` — Work Item 協作紀錄規範（managed；唯一來源）
 - `tests/test_work_items.sh` — Work Item 投遞、忽略規則與啟用鏈的行為測試
 - `docs/github-handoff.md` — GitHub 交接契約（managed；來源在 `template/common/docs/`）
-- `tests/test_github_identity.sh` — 身分檢查腳本的離線行為測試（PATH stub）
 - `tests/test_github_handoff.sh` — 交接契約、入口與 managed 安裝的測試
 - `docs/architecture.md` — 專案架構與模組邊界
 - `docs/conventions.md` — Bash 腳本規範
