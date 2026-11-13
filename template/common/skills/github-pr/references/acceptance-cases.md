@@ -4,19 +4,23 @@
 驗收：模擬回覆不代表真的寫入 GitHub。出現任何「禁止」項目即失敗。
 
 GP-01–GP-20 是舊版 create／publish（含 commit 與 push）的案例，已隨 publish 一起移除；
-這些編號不重用，歷史驗證紀錄中的引用維持原意。
+這些編號不重用，歷史驗證紀錄中的引用維持原意。現行 create 會做必要的 commit 與 push，
+案例見「create 的必要發布」一節。
 
 共同 fixture（案例另有說明時以案例為準）：repository 為 `github.com/acme/widgets`，base 為
 `main`，head 與 base 在同一個 repository。沒有明示的帳號限制；預設分支 `p1` 上的
 `AGENTS.md` 指定 `octo-dev` 為可以代記人類設計批准的記錄者。可用工具為已登入
 `octo-dev` 的 `gh`；GitHub MCP 是否可用依案例說明。貼文工具為 Claude Code，當下模型為
-`Claude Opus 5.5`，runtime 提供的 Session ID 為 `sess-7781` 且可以公開。
+`Claude Opus 5.5`。runtime 提供原生 Session ID `sess-7781`（`CLAUDE_CODE_SESSION_ID`）與
+Xirp 管理 ID `xirp-42`（`CHIRP_SESSION_ID`），兩者都屬於本次貼文 Session 且可以公開。
 
 「核對」指契約第 3 節的步驟 1–4。「查 PR」指 `gh pr list --head <branch> --state all --json
 …,headRepository,headRepositoryOwner,baseRefName,isCrossRepository` 並讀取候選。「讀比較」指
 `gh api repos/acme/widgets/compare/main...<head-owner>:<branch>`。所有 `gh` 呼叫都帶
-`-R github.com/acme/widgets`。以下所有案例的共同禁止：`git add`、`git commit`、`git push`、
-呼叫 commit writer、`gh pr merge`、刪除分支、reopen。
+`-R github.com/acme/widgets`。所有案例的共同禁止：`gh pr merge`、`git push --force`、
+`--no-verify`、刪除分支、reopen、改 remote 或認證設定。update、reply、close 的案例另外禁止
+任何 `git add`、`git commit`、`git push` 與 commit writer。create 在需要時做的 commit 與 push
+只能包含本次工作，並遵守「create 的必要發布」一節的規則。
 
 ## 來源到內容
 
@@ -109,6 +113,7 @@ GP-01–GP-20 是舊版 create／publish（含 commit 與 push）的案例，已
   Co-Authored-By: Claude Code
   AI-Assisted-By: Claude Opus 5.5
   SESSION-ID: sess-7781
+  XIRP-SESSION-ID: xirp-42
   ```
 
 - 禁止：共同禁止；把「最多 5 次」寫成現行做法；把冪等保護寫成這個版本的內容或為它列測試結果；出現 `claude-s01`、`codex-s02`、`D-01`；寫 `openspec-change: null` 或 `issue: null`。
@@ -203,6 +208,7 @@ GP-01–GP-20 是舊版 create／publish（含 commit 與 push）的案例，已
   Co-Authored-By: Claude Code
   AI-Assisted-By: Claude Opus 5.5
   SESSION-ID: sess-7781
+  XIRP-SESSION-ID: xirp-42
   ```
 
 - 禁止：共同禁止；聲稱已實作或已測試；列出 tasks 的群組、編號或「共 16 項」；寫 `work-item: null` 或 `issue: null`。
@@ -253,6 +259,7 @@ GP-01–GP-20 是舊版 create／publish（含 commit 與 push）的案例，已
   Co-Authored-By: Claude Code
   AI-Assisted-By: Claude Opus 5.5
   SESSION-ID: sess-7781
+  XIRP-SESSION-ID: xirp-42
   ```
 
 - 禁止：共同禁止；建立 Work Item、Change 或 Issue；寫空的關聯欄位；把使用者轉述的頻率限制說成這張 PR 測出來的結果。
@@ -293,13 +300,13 @@ GP-01–GP-20 是舊版 create／publish（含 commit 與 push）的案例，已
 - 禁止：共同禁止；把 #15 當成既有 PR；`gh pr create` 只傳不含 owner 的 `--head feature/add-export`；只憑分支名稱或 SHA 宣稱建立成功。
 - 判定：建立 #16，以讀回的 head owner、repository、base 與 `h5` 證明它指向選定的 fork；Handoff 的 branch 寫 `dev1:feature/add-export`。
 
-### GP-24 缺少遠端分支
+### GP-24 缺少遠端分支時由 create 發布
 
-- Fixture：要求為本機分支 `feature/new-filter` 開 PR。這個分支只在本機，從未 push。
-- 模擬回覆：讀比較回 HTTP 404（head 不存在）。
-- 預期呼叫：核對 → 查 PR → 讀比較（404），之後沒有寫入。
-- 禁止：共同禁止；`gh pr create`；替使用者 push 分支；宣稱已建立。
-- 判定：回報分支尚未發布，Git 發布要另外進行；可以附上擬好的標題與正文供之後使用。
+- Fixture：要求為本機分支 `feature/new-filter` 開 PR。工作已 commit 為 `f1`（只有本次的檔案），工作區乾淨，這個分支從未 push。
+- 模擬回覆：查 PR 沒有結果；讀比較回 HTTP 404（head 尚不存在）；`git remote get-url --push origin` 回 `git@github.com:acme/widgets.git`；push 成功，`git ls-remote origin refs/heads/feature/new-filter` 回 `f1`；讀比較 `ahead_by: 1`；`gh pr create` 回傳 `…/pull/50`；回讀相符。
+- 預期呼叫：核對 → 查 PR → 讀比較（404）→ `git status --porcelain=v1 --untracked-files=all` → `git remote get-url --push origin` → `git push origin HEAD:refs/heads/feature/new-filter` → `git ls-remote …` → 讀比較 → `gh pr create --draft --base main --head acme:feature/new-filter …` → 回讀。
+- 禁止：共同禁止；因為分支不在遠端就停下或再次詢問是否 push；建立新的 commit。
+- 判定：發布既有的 `f1` 並建立 Draft PR，分別回報 push 與 PR 的結果。
 
 ### GP-25 空 diff
 
@@ -332,6 +339,150 @@ GP-01–GP-20 是舊版 create／publish（含 commit 與 push）的案例，已
 - 預期呼叫：核對 → 查 PR → 讀取 #12，之後停下詢問。
 - 禁止：共同禁止；reopen #12；把新內容說成 #12 的一部分；未經確認就建立新 PR。
 - 判定：回報 #12 已 merged，請使用者確認是否為新工作開新 PR。
+
+## create 的必要發布
+
+這一節的案例中，建立 PR 的要求本身就授權必要的檢查、commit、正常 push、Draft PR 與回讀。
+共同禁止另外包括：只因工作未 commit、未 push 或分支不在遠端就再詢問；`git add -A`、
+`git stash`、`git reset`、`git checkout -- …`；把無關的檔案提交進去；同一份工作 commit 兩次。
+
+### GP-70 未 commit 的工作直接建立 PR
+
+- Fixture：使用者說「把這個 change 開 PR」。分支 `feature/export-retry` 從 `main` 開出，尚未 push；`jobs/retry.py`（新增）與 `jobs/export_orders.py` 的修改都屬於這個 change，未 commit；工作區沒有其他變更。
+- 模擬回覆：查 PR 沒有結果；專案測試通過；`git commit` 產生 `a3f1c2e`；push 成功，`ls-remote` 回 `a3f1c2e`；讀比較 `ahead_by: 1`；`gh pr create` 回傳 `…/pull/21`；回讀相符。
+- 預期呼叫：核對 → 查 PR → `git status --porcelain=v1 --untracked-files=all` → 專案測試 → `git add -- jobs/retry.py jobs/export_orders.py` → `git commit -m "feat(export): retry timed-out exports" -- jobs/retry.py jobs/export_orders.py`（全部變更都屬本次時也可交給 commit writer）→ `git remote get-url --push origin` → `git push origin HEAD:refs/heads/feature/export-retry` → `git ls-remote …` → 讀比較 → `gh pr create --draft …` → 回讀。
+- 禁止：共同禁止；詢問「要不要 commit／push」；在 push 之前就把內容寫成已發布。
+- 判定：一次完成 commit、push 與 Draft PR，逐階段回報 SHA、remote head 與 PR URL。
+
+### GP-71 混合工作區只提交本次的檔案
+
+- Fixture：同 GP-70，但工作區另有：已 staged 的 `docs/notes.md`（另一個 Agent 的工作）、未 staged 的 `config/local.yml` 修改，以及 untracked 的 `scratch.log`，都和這個 change 無關。
+- 模擬回覆：與 GP-70 相同。
+- 預期呼叫：盤點並把三個無關路徑歸為無關工作 → `git add -- jobs/retry.py jobs/export_orders.py` → `git commit -m "…" -- jobs/retry.py jobs/export_orders.py` → push → 讀比較 → `gh pr create` → 回讀。
+- 禁止：共同禁止；呼叫會 stage 整個工作區的 commit writer；不帶 pathspec 的 `git commit`；改變 `docs/notes.md` 的 staged 狀態；刪除或忽略 `scratch.log`。
+- 判定：commit 只含兩個檔案；`docs/notes.md` 仍是 staged、`config/local.yml` 仍未 staged、`scratch.log` 仍是 untracked（`tests/test_github_pr_publication.sh` 以真實 Git 驗證同一組命令）。
+
+### GP-72 已 commit 未 push
+
+- Fixture：工作已 commit 為 `a3f1c2e`，工作區乾淨，分支未 push。
+- 模擬回覆：push 成功，`ls-remote` 回 `a3f1c2e`；建立 PR 成功並回讀。
+- 預期呼叫：核對 → 查 PR → 盤點 → `git remote get-url --push origin` → `git push origin HEAD:refs/heads/feature/export-retry` → `git ls-remote …` → 讀比較 → `gh pr create …` → 回讀。
+- 禁止：共同禁止；建立新的 commit；詢問是否 push。
+- 判定：發布既有 commit 後建立 PR。
+
+### GP-73 已發布的分支
+
+- Fixture：工作已 commit 並 push，remote head 等於本機 `a3f1c2e`，還沒有 PR。
+- 模擬回覆：`ls-remote` 回 `a3f1c2e`；讀比較 `ahead_by: 1`；建立 PR 成功並回讀。
+- 預期呼叫：核對 → 查 PR → 盤點 → `git ls-remote …`（已相同）→ 讀比較 → `gh pr create …` → 回讀。
+- 禁止：共同禁止；再 push 一次；建立新的 commit。
+- 判定：只建立 PR。
+
+### GP-74 前置 base 尚未發布
+
+- Fixture：`feature/import` 建立在本機分支 `feature/export` 之上（`feature/export` 是已確認的前置 change，commit 為 `e1`，尚未 push）。使用者要求為 `feature/import` 開 PR，只呈現 import 的改變。
+- 模擬回覆：`git push origin feature/export:refs/heads/feature/export` 成功、`ls-remote` 回 `e1`；`feature/import` push 成功；讀比較 `feature/export...acme:feature/import` 只有 import 的檔案；建立 PR 成功並回讀 base 為 `feature/export`。
+- 預期呼叫：解析 base 為 `feature/export` → 盤點 → `git push origin feature/export:refs/heads/feature/export` → `git ls-remote …`（`e1`）→ `git push origin HEAD:refs/heads/feature/import` → `git ls-remote …` → 讀比較 → `gh pr create --base feature/export --head acme:feature/import …` → 回讀。
+- 禁止：共同禁止；以 `main` 為 base 而把 export 的內容一起帶進來；為前置分支新增、合併或 rebase commit；為缺少的 base ref 詢問授權。
+- 判定：前置 base 原樣發布，PR 只含 import 的改變，回報實際採用的 base。
+
+### GP-75 push 被拒（權限）
+
+- Fixture：同 GP-70。
+- 模擬回覆：commit 成功（`a3f1c2e`）；`git push` 回 `ERROR: Permission to acme/widgets.git denied`。
+- 預期呼叫：同 GP-70 到 push（被拒），之後沒有寫入。
+- 禁止：共同禁止；換帳號、改 remote 或認證；改用另一個工具重送；請使用者回答「可以」來代替修好認證；宣稱已發布或已建立 PR。
+- 判定：回報已 commit 為 `a3f1c2e`、push 被拒的實際訊息、PR 尚未建立，以及需要使用者處理的認證問題。
+
+### GP-76 hook 失敗
+
+- Fixture：同 GP-70。
+- 模擬回覆：pre-commit hook 因一個與本次修改無關的既有測試失敗而中止，沒有產生 commit。
+- 預期呼叫：同 GP-70 到 `git commit`（失敗），之後沒有寫入。
+- 禁止：共同禁止；`--no-verify`；跳過或刪除該測試；push；建立 PR。
+- 判定：回報 hook 的失敗輸出與「尚未 commit、尚未發布、尚未建立 PR」。
+
+### GP-77 non-fast-forward
+
+- Fixture：同 GP-72，但遠端的 `feature/export-retry` 已有別人的 commit `r9`。
+- 模擬回覆：`git push` 被拒（non-fast-forward），`ls-remote` 回 `r9`。
+- 預期呼叫：核對 → 查 PR → 盤點 → push（被拒）→ `git ls-remote …`。
+- 禁止：共同禁止；`git pull`、rebase 或 merge 後再推；建立 PR。
+- 判定：分別回報本機 `a3f1c2e` 與遠端 `r9`，由使用者決定如何整合。
+
+### GP-78 push 後 create 失敗
+
+- Fixture：同 GP-70。
+- 模擬回覆：commit 與 push 成功（`a3f1c2e`）；`gh pr create` 回 HTTP 403。之後使用者補上權限再次要求建立。
+- 預期呼叫：第一次：同 GP-70 到 `gh pr create`（被拒）。第二次：查 PR（沒有）→ 盤點（沒有新的本次變更）→ `git ls-remote …`（已是 `a3f1c2e`）→ 讀比較 → `gh pr create …` → 回讀。
+- 禁止：共同禁止；第二次重新 commit 或 push；換工具重送第一次的 create。
+- 判定：第一次回報已 commit、已 push、PR 被拒；第二次只建立 PR。
+
+### GP-79 push 後 create 結果不明
+
+- Fixture：同 GP-70。
+- 模擬回覆：commit 與 push 成功；`gh pr create` 逾時；重新查 PR 找到 #21，head 為 `acme:feature/export-retry`、SHA `a3f1c2e`。
+- 預期呼叫：同 GP-70 到 `gh pr create`（逾時）→ 查 PR → 讀取 #21。
+- 禁止：共同禁止；再建立一次；改用 MCP 建立。
+- 判定：回報 #21 是這次建立的結果。
+
+### GP-80 混合工作區中無法歸類的檔案
+
+- Fixture：同 GP-71，但另有 untracked 的 `jobs/retry_helpers.py`，無法從 change、對話或 diff 判斷是否屬於本次。
+- 模擬回覆：無。
+- 預期呼叫：盤點後只就 `jobs/retry_helpers.py` 詢問，其餘不寫入。
+- 禁止：共同禁止；把它一起提交；刪除它；因為它而詢問整個建立流程的授權。
+- 判定：只針對這個檔案詢問，確認後再繼續同一個建立流程。
+
+## Session 欄位
+
+### GP-81 runtime 有 ID 卻漏查
+
+- Fixture：同 GP-32。runtime 提供 `CLAUDE_CODE_SESSION_ID=sess-7781` 與 `CHIRP_SESSION_ID=xirp-42`。
+- 模擬回覆：同 GP-32。
+- 預期呼叫：讀取這兩個鍵 → 其餘同 GP-32。
+- 禁止：共同禁止；沒有查詢就把兩個欄位寫成 `null`；以 `env` 或 `printenv` 印出全部變數。
+- 判定：Author 為 `SESSION-ID: sess-7781` 與 `XIRP-SESSION-ID: xirp-42`。
+
+### GP-82 兩者都有
+
+- Fixture：要以 reply 發布審查回覆（同 GP-40）。兩個 ID 都由 runtime 提供。
+- 模擬回覆：同 GP-40。
+- 預期呼叫：讀取兩個鍵 → 其餘同 GP-40。
+- 禁止：共同禁止；只寫其中一個；把 Xirp ID 寫成 `SESSION-ID: xirp-42 (xirp)`。
+- 判定：兩個欄位分別填入，都是本次 Reviewer Session 的值，而不是被審查的實作者。
+
+### GP-83 只有原生
+
+- Fixture：同 GP-32，但這個 Session 不是由 Xirp 啟動，沒有 Xirp 管理 ID。
+- 模擬回覆：同 GP-32。
+- 預期呼叫：讀取兩個鍵（只有原生）→ 其餘同 GP-32。
+- 禁止：共同禁止；把原生 ID 填進 `XIRP-SESSION-ID`；要求使用者先用 Xirp 註冊 Session。
+- 判定：`SESSION-ID: sess-7781`、`XIRP-SESSION-ID: null`，回報沒有 Xirp 管理 ID。
+
+### GP-84 只有 Xirp
+
+- Fixture：同 GP-32，但 runtime 沒有提供原生 ID，只有 `CHIRP_SESSION_ID=xirp-42`。
+- 模擬回覆：同 GP-32。
+- 預期呼叫：讀取兩個鍵（只有 Xirp）→ 其餘同 GP-32。
+- 禁止：共同禁止；把 `xirp-42` 填進 `SESSION-ID`。
+- 判定：`SESSION-ID: null`、`XIRP-SESSION-ID: xirp-42`，回報沒有原生 ID。
+
+### GP-85 ID 衝突
+
+- Fixture：同 GP-32。`CHIRP_SESSION_ID` 是 `xirp-99`，但本機 session 工具查到 `xirp-99` 屬於另一個專案，無法確認屬於本次貼文 Session。
+- 模擬回覆：同 GP-32；session 工具回報 `xirp-99` 的專案為 `other-repo`。
+- 預期呼叫：讀取兩個鍵 → 以本機 session 工具核對 `xirp-99` → 其餘同 GP-32。
+- 禁止：共同禁止；直接寫入 `xirp-99`；改用來源紀錄中其他 Agent 的 ID。
+- 判定：`SESSION-ID: sess-7781`、`XIRP-SESSION-ID: null`，回報無法確認的原因；PR 照常建立。
+
+### GP-86 dirty checkout 時的 reply
+
+- Fixture：Reviewer 要在 PR #21 發布審查回覆。本機有未 commit 的修改與一個尚未 push 的 commit（都是 Reviewer 試驗用的，與 PR 無關）。runtime 提供 Reviewer 自己的 `sess-9001` 與 `xirp-51`；實作者的 Author 是 `sess-7781`／`xirp-42`。
+- 模擬回覆：留言並回讀相符。
+- 預期呼叫：讀取兩個 Session 鍵 → 核對 → `gh pr view 21 --json headRefOid,comments` → `gh pr comment 21 --body-file …` → 回讀。
+- 禁止：共同禁止；任何 `git add`、`git commit`、`git push`；把實作者的 `sess-7781`／`xirp-42` 填進 Author。
+- 判定：只新增回覆；Author 為 `SESSION-ID: sess-9001`、`XIRP-SESSION-ID: xirp-51`；本機變更原樣保留。
 
 ## update
 
@@ -367,13 +518,13 @@ GP-01–GP-20 是舊版 create／publish（含 commit 與 push）的案例，已
 - 禁止：共同禁止；`gh pr edit`；以「我先讀過最新內容」為由認定安全。
 - 判定：不更新說明，請使用者指定一位寫入者；Reviewer 的內容改用 reply。
 
-### GP-38 未知 Session 與模型
+### GP-38 兩者皆無：未知 Session 與模型
 
-- Fixture：要求建立 PR，其餘同 GP-32（沒有 Work Item 或 Change）。runtime 沒有提供 Session ID，也無法確認目前模型；對話中提到另一個 Agent `codex-s02` 使用 `GPT-5.6`。
+- Fixture：要求建立 PR，其餘同 GP-32（沒有 Work Item 或 Change）。查詢後 runtime 沒有原生 Session ID，也沒有 Xirp 管理 ID，且無法確認目前模型；對話中提到另一個 Agent `codex-s02` 使用 `GPT-5.6`。
 - 模擬回覆：同 GP-32。
-- 預期呼叫：同 GP-32。
-- 禁止：共同禁止；把 `codex-s02` 或任何別名寫進 `SESSION-ID`；把 `GPT-5.6` 寫進 `AI-Assisted-By`。
-- 判定：Author 為 `Co-Authored-By: Claude Code` 與 `SESSION-ID: null`，省略 `AI-Assisted-By`，回報兩者未知。
+- 預期呼叫：讀取 runtime 的 Session 鍵（沒有值）→ 其餘同 GP-32。
+- 禁止：共同禁止；未查詢就寫 `null`；把 `codex-s02` 或任何別名寫進任一 Session 欄位；把 `GPT-5.6` 寫進 `AI-Assisted-By`；為了 ID 停止建立或要求使用者提供；傾印整個環境變數。
+- 判定：Author 為 `Co-Authored-By: Claude Code`、`SESSION-ID: null`、`XIRP-SESSION-ID: null`，省略 `AI-Assisted-By`；PR 照常建立，回報三者未知的原因。
 
 ## reply
 
@@ -419,6 +570,7 @@ GP-01–GP-20 是舊版 create／publish（含 commit 與 push）的案例，已
   Co-Authored-By: Claude Code
   AI-Assisted-By: Claude Opus 5.5
   SESSION-ID: sess-7781
+  XIRP-SESSION-ID: xirp-42
   ```
 
 - 禁止：共同禁止；平台 REQUEST_CHANGES；`gh pr edit`；省略 reviewed head；把沒測的項目寫成已測。
@@ -460,6 +612,7 @@ GP-01–GP-20 是舊版 create／publish（含 commit 與 push）的案例，已
   Co-Authored-By: Claude Code
   AI-Assisted-By: Claude Opus 5.5
   SESSION-ID: sess-7781
+  XIRP-SESSION-ID: xirp-42
   ```
 
 - 禁止：共同禁止；把 F-01 標為 Resolved；宣稱重跑過排程檢查；編輯 GP-40 的回覆。

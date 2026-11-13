@@ -159,9 +159,11 @@ Write the report as the reviewer reply of contract section 6.2: the reviewed
 head and phase, the Review-ID and verdict, each finding as an actionable item
 (impact, location or evidence, how to tell it is fixed) that a reader without
 the local records understands, then the checks run and the limits. No findings
-means no filler items. Author carries `SESSION-ID`: the native ID only when known
-and publishable, otherwise `null` with the reason in your report; an alias is
-never written as the Session ID.
+means no filler items. Author carries both `SESSION-ID` (this reviewer
+session's native ID) and `XIRP-SESSION-ID` (its Xirp management ID). Look both
+up from the runtime before writing either as `null`, read only those keys, and
+explain any `null` in your report; an alias is never written as either ID, and
+one ID never fills the other's field (contract section 6.2).
 
 ## Step 7 — Publish, then read back
 
@@ -198,7 +200,14 @@ reason not to report.
   reviewed head, the finding IDs, and the next action. Send it directly only
   when the caller named an available, authorized session tool. Use the target
   that tool accepts — for example a 管理 Session ID — and keep it apart from the
-  agent's native Session ID; never swap one for the other. A sent message is not
+  agent's native Session ID; never swap one for the other. The implementer's
+  `XIRP-SESSION-ID` in their latest Changes reply or PR Author is only a
+  lookup hint: confirm through the local session tool that it belongs to the same tool,
+  project, and native `SESSION-ID` before sending — and take it from the
+  implementer's post, never from the newest reply if that one is a reviewer's.
+  Older Authors with only `SESSION-ID`, or `SESSION-ID: <id> (xirp)`, are still
+  read with the namespace they state and are never rewritten. No usable local
+  mapping: return the handoff message and say why it was not sent. A sent message is not
   a read message, and neither is a started repair. Repository notifiers such as
   Telegram or waiting prompts are not session channels.
 - If the original implementer session is gone, the PR already holds what a new

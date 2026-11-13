@@ -81,6 +81,13 @@ else
 fi
 want "$SKILL" 'create／update／close' "Skill states the create/update/close boundary explicitly"
 
+# streamline-github-pr-publication: dual session Author and safe local lookup.
+echo "dual session Author"
+want "$SKILL" 'XIRP-SESSION-ID' "Skill writes and reads the Xirp session field"
+want "$SKILL" 'lookup hint' "a Xirp ID is only a local lookup hint"
+want "$CASES" 'XIRP-SESSION-ID' "cases cover dual-field Author"
+want "$CASES" '(xirp)' "cases keep legacy single-field Author readable"
+
 # ── 2.x Phase checklists and findings ────────────────────────────────────────
 echo "2.x checklists and findings"
 [[ -f "$CHECKS" ]] && ok "phase checklists exist" || bad "phase checklists exist"

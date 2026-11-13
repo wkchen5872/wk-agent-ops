@@ -345,12 +345,14 @@ done
 for field in '- brach:' 'wk-agent-ops:handoff:start' '### Provenance' '### design-approval' '### Reviews' '- phase:' '- owner:'; do
   pr_section | grep -qF -- "$field" && bad "PR template drops '$field'" || ok "PR template drops '$field'"
 done
-if instructions "$PR_SKILL/SKILL.md" | grep -qE 'git push|git commit|git add|git-commit-writer|commit writer'; then
-  bad "github-pr instructs no staging, commit, push or commit-writer delegation"
+# streamline-github-pr-publication: only create may publish Git; update/reply/close never do.
+nongit_part() { sed -n '/^## Operation: update/,/^## Reporting/p' "$PR_SKILL/SKILL.md" 2>/dev/null; }
+if nongit_part | grep -vE '^- (禁止|Forbidden)：' | grep -qE 'git push|git commit|git add|git-commit-writer'; then
+  bad "update, reply and close instruct no staging, commit or push"
 else
-  ok "github-pr instructs no staging, commit, push or commit-writer delegation"
+  ok "update, reply and close instruct no staging, commit or push"
 fi
-want "$PR_SKILL/SKILL.md" 'Git publication is a separate step' "github-pr explains the removed publish boundary"
+want "$PR_SKILL/SKILL.md" 'publish` operation is removed' "github-pr keeps publish removed"
 want "$PR_SKILL/SKILL.md" 'Always merge the relevant current-session discussion' "github-pr merges session decisions into named sources"
 want "$PR_SKILL/SKILL.md" 'work-items/WI-*/README.md' "github-pr reads Work Items directly"
 want "$PR_SKILL/SKILL.md" 'SESSION-ID' "github-pr fills the Author Session ID"
@@ -441,6 +443,50 @@ grep -qF 'stateReason: NOT_PLANNED' "$PR_CASES" && ok "a case reads back NOT_PLA
 grep -qF 'stateReason: COMPLETED' "$PR_CASES" && ok "a case keeps COMPLETED for finished work" || bad "a case keeps COMPLETED for finished work"
 doc_section 10 11 | grep -qF 'not planned' && ok "contract §10 ties Issue close reason to evidence" \
   || bad "contract §10 ties Issue close reason to evidence"
+
+# ── streamline-github-pr-publication: create publishes; dual session Author ──
+# Maps to openspec/changes/streamline-github-pr-publication specs/github-pr.
+echo "SPP-1 create performs the necessary Git publication"
+create_part() { sed -n '/^## Operation: create/,/^## Operation: update/p' "$PR_SKILL/SKILL.md" 2>/dev/null; }
+for cmd in 'git status --porcelain=v1 --untracked-files=all' 'git add -- <pr-paths>' \
+           'git commit -m "<message>" -- <pr-paths>' 'git remote get-url --push <remote>' \
+           'git push <remote> HEAD:refs/heads/<head-branch>' 'git ls-remote <remote> refs/heads/<head-branch>'; do
+  create_part | grep -qF -- "$cmd" && ok "create documents '$cmd'" || bad "create documents '$cmd'"
+done
+if create_part | awk '/^ *```/{f=!f; next} f' | grep -qE -- '--force|--no-verify|git add -A|git stash|git reset'; then
+  bad "create never forces, bypasses hooks, stages everything or discards work"
+else
+  ok "create never forces, bypasses hooks, stages everything or discards work"
+fi
+create_part | grep -qF 'whole-worktree' && ok "create limits the whole-worktree commit writer to all-PR worktrees" \
+  || bad "create limits the whole-worktree commit writer to all-PR worktrees"
+create_part | grep -qF 'without asking again' && ok "create does not re-ask for routine publication" \
+  || bad "create does not re-ask for routine publication"
+deny "$DOC" 'Issue／PR 操作不 commit、不 push' "contract no longer forbids create from publishing"
+deny "$ROOT/README.md" '兩個入口都不 commit、不 push' "README no longer forbids create from publishing"
+for t in '未 commit' '已 commit 未 push' '已發布的分支' '前置 base' 'push 被拒' 'hook 失敗' 'non-fast-forward' \
+         'push 後 create 失敗' 'push 後 create 結果不明' '混合工作區'; do
+  grep -E '^### GP-[0-9]+' "$PR_CASES" 2>/dev/null | grep -qF -- "$t" \
+    && ok "github-pr has a publication case for '$t'" || bad "github-pr has a publication case for '$t'"
+done
+
+echo "SPP-2 dual session Author"
+n="$(pr_section | grep -c '^XIRP-SESSION-ID:')"; m="$(pr_section | grep -c '^SESSION-ID:')"
+[[ "${n:-0}" -ge 3 && "$n" == "$m" ]] && ok "every §6.2 Author has SESSION-ID and XIRP-SESSION-ID ($m/$n)" \
+  || bad "every §6.2 Author has SESSION-ID and XIRP-SESSION-ID ($m/$n)"
+want "$PR_SKILL/SKILL.md" 'XIRP-SESSION-ID' "github-pr fills the Xirp session field"
+want "$PR_SKILL/SKILL.md" 'look up both IDs before' "github-pr checks the runtime before writing null"
+want "$PR_SKILL/SKILL.md" 'never dump the environment' "session discovery reads only the needed keys"
+if grep -hvE '^- (禁止|Forbidden)：' "$PR_CASES" "$PR_SKILL/references/examples.md" "$PR_SKILL/SKILL.md" 2>/dev/null \
+   | grep -qE '^SESSION-ID: .*\(xirp\)'; then
+  bad "new Author examples no longer put a Xirp ID in SESSION-ID"
+else
+  ok "new Author examples no longer put a Xirp ID in SESSION-ID"
+fi
+for t in '漏查' '兩者都有' '只有原生' '只有 Xirp' '兩者皆無' 'ID 衝突'; do
+  grep -E '^### GP-[0-9]+' "$PR_CASES" 2>/dev/null | grep -qF -- "$t" \
+    && ok "github-pr has a session case for '$t'" || bad "github-pr has a session case for '$t'"
+done
 
 # ── 4.1 Managed delivery and legacy script retirement ────────────────────────
 echo "4.1 managed delivery"

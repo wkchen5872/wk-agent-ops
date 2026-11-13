@@ -23,9 +23,11 @@ Review 報告都引用這裡，不各自保存一份格式。
 - Work Item 只管理本機協作紀錄，不依賴本契約。GitHub skills 可以讀取它作為素材；
   Issue／PR 的整理、發布、回覆、關聯與關閉規則由本契約管理，不要求 Work Item 配合新增欄位或流程。
 - Issue、PR、Review 與留言使用當下可用且已配置的 GitHub CLI `gh` 或 GitHub MCP。
-  **Issue／PR 操作不 commit、不 push**：Git 發布是另外授權的獨立步驟，使用本機 Git，
-  SSH／HTTPS 認證交給 Git 與本機設定。本流程不提供 GitHub client、通用 adapter 或自訂的
-  身分檢查程式。
+  **只有 `github-pr create` 會發布 Git**：建立 PR 的要求本身就涵蓋必要的檢查、只含本次
+  工作的 commit、正常 push、Draft PR 與回讀。github-pr 的 update、reply、close 與 Issue
+  的操作都不 commit、不 push；對既有 PR 推送新的 commit 是另外的 Git 請求。Git 使用本機
+  工具，SSH／HTTPS 認證交給 Git 與本機設定。本流程不提供 GitHub client、通用 adapter 或
+  自訂的身分檢查程式。
 - 本文件與安裝的 rule 是規範，不是 hook：它們不會在執行期攔截指令。只有依本文件
   操作的入口才受這些規則約束，不能據此宣稱所有 Issue／PR 都已受控。
 - 不包含看板同步、背景派工、跨機器 Session 啟動、自動合併、部署或自動 archive。
@@ -34,9 +36,9 @@ Review 報告都引用這裡，不各自保存一份格式。
 
 | 需要 | 用途 | 缺少時 |
 | --- | --- | --- |
-| `git` | 讀取 remote、分支與比較；另行授權的 commit 與 push | 停止 |
+| `git` | 讀取 remote、分支與比較；`github-pr create` 必要的 commit 與 push | 停止 |
 | `gh` 或 GitHub MCP（至少一個可用且已配置） | Issue、PR、Review、留言的讀寫 | 兩者都無法執行所需操作時，停止遠端操作並回報 |
-| Git 既有的 SSH 或 HTTPS push 路徑 | 另行授權的 push | 只停 push，回報 Git 的實際錯誤 |
+| Git 既有的 SSH 或 HTTPS push 路徑 | create 必要的 push，或另外要求的 push | 只停 push，回報 Git 的實際錯誤 |
 
 不需要先建立身分政策、安裝檢查腳本或固定任何 blob。每台機器各自準備工具與登入；
 一台機器或一個工具的登入狀態，不能替另一台機器或另一個工具背書。
@@ -64,7 +66,7 @@ Review 報告都引用這裡，不各自保存一份格式。
 6. **結果不明先查核**。寫入逾時或回應不明時，先依第 5 節的精確關聯或 remote ref 查核
    實際狀態；在查清楚之前不重送，也不換工具重送。
 
-另行授權的 Git push 另外核對實際 push URL 的目的 repository 與 ref
+每次 Git push 另外核對實際 push URL 的目的 repository 與 ref
 （`git remote get-url --push <remote>`），不 force，push 後以 remote head 回讀。SSH 的
 host 別名交給 Git 與 SSH 設定解析。
 
@@ -75,8 +77,8 @@ host 別名交給 Git 與 SSH 設定解析。
 | 操作 | 本流程負責 | 本機工具負責 |
 | --- | --- | --- |
 | Issue／PR／Review／留言 | 完整目標、operation、授權、可得的權限證據、結果回讀 | `gh` 或 MCP 自身的連線與認證 |
-| commit（另行授權，不屬於 Issue／PR 操作） | 完整 dirty 範圍、既有 writer、記錄有效 author／committer、專案明示的規則 | Git 的身分設定與 hooks |
-| push（另行授權，不屬於 Issue／PR 操作） | 實際目的 repository／ref、已授權的 commits、不 force、remote head 回讀 | Git 的 SSH／HTTPS 認證與服務端的實際拒絕 |
+| commit（`github-pr create` 必要時，或另外要求時） | 完整 dirty 範圍、只提交本次工作並保留無關的 staged／unstaged／untracked 內容、記錄有效 author／committer、專案明示的規則 | Git 的身分設定與 hooks |
+| push（`github-pr create` 必要時，或另外要求時） | 實際目的 repository／ref、只推已確認的 commits、不 force、remote head 回讀 | Git 的 SSH／HTTPS 認證與服務端的實際拒絕 |
 
 本流程**不解析 credential helper**、token、SSH key 或 SSH 成功問候語，不執行 credential
 fill，也不把 `gh` 的 API 登入當作 push 的身分。Git 的 author／committer 是提交
@@ -276,7 +278,8 @@ PR 的正文說明這張 PR 的工作，之後依授權更新；每一輪的審�
 
 Co-Authored-By: <本次執行工具>
 AI-Assisted-By: <已知的當下 root-session model>
-SESSION-ID: <本次 Session ID｜null>
+SESSION-ID: <本次原生 Session ID｜null>
+XIRP-SESSION-ID: <本次 Xirp 管理 Session ID｜null>
 ```
 
 - **Handoff**：`branch` 一定要有（拼字是 `branch`）。其他關聯只在已確認時列出，未知就整行
@@ -292,11 +295,18 @@ SESSION-ID: <本次 Session ID｜null>
 - **只描述已發布的內容**：實作與測試結果以選定 PR 的實際 remote head 為準。本機尚未
   commit 或 push 的修改、以及它的測試，寫成「尚未發布」，不算在這個版本裡。只有設計
   artifacts 的 PR 說明設計，不聲稱已實作。
-- **Author** 只記本次貼文者：執行工具、已知的當下 root-session model，以及 `SESSION-ID`。
-  `SESSION-ID` 填可確認且允許揭露的原生 ID；未知或不公開時寫 `null`，並在操作回報中說明。
-  使用者明確指定管理器的 ID 時，標明命名空間，例如 `SESSION-ID: <id> (xirp)`，不冒稱原生 ID，
-  也不自創別名充數。模型未知時省略 `AI-Assisted-By` 並回報。不從來源紀錄或其他 Agent
-  推測任何一個值。
+- **Author** 只記本次貼文者：執行工具、已知的當下 root-session model，以及兩個 Session 欄位，
+  兩個欄位一定都出現：
+  - `SESSION-ID`：當下工具 runtime 提供的原生 Session ID。
+  - `XIRP-SESSION-ID`：本次 Session 的 Xirp 管理 ID，取自 runtime 或已配置的本機 session 工具。
+  寫 `null` 之前先查詢可用的來源，只讀需要的鍵，不傾印環境變數、對話或任何 credential。
+  無法確認屬於本次貼文 Session、不存在、未註冊或不公開的值，各自在自己的欄位寫 `null` 並在
+  操作回報中說明，另一欄不受影響，也不因此停止發文。兩個 ID 不互填，不從來源紀錄或其他
+  Agent 取得，也不要求使用者手抄。模型只取自當下 root session 已知的資訊，不由環境變數推測；
+  未知時省略 `AI-Assisted-By` 並回報。
+- 舊紀錄中只有 `SESSION-ID`，或以 `SESSION-ID: <id> (xirp)` 標示管理 ID 的 Author 仍然可讀，
+  保留它標示的命名空間，不改寫歷史紀錄。讀到 `XIRP-SESSION-ID` 時只能當作本機 session 工具的
+  查找線索，通知前仍要核對工具、專案與原生 ID 的對應。
 
 #### 審查回覆
 
@@ -319,7 +329,8 @@ SESSION-ID: <本次 Session ID｜null>
 
 Co-Authored-By: <本次執行工具>
 AI-Assisted-By: <已知的當下 root-session model>
-SESSION-ID: <本次 Session ID｜null>
+SESSION-ID: <本次原生 Session ID｜null>
+XIRP-SESSION-ID: <本次 Xirp 管理 Session ID｜null>
 ```
 
 #### 修正回覆
@@ -339,7 +350,8 @@ SESSION-ID: <本次 Session ID｜null>
 
 Co-Authored-By: <本次執行工具>
 AI-Assisted-By: <已知的當下 root-session model>
-SESSION-ID: <本次 Session ID｜null>
+SESSION-ID: <本次原生 Session ID｜null>
+XIRP-SESSION-ID: <本次 Xirp 管理 Session ID｜null>
 ```
 
 - 回覆**永遠新增一則頂層留言**，不編輯或刪除過去的回覆。主體標題預設為 Review 或
@@ -454,7 +466,7 @@ Delivery: <已透過 <工具> 送達 <Session>｜未送達，需由使用者轉�
 ## 7. Provenance
 
 Issue 與 PR 的正文和回覆只用各自的 Author：Issue 見第 6.1 節（貼文工具與已知模型），
-PR 見第 6.2 節（另加 `SESSION-ID`）。它們不記 role、Machine-Alias、時間或 revision，也不
+PR 見第 6.2 節（另加 `SESSION-ID` 與 `XIRP-SESSION-ID`）。它們不記 role、Machine-Alias、時間或 revision，也不
 累積多輪 provenance。下表的完整欄位只用於批准事件的 `recorded_by`、第 6.4 節的完整基線
 與驗證紀錄。本節的揭露與不推測規則適用於所有紀錄。
 
@@ -546,10 +558,10 @@ Apply（開始實作）之前，相關設計必須有人類批准，而且能從
 | --- | --- | --- | --- |
 | 01 建立 Change | OpenSpec 流程 | proposal、specs、design、tasks | 設計已批准 |
 | 02 登錄工作 | `github-issue create`；之後的進展以 `github-issue update` 新增留言 | Issue 與關聯、迭代留言 | 規格已發布 |
-| 03 發布規格 | 另行授權的 Git 發布（commit、push），再 `github-pr create` | 已發布的分支、Draft PR | 設計已審查 |
+| 03 發布規格 | `github-pr create`（含必要的 commit、push） | 已發布的分支、Draft PR | 設計已審查 |
 | 04 設計審查與批准 | design Review（`github-pr reply`），再由人類批准 | 審查回覆、批准事件 | 實作已驗收 |
 | 05 實作 | OpenSpec apply | 本機變更與測試 | 已發布 |
-| 06 發布實作 | 另行授權的 Git push，再 `github-pr update` 說明新版本 | 同一張 PR 的新 head 與說明 | 已審查 |
+| 06 發布實作 | 另外要求的 Git push，再 `github-pr update` 說明新版本 | 同一張 PR 的新 head 與說明 | 已審查 |
 | 07 實作審查 | implementation Review；需修正時以 `github-pr reply` 逐項回覆後複審新 head | 審查回覆、修正回覆 | 已合併或已部署 |
 | 08 交付整理 | 依授權 archive、文件更新、commit 與 push，再複審最終 head | 最終 head 的審查回覆 | 真實資料驗收完成 |
 | 09 結案 | merge 另依授權；不 merge 而結束時以 `github-pr close` 關閉 PR 與直接對應的 Issue；archive 各自授權 | 各自的結案紀錄 | 驗收完成 |
@@ -576,7 +588,7 @@ Apply（開始實作）之前，相關設計必須有人類批准，而且能從
 一般的實作 Review 或 verify 通過只代表當時的 head。具備 archive 條件並取得授權後：
 
 1. 以專案既有的 archive 與 commit 流程完成 archive、文件更新與 commit。
-2. 依另行授權的 Git 發布核對目的地並 push 這個既有 commit，再以 `github-pr update` 說明。
+2. 依另外要求的 Git 發布核對目的地並 push 這個既有 commit，再以 `github-pr update` 說明。
    不重新 archive，不建立空 commit。
 3. Reviewer 對新的 head 做最終差異複審，報告綁定最終 head；先前的報告仍屬於它當時的
    head。只有能證明差異僅為搬移、spec 同步與相應文件修訂時才縮小範圍；出現任何語意
@@ -658,7 +670,7 @@ sources:
 | `git push` 因認證失敗 | 本機 SSH key 或 credential helper 的問題 | 回報 Git 的錯誤，交給使用者處理；不讀取或修改認證設定 |
 | 明示的帳號限制無法證實 | 工具取不到實際帳號，或帳號不符 | 停止該操作並回報限制與缺少的證據 |
 | 舊版 PR 正文的起訖標記不完整或重複 | 正文被改寫 | 先詢問要更新的範圍，不整段取代。新 PR 不使用標記；Issue 照常新增留言 |
-| 呼叫了舊的 `github-pr publish` | 舊流程把 commit、push 與 PR 更新綁在一起 | 說明 publish 已移除：Git 發布另行授權，PR 說明用 `github-pr update`；不執行任何 Git 寫入 |
+| 呼叫了舊的 `github-pr publish` | 舊流程把 commit、push 與 PR 更新綁在一起 | 說明 publish 已移除：對既有 PR 推送新 commit 是另外的 Git 請求，PR 說明用 `github-pr update`；不執行任何 Git 寫入 |
 | 建立逾時、不知道是否成功 | 遠端回應不明 | 先依第 5 節重新查找，再決定是否重試；查清楚前不換工具重送 |
 | 專案裡還有舊的 `scripts/github/check-identity.sh` | 舊版安裝留下、且被改過的檔案 | 本流程已不使用它；由使用者決定是否刪除 |
 
@@ -730,7 +742,7 @@ Change 為 `add-export`，PR #12 由 `feature/add-export` 指向 `main`，對應
 
 - Fixture：要以 `github-pr reply` 發布一則回覆。runtime 提供 Session ID `sess-1234`，工具與模型已知，沒有不公開的要求。
 - 模擬回覆：`gh pr comment` 回傳留言 URL；讀回相符。
-- 預期呼叫：核對目標與能力 → `gh pr comment 12 --body-file …` → 讀回該留言，Author 為 `Co-Authored-By: <工具>`、`AI-Assisted-By: <模型>`、`SESSION-ID: sess-1234`。
+- 預期呼叫：讀取 runtime 提供的 Session 鍵 → 核對目標與能力 → `gh pr comment 12 --body-file …` → 讀回該留言，Author 為 `Co-Authored-By: <工具>`、`AI-Assisted-By: <模型>`、`SESSION-ID: sess-1234`、`XIRP-SESSION-ID: null`（這台機器沒有 Xirp 管理 ID，回報中說明）。
 - 禁止：執行 `hostname` 或讀取機器名稱；省略已知的模型或 Session ID；加入 Machine-Alias、時間或 revision 等 Provenance 欄位；寫入本機絕對路徑。
 - 判定：Author 三行都是已知且真實的值。
 
@@ -738,7 +750,7 @@ Change 為 `add-export`，PR #12 由 `feature/add-export` 指向 `main`，對應
 
 - Fixture：要發布 PR 回覆。目前模型無法得知。專案明確要求不公開 Session ID；本地別名為 `impl-s02`。
 - 模擬回覆：發布並回讀相符。
-- 預期呼叫：核對目標與能力 → `gh pr comment …` → 回讀；Author 省略 `AI-Assisted-By`，`SESSION-ID: null`。
+- 預期呼叫：核對目標與能力 → `gh pr comment …` → 回讀；Author 省略 `AI-Assisted-By`，`SESSION-ID: null`，`XIRP-SESSION-ID` 依實際查詢結果填寫或為 `null`。
 - 禁止：從歷史、環境變數或他人紀錄推測模型；把別名 `impl-s02` 寫成 `SESSION-ID`；填入工具名稱充當模型。
 - 判定：回報已省略模型、Session ID 因不公開而為 `null` 的原因。
 

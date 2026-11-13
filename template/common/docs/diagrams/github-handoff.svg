@@ -18,8 +18,8 @@
 <path d="M505 452 V492" class="line"/>
 <rect x="80" y="492" width="850" height="118" rx="16" class="blue"/>
 <text x="104" y="530" class="heading">03　github-pr create</text>
-<text x="104" y="564" class="body">分支已另行 push；核對 base／head 與比較差異</text>
-<text x="104" y="594" class="body">開 Draft PR 並回讀；不 commit、不 push</text>
+<text x="104" y="564" class="body">檢查 → 只提交本次工作 → 正常 push（需要時）</text>
+<text x="104" y="594" class="body">核對 remote head 與差異 → Draft PR 並回讀</text>
 <path d="M505 610 V650" class="line"/>
 <rect x="80" y="650" width="850" height="118" rx="16" class="gold"/>
 <text x="104" y="688" class="heading">04　design Review，再由人類批准</text>
@@ -32,8 +32,8 @@
 <text x="104" y="910" class="body">本機完成後仍需發布新版本</text>
 <path d="M505 926 V966" class="line"/>
 <rect x="80" y="966" width="850" height="118" rx="16" class="blue"/>
-<text x="104" y="1004" class="heading">06　另行 push，再 github-pr update</text>
-<text x="104" y="1038" class="body">Git 發布另行授權；PR 只描述已發布的 head</text>
+<text x="104" y="1004" class="heading">06　另外要求 push，再 github-pr update</text>
+<text x="104" y="1038" class="body">對既有 PR 推新 commit 另外要求；只描述已發布 head</text>
 <text x="104" y="1068" class="body">沿同一 PR 更新說明，審查與修正用 reply</text>
 <path d="M505 1084 V1124" class="line"/>
 <rect x="80" y="1124" width="850" height="118" rx="16" class="gold"/>
@@ -59,7 +59,7 @@
 <text x="1074" y="564" class="body">設計及實作各自綁定 reviewed head</text>
 <text x="1074" y="594" class="body">第一版示範同張 PR 的兩個階段</text>
 <rect x="1050" y="808" width="470" height="140" rx="16" class="box"/>
-<text x="1074" y="846" class="heading">Issue／PR 操作都不改 Git</text>
+<text x="1074" y="846" class="heading">只有 PR create 會寫 Git</text>
 <text x="1074" y="880" class="body">PR 說明保留人工內容；Issue 只加留言</text>
 <text x="1074" y="910" class="body">審查與修正以 reply 新增留言</text>
 <rect x="1050" y="1124" width="470" height="140" rx="16" class="gold"/>

@@ -182,14 +182,16 @@ Installer 會把忽略規則合併進專案版控的 `.gitignore`，並以 Git �
 要讓另一個 Session 或另一台機器只靠 GitHub Issue／PR 接手某個 OpenSpec Change 時，
 使用 `github-issue`（create／update）與 `github-pr`（create／update／reply／close）。
 `github-issue` 可從指定的 Work Item、Change、兩者、目前分支的關聯或目前 Session 整理出
-精簡的 Issue；之後的迭代以新增留言保存，不改寫正文。`github-pr` 用同樣的素材說明已發布
-的分支：create 開 Draft PR、update 改說明、reply 新增審查或修正回覆、close 不 merge 地關閉
-PR 與它直接處理的 Issue。
+精簡的 Issue；之後的迭代以新增留言保存，不改寫正文。`github-pr` 用同樣的素材說明這份工作：
+create 會做開 PR 需要的檢查、只含本次工作的 commit 與正常 push，再開 Draft PR；update 改說明、
+reply 新增審查或修正回覆、close 不 merge 地關閉 PR 與它直接處理的 Issue。
 兩個入口只負責操作順序；範本、關聯鍵、provenance、人類設計批准與完整流程都在
 managed 的 [`docs/github-handoff.md`](docs/github-handoff.md)。GitHub 操作使用當下
-可用且已配置的 `gh` 或 GitHub MCP。兩個入口都不 commit、不 push：Git 發布是另外授權的
-步驟，使用專案既有的 Git／commit 流程，SSH／HTTPS 認證交給 Git 與本機設定。舊的
-`github-pr publish` 已移除，push 之後以 `github-pr update` 說明新版本。
+可用且已配置的 `gh` 或 GitHub MCP。只有 `github-pr create` 會 commit 與 push，且不 force、
+不略過 hooks、保留無關的工作區內容；`github-issue` 與 github-pr 的其他操作都不寫 Git，SSH／HTTPS
+認證交給 Git 與本機設定。舊的 `github-pr publish` 已移除：對既有 PR 推送新 commit 是另外的
+Git 請求，之後以 `github-pr update` 說明新版本。PR 與回覆的 Author 同時記錄原生的
+`SESSION-ID` 與 Xirp 的 `XIRP-SESSION-ID`。
 
 每次寫入前，入口會核對完整的 host／owner／repo、操作與使用者授權（PR 另核對 base／head
 repository 與分支），寫入後回讀結果。預設不限制帳號；只有使用者或可信專案規範明示

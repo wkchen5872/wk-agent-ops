@@ -4,21 +4,21 @@ description: >
   Create, update, reply to, or close a GitHub pull request, following the
   project's shared handoff contract. Work Items, OpenSpec Changes, the published
   branch diff, and the current session are material: the PR explains the work so
-  someone who missed the conversation understands it. create opens a Draft PR
-  for an already published branch (or returns the existing one); update edits
-  the authorized parts of its description; reply adds a Review, Changes, or other
-  report as a new top-level comment; close closes the PR without merging and then
-  its directly corresponding Issues. It never stages, commits, or pushes — Git
-  publication is a separate step. Every write checks the full base and head
-  repositories (including forks) and is read back. Works through gh or a
+  someone who missed the conversation understands it. create does what opening
+  the PR needs — checks, a commit scoped to this work, a normal push — then opens
+  a Draft PR (or returns the existing one); update edits the authorized parts of
+  its description; reply adds a Review, Changes, or other report as a new
+  top-level comment; close closes the PR without merging and then its directly
+  corresponding Issues. Only create publishes Git. Every write checks the full
+  base and head repositories (including forks) and is read back. Works through gh or a
   configured GitHub MCP. Use whenever the user asks to open, describe, refresh,
   review-reply, report fixes on, or close a PR — for example "建立 PR", "開 PR",
   "更新 PR 說明", "回覆 review", "回報修正", "關閉 PR", "把批准記到 PR".
 license: MIT
-compatibility: "Requires git (read-only here) and either GitHub CLI (gh) or a GitHub MCP, already configured for the target host. Optional: openspec CLI."
+compatibility: "Requires git and either GitHub CLI (gh) or a GitHub MCP, already configured for the target host. Optional: openspec CLI, git-commit-writer."
 metadata:
   author: wkchen
-  version: "2.0"
+  version: "2.1"
 ---
 
 # GitHub PR
@@ -36,19 +36,20 @@ rather than from memory.
 
 | Operation | Needs | Side effect when authorized |
 |---|---|---|
-| `create` | Base and a **published** head branch with changes; material to describe | Opens one Draft PR, or returns the existing open one |
+| `create` | The work to open as a PR (local or already pushed); material to describe | Checks, a scoped commit and a normal push when needed, then one Draft PR — or returns the existing open one |
 | `update` | The PR, what to change | Rewrites the authorized parts of its description |
 | `reply` | The PR, this round's review, fixes, or report | Adds one top-level comment |
 | `close` | The PR | Closes the PR without merging, then its confirmed directly corresponding Issues |
 
-None of them stages, commits, pushes, merges, changes the base, deletes a
-branch, or switches Draft/Ready. **Git publication is a separate step**: when
-the branch is not on the remote yet, say so. Publishing it is a separately
-authorized action through the project's Git or commit workflow, following the
-contract's push checks (sections 3 and 4.1) — not part of any operation here. The old
-`publish` operation is removed. If someone asks for it, explain this boundary,
-offer `update` for the description once the branch is pushed, and make no Git
-write — do not quietly treat the request as `update` either.
+A request to create a PR is the authorization for everything opening it needs:
+the project's checks, a commit of this PR's changes, a normal push, the Draft PR,
+and readback. Do those without asking again because the work is uncommitted or
+the branch is not on the remote yet. `update`, `reply`, and `close` never stage,
+commit, or push. No operation merges, force-pushes, changes the base, deletes a
+branch, or switches Draft/Ready. The old `publish` operation is removed. If
+someone asks for it, say so: pushing new commits to an existing PR is a separate
+Git request, and `update` describes the new head afterwards. Make no Git write
+for it, and do not quietly treat it as `update`.
 
 GitHub reads and writes go through one available, already configured tool: `gh`
 or a GitHub MCP. The commands below are written for `gh`, always with an explicit
@@ -160,34 +161,114 @@ gh api repos/<owner>/<repo>/compare/<base-branch>...<head-owner>:<head-branch> \
   --jq '{status, ahead_by, head: .commits[-1].sha, files: [.files[].filename]}'
 ```
 
-No head branch on the remote, or nothing ahead of the base, means there is no PR
-to open: report the missing prerequisite and, if useful, return the proposed
-title and body as text. Never create an empty commit, a branch, or a placeholder
-file to manufacture one. A dirty or ahead local checkout does not block a
-description change, but it is not evidence of what is published.
+For `create`, a head branch missing on the remote is not a blocker — Step 5
+publishes it. Nothing to publish and nothing ahead of the base means there is no
+PR to open: report it. Never create an empty commit, a branch, or a placeholder
+file to manufacture a difference. For the other operations, a dirty or ahead
+local checkout does not block the write, but it is not evidence of what is
+published.
 
 ## Operation: create
 
-### Step 5 — Compose the description
+Run Steps 1–4 first. If one open PR already matches the base and the full head,
+return its URL and stop — no commit, no push, no description rewrite.
 
-Follow the body in contract section 6.2. Handoff first, with `branch` always and
-other associations only when confirmed — no empty fields. Then the work: what
-the problem is and whom it affects, what is in and out of scope, the design or
-the published changes, how to check the result, and what is still open, as far
-as the material supports each. Pick headings that fit (Goal, Design,
-Implementation, Verification, Open questions); do not add empty sections. Do not
-keep a record's layout (Sessions, coordinators, decision IDs, per-agent next
-actions), do not shorten the tasks list group by group, and do not post bare IDs
-in place of an explanation. Point to a task plan by linking it, without enumerating its groups
-or counts. A design-only PR describes the design and claims no implementation. Never invent a decision, number, owner, date, or test result.
+### Step 5 — Prepare and publish what the PR needs
 
-Author last: the tool posting now, the known current root-session model, and
-`SESSION-ID` — the native ID when it is known and may be published; otherwise
-`null`, said in the report. A management session ID the user chose is written
-with its namespace, for example `SESSION-ID: <id> (xirp)`. An unknown model is
-omitted and reported. Nothing is taken from source records or other agents.
+Do only the stages that are missing, without asking again for routine work.
 
-### Step 6 — Create, then verify
+1. **Resolve the base** when it was not given: an existing PR or session decision
+   about this branch, a verified predecessor branch the work builds on, or the
+   repository's default branch — in that order. Never use the head's own
+   tracking ref as the base. Say which base you used.
+2. **Inventory and scope.**
+
+   ```bash
+   git status --porcelain=v1 --untracked-files=all
+   git log --oneline <base-branch>..HEAD
+   ```
+
+   Sort every staged, unstaged, and untracked path into this PR's work or
+   unrelated work, from the selected Change or Work Item, the session, and the
+   actual diff. Paths you cannot place: list them and ask about those paths
+   only. Unrelated work is left exactly as it is — never stash, reset, discard,
+   or move it.
+3. **Checks.** Run the project's required checks for this work. A failure that
+   belongs to this work is fixed only within existing authorization; otherwise
+   stop and report it — never skip a check or use `--no-verify` to get past it.
+4. **Commit, only if this PR's changes are uncommitted.**
+
+   ```bash
+   git add -- <pr-paths>
+   git commit -m "<message>" -- <pr-paths>
+   ```
+
+   The pathspec commit takes only `<pr-paths>`; other staged entries stay staged,
+   and unstaged or untracked unrelated files stay as they were. Use the project's
+   Conventional Commits style and root-session attribution. `git-commit-writer`
+   stages the whole worktree, so use it only when every changed path belongs to
+   this PR — never as a whole-worktree helper on a mixed checkout. Hooks run;
+   if one fails, nothing is committed and you report it.
+5. **Push, only if the remote does not already have this commit.**
+
+   ```bash
+   git remote get-url --push <remote>
+   git push <remote> HEAD:refs/heads/<head-branch>
+   git ls-remote <remote> refs/heads/<head-branch>
+   ```
+
+   The push URL must name the selected head repository — full host, owner, and
+   repository; if not, stop rather than change the remote. Push normally, never
+   force. The remote head must equal the local commit before the PR describes
+   it. When the resolved base is an existing predecessor branch that is not on
+   the remote yet, publish that branch as it is
+   (`git push <remote> <base-branch>:refs/heads/<base-branch>`) and read it back
+   the same way — never create, merge, or rebase predecessor work for it.
+   A rejected push (non-fast-forward, denial) stops here: report Git's message
+   and the remote head; never pull, rebase, or force to get past it.
+6. **Compare what is now published** (Step 4's compare call). Nothing ahead of the
+   base: report that there is no PR to open.
+
+Authentication or permission problems are reported as the actual failed
+stage — not fixed by asking the user to say yes again, by switching accounts or
+credentials, or by resending through another tool.
+
+### Step 6 — Compose the description
+
+Write it from what Step 5 actually published. Follow the body in contract
+section 6.2. Handoff first, with `branch` always and other associations only
+when confirmed — no empty fields. Then the work: what the problem is and whom it
+affects, what is in and out of scope, the design or the published changes, how
+to check the result, and what is still open, as far as the material supports
+each. Pick headings that fit (Goal, Design, Implementation, Verification, Open
+questions); do not add empty sections. Do not keep a record's layout (Sessions,
+coordinators, decision IDs, per-agent next actions), do not shorten the tasks
+list group by group, and do not post bare IDs in place of an explanation. Point
+to a task plan by linking it, without enumerating its groups or counts. A
+design-only PR describes the design and claims no implementation. Never invent a
+decision, number, owner, date, or test result.
+
+**Author** last (contract section 6.2): the tool posting now, the known current
+root-session model, `SESSION-ID`, and `XIRP-SESSION-ID`; look up both IDs before
+writing either one as `null`:
+
+- `SESSION-ID` — the native ID the current tool's runtime exposes for this
+  session (for example `CLAUDE_CODE_SESSION_ID` in Claude Code, or
+  `CODEX_THREAD_ID`／`CODEX_SESSION_ID` in Codex).
+- `XIRP-SESSION-ID` — the Xirp management ID for this session, from the runtime
+  (on this kind of setup `CHIRP_SESSION_ID`) or the configured local session
+  tool. Do not assume an `XIRP_SESSION_ID` variable exists.
+
+Read only those keys — never dump the environment, the transcript, or anything
+credential-like. A value that cannot be tied to the current posting session, or
+that is absent, unregistered, or withheld, is `null` in its own field, with the
+reason in your report; the other field is unaffected and the post goes ahead.
+Never copy one ID into the other field, take an ID from a source record or
+another agent, or ask the user to type one in. The model comes from what the
+current root session knows, never from the environment; an unknown model is
+omitted and reported.
+
+### Step 7 — Create, then verify
 
 ```bash
 gh pr create -R <host>/<owner>/<repo> --draft --base <base-branch> \
@@ -199,10 +280,19 @@ gh pr view <number> -R <host>/<owner>/<repo> \
 Always name the head owner, so `gh` cannot pick another fork's branch of the same
 name; with an MCP, pass the head as `<head-owner>:<head-branch>` too, or stop if
 the tool cannot express it. The read-back head repository, owner, base branch,
-and head SHA must all equal what was selected and compared. If the readback
+and head SHA must all equal what was selected and published. If the readback
 fails, report the returned URL as created but unconfirmed and do not create
-again. If the create call times out or its result is unknown, go back to Step 4
-before any retry, with either tool.
+again.
+
+### Partial results and reruns
+
+Report each stage on its own: committed (SHA), pushed (remote head), PR created
+(URL), read back. A later failure never undoes an earlier stage: a commit whose
+push failed stays committed; a pushed branch whose PR failed stays pushed. Before
+any retry — after a failure, a timeout, or an unknown result — read the local
+commits, the remote ref, and the existing PRs (Step 4), then do only what is
+still missing. Never commit the same work twice, push again "to be safe", or
+create a second PR; if the state stays unclear, report that instead.
 
 ## Operation: update
 

@@ -40,7 +40,9 @@
 
 ## Author 的幾種情況
 
-已知 runtime Session ID：
+兩個 Session 欄位一定都出現。先查 runtime 提供的鍵，再填值；查不到的欄位才寫 `null`。
+
+原生與 Xirp 管理 ID 都有：
 
 ```markdown
 ## Author
@@ -48,18 +50,20 @@
 Co-Authored-By: Claude Code
 AI-Assisted-By: Claude Opus 5.5
 SESSION-ID: sess-7781
+XIRP-SESSION-ID: xirp-42
 ```
 
-使用者指定用管理器的 ID，且模型未知（省略 `AI-Assisted-By`，回報時說明）：
+只有 Xirp 管理 ID，且模型未知（省略 `AI-Assisted-By`，回報時說明）：
 
 ```markdown
 ## Author
 
 Co-Authored-By: Codex
-SESSION-ID: 3f9c-21 (xirp)
+SESSION-ID: null
+XIRP-SESSION-ID: 3f9c-21
 ```
 
-沒有可公開的 Session ID：
+兩者都沒有：
 
 ```markdown
 ## Author
@@ -67,4 +71,7 @@ SESSION-ID: 3f9c-21 (xirp)
 Co-Authored-By: Claude Code
 AI-Assisted-By: Claude Opus 5.5
 SESSION-ID: null
+XIRP-SESSION-ID: null
 ```
+
+舊紀錄的 `SESSION-ID: <id> (xirp)` 仍可讀，但新的 Author 不再這樣寫。
