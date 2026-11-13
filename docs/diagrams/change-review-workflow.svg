@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="2030" viewBox="0 0 1400 2030" role="img" aria-labelledby="title desc">
+<title id="title">change-review 簡化流程提案</title><desc id="desc">從 Change 或 GitHub Issue 解析關聯、尋找 PR，執行必要 OpenSpec 驗證與選用 Review。無 PR 或通過時直接回報；有 PR 且未通過時新增審查留言，核對本機實作者 Session 後通知，無法定位時提供交接訊息。</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#52708c"/></marker></defs>
+<style>text{font-family:"PingFang TC","Noto Sans CJK TC",sans-serif;fill:#17324d} .title{font-size:36px;font-weight:700}.h{font-size:26px;font-weight:650}.p{font-size:21px}.small{font-size:19px;fill:#526b83}.tag{font-size:19px;font-weight:650;fill:#285f9f}.line{fill:none;stroke:#52708c;stroke-width:2.5;marker-end:url(#arrow);stroke-linejoin:round}.label{font-size:20px;fill:#385b79;font-weight:600}.box{stroke-width:1.8} </style>
+<rect width="1400" height="2030" fill="#f5f8fc"/>
+<text x="90" y="68" class="title">change-review：審查、驗收與修正交接</text>
+<text x="90" y="106" class="small">討論用流程提案 · 以 Change 或 GitHub Issue 為入口</text>
+<rect class="box" x="100" y="145" width="760" height="105" rx="16" fill="#fff" stroke="#9bb1c8"/>
+<text x="126" y="183" class="h">01  指定要審查的目標</text>
+<text x="126" y="221" class="p">OpenSpec Change 名稱／GitHub Issue URL 或 #N</text>
+<path d="M480 250 V290" class="line"/>
+<rect class="box" x="100" y="290" width="760" height="140" rx="16" fill="#fff" stroke="#9bb1c8"/>
+<text x="126" y="328" class="h">02  讀取內容，解析 Change 與關聯 PR</text>
+<text x="126" y="366" class="p">讀 Issue 正文與留言、Change，以及可取得的 Work Item</text>
+<text x="126" y="397" class="p">確認完整 repo；多個候選時先釐清，不任選一個</text>
+<rect class="box" x="950" y="290" width="360" height="140" rx="16" fill="#fff6df" stroke="#c19a40"/>
+<text x="976" y="328" class="h">資訊不足</text>
+<text x="976" y="366" class="p">Issue 找不到 Change？</text>
+<text x="976" y="397" class="p">補齊必要資訊再繼續。</text>
+<path d="M860 360 H950" class="line"/>
+<path d="M480 430 V475" class="line"/>
+<rect class="box" x="230" y="475" width="500" height="80" rx="16" fill="#eaf2ff" stroke="#6c96ce"/>
+<text x="256" y="513" class="h">找到對應 PR？</text>
+<path d="M480 555 V605" class="line"/>
+<text x="500" y="585" class="label">有 PR</text>
+<rect class="box" x="100" y="605" width="760" height="145" rx="16" fill="#fff" stroke="#9bb1c8"/>
+<text x="126" y="643" class="h">03  讀 PR 的實作與後續修正</text>
+<text x="126" y="681" class="p">讀 diff、更新與 Review／Changes 留言；固定審查 head</text>
+<text x="126" y="712" class="p">讀 Author：Co-Authored-By、AI-Assisted-By、SESSION-ID</text>
+<path d="M480 750 V825" class="line"/>
+<path d="M230 515 H45 V900 H100" class="line"/>
+<text x="63" y="795" class="label">無 PR</text>
+<rect class="box" x="100" y="825" width="760" height="195" rx="16" fill="#eaf2ff" stroke="#6c96ce"/>
+<text x="126" y="863" class="h">04  依目的 Review、驗收與測試</text>
+<text x="126" y="901" class="p">必用：openspec-verify-change</text>
+<text x="126" y="932" class="p">選用：已安裝且適合的 ponytail-review／code-review</text>
+<text x="126" y="963" class="p">有 PR 綁定 head；無 PR 記錄本機受測版本與未提交差異</text>
+<rect class="box" x="950" y="825" width="360" height="195" rx="16" fill="#fff" stroke="#9bb1c8"/>
+<text x="976" y="863" class="h">調用方式</text>
+<text x="976" y="901" class="p">Codex：$skill</text>
+<text x="976" y="932" class="p">Claude／Antigravity：/skill</text>
+<text x="976" y="963" class="p">依工具實際支援與安裝狀態</text>
+<path d="M480 1020 V1075" class="line"/>
+<rect class="box" x="180" y="1075" width="600" height="90" rx="16" fill="#fff6df" stroke="#c19a40"/>
+<text x="206" y="1113" class="h">有 PR，且驗收未通過或 blocked？</text>
+<path d="M780 1120 H950" class="line"/>
+<text x="852" y="1105" class="label">否</text>
+<rect class="box" x="950" y="1075" width="360" height="150" rx="16" fill="#eaf8ef" stroke="#76a68a"/>
+<text x="976" y="1113" class="h">回傳審查結果</text>
+<text x="976" y="1151" class="p">無 PR：單純回報 Review。</text>
+<text x="976" y="1182" class="p">通過：回報本輪版本與限制。</text>
+<path d="M480 1165 V1240" class="line"/>
+<text x="503" y="1208" class="label">是</text>
+<rect class="box" x="100" y="1240" width="760" height="155" rx="16" fill="#eaf2ff" stroke="#6c96ce"/>
+<text x="126" y="1278" class="h">05  用 github-pr reply 新增審查留言</text>
+<text x="126" y="1316" class="p">回報版本、結論、問題、證據、測試與未驗證事項</text>
+<text x="126" y="1347" class="p">回讀確認，保留原 PR 正文與歷史回覆</text>
+<path d="M480 1395 V1450" class="line"/>
+<rect class="box" x="130" y="1450" width="700" height="95" rx="16" fill="#fff6df" stroke="#c19a40"/>
+<text x="156" y="1488" class="h">Author 對應的實作者 Session 可在本機定位？</text>
+<path d="M830 1497 H1130 V1640" class="line"/>
+<text x="920" y="1480" class="label">否／無法確認</text>
+<path d="M480 1545 V1640" class="line"/>
+<text x="135" y="1597" class="label">是，核對工具與 Session 對應</text>
+<rect class="box" x="100" y="1640" width="760" height="145" rx="16" fill="#eaf8ef" stroke="#76a68a"/>
+<text x="126" y="1678" class="h">06  通知實作者修正</text>
+<text x="126" y="1716" class="p">附 Review 結果與連結、PR 號碼與 URL、受審版本</text>
+<text x="126" y="1747" class="p">通知送出只代表已送出，不代表已讀或已開始修正</text>
+<rect class="box" x="950" y="1640" width="360" height="145" rx="16" fill="#fff" stroke="#9bb1c8"/>
+<text x="976" y="1678" class="h">提供可轉交訊息</text>
+<text x="976" y="1716" class="p">保留 PR 與 Review 連結。</text>
+<text x="976" y="1747" class="p">清楚說明未能直接通知。</text>
+<rect class="box" x="100" y="1845" width="1210" height="135" rx="16" fill="#fff" stroke="#9bb1c8"/>
+<text x="126" y="1883" class="h">本輪結束</text>
+<text x="126" y="1921" class="p">建議預設：實作者完成修正後，再由使用者觸發一輪複驗。</text>
+<text x="126" y="1952" class="p">驗收結論只涵蓋本次版本；不自動修程式、commit、push、merge 或關閉 Issue。</text>
+</svg>
