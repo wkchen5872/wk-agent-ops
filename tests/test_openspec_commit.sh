@@ -319,6 +319,89 @@ for f in "$CLAUDE_ENTRYPOINT" "$ANTIGRAVITY_ENTRYPOINT"; do
 done
 fi
 
+if run_section references; then
+# ── preserve-github-commit-references (Issue #19) ────────────────────────────
+# Maps to openspec/changes/preserve-github-commit-references specs.
+printf '\ncommit references: writer policy (1.1 / 1.2)\n'
+WC_CASES="$ROOT/template/common/skills/git-commit-writer/references/acceptance-cases.md"
+for f in "$COMMIT_SKILL" "$COMMIT_AGENT" "$CODEX_COMMIT_AGENT"; do
+  b="$(basename "$f")"
+  require_text "$f" 'github_references=' "$b accepts confirmed GitHub references"
+  require_text "$f" 'Refs: #19, #20' "$b shows the Refs line"
+  require_text "$f" 'never `Closes` or `Fixes`' "$b forbids closing keywords"
+  require_text "$f" 'directly addressed' "$b limits references to directly addressed work"
+  require_text "$f" 'never amend' "$b never rewrites commits for references"
+  refs_line="$(line_of "$f" 'Refs: <references>')"
+  if [[ "$b" == git-commit-writer-agent.md ]]; then co_line="$(line_of "$f" 'Co-Authored-By: Claude Code <noreply@anthropic.com>')"
+  else co_line="$(line_of "$f" '<resolved Co-Authored-By trailer>')"; fi
+  [[ -n "$refs_line" && -n "$co_line" ]] && (( refs_line < co_line )) \
+    && ok "$b places Refs before the attribution trailers" || bad "$b places Refs before the attribution trailers"
+done
+require_text "$COMMIT_SKILL" 'commit_repository=' "writer takes the verified commit repository"
+require_text "$COMMIT_SKILL" 'host, owner, repository, and number' "writer deduplicates by repository identity"
+require_text "$COMMIT_SKILL" 'full HTTPS URL' "other repositories keep full URLs"
+require_text "$COMMIT_SKILL" 'background' "background links are excluded"
+require_text "$COMMIT_SKILL" 'references/acceptance-cases.md' "writer links its replay cases"
+n="$(grep -cE '^### WC-[0-9]+' "$WC_CASES" 2>/dev/null)"
+[[ "${n:-0}" -ge 14 ]] && ok "writer has at least 14 replay cases ($n)" || bad "writer has at least 14 replay cases (${n:-0})"
+for t in '只有 Issue' 'Issue 與 PR' '複數直接 Issue' '背景 #13／#17' '沒有關聯' '關聯衝突' '跨 repo 同號' '重複引用' \
+         'commit repo 不明' '離線' 'PR 稍後建立' '既有 commit' '純 GitHub 操作' '混合工作區'; do
+  grep -E '^### WC-[0-9]+' "$WC_CASES" 2>/dev/null | grep -qF -- "$t" && ok "writer case for '$t'" || bad "writer case for '$t'"
+done
+
+# codex-commit-refs-r01/F-01: background/dependency targets are dropped only
+# when nothing separately confirms them as directly addressed — in every entry.
+for f in "$COMMIT_SKILL" "$COMMIT_AGENT" "$CODEX_COMMIT_AGENT" "$ORCHESTRATOR"; do
+  b="$(basename "$f")"
+  require_text "$f" 'separately confirmed as directly addressed' "$b keeps a separately confirmed direct target"
+  grep -qF 'drop background links, `references`, and' "$f" && bad "$b drops background/dependency targets unconditionally" \
+    || ok "$b has no unconditional background drop"
+  grep -qF '`depends-on` targets are not passed' "$f" && bad "$b withholds dependency targets unconditionally" \
+    || ok "$b has no unconditional dependency drop"
+done
+for t in '只有 depends-on' '依賴後另被確認'; do
+  grep -E '^### WC-[0-9]+' "$WC_CASES" 2>/dev/null | grep -qF -- "$t" && ok "writer case for '$t'" || bad "writer case for '$t'"
+done
+OC_CASES="$ROOT/template/common/skills/openspec-commit/references/acceptance-cases.md"
+for t in '只有依賴不交接' '依賴後另被確認'; do
+  grep -E '^### OC-[0-9]+' "$OC_CASES" 2>/dev/null | grep -qF -- "$t" && ok "openspec-commit case for '$t'" || bad "openspec-commit case for '$t'"
+done
+
+printf '\ncommit references: callers (2.1 / 2.2)\n'
+step5="$(sed -n '/^## Step 5 — Invoke git-commit-writer/,/^## Step 6/p' "$ORCHESTRATOR")"
+grep -qF 'github_references=' <<<"$step5" && ok "openspec-commit forwards github_references" || bad "openspec-commit forwards github_references"
+grep -qF 'commit_repository=' <<<"$step5" && ok "openspec-commit forwards commit_repository" || bad "openspec-commit forwards commit_repository"
+grep -qF 'no GitHub lookup' <<<"$step5" && ok "missing references need no GitHub lookup" || bad "missing references need no GitHub lookup"
+grep -qF 'archive_path=<archive_path, when available>' <<<"$step5" && ok "archive context still forwarded" || bad "archive context still forwarded"
+PR_SKILL_FILE="$ROOT/template/common/skills/github-pr/SKILL.md"
+create4="$(sed -n '/^4\. \*\*Commit, only if/,/^5\. \*\*Push/p' "$PR_SKILL_FILE")"
+grep -qF 'Refs:' <<<"$create4" && ok "github-pr create commit carries Refs" || bad "github-pr create commit carries Refs"
+grep -qF 'the new PR has no number yet' <<<"$create4" && ok "github-pr create never guesses the new PR number" || bad "github-pr create never guesses the new PR number"
+grep -qF 'never amend' <<<"$create4" && ok "github-pr create never amends to backfill" || bad "github-pr create never amends to backfill"
+fi
+
+if run_section references-git; then
+printf '\ncommit references: real Git trailer placement\n'
+RT="$(mktemp -d)"; RG="$RT/r"; git init -q -b main "$RG"
+rg() { git -C "$RG" "$@"; }
+rg config user.name T; rg config user.email t@example.invalid; rg config commit.gpgsign false
+printf 'x\n' > "$RG/a.txt"; rg add a.txt
+rg commit -q -F - <<'MSG'
+feat(preserve-github-commit-references): keep confirmed references
+
+Pass confirmed direct Issue and PR links to the writer.
+
+Refs: #19, #20, https://github.com/other/project/issues/19
+Co-Authored-By: Claude Code <noreply@anthropic.com>
+AI-Assisted-By: Claude Opus 5.5
+MSG
+tr="$(rg log -1 --format=%B | git interpret-trailers --parse | cut -d: -f1 | tr '\n' ' ')"
+[[ "$tr" == "Refs Co-Authored-By AI-Assisted-By " ]] && ok "Refs is parsed as a trailer before attribution ($tr)" \
+  || bad "Refs is parsed as a trailer before attribution ($tr)"
+rg log -1 --format=%B | grep -qiE '^(closes|fixes|resolves)' && bad "message has no closing keyword" || ok "message has no closing keyword"
+rm -rf "$RT"
+fi
+
 if run_section rehearsal; then
 printf '\nlocal bare-remote rehearsal (2.1 / 3.1)\n'
 # codex-sol-commit-r01/F-04: every disposable repository sets its own identity
