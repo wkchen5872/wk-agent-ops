@@ -192,6 +192,8 @@ Codex 版本：`.codex/agents/git-commit-writer-agent.toml`（`gpt-5.6-luna`、m
 - 自動以當下可確認的協作模型作為 `AI-Assisted-By`；接受 `GPT-5`、`GPT-5.6`、`GPT-6`
   等名稱，不補猜變體。完全未知時省略該 trailer 並回報，不阻擋 commit
 - Archive guard：若傳入 `archive_path`，在 commit 前驗證目錄存在；archive 未完成則停止
+- GitHub 引用：caller（openspec-commit、github-pr create）傳入已確認的直接 Issue／PR，寫成 attribution 前的
+  `Refs: #N`；背景與 `depends-on` 只在另被確認為直接處理時列入；跨 repo 用完整 URL，不猜編號、不用 `Closes`，也不為補引用 amend 或另外 commit
 
 **觸發方式：**
 

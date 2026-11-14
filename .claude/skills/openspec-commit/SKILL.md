@@ -289,15 +289,33 @@ infer a model name that is not available in the current context.
 It MUST NOT be used as a subagent spawn model or reasoning-effort override.
 This workflow MUST NOT request or require `assisting_model` before archive or documentation handling.
 
-Pass the same exact archive context plus the tool and optional model as task input
-(omit the `assisting_model` field entirely when unknown):
+Collect the GitHub Issues and PRs this Change directly addresses, as far as
+they are already confirmed: the PR confirmed for this delivery, `issue` and
+`pull-request` lines of a Handoff already read, or the user's own instruction —
+each with its URL and that evidence. Background links, `references`, and
+`depends-on` targets are passed only when
+separately confirmed as directly addressed by this Change (for example, the
+user says it also fixes that dependency); otherwise they are left out. When nothing is confirmed, omit the field;
+no GitHub lookup is made just for commit metadata, so local or offline
+completion is never blocked, and a confirmed URL needs no fresh login. Passing a
+reference authorizes no publication or state change.
+
+Pass the same exact archive context plus the tool, optional model, and any
+confirmed references as task input (omit `assisting_model` when unknown and
+`github_references` when none is confirmed):
 
 ```text
 change_id=<change_id, when available>
 archive_path=<archive_path, when available>
 tool_name=<executing agent tool>
 assisting_model=<current root-session model>
+commit_repository=<host/owner/repo of this checkout, when confirmed>
+github_references=<url=<Issue or PR URL> evidence=<how it was confirmed>, ...>
 ```
+
+The writer formats them as one `Refs:` line (its "GitHub references" rules).
+On recovery an existing completion commit is reused as it is — never amended
+to add a reference discovered later.
 
 - **Claude Code:** invoke the provider-native `git-commit-writer-agent`
   subagent with these values in its task prompt.

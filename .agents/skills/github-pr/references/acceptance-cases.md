@@ -863,3 +863,37 @@ Closure 讀回確認前 close；在 Closure 中宣稱尚未發生的關閉、合
 - 預期呼叫：核對 → 讀取 → `gh pr comment 21 …`（逾時）→ `gh pr view 21 --json comments`。
 - 禁止：共同禁止；直接再發；改用 MCP 重送。
 - 判定：回報找到的那則就是這次的回覆；若查不到或無法確認，回報不確定，不重送。
+
+## commit 引用
+
+### GP-88 create 只引用當時已知的 Issue
+
+- Fixture：使用者要求為 add-export 開 PR，已確認處理 Issue #7。工作尚未 commit，PR 還不存在。
+- 模擬回覆：checks 通過；pathspec commit 成功；push 成功；`gh pr create` 回傳 `…/pull/21`；讀回相符。
+- 預期呼叫：盤點 → checks → `git add -- <pr-paths>` → `git commit -m "<message>" -- <pr-paths>`（訊息尾端為 `Refs: #7` 與 attribution）→ 推送並讀回 → `gh pr create …` → 讀回。
+- 禁止：共同禁止；在 commit 中寫入猜測的 `#21`；建立 PR 後 amend 或另外 commit 補上 #21；使用 `Closes #7`。
+- 判定：commit 只引用 #7，PR #21 建立後歷史不變。
+
+### GP-89 已 commit 的工作直接發布
+
+- Fixture：同 GP-88，但工作已 commit 為 `c3`，訊息沒有引用。
+- 模擬回覆：push 成功；PR 建立並讀回。
+- 預期呼叫：盤點（沒有未 commit 的本 PR 檔案）→ push `c3` → `gh pr create …`。
+- 禁止：共同禁止；amend `c3` 補 `Refs: #7`；為了引用另外 commit。
+- 判定：`c3` 原樣發布。
+
+### GP-90 混合工作區的 scoped commit 帶引用
+
+- Fixture：同 GP-71 的混合工作區，已確認處理 Issue #7。
+- 模擬回覆：pathspec commit 成功。
+- 預期呼叫：`git add -- <pr-paths>` → `git commit -m "<message>" -- <pr-paths>`（訊息尾端為 `Refs: #7`）。
+- 禁止：共同禁止；改用會 stage 整個工作區的 writer；把無關檔案一起提交。
+- 判定：只提交本 PR 的檔案，無關內容維持原狀，引用格式與 writer 政策相同。
+
+### GP-91 reply 不為了引用 commit
+
+- Fixture：使用者要求在 PR #21 回覆修正說明，本機沒有變更。
+- 模擬回覆：留言並讀回相符。
+- 預期呼叫：核對 → `gh pr comment 21 …` → 讀回。
+- 禁止：共同禁止；任何 `git commit` 或 push。
+- 判定：只新增留言。

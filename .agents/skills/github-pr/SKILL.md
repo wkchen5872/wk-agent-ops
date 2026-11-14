@@ -211,6 +211,13 @@ Do only the stages that are missing, without asking again for routine work.
    stages the whole worktree, so use it only when every changed path belongs to
    this PR — never as a whole-worktree helper on a mixed checkout. Hooks run;
    if one fails, nothing is committed and you report it.
+
+   Add the `Refs:` line of the git-commit-writer "GitHub references" rules for
+   the Issues and PRs this work directly addresses that are already confirmed —
+   for example the Handoff `issue`, or an existing PR being reused. Only targets
+   that exist at commit time count: the new PR has no number yet, so it is never
+   guessed into the message. Work that is already committed is published as it
+   is; never amend it, or add a commit, just to backfill a reference.
 5. **Push, only if the remote does not already have this commit.**
 
    ```bash

@@ -240,3 +240,53 @@
 - 預期呼叫：本地三步，由 writer 處理重試。
 - 禁止：共同禁止；略過 hook；改由本 workflow 直接 commit。
 - 判定：回報最終 commit 與 hook 曾失敗後修正。
+
+## GitHub 引用交接
+
+### OC-26 已知 Issue 與 PR 交接
+
+- Fixture：使用者授權交付到 PR #12（處理 Issue #7），PR Handoff 已讀取，有 `issue: https://github.com/acme/widgets/issues/7`。
+- 模擬回覆：archive 與文件更新成功；commit 成功。
+- 預期呼叫：`openspec-archive-change` → `git add -A` → `doc-updater-agent` → `git-commit-writer-agent`，輸入除了 `change_id`、`archive_path`、`tool_name`、`assisting_model`，另有 `commit_repository=github.com/acme/widgets` 與 `github_references` 的 #7、#12（證據為已讀的 Handoff 與確認的 PR）。
+- 禁止：共同禁止；遺漏 `archive_path` 或 attribution；把 Handoff 的 `depends-on` 一起交接；使用 `Closes`。
+- 判定：commit 訊息尾端為 `Refs: #7, #12` 與 attribution。
+
+### OC-27 本地完成，沒有 GitHub 存取
+
+- Fixture：使用者說「完成 add-export 的 archive 跟 commit」。沒有已確認的 Issue 或 PR，這台機器也沒有 GitHub 登入。
+- 模擬回覆：本地三步成功。
+- 預期呼叫：本地三步；交接給 writer 時沒有 `github_references`。
+- 禁止：共同禁止；為了找引用而執行 `gh` 或要求登入；寫佔位引用。
+- 判定：commit 沒有 `Refs:` 行；回報沒有已確認的關聯（不是「確認沒有關聯」）。
+
+### OC-28 離線沿用已確認的關聯
+
+- Fixture：本 Session 稍早使用者已確認 add-export 處理 Issue #7（附 URL）。現在離線，只要求本地完成。
+- 模擬回覆：本地三步成功。
+- 預期呼叫：本地三步；交接 `github_references` 的 #7（證據為使用者指示）。
+- 禁止：共同禁止；因離線而丟掉已確認的 #7；把交接當成可以發布或改狀態的授權。
+- 判定：commit 訊息尾端為 `Refs: #7`；沒有任何 GitHub 寫入。
+
+### OC-29 恢復時既有 commit 不補引用
+
+- Fixture：同 OC-17，完成 commit `c7` 已存在但沒有 `Refs:`；這次重跑時才確認 Issue #7。
+- 模擬回覆：依 archive 路徑找到 `c7`。
+- 預期呼叫：沿用 `c7` → 只做缺少且已授權的遠端步驟。
+- 禁止：共同禁止；amend `c7` 補 #7；再 commit 一次。
+- 判定：`c7` 不變；回報 #7 沒有寫進既有 commit。
+
+### OC-30 只有依賴不交接
+
+- Fixture：同 OC-26，PR Handoff 另有 `depends-on: https://github.com/acme/widgets/pull/9`，沒有任何證據顯示本 Change 直接處理 #9。
+- 模擬回覆：本地三步成功。
+- 預期呼叫：同 OC-26；`github_references` 只有 #7、#12。
+- 禁止：共同禁止；交接 #9。
+- 判定：commit 訊息尾端為 `Refs: #7, #12`；#9 只是依賴，回報沒有列入。
+
+### OC-31 依賴後另被確認直接處理
+
+- Fixture：同 OC-30，但使用者本輪另外確認「add-export 也直接修正 #9」（附 URL）。
+- 模擬回覆：本地三步成功。
+- 預期呼叫：同 OC-26；`github_references` 有 #7、#12，以及 #9（證據為使用者本輪指示）。
+- 禁止：共同禁止；因為 #9 原本列在 `depends-on` 就不交接；把這次確認當成可以發布或改狀態的授權。
+- 判定：commit 訊息尾端為 `Refs: #7, #9, #12`。

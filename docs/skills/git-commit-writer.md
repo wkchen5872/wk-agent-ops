@@ -19,8 +19,12 @@ timestamp: 2026-08-01T00:00:00+08:00
 3. **高品質 Subject/Body**：從 `proposal.md` 或 diff 內容推斷變更的原因 (Why) 與細節 (What)。
 4. **可追溯的 AI attribution**：以執行工具寫入 `Co-Authored-By`，並以
    `AI-Assisted-By` 記錄主要實作模型。
-5. **完整 staging guard**：先 `git add -A`，空 staged diff 不 commit；hook 修正後重新 staging。
-6. **即刻執行**：生成後不需額外確認，直接執行 `git commit`。
+5. **GitHub 引用**：本次工作直接處理、而且已確認的 Issue／PR 寫成一行 `Refs: #19, #20`，
+   放在 attribution 之前；同 repo 用 `#N`，其他 repo 用完整 URL，依 repository 去重。背景連結與
+   `depends-on` 只有另被確認為本次直接處理時才列入；未知或衝突的省略並回報，不阻擋 commit。不使用 `Closes`／`Fixes`，也不為了
+   引用 amend 或另外 commit。案例見 `skills/git-commit-writer/references/acceptance-cases.md`。
+6. **完整 staging guard**：先 `git add -A`，空 staged diff 不 commit；hook 修正後重新 staging。
+7. **即刻執行**：生成後不需額外確認，直接執行 `git commit`。
 
 ---
 
@@ -112,6 +116,7 @@ forbidden: docs(add-mutation-check): <subject>
 
 <body>
 
+Refs: <confirmed direct Issue/PR references, when any>
 Co-Authored-By: <tool name> <verified provider email when mapped>
 AI-Assisted-By: <current root-session model>
 ```
@@ -122,6 +127,7 @@ AI-Assisted-By: <current root-session model>
 
 <body>
 
+Refs: <confirmed direct Issue/PR references, when any>
 Co-Authored-By: <tool name> <verified provider email when mapped>
 AI-Assisted-By: <current root-session model>
 ```

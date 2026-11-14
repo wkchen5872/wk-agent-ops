@@ -18,6 +18,8 @@ archive_path=<exact archived change directory>
 change_id=<OpenSpec change id without date prefix>
 tool_name=<executing agent tool>
 assisting_model=<current root-session model>
+commit_repository=<host/owner/repo of the repository being committed>
+github_references=<list of: url=<Issue or PR URL> evidence=<how it was confirmed>>
 ```
 
 When archive_path and change_id are provided, use them directly. If only one is
@@ -37,6 +39,25 @@ Never infer it from documentation, session logs, environment variables, or Git h
 `assisting_model` is Git attribution metadata only. It identifies the current
 collaborating root-session model for
 the `AI-Assisted-By` trailer. It MUST NOT select or override this writer's runtime model or reasoning effort.
+
+## GitHub references
+
+`github_references` lists Issues and PRs the staged work directly addressed,
+each with evidence (this session's user instruction, a read Handoff line, or a
+read Issue or PR). Without it, use only associations already confirmed in this
+session; never scan GitHub or infer one from a branch name or a mention.
+
+- Keep only directly addressed work. Drop background links, `references`, and
+  `depends-on` targets unless separately confirmed as directly addressed by
+  this staged work (then keep them like any other). Omit and report unknown or conflicting targets; they
+  never block the commit or trigger a question or login.
+- `#N` for the `commit_repository` (from the caller or the confirmed `origin`
+  remote, never changed); full HTTPS URL for any other repository or host. With
+  the commit repository unknown, keep only full URLs.
+- Deduplicate by host, owner, repository, and number; local `#N` ascending,
+  then URLs lexically. One line: `Refs: #19, #20`.
+- Use `Refs:` only — never `Closes` or `Fixes`. Apply it only to this authorized,
+  nonempty commit; never amend, rewrite, or create an empty commit for a reference.
 
 ## Step 1 — Validate optional OpenSpec input
 
@@ -135,11 +156,13 @@ with no trailing period.
 ```bash
 git commit -m "<message>
 
+Refs: <references>
 Co-Authored-By: Claude Code <noreply@anthropic.com>
 AI-Assisted-By: <assisting_model>"
 ```
 
-Omit the entire `AI-Assisted-By` line when no root-session model is supplied.
+Omit the entire `AI-Assisted-By` line when no root-session model is supplied,
+and the `Refs:` line when no reference is confirmed.
 
 On pre-commit failure, fix the in-scope issue. **Re-run `git add -A`**, inspect
 the cached diff, and retry without `--no-verify`.

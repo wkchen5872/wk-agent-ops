@@ -8,7 +8,7 @@ license: MIT
 compatibility: "Requires git. Optional: openspec CLI."
 metadata:
   author: wkchen
-  version: "1.6"
+  version: "1.7"
 ---
 
 # Git Commit Writer
@@ -26,6 +26,8 @@ archive_path=<exact archived change directory>
 change_id=<OpenSpec change id without date prefix>
 tool_name=<executing agent tool>
 assisting_model=<current root-session model>
+commit_repository=<host/owner/repo of the repository being committed>
+github_references=<list of: url=<Issue or PR URL> evidence=<how it was confirmed>>
 ```
 
 When archive_path and change_id are provided, use them directly. They are a
@@ -55,6 +57,42 @@ session logs, Git history, or the commit-only agent's identity.
 `assisting_model` is Git attribution metadata only. It identifies the known
 current root-session collaboration model, at the available precision.
 It MUST NOT select or override this writer's runtime model or reasoning effort.
+
+### GitHub references
+
+`github_references` lists GitHub Issues and PRs that the staged work directly
+addressed, each with evidence that confirms it: this session's user
+instruction, a Handoff `issue`/`pull-request` line that was read, or a read
+Issue or PR that names this work. Without the input, use only associations
+already confirmed in this session; never scan GitHub, and never infer one from
+a branch name or from an Issue number a proposal merely mentions.
+
+- Only directly addressed work is kept. Links that are background (for example
+  completed Issues a proposal cites as context), `references`, or `depends-on`
+  targets are dropped unless separately confirmed as directly addressed.
+- Unknown, ambiguous, or conflicting targets are omitted and reported; they
+  never block an otherwise authorized commit, and an optional reference is
+  never a reason to ask the user again or to log in.
+- `commit_repository` comes from the caller, or from the confirmed `origin`
+  remote (`git remote get-url origin`) without changing it. When it is unknown,
+  keep only targets given as full URLs; a bare number is never attached to a
+  guessed repository.
+
+Format one line, `Refs: #19, #20`:
+
+- A target in the commit repository on the same host is `#N`; anything else is
+  its full HTTPS URL (`https://<host>/<owner>/<repo>/issues/<N>` or
+  `/pull/<N>`).
+- Deduplicate by host, owner, repository, and number — a `#N` and a URL for
+  the same target count once. List local `#N` in ascending order, then
+  external URLs in lexical order.
+- Use `Refs:` only — never `Closes` or `Fixes`, or any keyword that would
+  change Issue or PR state.
+- References apply only to an already authorized, nonempty commit; never amend,
+  rewrite, or create an empty commit to add or update a reference — a PR
+  created later appears only in a future commit that is needed anyway.
+
+Replayable cases are in [references/acceptance-cases.md](references/acceptance-cases.md).
 
 ---
 
@@ -183,6 +221,8 @@ Rules:
   period.
 - Body is 2–5 lines explaining what changed and why.
 - Never claim a proposal item that is absent from the staged diff.
+- When confirmed references exist, add the `Refs:` line from "GitHub
+  references" as the first trailer, right before the attribution trailers.
 
 ---
 
@@ -202,9 +242,13 @@ follow it immediately with the model trailer:
 ```bash
 git commit -m "<message>
 
+Refs: <references>
 <resolved Co-Authored-By trailer>
 AI-Assisted-By: <assisting_model>"
 ```
+
+Omit the `Refs:` line when no reference is confirmed — never write an empty
+value or a placeholder.
 
 When the model is unknown, omit the entire `AI-Assisted-By` line, not an empty
 value or placeholder, and mention the omission in the result.
@@ -230,4 +274,5 @@ Report:
 💾 Commit: <short-hash> <type>(<change_id>): <subject>
 ```
 
-Omit `(<change_id>)` when no OpenSpec context exists.
+Omit `(<change_id>)` when no OpenSpec context exists. Report the references
+written, and any that were omitted as unknown, conflicting, or background.

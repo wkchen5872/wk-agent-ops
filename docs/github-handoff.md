@@ -205,6 +205,7 @@ PR 的正文與回覆見第 6.2 節，交接摘要見第 6.6 節，結案摘要�
   正文不能依賴它才看得懂；同一件工作可以由不同環境的本地紀錄接手（第 5 節）。
 - 直接處理的工作、只供參考的連結（`references`）與依賴（`depends-on`）分開寫；依賴要
   寫出解除條件。不寫 `Closes`／`Fixes` 這類會自動關閉 Issue 的語句，需要時用 `Refs #N`。
+  Git commit 的引用格式由 `git-commit-writer` 的 GitHub references 規則定義（`Refs: #N`）。
 - 舊紀錄的 `null` 欄位（例如 `- work-item: null`）與舊的 managed 區塊仍可讀，表示「當時
   未確認」，不需遷移；新內容不再寫 `null` 佔位。
 
