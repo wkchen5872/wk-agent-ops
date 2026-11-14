@@ -51,8 +51,5 @@ bash scripts/notify/telegram/update.sh fix-hooks
 - [Provider hook 總覽](/docs/hooks/index.md)
 - [Telegram Notify](/docs/notify/telegram.md)
 - [Workflow scripts](/scripts/workflow/README.md)
-
-# Citations
-
-[1] [Codex hooks](https://learn.chatgpt.com/docs/hooks)
-[2] [Codex App Server](https://learn.chatgpt.com/docs/app-server)
+- [Codex hooks 官方文件](https://learn.chatgpt.com/docs/hooks)
+- [Codex App Server](https://learn.chatgpt.com/docs/app-server)

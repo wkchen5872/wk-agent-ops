@@ -21,26 +21,32 @@ sources:
 
 # 本機開發四階段流程
 
-這是本 repo 自己採用的個人開發流程。使用者於 2026-11-14 確認了流程順序。它只是 wk-agent-ops 的工作方式，
-installer 不會把它部署到其他專案，也不是每個安裝目標都必須採用的規範。GitHub
-Issue／PR 的格式、寫入前核對與結案規則一律以 [GitHub 交接契約](../github-handoff.md)
-為準，本文不另定欄位。
+這是本 repo 採用的本機標準開發流程。將日常開發工作收斂為清晰的四個階段：開立規格、實作與發布、Review 與修正交接、封存與交付。
+GitHub Issue／PR 的格式、寫入前核對與結案規則一律以 [GitHub 交接契約](../github-handoff.md) 為準。
 
-流程確認與能力實作是兩件事，下表分開列出：
+## 四階段總覽
 
-| 階段 | 流程狀態 | 能力狀態 |
-| --- | --- | --- |
-| 01 開立規格 | 已確認 | 沿用既有 Skills，不新增整合 Skill |
-| 02 實作與發布 | 已確認 | 沿用既有 Skills，不新增整合 Skill；發布前保留人工發布檢核 |
-| 03 Review 與修正交接 | 已確認 | 沿用現有 `change-review`；本地報告、明確本機交接與延後 PR 發布的版本核對已實作並完成本地驗證 |
-| 04 封存與交付 | 已確認 | 遠端交付與 commit 後恢復已在本版本 Skill 實作並完成本地驗證；真實遠端發布仍待端到端驗收 |
+```text
+  ┌─────────────────┐       ┌─────────────────┐
+  │  01 開立規格    │ ───►  │  02 實作與發布  │
+  │  釐清需求與產出 │       │  TDD、驗證與檢核│
+  └─────────────────┘       └────────┬────────┘
+                                     │
+                                     ▼
+  ┌─────────────────┐       ┌─────────────────┐
+  │  04 封存與交付  │ ◄───  │  03 Review 審查 │
+  │  封存、文件與提交│ (pass)│  結論判定與修正 │
+  └─────────────────┘       └─────────────────┘
+```
 
-Review 的本地交接已由本版本 Skill 實作，並完成本地測試、installer 與離線重播驗證；真實 Session
-訊息與 GitHub 寫入尚未執行。第 04 階段的遠端部分也已由本版本 Skill 實作，並完成本地 bare remote、
-installer、離線重播與 Change delta strict validate；真實 Git 發布、PR update 與最終 published-head Review
-的完整路徑仍待端到端驗收。[^review-skill][^delivery-design]
+| 階段 | 核心目標 | 呼叫工具 / 指令 | 產出成果 |
+| --- | --- | --- | --- |
+| **01 開立規格** | 釐清需求，建立分支與規格 | `opsx-branch`, `openspec-ff-change` | 規格 artifacts, `feature/<change-id>` |
+| **02 實作與發布** | 依規格 TDD 實作並驗證功能 | `openspec-apply-change`, `openspec-verify-change`, `github-pr create` | 完成之代碼、測試通過證據、Draft PR（選用） |
+| **03 Review 與修正交接** | 驗收功能品質，產出結論 | `change-review`, `github-pr reply` | 審查結論（pass / changes-required / blocked） |
+| **04 封存與交付** | 封存規格、同步文件、提交並交付 | `openspec-commit` | 封存目錄、同步文件、Conventional Commit、交付 PR（選用） |
 
-每張圖都有 SVG 原稿與 1600 px 寬的手機 PNG 預覽。
+每張圖均提供 SVG 原稿與 1600 px 寬的手機 PNG 預覽。
 
 ## 01 開立規格
 
@@ -120,7 +126,7 @@ installer、離線重播與 Change delta strict validate；真實 Git 發布、P
 ## 來源與驗收範圍
 
 - Review 的現行規則見 `change-review`；本地報告、明確交接與後補 PR 的版本核對以該 Skill 及對應 archive 為準。
-- Commit 交付擴充的完成 tasks 與驗證範圍見 [archive tasks](../../openspec/changes/archive/2026-11-14-extend-openspec-commit-delivery/tasks.md) 及 [r02 驗證紀錄](../verification/openspec-commit/2026-11-14-extend-delivery-r02.md)。
+- Commit 交付擴充的完成 tasks 與驗收範圍見 [archive tasks](../../openspec/changes/archive/2026-11-14-extend-openspec-commit-delivery/tasks.md)。
 - 圖稿索引與維護位置見 [正式圖稿索引](../diagrams/README.md)。
 
 [^review-skill]: [Change Review 來源](../../template/common/skills/change-review/SKILL.md)。

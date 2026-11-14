@@ -8,174 +8,135 @@ timestamp: 2026-08-01T00:00:00+08:00
 
 # Git Commit Writer
 
-`git-commit-writer` 是一個專門用來生成符合 [Conventional Commits](https://www.conventionalcommits.org/) 規範之 git commit 的工具。它可以作為 `openspec-commit` 流程的一部分，也可以獨立呼叫。
+`git-commit-writer` 是一個專門用來生成符合 [Conventional Commits](https://www.conventionalcommits.org/) 規範之 Git commit 的自動化工具。它可以作為 `openspec-commit` 流程的一部分自動被呼叫，也可以由開發者獨立手動觸發。
 
 ---
 
 ## 核心功能
 
-1. **精確 context 優先**：caller 提供 `archive_path` 與 `change_id` 時直接驗證並使用；只有獨立呼叫才依 branch 與 staged path 的明確關聯自動偵測。
-2. **語意化 Commit Type**：根據 `git diff` 內容自動推斷 type (feat, fix, docs, refactor, chore, test)。
-3. **高品質 Subject/Body**：從 `proposal.md` 或 diff 內容推斷變更的原因 (Why) 與細節 (What)。
-4. **可追溯的 AI attribution**：以執行工具寫入 `Co-Authored-By`，並以
-   `AI-Assisted-By` 記錄主要實作模型。
-5. **GitHub 引用**：本次工作直接處理、而且已確認的 Issue／PR 寫成一行 `Refs: #19, #20`，
-   放在 attribution 之前；同 repo 用 `#N`，其他 repo 用完整 URL，依 repository 去重。背景連結與
-   `depends-on` 只有另被確認為本次直接處理時才列入；未知或衝突的省略並回報，不阻擋 commit。不使用 `Closes`／`Fixes`，也不為了
-   引用 amend 或另外 commit。案例見 `skills/git-commit-writer/references/acceptance-cases.md`。
-6. **完整 staging guard**：先 `git add -A`，空 staged diff 不 commit；hook 修正後重新 staging。
-7. **即刻執行**：生成後不需額外確認，直接執行 `git commit`。
+1. **精確 Context 優先**：若由 `openspec-commit` 呼叫，會直接接收並使用 `archive_path` 與 `change_id`；若為獨立呼叫，則依當前分支與 staged 變更自動關聯。
+2. **自動推斷 Commit Type**：根據 `git diff` 內容自動判斷變更性質（`feat`, `fix`, `docs`, `refactor`, `chore`, `test`）。
+3. **高品質 Subject 與 Body**：從 proposal 或實際變更內容推導「為什麼改 (Why)」與「改了什麼 (What)」。
+4. **透明的協作標註**：
+   - `Co-Authored-By`: 自動標註執行的 AI 工具與對應 email（如 Claude Code 或 Codex）。
+   - `AI-Assisted-By`: 記錄協作的 AI 模型名稱。
+   - `Refs`: 自動帶入本次工作直接處理且已確認的 GitHub Issue 或 PR 編號（如 `Refs: #19`）。
+5. **完整 Staging 防護**：自動執行 `git add -A`，若無任何變更則安全停止；若觸發 pre-commit hook 格式化檔案，會重新 staging 後再完成提交。
+6. **即刻執行**：生成符合規範的訊息後直接執行 `git commit`，不需開發者反覆手動確認。
 
 ---
 
 ## 運作流程
 
-```mermaid
-graph TD
-    Start[呼叫 git-commit-writer] --> Context{caller 有完整 archive context?}
-    Context -- Yes --> Validate[驗證精確 archive_path]
-    Context -- Invalid --> Invalid[停止：參數不完整或路徑不存在]
-    Context -- No --> Stage[git add -A]
-    Validate --> Stage[git add -A]
-    Stage --> Empty{cached diff 為空?}
-    Empty -- Yes --> Stop[停止：Nothing to commit]
-    Empty -- No --> Resolve{有明確 context?}
-    Resolve -- Yes --> Scoped[使用 caller context]
-    Resolve -- No --> Detect[依精確 branch / staged path<br/>篩選關聯候選]
-    Detect --> Count{關聯候選數}
-    Count -- 0 --> Unscoped[只使用 staged diff，不加 scope]
-    Count -- 1 --> Scoped
-    Count -- 多個 --> Ambiguous[互動選擇；無互動能力則停止]
-    Scoped --> Infer[依 staged diff + proposal 推斷訊息]
-    Unscoped --> Infer
-    Infer --> Commit[執行 git commit]
-    Commit --> Hook{hook 通過?}
-    Hook -- No --> Restage[修正後重新 git add -A]
-    Restage --> Commit
-    Hook -- Yes --> Done[回傳 commit hash / subject]
-```
-
----
-
-## OpenSpec context
-
-`openspec-commit` 會傳入一組不可拆分的值：
-
 ```text
-archive_path=<exact archived change directory>
-change_id=<OpenSpec change id without date prefix>
-tool_name=<executing agent tool>
-assisting_model=<current root-session model>
-```
-
-archive context 少一個值或路徑不存在就停止，不可改抓「最新」archive。
-`assisting_model` 為選填；缺少模型名稱不阻擋 commit。
-commit-only subagent 必須保留 caller 傳入的當下 root-session 協作模型，不可換成自己的模型。
-`assisting_model` 只用於 `AI-Assisted-By` trailer，不得覆寫 commit-only agent
-既有的 runtime model 或 reasoning effort。優先原樣使用使用者為本次工作提供的
-模型名稱，否則自動記錄目前可確認的 root-session 模型；接受 `GPT-5`、`GPT-5.6`、`GPT-6`，
-不補猜 variant、版本或 context size。同一 session 模型未切換時持續沿用，不重問。
-這記錄當下協作，不是原始程式作者。接手既有變更或只負責提交時，仍記錄當下已知
-模型；切換模型後改記目前模型，不沿用切換前的名稱。已知 `GPT-5` 就必須記錄。
-工具名稱如 `OpenAI Codex` 不當作模型名稱；只有完全不知道當下模型名稱時才省略
-整行 `AI-Assisted-By` 並回報，不填空值或 placeholder，也不阻擋 commit。
-不透過文件、環境變數、session logs、Git history 或 commit-only subagent 自己的
-模型推測 root-session 模型。
-獨立呼叫且沒有
-context 時，先完成 staging，再依以下明確證據篩選候選：
-
-| 候選 | 必要關聯證據 |
-|---|---|
-| Active change | 存在於 `openspec list --json`，且目前 branch 正好是 `feature/<change-id>`，或 staged path 位於 `openspec/changes/<change-id>/` |
-| Archived change | staged path 位於該筆精確的 `openspec/changes/archive/<archive-directory>/` |
-
-候選數只用來處理篩選後的歧義，不能取代關聯證據：零筆時使用無 scope 的
-staged diff；一筆時使用其 context；多筆時互動選擇，無互動能力則停止。
-即使目前只有一筆 active change，只要沒有上述關聯，也必須忽略。
-
-### 無關 active change 重播案例
-
-下列是歷史錯誤輸入形狀的安全重播，不會實際建立 commit：
-
-```text
-branch: main
-cached paths: docs/hooks/codex.md, docs/hooks/antigravity.md
-active changes: add-mutation-check
-association: none
-expected: docs: <subject>
-forbidden: docs(add-mutation-check): <subject>
+               ┌────────────────────────┐
+               │ 呼叫 git-commit-writer │
+               └───────────┬────────────┘
+                           │
+             ┌─────────────┴─────────────┐
+             ▼                           ▼
+    [由 openspec-commit 呼叫]        [手動獨立呼叫]
+    接收精確 archive_path         自動偵測當前分支與變更
+             │                           │
+             └─────────────┬─────────────┘
+                           ▼
+                  執行 git add -A
+                           │
+                           ▼
+                 Staged diff 是否為空？
+                 ├─ 是 ──► 停止（Nothing to commit）
+                 └─ 否
+                           │
+                           ▼
+             推斷 commit type, subject, body
+             並附加 Refs 與 AI 協作標籤
+                           │
+                           ▼
+                    執行 git commit
+                           │
+                           ▼
+                  Pre-commit hook 檢查
+                 ├─ 失敗 ──► 修正後重新 git add -A 並重試
+                 └─ 通過
+                           │
+                           ▼
+             完成提交，回傳 commit hash 與主旨
 ```
 
 ---
 
 ## Commit 格式規範
 
-### 帶有 OpenSpec Context
-```
+### 1. 帶有 OpenSpec Context（標準開發流程）
+```text
 <type>(<change-id>): <subject>
 
 <body>
 
-Refs: <confirmed direct Issue/PR references, when any>
-Co-Authored-By: <tool name> <verified provider email when mapped>
-AI-Assisted-By: <current root-session model>
+Refs: #19
+Co-Authored-By: Claude Code <noreply@anthropic.com>
+AI-Assisted-By: Claude 3.7 Sonnet
 ```
 
-### 無 OpenSpec Context
-```
+### 2. 無 OpenSpec Context（一般獨立提交）
+```text
 <type>: <subject>
 
 <body>
 
-Refs: <confirmed direct Issue/PR references, when any>
-Co-Authored-By: <tool name> <verified provider email when mapped>
-AI-Assisted-By: <current root-session model>
+Co-Authored-By: Codex <noreply@openai.com>
+AI-Assisted-By: GPT-6
 ```
 
-目前驗證的 mapping 只有 `Codex <noreply@openai.com>` 與
-`Claude Code <noreply@anthropic.com>`。未知 mapping 只寫
-`Co-Authored-By: <tool name>`，不得猜測 email。
+### Trailer 標籤說明
+- **Refs**：直接處理的 Issue 或 PR 編號（同 repo 寫 `#N`，跨 repo 寫完整網址）。
+- **Co-Authored-By**：目前已驗證支援 `Claude Code <noreply@anthropic.com>` 與 `Codex <noreply@openai.com>`。
+- **AI-Assisted-By**：記錄本次協作的核心模型名稱（如 `GPT-6` 或 `Claude 3.7 Sonnet`）。
 
 ---
 
 ## Type 推斷原則
 
-| 變更性質 | Type | 範例 |
+| 變更性質 | Type | 適用情境範例 |
 | :--- | :--- | :--- |
-| **新功能 / 新能力** | `feat` | 新增資料來源、新工具、新 Skill |
-| **修復錯誤** | `fix` | 修正爬蟲解析邏輯、修正邏輯錯誤 |
-| **重構** | `refactor` | 結構調整、不改變外部行為的程式優化 |
-| **文件** | `docs` | 僅修改 `docs/` 或 `README.md` |
-| **腳本、設定、維護** | `chore` | 修改 `.gitignore`、更新 dependencies、調整 CI |
-| **測試** | `test` | 新增或修正測試案例 |
+| **新功能 / 新能力** | `feat` | 新增資料來源、新工具、新 Skill、新功能 |
+| **修復錯誤** | `fix` | 修正解析邏輯、修復 Bug、修正型別錯誤 |
+| **重構** | `refactor` | 結構調整、不改變對外行為的程式碼優化 |
+| **文件** | `docs` | 僅修改 `docs/`、`README.md` 或註解 |
+| **維護 / 設定** | `chore` | 修改 `.gitignore`、更新 dependencies、調整安裝腳本 |
+| **測試** | `test` | 新增或更新測試案例、測試腳本 |
 
 ---
 
-## 獨立使用方式
+## 獨立使用方式（新人 Step-by-Step）
 
-如果你已經手動實作完畢，想直接提交：
+當你已經手動完成開發，想要快速產生標準 commit 時：
 
-1. **Claude Code**：輸入 `@"git-commit-writer-agent"`
-2. **支援 project skill 的 host**：呼叫 `git-commit-writer`
-3. **完整 OpenSpec 收尾**：改呼叫 `openspec-commit`，由協調層傳入精確
-   archive context
+### 步驟 1：確認工作區狀態
+先透過 `git status` 確認你的程式碼已完成且工作區處於欲提交狀態。
+
+### 步驟 2：呼叫 Agent 或 Skill
+- **在 Claude Code 中**：
+  ```text
+  @"git-commit-writer-agent"
+  ```
+- **在 Codex 中**：
+  直接輸入指令呼叫 `git-commit-writer`。
+- **在其他支援 Project Skill 的環境中**：
+  呼叫 `/git-commit-writer`。
+
+### 步驟 3：檢視提交結果
+工具會自動暫存變更、分析變更內容、產生合規的 Conventional Commit 訊息並完成提交。最後會輸出產生的 commit hash 與主旨供你核對。
 
 > [!TIP]
-> 自動偵測只供獨立呼叫。`openspec-commit` 一律傳入精確的
-> `archive_path`、`change_id`、`tool_name` 與 `assisting_model`。
+> 如果你的變更屬於完整的 OpenSpec 規格流程，建議使用 [`openspec-commit`](/docs/skills/openspec-commit.md)，它會自動串聯 Change 封存、文件更新與此提交工具。
 
 ---
 
-## 相關組件
+## 相關組件與原始碼
 
-- **Skill**: `template/common/skills/git-commit-writer/SKILL.md`
-- **Agent**: `template/common/.claude/agents/git-commit-writer-agent.md`
-- **Codex agent**: `template/common/.codex/agents/git-commit-writer-agent.toml`
-  （`gpt-5.6-luna`、medium）
-- **Installed portable skill**: `.claude/skills/git-commit-writer/SKILL.md`、
-  `.agents/skills/git-commit-writer/SKILL.md`
-- **Workflow**: [OpenSpec Commit Workflow](/docs/workflow/commit.md)
-
-# Citations
-
-[1] [Conventional Commits](https://www.conventionalcommits.org/)
+- **Skill 定義**：`template/common/skills/git-commit-writer/SKILL.md`
+- **Claude Agent**：`template/common/.claude/agents/git-commit-writer-agent.md`
+- **Codex Agent**：`template/common/.codex/agents/git-commit-writer-agent.toml`
+- **安裝目標**：`.claude/skills/git-commit-writer/` 與 `.agents/skills/git-commit-writer/`
+- **上層工作流**：[OpenSpec Commit 工作流程](/docs/workflow/commit.md)

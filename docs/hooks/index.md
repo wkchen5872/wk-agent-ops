@@ -12,9 +12,6 @@ runtime 啟用步驟，不複製各 CLI 的完整 hook API。
 | [Antigravity](/docs/hooks/antigravity-hooks.md) | 無；使用 Agent guard | named `Stop` | `statusLine` observer | user-level |
 | [GitHub Copilot CLI](/docs/hooks/copilot-hooks.md) | `postToolUse` | `sessionEnd`（opt-in） | `userPromptSubmitted`（opt-in） | repository-local |
 
-Gemini CLI 不在目前 Provider matrix。Installers 只會清除過去建立的 legacy
-entries，不會新增 Gemini hooks。
-
 ## Hook families
 
 ### Workflow compatibility

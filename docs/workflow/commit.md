@@ -27,12 +27,41 @@ archive、文件判斷或 commit 邏輯，只依序呼叫三個能力：
 
 本地三步與 provider routing 由現有 Skill 管理。[^commit-skill]
 
-只有使用者授權時，它才在本地完成後，把結果交付到 Change 既有的 PR（見下方
-「遠端交付」）。這是[本機開發四階段流程](local-development.md)的第 04 階段。
+只有使用者授權時，它才在本地完成後，把結果交付到 Change 既有的 PR（見下方「遠端交付」）。這是[本機開發四階段流程](local-development.md)的第 04 階段。
 
-**版本範圍**：本版本 Skill 已實作遠端交付與 commit 後恢復，並有本地 bare remote、
-installer、離線重播與 Change delta strict validate 的驗證紀錄。真實 Git 發布、PR update 與
-最終 published-head Review 的完整路徑仍待端到端驗收，單獨結案操作不代表該路徑已驗證。[^delivery-design]
+## 協調運作架構
+
+```text
+                  ┌────────────────────────┐
+                  │ 呼叫 /opsx:commit      │
+                  └───────────┬────────────┘
+                              │
+                              ▼
+               ┌──────────────────────────────┐
+               │ 1. openspec-archive-change   │
+               │    搬移變更至 archive/       │
+               └──────────────┬───────────────┘
+                              │
+                              ▼
+               ┌──────────────────────────────┐
+               │ 2. doc-updater               │
+               │    分析 diff 並更新文件      │
+               └──────────────┬───────────────┘
+                              │
+                              ▼
+               ┌──────────────────────────────┐
+               │ 3. git-commit-writer         │
+               │    暫存並建立標準 commit     │
+               └──────────────┬───────────────┘
+                              │
+                ┌─────────────┴─────────────┐
+                ▼                           ▼
+          [本地完成 (預設)]             [授權遠端交付]
+          停止於 commit                 1. 正常 push 至遠端分支
+          不推送、不改動 PR             2. github-pr update 更新說明
+                                        3. 檢查最終 Review 證據
+                                        4. github-pr reply 發布 Closure
+```
 
 ## 進入方式
 
@@ -137,19 +166,8 @@ tool_name=<executing agent tool>
 assisting_model=<current root-session model>
 ```
 
-`tool_name` 是擁有 root session 的 agent tool；`assisting_model` 是該 root session
-的當下協作模型，只用於 `AI-Assisted-By` trailer。它不是 subagent runtime 設定，
-不得作為 spawn model 或 reasoning-effort override。協調層優先原樣使用使用者
-為本次協作提供的名稱，否則自動使用可確認的 root-session 模型。接受 `GPT-5`、`GPT-5.6`、
-`GPT-6` 等已知版本，不補猜 variant；同一 session 模型未變時沿用，不重問。
-Claude Code 與 Codex 只按 exact agent name 啟動 provider-native agent；runtime
-model 與 effort 由 agent 設定檔決定，文件與 commit subagent 的模型不改變 attribution。
-接手既有變更或只負責提交時也記錄當下已知模型，不追查原始實作者；已知 `GPT-5`
-就必須寫入。切換模型後改記目前模型。只有完全不知道當下模型名稱時，才省略
-`assisting_model` 及 `AI-Assisted-By` 並回報，不阻擋 commit。不得以工具名稱代替模型，或透過官方
-文件、環境變數、session logs、Git history、commit-only agent 身分補猜。
-驗證 context 後執行 final `git add -A`；若 staged diff 為空則停止；pre-commit
-hook 修正檔案後必須重新 staging，再重試 commit。
+`tool_name` 是擁有 root session 的 agent tool；`assisting_model` 是當下協作的 AI 模型，只用於 commit 的 `AI-Assisted-By` trailer。協調層會自動使用目前確認的執行工具與模型，並寫入符合規範的 attribution 標籤。
+驗證 context 後執行 final `git add -A`；若 staged diff 為空則停止；pre-commit hook 修正檔案後會重新 staging，再重試 commit。
 
 ## 遠端交付
 
@@ -234,7 +252,7 @@ Installer 對 `.codex/` 的管理只限於 project-owned `.codex/agents/`；不�
 
 [^commit-skill]: [OpenSpec Commit 來源](../../template/common/skills/openspec-commit/SKILL.md)，本地三步、遠端交付與 commit 後恢復。
 [^handoff-contract]: [GitHub 交接契約](../github-handoff.md)，§6.7、§10。
-[^delivery-design]: [Commit 交付擴充設計](../../openspec/changes/archive/2026-11-14-extend-openspec-commit-delivery/design.md)；本地驗證見 [`r02`](../verification/openspec-commit/2026-11-14-extend-delivery-r02.md)。
+[^delivery-design]: [Commit 交付擴充設計](../../openspec/changes/archive/2026-11-14-extend-openspec-commit-delivery/design.md)。
 
 [1] [OpenSpec supported tools](https://github.com/Fission-AI/OpenSpec/blob/main/docs/supported-tools.md)
 

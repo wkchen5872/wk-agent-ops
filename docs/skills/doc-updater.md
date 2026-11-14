@@ -59,6 +59,35 @@ doc-updater 先驗證路徑，再讀取 `<archive_path>/proposal.md` 與
 
 ## 兩種運作模式
 
+```text
+               ┌────────────────────────┐
+               │    呼叫 doc-updater    │
+               └───────────┬────────────┘
+                           │
+                           ▼
+                  檢查工作區 git status
+                           │
+             ┌─────────────┴─────────────┐
+             ▼                           ▼
+    [工作區有未提交變更]            [工作區完全乾淨]
+         Mode A                      Mode B
+             │                           │
+             ▼                           ▼
+      掃描 git diff HEAD           掃描最近 N 個 commits
+             │                           │
+             └─────────────┬─────────────┘
+                           ▼
+                 分析受影響的文件清單
+               （docs/, README, AGENTS）
+                           │
+                           ▼
+                    更新文件內容
+                           │
+                           ▼
+                   變更保留在工作區
+                 （不自動建立 commit）
+```
+
 doc-updater 會先偵測 `git status`，自動選擇模式：
 
 ### Mode A — 有未 commit 的變更
@@ -71,10 +100,6 @@ doc-updater 會先偵測 `git status`，自動選擇模式：
 3. 直接更新文件（留在工作區）
 4. **不建立獨立的 docs commit**——文件變更會與 feature 一起 commit
 
-```
-git diff HEAD → 分析 → 更新文件 → 留在工作區
-```
-
 ### Mode B — 工作區乾淨
 
 **觸發時機**：工作區無任何變更（所有變更都已 commit）
@@ -84,10 +109,6 @@ git diff HEAD → 分析 → 更新文件 → 留在工作區
 2. 掃描最近 N 個 commit 的 diff
 3. 分析哪些文件需要更新
 4. 更新文件並**留在工作區**，由用戶 review 後手動 commit
-
-```
-resolve N → git diff HEAD~N HEAD → 分析 → 更新文件 → 留在工作區
-```
 
 ---
 
