@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="1580" viewBox="0 0 1000 1580" role="img" aria-labelledby="title desc">
+  <title id="title">02 實作與發布：已確認的本機開發流程</title>
+  <desc id="desc">逐項實作、測試與驗證後，先由人類決定是否發布。可留在本地進入 Review；選擇發布才處理 commit、push 與既有或新建 PR。</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#647a94" />
+    </marker>
+  </defs>
+  <rect width="1000" height="1580" fill="#f5f7fb" />
+  <g font-family="PingFang TC, Noto Sans CJK TC, sans-serif">
+    <text x="65" y="78" font-size="39" fill="#19344c" font-weight="700">02 實作與發布</text>
+    <text x="65" y="119" font-size="22" fill="#42556d" font-weight="400">已確認流程 · 前兩階段不新增整合 Skill</text>
+    <rect x="785" y="38" width="145" height="45" rx="22" fill="#dcf2e5" />
+    <text x="816" y="68" font-size="21" fill="#865b11" font-weight="600">已確認</text>
+    <rect x="170" y="173" width="700" height="108" rx="18" fill="#ffffff" stroke="#b4c6d8" stroke-width="2" />
+    <circle cx="126" cy="208" r="22" fill="#dce7f2" />
+    <text x="113" y="216" font-size="20" fill="#294761" font-weight="600">01</text>
+    <text x="194" y="208" font-size="27" fill="#19344c" font-weight="650">取得 Change 與已確認設計</text>
+    <text x="194" y="240" font-size="21" fill="#42556d" font-weight="400">確認分支、實作授權及本輪工作範圍</text>
+    <path d="M 520.0 284 V 305" fill="none" stroke="#647a94" stroke-width="2.5" stroke-linejoin="round" marker-end="url(#arrow)" />
+    <rect x="170" y="317" width="700" height="108" rx="18" fill="#ffffff" stroke="#b4c6d8" stroke-width="2" />
+    <circle cx="126" cy="352" r="22" fill="#dce7f2" />
+    <text x="113" y="360" font-size="20" fill="#294761" font-weight="600">02</text>
+    <text x="194" y="352" font-size="27" fill="#19344c" font-weight="650">逐項實作與測試</text>
+    <text x="194" y="384" font-size="21" fill="#42556d" font-weight="400">openspec-apply-change；依專案規範執行 TDD</text>
+    <path d="M 520.0 428 V 449" fill="none" stroke="#647a94" stroke-width="2.5" stroke-linejoin="round" marker-end="url(#arrow)" />
+    <rect x="170" y="461" width="700" height="108" rx="18" fill="#fff5dc" stroke="#d2a14a" stroke-width="2" />
+    <circle cx="126" cy="496" r="22" fill="#dce7f2" />
+    <text x="113" y="504" font-size="20" fill="#294761" font-weight="600">03</text>
+    <text x="194" y="496" font-size="27" fill="#19344c" font-weight="650">完成本地驗證</text>
+    <text x="194" y="528" font-size="21" fill="#42556d" font-weight="400">openspec-verify-change ＋ 必要測試；失敗先修正</text>
+    <path d="M 520.0 572 V 593" fill="none" stroke="#647a94" stroke-width="2.5" stroke-linejoin="round" marker-end="url(#arrow)" />
+    <rect x="170" y="605" width="700" height="108" rx="18" fill="#fff5dc" stroke="#d2a14a" stroke-width="2" />
+    <circle cx="126" cy="640" r="22" fill="#dce7f2" />
+    <text x="113" y="648" font-size="20" fill="#294761" font-weight="600">04</text>
+    <text x="194" y="640" font-size="27" fill="#19344c" font-weight="650">發布前人工檢核點</text>
+    <text x="194" y="672" font-size="21" fill="#42556d" font-weight="400">由你確認本輪成果，再決定是否建立或更新 PR</text>
+    <path d="M 520.0 716 V 737" fill="none" stroke="#647a94" stroke-width="2.5" stroke-linejoin="round" marker-end="url(#arrow)" />
+    <rect x="170" y="749" width="700" height="108" rx="18" fill="#eaf3ff" stroke="#73a2d5" stroke-width="2" />
+    <circle cx="126" cy="784" r="22" fill="#dce7f2" />
+    <text x="113" y="792" font-size="20" fill="#294761" font-weight="600">05</text>
+    <text x="194" y="784" font-size="27" fill="#19344c" font-weight="650">依選擇建立或更新 PR</text>
+    <text x="194" y="816" font-size="21" fill="#42556d" font-weight="400">確認後依需要 commit／push，再建立或更新 PR</text>
+    <path d="M 520.0 860 V 881" fill="none" stroke="#647a94" stroke-width="2.5" stroke-linejoin="round" marker-end="url(#arrow)" />
+    <rect x="170" y="893" width="700" height="108" rx="18" fill="#ffffff" stroke="#b4c6d8" stroke-width="2" />
+    <circle cx="126" cy="928" r="22" fill="#dce7f2" />
+    <text x="113" y="936" font-size="20" fill="#294761" font-weight="600">06</text>
+    <text x="194" y="928" font-size="27" fill="#19344c" font-weight="650">交給 Review 流程</text>
+    <text x="194" y="960" font-size="21" fill="#42556d" font-weight="400">可先做本地 Review；有 PR 時審查對應發布版本</text>
+    <path d="M 165 515 H 59 V 371 H 158" fill="none" stroke="#647a94" stroke-width="2.5" stroke-linejoin="round" marker-end="url(#arrow)" stroke-dasharray="7 6" />
+    <text x="62" y="590" font-size="19" fill="#42556d" font-weight="400">未通過</text>
+    <text x="62" y="616" font-size="19" fill="#42556d" font-weight="400">回實作</text>
+    <rect x="54" y="1200" width="892" height="230" rx="20" fill="#eaf0f7" />
+    <text x="80" y="1238" font-size="24" fill="#294761" font-weight="650">執行邊界與交接</text>
+    <text x="80" y="1276" font-size="20" fill="#42556d" font-weight="400">• 前兩階段沿用既有 Skills，不額外開發 workflow skill。</text>
+    <text x="80" y="1312" font-size="20" fill="#42556d" font-weight="400">• 發布前保留人工確認；已有 PR 沿用，不為每輪修正重建。</text>
+    <text x="80" y="1348" font-size="20" fill="#42556d" font-weight="400">• 輸出：本地成果與驗證證據；選擇發布時才增加 PR。</text>
+    <text x="80" y="1384" font-size="20" fill="#42556d" font-weight="400">• 圖例：編號框依序執行；側邊標籤為分支、略過或回退；顏色僅輔助。</text>
+    <text x="65" y="1545" font-size="18" fill="#6c7c90" font-weight="400">狀態：使用者已確認的流程；說明見 docs/workflow/local-development.md。</text>
+    <path d="M 520 727 H 38 V 877 H 520" fill="none" stroke="#647a94" stroke-width="2.5" stroke-linejoin="round" marker-end="url(#arrow)" stroke-dasharray="7 6" />
+    <text x="48" y="802" font-size="19" fill="#42556d">暫不</text>
+    <text x="48" y="827" font-size="19" fill="#42556d">發布</text>
+  </g>
+</svg>

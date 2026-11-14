@@ -3,7 +3,17 @@ type: Playbook
 title: PM/RD 多 Agent 協作工作流
 description: 從需求探索、OpenSpec 規劃到循序或平行實作的協作流程。
 tags: [workflow, openspec, git, worktree, agents]
-timestamp: 2026-08-01T00:00:00+08:00
+generated: { by: codex/GPT-6, at: 2026-11-14T12:41:58+08:00 }
+sources:
+  - id: workflow-runtime
+    resource: /scripts/workflow/runtime.sh
+    title: Worktree resolution runtime
+  - id: wt-done
+    resource: /scripts/workflow/wt-done.sh
+    title: Local merge and cleanup
+  - id: delivery-policy
+    resource: /docs/openspec-workflow.md
+    title: OpenSpec Workflow
 ---
 
 # PM/RD 多 Agent 協作工作流
@@ -147,6 +157,10 @@ $openspec-apply-change <change-id>
     ↓
 $openspec-verify-change <change-id>
     ↓
+人工發布檢核：可留在本地 Review，或依授權發布到 PR
+    ↓
+$change-review <change-id>：修正後另啟一輪；pass 後依授權交付
+    ↓
 $openspec-commit <change-id>
 ```
 
@@ -173,7 +187,11 @@ Worktree。
 原生預設位置、path discovery 與接手命令見
 [Provider-native Worktree Reference](/docs/workflow/provider-worktrees.md)。
 
-## Phase 3：合併與清理
+## Phase 3：交付、合併與清理
+
+驗收與 Git 整合分開。要求先 review 時，保留未封存、未提交的成果；要求封存提交時，
+`openspec-commit` 預設完成本地 archive → docs → commit。PR 交付、merge 與清理各依其授權，
+詳見 [Commit 工作流](commit.md) 與 [本機開發四階段流程](local-development.md)。[^delivery-policy]
 
 - `wt-work` 建立的 `.worktrees/<change-id>` 使用 `wt-done <change-id>` 合併並
   清理。
@@ -183,51 +201,18 @@ Worktree。
   `wt-done`，也不從目錄名稱猜測並刪除。
 
 `wt-done` 目前是 local-only：不包含 push、PR、遠端 branch 刪除或 code review
-gate。
+gate。它也不執行 OpenSpec verify 或 archive；呼叫者須先確認交付條件，不能把下方順序
+當成腳本已強制實施的驗收 gate。[^wt-done]
 
-## 完整狀態圖
+## 開發與交付概覽
 
-```mermaid
-flowchart TD
-    A[需求清楚] --> B[pm-start / Plan Mode]
-    C[範圍不明] --> D[一般 Session：讀取與討論]
-    D --> E[Plan Mode 及／或 openspec-explore]
-    B --> F{Scope Ready?}
-    E --> F
-    F -- no --> D
-    F -- yes --> G[OpenSpec skill 接受或推導 change-id]
-    G --> U[Agent 執行 opsx-branch<br/>先於 Antigravity 驗證]
-    U --> V{branch ready?}
-    V -- no --> X[停止 action<br/>回報錯誤或 Worktree path]
-    V -- yes --> W[openspec new change]
-    W --> Y{new 或 ff?}
-    Y -- new --> Z[顯示第一個 artifact instructions]
-    Z --> AA[continue 解析 change-id<br/>並執行相同 branch guard]
-    AA --> AB{branch ready?}
-    AB -- no --> X
-    AB -- yes --> AC[建立一份 ready artifact]
-    AC --> AD{planning complete?}
-    AD -- no --> AA
-    AD -- yes --> I[人類 review + planning commit]
-    Y -- ff --> AE[產生所有 apply-required artifacts]
-    AE --> I
-    I --> J{需要平行 RD?}
-    J -- no --> K[Branch-only apply]
-    J -- yes --> P{已有可用 Worktree?}
-    P -- yes --> Q[解析 path 並 attach<br/>保留 cleanup owner]
-    P -- no, portable --> L[wt-work 建立<br/>Project-managed Worktree]
-    P -- no, native --> M[Provider 建立<br/>Provider-native Worktree]
-    Q --> VG[驗證包含 planning commit]
-    L --> VG
-    M --> VG
-    VG --> R[在 resolved path 啟動 Provider]
-    R --> S{Provider 卡住?}
-    S -- yes --> T[停止 active writer<br/>換 Provider 使用同一 path]
-    T --> R
-    S -- no --> N[verify + openspec-commit]
-    K --> N
-    N --> O[merge + cleanup owner 清理]
-```
+[SVG 原稿](../diagrams/development-lifecycle.svg)
+
+![開發與交付概覽](../diagrams/development-lifecycle.png)
+
+圖中的發布、審查、交付與合併各有停止點。Worktree 解析細節以
+[wt-work 圖](wt-work-flow.md) 為準；目前 runtime 檢查的是 feature branch 的當前 tip，
+固定的 `planning_commit` 仍由交接者與接手者另行核對。[^workflow-runtime]
 
 底層概念見 [OpenSpec、Git 與 Session 邊界](/docs/workflow/concepts.md)，
 `wt-work` 的現行 branch resolution 見
@@ -255,9 +240,9 @@ Worktree core 應保持 Provider-neutral；Provider adapter 只負責在指定 c
 
 1. `wt-work` 預設建立 Project-managed Worktree；Provider-native 是 attach-only
    的外部入口。
-2. `--path` 明確指定時優先使用；省略時只從 Git Worktree registry 自動選擇唯一
-   可驗證候選。零個候選才建立 Project-managed Worktree，多個候選則停止並列出
-   path，不保存額外 mapping registry。
+2. `--path` 明確指定時優先使用；省略時依序檢查 project path、named-branch、detached
+   候選，命中即驗證並返回。同一候選層有多個 path 就停止，完全沒有候選才建立
+   Project-managed Worktree，不保存額外 mapping registry。[^workflow-runtime]
 3. 同機 failover 允許 verified dirty Worktree；停止原 active writer 後即可接手，
    checkpoint commit 是情境式選項，不是 gate。
 4. Cleanup ownership 不因 attach 或 Provider 切換而移交；`wt-done` 只清理
@@ -271,4 +256,10 @@ Worktree core 應保持 Provider-neutral；Provider adapter 只負責在指定 c
 - [wt-work Worktree and Branch Resolution Flow](/docs/workflow/wt-work-flow.md)
 - [Provider-native Worktree Reference](/docs/workflow/provider-worktrees.md)
 - [OpenSpec Commit Workflow](/docs/workflow/commit.md)
+- [本機開發四階段流程](/docs/workflow/local-development.md)
 - [Workflow 腳本手冊](/scripts/workflow/README.md)
+- [正式圖稿索引](../diagrams/README.md)
+
+[^workflow-runtime]: [runtime.sh](../../scripts/workflow/runtime.sh)，`workflow_check_candidate`、`workflow_resolve_worktree`。
+[^wt-done]: [wt-done.sh](../../scripts/workflow/wt-done.sh)，checkout、merge 與 cleanup 路徑。
+[^delivery-policy]: [OpenSpec Workflow](../openspec-workflow.md)，§5。

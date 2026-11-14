@@ -3,7 +3,14 @@ type: Architecture
 title: wk-agent-ops Architecture Guide
 description: Template propagation, provider entrypoints, and repository module boundaries.
 tags: [architecture, agents, distribution]
-timestamp: 2026-07-31T13:56:38+08:00
+generated: { by: codex/GPT-6, at: 2026-11-14T12:41:58+08:00 }
+sources:
+  - id: delivery-policy
+    resource: /docs/openspec-workflow.md
+    title: OpenSpec Workflow
+  - id: commit-workflow
+    resource: /openspec/changes/extend-openspec-commit-delivery/design.md
+    title: Commit 交付擴充設計
 ---
 
 # 🏗️ wk-agent-ops Architecture Guide
@@ -54,9 +61,10 @@ wk-agent-ops/
 │   │   ├── .claude/rules/     ← Thin native rules; mirrored to .agents/rules/
 │   │   ├── .agents/workflows/ ← Antigravity-native workflow entrypoints
 │   │   ├── .codex/agents/     ← Project-owned Codex custom-agent TOML
-│   │   ├── skills/            ← Shared skills (opsx-commit, doc-updater, etc.)
+│   │   ├── skills/            ← Shared skills (openspec-commit, doc-updater, etc.)
 │   │   ├── AGENTS.md          ← Thin pointer to docs/agent-protocol.md (seed, no-overwrite)
-│   │   ├── docs/              ← agent-protocol.md/okf-conventions.md (managed) + architecture/conventions starters (seed)
+│   │   ├── docs/              ← agent-protocol.md/openspec-workflow.md/okf-conventions.md (managed)
+│   │   │                         architecture/conventions starters (seed)
 │   │   │                         github-handoff.md + diagrams/github-handoff.svg (managed handoff contract)
 │   │   └── work-items/        ← AGENTS.md Work Item convention (managed; no WI-* records)
 │   ├── python/                ← Python-specific: pytest hook, style guide
@@ -94,8 +102,13 @@ session 各自管理獨立 lifecycle；`change-id` 與 `planning_commit` 是 han
 |---|---|---|
 | Explore | 任一安全 checkout；不建立持久化 change | Scope Ready 與唯一 `change-id` |
 | Plan | `feature/<change-id>` branch | 已 review 並 commit 的 OpenSpec artifacts |
-| Apply | 同一 branch；可為 primary、project-managed 或 provider-native Worktree | 通過 verify 並封存 change |
-| Finish | 由已知 cleanup owner 處理 | merge、branch／Worktree cleanup |
+| Apply / Review | 同一 branch；可為 primary、project-managed 或 provider-native Worktree | 實作與驗證；Review 綁定受審版本，可停在未封存、未提交 |
+| Finish | 原工作 checkout | 依授權 archive → docs → commit；預設本地完成，PR 交付另依授權 |
+| Git 整合與清理 | 由已知 merge／cleanup owner 處理 | 另行授權的 merge、branch／Worktree cleanup |
+
+實作、封存、提交、遠端交付、合併與部署各有自己的完成證據；一個階段完成不代表下一個
+已完成。交付擴充設計的成功交付只到最終 head 的 Review 與 Closure，merge 與 Issue
+結案分開處理。[^delivery-policy][^commit-workflow]
 
 Worktree 只在需要同時 checkout 多個工作時使用；單一 Session 可直接在 feature
 branch 完成。每個 Worktree 同一時間只能有一個 active writer，跨 Provider 接手
@@ -103,6 +116,8 @@ branch 完成。每個 Worktree 同一時間只能有一個 active writer，跨 
 
 完整流程見 [PM/RD 多 Agent 協作工作流](/docs/workflow/guide.md)，狀態與 ownership
 規則見 [OpenSpec、Git 與 Session 邊界](/docs/workflow/concepts.md)。
+本 repo 採用的 [本機四階段流程](workflow/local-development.md) 與
+[正式圖稿索引](diagrams/README.md) 提供各階段與團隊 GitHub 交接的圖文入口。
 
 ---
 
@@ -142,3 +157,6 @@ branch 完成。每個 Worktree 同一時間只能有一個 active writer，跨 
 | `diff template/common/docs/agent-protocol.md docs/agent-protocol.md` | Confirm managed policy matches source |
 | `diff template/common/work-items/AGENTS.md work-items/AGENTS.md` | Confirm the managed Work Item convention matches its source |
 | `bash tests/test_github_handoff.sh` | Contract presence and managed delivery of the GitHub handoff assets |
+
+[^delivery-policy]: [OpenSpec Workflow](openspec-workflow.md)，§4–5。
+[^commit-workflow]: [Commit 交付擴充設計](../openspec/changes/extend-openspec-commit-delivery/design.md)，Decisions 1–4；遠端 Skill 實作另行交付。

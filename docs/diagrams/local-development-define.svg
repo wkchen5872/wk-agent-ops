@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="1580" viewBox="0 0 1000 1580" role="img" aria-labelledby="title desc">
+  <title id="title">01 開立規格：已確認的本機開發流程</title>
+  <desc id="desc">先確認需求與分支，再建立 OpenSpec Change，經人工確認後依需要建立 Issue 或設計 PR。沿用既有 Skills，不新增前兩階段整合入口。</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#647a94" />
+    </marker>
+  </defs>
+  <rect width="1000" height="1580" fill="#f5f7fb" />
+  <g font-family="PingFang TC, Noto Sans CJK TC, sans-serif">
+    <text x="65" y="78" font-size="39" fill="#19344c" font-weight="700">01 開立規格</text>
+    <text x="65" y="119" font-size="22" fill="#42556d" font-weight="400">已確認流程 · 前兩階段不新增整合 Skill</text>
+    <rect x="785" y="38" width="145" height="45" rx="22" fill="#dcf2e5" />
+    <text x="816" y="68" font-size="21" fill="#865b11" font-weight="600">已確認</text>
+    <rect x="170" y="173" width="700" height="108" rx="18" fill="#ffffff" stroke="#b4c6d8" stroke-width="2" />
+    <circle cx="126" cy="208" r="22" fill="#dce7f2" />
+    <text x="113" y="216" font-size="20" fill="#294761" font-weight="600">01</text>
+    <text x="194" y="208" font-size="27" fill="#19344c" font-weight="650">需求已可描述</text>
+    <text x="194" y="240" font-size="21" fill="#42556d" font-weight="400">需求討論／Bug 重現；必要時使用 Work Item</text>
+    <path d="M 520.0 284 V 305" fill="none" stroke="#647a94" stroke-width="2.5" stroke-linejoin="round" marker-end="url(#arrow)" />
+    <rect x="170" y="317" width="700" height="108" rx="18" fill="#ffffff" stroke="#b4c6d8" stroke-width="2" />
+    <circle cx="126" cy="352" r="22" fill="#dce7f2" />
+    <text x="113" y="360" font-size="20" fill="#294761" font-weight="600">02</text>
+    <text x="194" y="352" font-size="27" fill="#19344c" font-weight="650">準備工作分支</text>
+    <text x="194" y="384" font-size="21" fill="#42556d" font-weight="400">先確認 repo、既有分支與工作區；必要時隔離</text>
+    <path d="M 520.0 428 V 449" fill="none" stroke="#647a94" stroke-width="2.5" stroke-linejoin="round" marker-end="url(#arrow)" />
+    <rect x="170" y="461" width="700" height="108" rx="18" fill="#ffffff" stroke="#b4c6d8" stroke-width="2" />
+    <circle cx="126" cy="496" r="22" fill="#dce7f2" />
+    <text x="113" y="504" font-size="20" fill="#294761" font-weight="600">03</text>
+    <text x="194" y="496" font-size="27" fill="#19344c" font-weight="650">建立 OpenSpec Change</text>
+    <text x="194" y="528" font-size="21" fill="#42556d" font-weight="400">openspec-ff-change</text>
+    <path d="M 520.0 572 V 593" fill="none" stroke="#647a94" stroke-width="2.5" stroke-linejoin="round" marker-end="url(#arrow)" />
+    <rect x="170" y="605" width="700" height="108" rx="18" fill="#fff5dc" stroke="#d2a14a" stroke-width="2" />
+    <circle cx="126" cy="640" r="22" fill="#dce7f2" />
+    <text x="113" y="648" font-size="20" fill="#294761" font-weight="600">04</text>
+    <text x="194" y="640" font-size="27" fill="#19344c" font-weight="650">確認規格與後續動作</text>
+    <text x="194" y="672" font-size="21" fill="#42556d" font-weight="400">檢視 Change；確認實作授權，決定是否發布設計 PR</text>
+    <path d="M 520.0 716 V 737" fill="none" stroke="#647a94" stroke-width="2.5" stroke-linejoin="round" marker-end="url(#arrow)" />
+    <rect x="170" y="749" width="700" height="108" rx="18" fill="#eaf3ff" stroke="#73a2d5" stroke-width="2" stroke-dasharray="9 6" />
+    <circle cx="126" cy="784" r="22" fill="#dce7f2" />
+    <text x="113" y="792" font-size="20" fill="#294761" font-weight="600">05</text>
+    <text x="194" y="784" font-size="27" fill="#19344c" font-weight="650">依需要建立 Issue</text>
+    <text x="194" y="816" font-size="21" fill="#42556d" font-weight="400">github-issue create；已有同一工作就沿用</text>
+    <path d="M 520.0 860 V 881" fill="none" stroke="#647a94" stroke-width="2.5" stroke-linejoin="round" marker-end="url(#arrow)" />
+    <rect x="170" y="893" width="700" height="108" rx="18" fill="#ffffff" stroke="#b4c6d8" stroke-width="2" />
+    <circle cx="126" cy="928" r="22" fill="#dce7f2" />
+    <text x="113" y="936" font-size="20" fill="#294761" font-weight="600">06</text>
+    <text x="194" y="928" font-size="27" fill="#19344c" font-weight="650">交給實作流程</text>
+    <text x="194" y="960" font-size="21" fill="#42556d" font-weight="400">輸出 Change、branch、已確認決策與下一步</text>
+    <path d="M 520.0 723 H 58 V 877 H 520.0" fill="none" stroke="#647a94" stroke-width="2.5" stroke-linejoin="round" marker-end="url(#arrow)" stroke-dasharray="7 6" />
+    <text x="4" y="816" font-size="20" fill="#667a90" font-weight="400">略過</text>
+    <text x="4" y="842" font-size="20" fill="#667a90" font-weight="400">Issue</text>
+    <rect x="54" y="1200" width="892" height="230" rx="20" fill="#eaf0f7" />
+    <text x="80" y="1238" font-size="24" fill="#294761" font-weight="650">執行邊界與交接</text>
+    <text x="80" y="1276" font-size="20" fill="#42556d" font-weight="400">• 先準備分支，再建立 Change；由人類確認後決定後續動作。</text>
+    <text x="80" y="1312" font-size="20" fill="#42556d" font-weight="400">• 若團隊要求遠端設計批准，可先建設計 Draft PR，實作時沿用。</text>
+    <text x="80" y="1348" font-size="20" fill="#42556d" font-weight="400">• 輸出：Change、branch、實作授權；Issue 不是必要產物。</text>
+    <text x="80" y="1384" font-size="20" fill="#42556d" font-weight="400">• 圖例：編號框依序執行；側邊標籤為分支、略過或回退；顏色僅輔助。</text>
+    <text x="65" y="1545" font-size="18" fill="#6c7c90" font-weight="400">狀態：使用者已確認的流程；說明見 docs/workflow/local-development.md。</text>
+    <text x="194" y="553" font-size="21" fill="#42556d" font-weight="400">產生 proposal / design / specs / tasks</text>
+  </g>
+</svg>

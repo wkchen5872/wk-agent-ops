@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="1580" viewBox="0 0 1000 1580" role="img" aria-labelledby="title desc">
+  <title id="title">03 Review 與修正交接：已確認的本機開發流程</title>
+  <desc id="desc">依現行 change-review 固定受審版本，執行驗收與必要測試，保存 pass、changes-required 或 blocked。只有已確認 PR 且非 local-only 時發布回覆；新 head 需要新的相符審查證據。</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#647a94" />
+    </marker>
+  </defs>
+  <rect width="1000" height="1580" fill="#f5f7fb" />
+  <g font-family="PingFang TC, Noto Sans CJK TC, sans-serif">
+    <text x="65" y="78" font-size="39" fill="#19344c" font-weight="700">03 Review 與修正交接</text>
+    <text x="65" y="119" font-size="22" fill="#42556d" font-weight="400">沿用現行 change-review · 本地交接優化尚在規劃</text>
+    <rect x="785" y="38" width="145" height="45" rx="22" fill="#dcf2e5" />
+    <text x="816" y="68" font-size="21" fill="#865b11" font-weight="600">已確認</text>
+    <rect x="170" y="173" width="700" height="108" rx="18" fill="#ffffff" stroke="#b4c6d8" stroke-width="2" />
+    <circle cx="126" cy="208" r="22" fill="#dce7f2" />
+    <text x="113" y="216" font-size="20" fill="#294761" font-weight="600">01</text>
+    <text x="194" y="208" font-size="27" fill="#19344c" font-weight="650">指定 Change、Issue 或 PR</text>
+    <text x="194" y="240" font-size="21" fill="#42556d" font-weight="400">找出關聯工作；沒有 PR 也可以本地 Review</text>
+    <path d="M 520.0 284 V 305" fill="none" stroke="#647a94" stroke-width="2.5" stroke-linejoin="round" marker-end="url(#arrow)" />
+    <rect x="170" y="317" width="700" height="108" rx="18" fill="#ffffff" stroke="#b4c6d8" stroke-width="2" />
+    <circle cx="126" cy="352" r="22" fill="#dce7f2" />
+    <text x="113" y="360" font-size="20" fill="#294761" font-weight="600">02</text>
+    <text x="194" y="352" font-size="27" fill="#19344c" font-weight="650">固定受審版本</text>
+    <text x="194" y="384" font-size="21" fill="#42556d" font-weight="400">PR 用相符且乾淨的 checkout；必要時隔離</text>
+    <path d="M 520.0 428 V 449" fill="none" stroke="#647a94" stroke-width="2.5" stroke-linejoin="round" marker-end="url(#arrow)" />
+    <rect x="170" y="461" width="700" height="108" rx="18" fill="#fff5dc" stroke="#d2a14a" stroke-width="2" />
+    <circle cx="126" cy="496" r="22" fill="#dce7f2" />
+    <text x="113" y="504" font-size="20" fill="#294761" font-weight="600">03</text>
+    <text x="194" y="496" font-size="27" fill="#19344c" font-weight="650">驗收與品質審查</text>
+    <text x="194" y="528" font-size="21" fill="#42556d" font-weight="400">change-review → openspec-verify-change ＋ 必要測試</text>
+    <path d="M 520.0 572 V 593" fill="none" stroke="#647a94" stroke-width="2.5" stroke-linejoin="round" marker-end="url(#arrow)" />
+    <rect x="170" y="605" width="700" height="108" rx="18" fill="#ffffff" stroke="#b4c6d8" stroke-width="2" />
+    <circle cx="126" cy="640" r="22" fill="#dce7f2" />
+    <text x="113" y="648" font-size="20" fill="#294761" font-weight="600">04</text>
+    <text x="194" y="640" font-size="27" fill="#19344c" font-weight="650">作出本輪結論</text>
+    <text x="194" y="672" font-size="21" fill="#42556d" font-weight="400">通過／需要修正／阻擋；記錄 Finding 與證據</text>
+    <path d="M 520.0 716 V 737" fill="none" stroke="#647a94" stroke-width="2.5" stroke-linejoin="round" marker-end="url(#arrow)" />
+    <rect x="170" y="749" width="700" height="108" rx="18" fill="#eaf3ff" stroke="#73a2d5" stroke-width="2" />
+    <circle cx="126" cy="784" r="22" fill="#dce7f2" />
+    <text x="113" y="792" font-size="20" fill="#294761" font-weight="600">05</text>
+    <text x="194" y="784" font-size="27" fill="#19344c" font-weight="650">保存並回覆結果</text>
+    <text x="194" y="816" font-size="21" fill="#42556d" font-weight="400">已確認 PR 且非 local-only 才 reply；其他只在本地回報</text>
+    <path d="M 520.0 861 V 947 H 187 V 988" fill="none" stroke="#647a94" stroke-width="2.5" stroke-linejoin="round" marker-end="url(#arrow)" />
+    <rect x="52" y="1000" width="270" height="125" rx="17" fill="#e7f5ed" stroke="#85bca0" stroke-width="2" />
+    <text x="74" y="1042" font-size="27" fill="#243e54" font-weight="650">通過</text>
+    <text x="74" y="1077" font-size="20" fill="#42556d" font-weight="400">交給流程 04 封存交付</text>
+    <path d="M 520.0 861 V 947 H 500 V 988" fill="none" stroke="#647a94" stroke-width="2.5" stroke-linejoin="round" marker-end="url(#arrow)" />
+    <rect x="365" y="1000" width="270" height="125" rx="17" fill="#fff2db" stroke="#d0ad6a" stroke-width="2" />
+    <text x="387" y="1042" font-size="27" fill="#243e54" font-weight="650">需要修正</text>
+    <text x="387" y="1077" font-size="20" fill="#42556d" font-weight="400">交回流程 02</text>
+    <text x="387" y="1101" font-size="20" fill="#42556d" font-weight="400">修正後重新驗收</text>
+    <path d="M 520.0 861 V 947 H 813 V 988" fill="none" stroke="#647a94" stroke-width="2.5" stroke-linejoin="round" marker-end="url(#arrow)" />
+    <rect x="678" y="1000" width="270" height="125" rx="17" fill="#faeaf0" stroke="#ce9bae" stroke-width="2" />
+    <text x="700" y="1042" font-size="27" fill="#243e54" font-weight="650">阻擋</text>
+    <text x="700" y="1077" font-size="20" fill="#42556d" font-weight="400">補齊證據</text>
+    <text x="700" y="1101" font-size="20" fill="#42556d" font-weight="400">再啟動 Review</text>
+    <rect x="54" y="1200" width="892" height="230" rx="20" fill="#eaf0f7" />
+    <text x="80" y="1238" font-size="24" fill="#294761" font-weight="650">執行邊界與交接</text>
+    <text x="80" y="1276" font-size="20" fill="#42556d" font-weight="400">• 修正並測試、回報後，再明確啟動新一輪；發布另依授權。</text>
+    <text x="80" y="1312" font-size="20" fill="#42556d" font-weight="400">• 阻擋：先由能處理的一方補齊環境或證據，不把缺證據當作通過。</text>
+    <text x="80" y="1348" font-size="20" fill="#42556d" font-weight="400">• 舊 pass 不涵蓋新 head；Review 不自行改產品或合併。</text>
+    <text x="80" y="1384" font-size="20" fill="#42556d" font-weight="400">• 圖例：編號框依序執行；側邊標籤為分支、略過或回退；顏色僅輔助。</text>
+    <text x="65" y="1545" font-size="18" fill="#6c7c90" font-weight="400">狀態：使用者已確認的流程；說明見 docs/workflow/local-development.md。</text>
+  </g>
+</svg>

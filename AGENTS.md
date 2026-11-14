@@ -386,6 +386,7 @@ not edit it here. Keep project-specific rules in this file or under `docs/`.
 - `docs/architecture.md` — 專案架構與模組邊界
 - `docs/conventions.md` — Bash 腳本規範
 - `docs/workflow/guide.md` — PM/RD 協作完整指南
+- `docs/workflow/local-development.md` — 本 repo 的本機開發四階段流程（不由 installer 部署）
 - `docs/mutation-testing.md` — 變異測試 playbook（setup/check skills、工具與參考連結）
 - `CLAUDE.md` — Claude Code 相關規範
 - `.openspec.yaml` — OpenSpec 配置

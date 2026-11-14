@@ -3,7 +3,11 @@ type: Reference
 title: Provider-native Worktree Reference
 description: Claude、Codex 與 Antigravity 的原生 Worktree 位置、checkout 行為與跨 Provider 接手規則。
 tags: [workflow, git, worktree, claude, codex, antigravity]
-timestamp: 2026-07-31T00:00:00+08:00
+generated: { by: codex/GPT-6, at: 2026-11-14T12:41:58+08:00 }
+sources:
+  - id: worktree-runtime
+    resource: /scripts/workflow/runtime.sh
+    title: Worktree resolution runtime
 ---
 
 # Provider-native Worktree Reference
@@ -46,6 +50,11 @@ Worktree 的 HEAD 包含該 commit。不能只確認 change 目錄名稱存在�
 ```bash
 git -C <worktree-path> merge-base --is-ancestor <planning-commit> HEAD
 ```
+
+這是交接者／接手者對固定 SHA 的核對要求。現行 `wt-work` runtime 檢查的是本地
+`feature/<change-id>` **當前 tip** 可達 resolved HEAD，沒有接收固定 `planning_commit`
+參數；不可把兩者當成同一項自動 gate。實作與分層解析見
+[wt-work 解析流程](wt-work-flow.md)。[^worktree-runtime]
 
 ## 不要靠目錄命名猜測
 
@@ -168,7 +177,12 @@ Provider 負責。
 - [OpenSpec、Git 與 Session 邊界](/docs/workflow/concepts.md)
 - [wt-work Worktree and Branch Resolution Flow](/docs/workflow/wt-work-flow.md)
 
-# Citations
+## 本輪實作依據與既有產品參考
+
+本輪只核對 repository 的解析與交接行為；下列既有 Provider 產品資料未重新查證，
+不將目錄位置或產品版本視為本輪的驗收結果。
+
+[^worktree-runtime]: [runtime.sh](../../scripts/workflow/runtime.sh)，`workflow_check_candidate`、`workflow_resolve_worktree`。
 
 [1] [Claude Code CLI reference — `--worktree`](https://code.claude.com/docs/en/cli-usage)
 
