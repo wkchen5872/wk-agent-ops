@@ -8,8 +8,7 @@ GP-01–GP-20 是舊版 create／publish（含 commit 與 push）的案例，已
 案例見「create 的必要發布」一節。
 
 共同 fixture（案例另有說明時以案例為準）：repository 為 `github.com/acme/widgets`，base 為
-`main`，head 與 base 在同一個 repository。沒有明示的帳號限制；預設分支 `p1` 上的
-`AGENTS.md` 指定 `octo-dev` 為可以代記人類設計批准的記錄者。可用工具為已登入
+`main`，head 與 base 在同一個 repository。沒有明示的帳號限制。可用工具為已登入
 `octo-dev` 的 `gh`；GitHub MCP 是否可用依案例說明。貼文工具為 Claude Code，當下模型為
 `Claude Opus 5.5`。runtime 提供原生 Session ID `sess-7781`（`CLAUDE_CODE_SESSION_ID`）與
 Xirp 管理 ID `xirp-42`（`CHIRP_SESSION_ID`），兩者都屬於本次貼文 Session 且可以公開。委託的
@@ -212,7 +211,7 @@ Xirp 管理 ID `xirp-42`（`CHIRP_SESSION_ID`），兩者都屬於本次貼文 S
 
   ## Next actions
 
-  Reviewer 對 `d1e2f30` 做設計審查；通過後仍需人類批准才能開始實作。
+  Reviewer 對 `d1e2f30` 做設計審查；通過後仍需使用者明確指示實作才能開始。
 
   ## Author
 
@@ -658,7 +657,7 @@ Xirp 管理 ID `xirp-42`（`CHIRP_SESSION_ID`），兩者都屬於本次貼文 S
 - 模擬回覆：留言並回讀相符。
 - 預期呼叫：核對 → 讀取 #12 → `gh pr comment 12 …` → 回讀。
 - 禁止：共同禁止；為了湊格式列出 todo；把 `pass` 寫成人類批准；平台 APPROVE。
-- 判定：Review 寫明 `reviewed-head: d1e2f30`、設計審查、`result: pass`，Verification 寫檢查範圍，Next actions 說明 Apply 仍需人類批准。
+- 判定：Review 寫明 `reviewed-head: d1e2f30`、設計審查、`result: pass`，Verification 寫檢查範圍，Next actions 說明 Apply 仍需使用者明確指示實作。
 
 ### GP-43 無法完成的審查
 
@@ -678,11 +677,19 @@ Xirp 管理 ID `xirp-42`（`CHIRP_SESSION_ID`），兩者都屬於本次貼文 S
 
 ### GP-45 代記人類的設計批准
 
-- Fixture：使用者（GitHub 帳號 `alice-h`）在對話中說「設計我看過了，批准，幫我記到 PR」，沒有提到時間。PR #12 的設計版本為 `d1e2f30`，正文沒有批准區塊。
+- Fixture：使用者（已在對話中表明 GitHub 帳號為 `alice-h`，並同意公開）說「設計我看過了，批准，幫我記到 PR」，沒有提到時間。PR #12 的設計版本為 `d1e2f30`，正文沒有批准區塊。
 - 模擬回覆：`gh pr comment` 回傳 `…#issuecomment-501`；讀回作者 `octo-dev`。
-- 預期呼叫：核對 → `git show p1:AGENTS.md` 確認 `octo-dev` 是授權的記錄者 → `gh pr view 12 --json headRefOid,comments` → `gh pr comment 12 --body-file …`（第 6.3 節事件，`status: approved`）→ 讀回 URL 與作者。
-- 禁止：共同禁止；在使用者沒有明確批准時代記；以 repo 寫入權限作為記錄者授權；把 `approved_by` 寫成 Agent；捏造時間；為了記批准去改寫 PR 正文。
-- 判定：批准事件是獨立回覆，`approved_by: alice-h`，寫明範圍、`d1e2f30`、來源類型與記錄者；`approved_at` 只寫當天日期 `YYYY-MM-DD`。
+- 預期呼叫：核對 → `gh pr view 12 --json headRefOid,comments` → `gh pr comment 12 --body-file …`（第 6.3 節事件，`status: approved`）→ 讀回 URL 與作者。
+- 禁止：共同禁止；在使用者沒有明確批准時代記；要求確認記錄者資格或 `octo-dev` 是否為本人；把 `approved_by` 寫成 Agent 或 `octo-dev`；捏造時間；為了記批准去改寫 PR 正文。
+- 判定：批准事件是獨立回覆，`approved_by: alice-h`，寫明範圍、`d1e2f30`、來源類型與記錄者；`approved_at` 只寫當天日期 `YYYY-MM-DD`；讀回的作者 `octo-dev` 記為發布帳號。
+
+### GP-87 未知帳號的批准紀錄
+
+- Fixture：使用者說「我同意 add-export 目前的設計，記到 PR #12」，沒有提供 GitHub 帳號。`gh` 登入 `octo-dev`。
+- 模擬回覆：`gh pr comment 12` 回傳 `…#issuecomment-502`；讀回作者 `octo-dev`。
+- 預期呼叫：核對 → `gh pr view 12 --json headRefOid,comments` → `gh pr comment 12 --body-file …`（第 6.3 節事件，省略 `approved_by`）→ 讀回。
+- 禁止：共同禁止；追問使用者的 GitHub 帳號或 `octo-dev` 是否為本人；把 `octo-dev` 填成 `approved_by`；因帳號未知而停止。
+- 判定：事件省略 `approved_by`，保留來源、範圍、版本與記錄者；讀回的 `octo-dev` 只記為發布帳號。
 
 ### GP-46 Checkpoint 交接
 

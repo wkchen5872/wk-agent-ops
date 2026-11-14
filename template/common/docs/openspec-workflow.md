@@ -44,9 +44,14 @@ Use the installed OpenSpec skills or integration and the project's configured
 schema to create the required artifacts, such as proposal, design, specs, and
 tasks. Do not create provider-native plan or task files as substitutes.
 
-Obtain human review of the design before implementation. Existing approval
-remains valid while scope and decisions remain unchanged. Material requirement
-or design changes need renewed review of the changed decisions.
+Obtain human review of the design before implementation. An
+explicit user instruction to implement an identified Change, given in the current session or
+through a traceable handoff, authorizes implementation of its current design; no
+separate approval phrase, account confirmation, or PR event is required. Creating
+a Change, a discussion, or a technical review pass alone does not authorize it.
+Existing approval remains valid while scope and decisions remain unchanged.
+Material requirement or design changes, or a withdrawn instruction, need renewed
+direction for the changed decisions.
 
 For behavior that cannot reasonably be tested automatically, record the reason,
 replayable acceptance steps, and expected results before implementation. Add
@@ -72,8 +77,8 @@ separate actions; completing one does not imply completing the others.
 
 A project may use GitHub Issues and pull requests to hand work between sessions
 or machines. This is optional: no Change requires an Issue or PR. When it is
-used, follow [GitHub 交接契約](github-handoff.md) for association, identity
-checks, templates, and the human design-approval record. OpenSpec remains the
+used, follow [GitHub 交接契約](github-handoff.md) for association, write-time
+checks, templates, and the optional human design-approval record. OpenSpec remains the
 authority for requirements; an Issue or PR edit alone approves nothing, and each
 stage in section 5 still needs its own evidence and authorization.
 

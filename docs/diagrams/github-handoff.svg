@@ -22,9 +22,9 @@
 <text x="104" y="594" class="body">核對 remote head 與差異 → Draft PR 並回讀</text>
 <path d="M505 610 V650" class="line"/>
 <rect x="80" y="650" width="850" height="118" rx="16" class="gold"/>
-<text x="104" y="688" class="heading">04　design Review，再由人類批准</text>
-<text x="104" y="722" class="body">可由已授權 Agent 具名代記，綁定來源、範圍與 revision</text>
-<text x="104" y="752" class="body">Agent 技術通過不代表人類已批准實作</text>
+<text x="104" y="688" class="heading">04　design Review，再由使用者指示實作</text>
+<text x="104" y="722" class="body">明確指示即可開始；需要時記到 PR，綁定來源、範圍與版本</text>
+<text x="104" y="752" class="body">Agent 技術通過不等於使用者授權實作</text>
 <path d="M505 768 V808" class="line"/>
 <rect x="80" y="808" width="850" height="118" rx="16" class="box"/>
 <text x="104" y="846" class="heading">05　openspec-apply-change</text>

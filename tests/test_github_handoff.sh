@@ -585,6 +585,120 @@ for term in '## Closure' '## Checkpoint' 'reviewer-b-r01/F-01' 'result: pass' '�
   want "$PEX" "$term" "PR examples show '$term'"
 done
 
+# ── simplify-github-design-approval (Issue #17) ──────────────────────────────
+# Maps to openspec/changes/simplify-github-design-approval specs. Static checks
+# only; Apply decisions are replayed separately.
+echo "SDA-1 explicit instruction authorizes Apply; no second identity gate"
+sec43() { awk '/^### 4\.3 /{f=1;next} /^## 5\. /{f=0} f' "$DOC" 2>/dev/null; }
+sec63() { awk '/^### 6\.3 /{f=1;next} /^### 6\.4 /{f=0} f' "$DOC" 2>/dev/null; }
+sec9()  { doc_section 9 10; }
+deny "$DOC" '記錄者由已信任的專案批准規範或' "§4.3 drops the recorder allowlist"
+sec43 | grep -qF '不要求證明 API 帳號就是使用者本人' && ok "§4.3 does not demand API-account identity proof" \
+  || bad "§4.3 does not demand API-account identity proof"
+sec43 | grep -qF '不能由 repository 權限推導' && ok "§4.3 still refuses repo access as authorization" \
+  || bad "§4.3 still refuses repo access as authorization"
+sec9 | grep -qF '而且能從 PR 找到' && bad "§9 no longer requires a PR event before Apply" || ok "§9 no longer requires a PR event before Apply"
+sec9 | grep -qF '已授權的記錄者或人類本人' && bad "§9 drops the recorder-or-human author check" || ok "§9 drops the recorder-or-human author check"
+for t in '明確的使用者指示' 'PR 事件不是 Apply 的必要條件' '只要求建立 Change' '技術 pass' '撤回' 'API 帳號'; do
+  sec9 | grep -qF -- "$t" && ok "§9 covers '$t'" || bad "§9 covers '$t'"
+done
+sec9 | grep -qF '沒有正文批准區塊' && ok "§9 keeps legacy event discovery" || bad "§9 keeps legacy event discovery"
+
+echo "SDA-2 approval record: optional human identifier, honest metadata"
+sec63 | grep -qF '人類批准者的 GitHub 帳號>' && bad "§6.3 no longer requires the approver's GitHub account" \
+  || ok "§6.3 no longer requires the approver's GitHub account"
+sec63 | grep -qF 'approved_by: <已知且可公開的人類識別；未知時整行省略>' && ok "§6.3 approved_by is optional" \
+  || bad "§6.3 approved_by is optional"
+for f in 'approved_scope:' 'artifact_revision:' 'source_kind:' 'source_ref:' 'recorded_by:' 'recorded_at:' 'approved_at:' 'supersedes:'; do
+  sec63 | grep -qF -- "- $f" && ok "§6.3 keeps '$f'" || bad "§6.3 keeps '$f'"
+done
+sec63 | grep -qF '實際作者只代表發布帳號' && ok "§6.3 actual author is the publisher, not identity proof" \
+  || bad "§6.3 actual author is the publisher, not identity proof"
+deny "$DOC" '明文指定 `octo-dev` 為可以代記人類' "shared case fixture has no recorder allowlist"
+for t in '未知人類帳號' 'API 帳號與委託者不同' '沒有 PR 事件但已有明確實作指示' '只要求建立 Change' '來源不明的批准宣稱' '授權撤回'; do
+  grep -E '^### C-[0-9]+' "$DOC" | grep -qF -- "$t" && ok "shared case for '$t'" || bad "shared case for '$t'"
+done
+want "$WORKFLOW" 'explicit user instruction' "OpenSpec workflow accepts an explicit user instruction"
+deny "$COMMON/AGENTS.md" '批准記錄者授權' "AGENTS seed drops recorder authorization"
+
+echo "SDA-3 entries share the same approval semantics"
+CR_SKILL="$COMMON/skills/change-review/SKILL.md"; CR_CASES="$COMMON/skills/change-review/references/acceptance-cases.md"
+for f in "$PR_SKILL/SKILL.md" "$CR_SKILL"; do
+  if grep -qE 'authorized recorder|contract 4\.3' "$f"; then bad "${f#"$ROOT"/} drops the recorder gate"; else ok "${f#"$ROOT"/} drops the recorder gate"; fi
+done
+want "$PR_SKILL/SKILL.md" 'omit the human identifier field' "github-pr omits an unknown human identifier"
+want "$PR_SKILL/SKILL.md" 'never infer it from the API login' "github-pr never infers identity from the API login"
+want "$CR_SKILL" 'explicit user instruction' "change-review recognizes an explicit instruction"
+for f in "$PR_CASES" "$CR_CASES"; do
+  deny "$f" '為可以代記人類設計批准的記錄者' "${f#"$ROOT"/} fixture has no recorder allowlist"
+done
+grep -E '^### GP-[0-9]+' "$PR_CASES" | grep -qF '未知帳號的批准紀錄' && ok "github-pr case for an unknown-account approval reply" \
+  || bad "github-pr case for an unknown-account approval reply"
+grep -E '^### CR-[0-9]+' "$CR_CASES" | grep -qF '明確指示涵蓋實作' && ok "change-review case for an explicit implementation instruction" \
+  || bad "change-review case for an explicit implementation instruction"
+deny "$SVG" '可由已授權 Agent 具名代記' "diagram drops the named-recorder wording"
+
+# codex-sgda-r01/F-01, F-02: version binding covers the real worktree and
+# local-only design revisions.
+echo "SDA-4 design version check covers the worktree and local-only revisions"
+sec9 | grep -qF 'git diff --quiet <artifact_revision> HEAD' && bad "§9 no longer compares commits only" \
+  || ok "§9 no longer compares commits only"
+for t in 'git diff --quiet <artifact_revision> -- openspec/changes/<change-id>/' \
+         'git ls-files --others --exclude-standard -- openspec/changes/<change-id>/' \
+         '結束碼大於 1' '只差在 tasks 的勾選' '不能當成相同'; do
+  sec9 | grep -qF -- "$t" && ok "§9 covers '$t'" || bad "§9 covers '$t'"
+done
+for t in 'unpublished-snapshot' "printf '%s\\0'" '另一台機器' '不編造 commit'; do
+  sec63 | grep -qF -- "$t" && ok "§6.3 covers '$t'" || bad "§6.3 covers '$t'"
+done
+for t in '工作區設計已實質改變' '只有 tasks 勾選' '基線不可得' '本機未提交規劃記到 PR'; do
+  grep -E '^### C-[0-9]+' "$DOC" | grep -qF -- "$t" && ok "shared case for '$t'" || bad "shared case for '$t'"
+done
+want "$PR_SKILL/SKILL.md" 'unpublished snapshot' "github-pr records a local-only design revision honestly"
+
+echo "SDA-5 rehearsal of the documented version check (real Git)"
+VT="$(mktemp -d)"; VR="$VT/repo"; CH="openspec/changes/add-export"
+vg() { git -C "$VR" "$@"; }
+snap() {                           # documented unpublished-snapshot digest of $1 (Change root)
+  ( cd "$1" && find . -type f | sed 's|^\./||' | LC_ALL=C sort | while IFS= read -r f; do
+      printf '%s\0' "$f"
+      if [ "$(basename "$f")" = tasks.md ]; then sed 's/^\([[:space:]]*\)- \[x\] /\1- [ ] /' "$f"; else cat "$f"; fi
+      printf '\0'
+    done ) | shasum -a 256 | cut -d' ' -f1
+}
+changed() {                        # documented check: 0 same, 1 changed, 2 not verifiable
+  local rev="$1" rc
+  vg rev-parse --verify -q "$rev^{commit}" >/dev/null || return 2
+  vg diff --quiet "$rev" -- "$CH/" ':(exclude)'"$CH/tasks.md"; rc=$?
+  (( rc > 1 )) && return 2; (( rc == 1 )) && return 1
+  [[ -n "$(vg ls-files --others --exclude-standard -- "$CH/")" ]] && return 1
+  # tasks.md: only checkbox state may differ
+  diff -q <(vg show "$rev:$CH/tasks.md" 2>/dev/null | sed 's/- \[x\] /- [ ] /') \
+          <(sed 's/- \[x\] /- [ ] /' "$VR/$CH/tasks.md") >/dev/null || return 1
+  return 0
+}
+git init -q -b main "$VR"; vg config user.name T; vg config user.email t@example.invalid; vg config commit.gpgsign false
+mkdir -p "$VR/$CH/specs/x"; printf 'decision A\n' > "$VR/$CH/design.md"; printf 'req\n' > "$VR/$CH/specs/x/spec.md"
+printf -- '- [ ] 1.1 do it\n' > "$VR/$CH/tasks.md"
+vg add -A; vg commit -q -m d1; D1="$(vg rev-parse HEAD)"; S1="$(snap "$VR/$CH")"
+changed "$D1"; [[ $? == 0 ]] && ok "unchanged artifacts match the approved revision" || bad "unchanged artifacts match the approved revision"
+sed -i.bak 's/- \[ \]/- [x]/' "$VR/$CH/tasks.md"; rm -f "$VR/$CH/tasks.md.bak"
+changed "$D1"; [[ $? == 0 ]] && ok "task checkbox progress is bookkeeping, not a design change" || bad "task checkbox progress is bookkeeping, not a design change"
+[[ "$(snap "$VR/$CH")" == "$S1" ]] && ok "snapshot digest ignores task checkbox progress" || bad "snapshot digest ignores task checkbox progress"
+printf 'decision B\n' > "$VR/$CH/design.md"
+vg diff --quiet "$D1" HEAD -- "$CH/" && ok "(gap reproduced) commit-to-HEAD comparison misses the worktree change" \
+  || bad "(gap reproduced) commit-to-HEAD comparison misses the worktree change"
+changed "$D1"; [[ $? == 1 ]] && ok "unstaged design change is detected" || bad "unstaged design change is detected"
+[[ "$(snap "$VR/$CH")" != "$S1" ]] && ok "snapshot digest changes with the design" || bad "snapshot digest changes with the design"
+vg add "$CH/design.md"
+changed "$D1"; [[ $? == 1 ]] && ok "staged design change is detected" || bad "staged design change is detected"
+vg checkout -q "$D1" -- "$CH/design.md"; printf 'new\n' > "$VR/$CH/specs/x/extra.md"
+changed "$D1"; [[ $? == 1 ]] && ok "untracked design artifact is detected" || bad "untracked design artifact is detected"
+rm -f "$VR/$CH/specs/x/extra.md"
+changed "0000000000000000000000000000000000000000"; [[ $? == 2 ]] && ok "missing baseline is not verifiable, never 'same'" \
+  || bad "missing baseline is not verifiable, never 'same'"
+rm -rf "$VT"
+
 # ── 4.1 Managed delivery and legacy script retirement ────────────────────────
 echo "4.1 managed delivery"
 T="$(new_target)"

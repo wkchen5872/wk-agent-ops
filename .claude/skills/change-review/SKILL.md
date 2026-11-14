@@ -129,10 +129,13 @@ human approval nor permission to Apply. The checklist in
 [references/checklists.md](references/checklists.md) lists only what the
 invoked skills do not cover.
 
-Approval records are judged by the contract (section 9): the human approver's
-account, a date-only `approved_at` is an accepted precision, and the event's
-actual author must be an authorized recorder. A recorder without authority
-cannot authorize Apply; that does not stop this review.
+Approval is judged by the contract (section 9): an explicit user instruction
+covering the Change and its design revision — given directly or through a
+traceable handoff, with or without a published event — authorizes Apply. A
+date-only `approved_at` is an accepted precision, and an unknown human
+identifier is simply omitted. A technical `pass`, repository access, or a
+self-declared recorder never authorizes Apply, and no recorder qualification is
+checked. None of this stops the review itself.
 
 ## Step 4 — Decide the result and write the report
 

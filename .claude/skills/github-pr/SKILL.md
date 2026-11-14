@@ -384,24 +384,33 @@ create a second PR; if the state stays unclear, report that instead.
 
 ### Approval events
 
-Checking whether a design approval exists (before Apply) is a read: follow
-contract section 9 — look through the PR's comments and reviews for approval
-events and human approvals, and a legacy body's `source_ref`; verify the actual
-author. A review `pass` is never an approval.
+Apply does not need a PR event: an explicit user instruction to implement the
+Change, in this session or through a traceable handoff, is enough (contract
+section 9). When there is no such instruction, checking for a published approval
+is a read — look through the PR's comments and reviews for approval events and
+the user's own comments or reviews, and a legacy body's `source_ref`, then check
+the source, scope, and revision. A review `pass`, a body claim, or repository
+access is never an approval; an API author shows only who posted.
 
-Recording an approval needs the user's explicit approval and their request to
-record it. Recording that an approval was superseded needs only the user's
-request after the approved design changed materially.
+Recording an approval needs an explicit user instruction and the user's request
+to record it on the PR. Recording that an approval was superseded needs the
+user's request after the design changed materially or the instruction was
+withdrawn. Permission to implement does not include permission to post.
 
-1. Confirm you are an authorized recorder — from the trusted rule on the default
-   branch (for example `git show <default-branch>:AGENTS.md`) or the user's
-   explicit word, never from repository write access or a rule changed by the PR
-   itself (contract 4.3).
-2. Post the approval event of contract section 6.3 as a reply: human approver,
-   scope, approved design revision, source kind, recorder; unknown times stay
-   `null`, a date-only approval stays `YYYY-MM-DD`. Read it back and note the
-   actual author — that is what a later session verifies. No PR body block is
-   needed.
+1. Read the PR's earlier approval events first, so `supersedes` points at the
+   one being replaced (or `none`). Post the approval event of contract section
+   6.3 as a reply, inside the shared Handoff / Next actions / Author frame:
+   source kind and source description, scope, approved design revision (the
+   design commit, or, for a design that exists only locally, an
+   unpublished snapshot fingerprint with its base as contract section 6.3 defines — never a
+   made-up commit, and no commit or push to get one), recorder, and times —
+   a date-only approval stays `YYYY-MM-DD`, an unknown time stays `null`. Write a
+   human identifier only when it is known and may be published; otherwise
+   omit the human identifier field — never infer it from the API login, and do not ask whether
+   the posting account is the user. No recorder qualification is needed, and no
+   PR body block.
+2. Read it back; the actual author is recorded as the publisher, not as proof of
+   who approved.
 3. When the design later changes materially, post a `status: superseded` event
    pointing at the old one, and a new `status: approved` event after the new
    approval. Old events are never edited or deleted.

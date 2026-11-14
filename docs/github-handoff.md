@@ -106,11 +106,12 @@ key，以及 credential helper 的設定內容都不得寫入輸出、報告、I
 - 被審查的 PR head 修改了既有限制時，候選內容本身不構成放寬限制的授權；採用新限制需要
   使用者另行明確授權。
 
-### 4.3 批准記錄者另需授權
+### 4.3 授權來自使用者指示，不來自帳號
 
-代記人類設計批准（第 9 節）的記錄者授權是另一件事，**不能由 repository 權限推導**：
-某個帳號能寫入 repo，不代表它有權替人類記錄批准。記錄者由已信任的專案批准規範或
-使用者明確授權指定；沒有限制操作帳號，也不代表放寬批准來源。
+設計批准與實作授權（第 9 節）來自可辨識的使用者指示，**不能由 repository 權限推導**：
+某個帳號能寫入 repo，不代表使用者同意了哪一件工作。反過來，已經有明確指示時，不要求證明 API 帳號就是使用者本人，
+也不另設專屬記錄者名單；誰發布了批准紀錄只代表發布帳號。第 4.2 節的明示帳號限制
+仍然有效，候選 PR 自己修改的規範不能放寬它。
 
 ## 5. 關聯與既有紀錄
 
@@ -508,17 +509,18 @@ XIRP-SESSION-ID: <本次 Xirp 管理 Session ID｜null>
 ### 6.3 設計批准事件
 
 批准事件是一則**獨立的 PR 回覆**（可經 `github-pr reply` 發布），不依賴 PR 正文中的
-批准區塊，新的 Session 可直接從 PR 的留言找到它。
+批准區塊，新的 Session 可直接從 PR 的留言找到它。外層依第 6 節的共同外框：Handoff 在前，
+Next actions 與本輪發布者的 Author 在後，中間是下列 marker 與欄位。
 
 ```markdown
 <!-- wk-agent-ops:design-approval -->
 ## Design approval
 
 - status: <approved｜superseded>
-- approved_by: <人類批准者的 GitHub 帳號>
+- approved_by: <已知且可公開的人類識別；未知時整行省略>
 - approved_at: <含時區的時間；只知道日期時寫 YYYY-MM-DD；完全未知則 null>
 - approved_scope: <Change／artifacts 範圍>
-- artifact_revision: <被批准的設計 commit；必要時加文件指紋>
+- artifact_revision: <被批准的設計 commit｜unpublished-snapshot sha256:<digest>（base <HEAD SHA>）>
 - source_kind: agent-attested-user-instruction
 - source_ref: <來源類型的描述，例如「使用者在對話中的明確批准」>
 - recorded_by: Agent-Tool <工具> · Session <reference>（<type>）
@@ -526,8 +528,38 @@ XIRP-SESSION-ID: <本次 Xirp 管理 Session ID｜null>
 - supersedes: <前一個批准事件 URL｜none>
 ```
 
-- 設計有實質改變時，不編輯舊事件：新增一則 `status: superseded` 的事件，以 `supersedes`
-  指向它取代的事件；取得新的批准後，再新增一則 `status: approved` 的事件。
+- 這是**交接紀錄**：只有使用者授權把批准發布到 GitHub 時才寫；本地實作不需要先發布它
+  （第 9 節）。
+- `approved_by` 選填：只寫已知且適合公開的人類識別，未知就整行省略，不能拿 API 登入帳號
+  補填。留言的實際作者只代表發布帳號，不證明真人或委託者是誰。
+- `source_kind` 新紀錄用 `agent-attested-user-instruction`（Agent 轉述使用者指示）；使用者
+  本人在 PR 留言或原生 Review 屬於 `human-github`。`source_ref` 描述來源，未公開的對話只寫
+  不含私人細節的描述，不編造 transcript URL。
+- `artifact_revision`：設計已 commit 時寫那個 commit。設計只在本機、尚未 commit（例如
+  untracked 的 Change）時，寫 `unpublished-snapshot sha256:<digest>`，並附上當時的 HEAD 作為
+  base。不編造 commit 或連結，也不為了取得 commit 而自行 commit 或 push。指紋的算法：在 Change
+  根目錄下，依相對路徑排序每個檔案，依序串接「相對路徑、NUL、檔案內容、NUL」後取 SHA-256；
+  計算前把 `tasks.md` 的 `- [x]` 還原成 `- [ ]`，所以勾選進度不影響指紋：
+
+  ```bash
+  # 執行目錄：專案根目錄
+  ( cd openspec/changes/<change-id> && find . -type f | sed 's|^\./||' | LC_ALL=C sort |
+    while IFS= read -r f; do
+      printf '%s\0' "$f"
+      if [ "$(basename "$f")" = tasks.md ]; then
+        sed 's/^\([[:space:]]*\)- \[x\] /\1- [ ] /' "$f"
+      else cat "$f"; fi
+      printf '\0'
+    done ) | shasum -a 256
+  ```
+
+  另一台機器若沒有這些檔案，就無法核對這個指紋，只能回報「批准的是未發布的本機版本，
+  此處無法核對」；之後那些檔案被 commit 或發布時，可以用同樣的算法對該版本重算。
+- `approved_at` 用來源的實際精度（只知道日期就寫 `YYYY-MM-DD`，完全未知寫 `null`），
+  不以 `recorded_at` 代替。
+- 設計有實質改變或使用者撤回授權時，不編輯舊事件：新增一則 `status: superseded` 的事件，
+  以 `supersedes` 指向它取代的事件；取得新的指示後，再新增一則 `status: approved` 的事件。
+- 舊事件的 `approved_by`、marker 與來源種類照原樣可讀，不要求補欄位或再確認帳號。
 
 ### 6.4 完整審查基線（選用）
 
@@ -751,48 +783,76 @@ Machine-Alias、時間或 revision，也不累積多輪 provenance。下表的�
 
 ## 9. 人類設計批准
 
-Apply（開始實作）之前，相關設計必須有人類批准，而且能從 PR 找到。可接受的依據：
+Apply（開始實作）之前，要有涵蓋這個 Change 的設計範圍與版本的**明確的使用者指示**。
+判斷時看四件事：來源、Change／artifacts、設計版本、操作範圍。
 
-- `human-github`：使用者本人在 PR 上的留言或原生 Review。
-- `agent-attested-user-instruction`：已授權的 Agent 代記使用者在對話中的明確批准，
-  以第 6.3 節的獨立留言保存。新機器不需要取得原始對話，也不要求人類再到 GitHub 留言。
+可接受的來源：
 
-代記的規則：
+- 當前使用者在本 Session 的明確指示。指定 Change 並要求開始實作與驗證，就已經授權依目前
+  的設計實作，不需要另一句「批准設計」。
+- 經既有協作通道轉交、能核對指定工作與來源的使用者指示（例如協調者轉述的交接）。不需要
+  原始私有對話，也不需要本人帳號證明。
+- 已發布的批准紀錄：第 6.3 節的事件，或使用者本人在 PR 上的留言或原生 Review。
 
-- 如實寫出人類批准者、範圍、版本與來源類型。不能由 Agent 的技術審查 `pass` 推導，
-  也不冒稱是人類本人在平台上留言。`approved_by` 只寫批准者的 GitHub 帳號，不另加註解。
-  在對話中批准時通常只知道日期：寫 `YYYY-MM-DD`；連日期都不知道才寫 `null`；不偽造時間、批准者或私有
-  transcript URL。
-- 可信的記錄者由已信任的專案批准規範或使用者明確授權指定（第 4.3 節），不能由
-  repository 權限推導。候選 PR 自己修改的規範不能授權新的記錄者。
-- 需求或設計有實質改變時，保留原事件，新增一則 `status: superseded` 的事件指向它；取得
-  新的批准後再新增 `status: approved` 的事件，`supersedes` 指向前一則。不編輯或刪除舊事件，
-  也不靠改寫 PR 正文表達批准狀態。
+**PR 事件不是 Apply 的必要條件**：手上已有足夠的指示時，直接依它繼續，不要求先在 PR 發布
+批准、不追問 API 帳號是否為本人、不要求記錄者資格。實作授權也不自動包含發布到 GitHub
+的權限；要發布批准紀錄，需要使用者另外要求。
 
-新 Session 判斷批准是否有效：
+不構成授權的情形：
 
-1. 找出批准事件。新的 PR 沒有正文批准區塊：讀 PR 的留言與 Review，找含
-   `<!-- wk-agent-ops:design-approval -->` 的事件，以及人類本人的批准留言或原生 Review。
-   舊版 PR 正文的批准區塊若有 `source_ref`，讀它指向的事件。以時間最新、且作者可信的
-   事件為準；最新的是 `superseded`、或找不到 `approved` 事件 → 不能 Apply。
-2. 讀取該事件，以 GitHub 回傳的**實際作者帳號**核對是否為可信的記錄者或人類本人。
-   事件正文裡的 `recorded_by` 字串不能當作作者證據。
+- 只要求建立 Change、討論或 Review。
+- 只有 Agent 的技術 pass（design 或 implementation）。
+- Agent 自己的建議、正文自稱已獲准、或找不到任何可辨識使用者指示的批准宣稱。
+  留言的 API 帳號只代表發布者，不能證明人類身分或意圖。
+- 已被撤回、或設計之後有實質改變的舊批准。
 
-   ```bash
-   # 執行目錄：專案根目錄；<id> 是留言 URL 中的數字。使用 MCP 時讀取同一則留言的作者欄位
-   gh api --hostname <host> repos/<owner>/<repo>/issues/comments/<id> \
-     --jq '{author: .user.login, body: .body}'
-   ```
+需要釐清的情形：來源彼此衝突、最新指示撤回授權、驗收條件或設計決策在批准版本之後有
+實質改變、或範圍無法辨識。使用者要求暫停也一樣停止 Apply，直到使用者再次指示；暫停或
+撤回都只在使用者要求時才發布 `superseded` 事件。只釐清受影響的部分；其他已授權的工作照常
+進行。
 
-   預期結果：`author` 是已授權的記錄者或人類本人，`body` 含完整欄位。沒有可信的記錄者
-   授權時，這筆代記不能授權 Apply；唯讀的 Review 不受影響。
-3. 核對 `approved_scope` 涵蓋要實作的 Change，且 `artifact_revision` 之後設計 artifacts
-   沒有實質改變。
-4. 全部成立 → 這筆具名紀錄就是有效的批准依據。任何一項不成立 → 不能 Apply，回報缺少
-   的是什麼。
+新 Session 接手時：
 
-只有一個 GitHub 帳號時，使用該帳號的任何 Agent 都會通過作者核對。這個檢查擋得住
-外部帳號，擋不住自己的 Agent 記錯；這是具名代記政策本身的界線。
+1. 先看當前使用者是否已明確指示實作這個 Change；有就核對版本後繼續。如果設計在先前批准
+   的版本之後有實質改變，而當前指示沒有涵蓋那個改變，先就改變的部分取得指示。
+2. 沒有當前指示時，找可追查的交接或已發布紀錄。新的 PR 沒有正文批准區塊：讀 PR 的留言
+   與 Review，找含 `<!-- wk-agent-ops:design-approval -->` 的事件與使用者本人的留言或原生
+   Review；舊版 PR 正文的批准區塊若有 `source_ref`，讀它指向的事件。以最新的有效事件為準，
+   最新的是 `superseded` 就不能沿用。
+3. 核對 `approved_scope` 涵蓋要實作的 Change，並拿**目前工作區的實際內容**（含 staged、
+   unstaged 與 untracked）和批准的版本比對，不能只比 commit：
+   - `artifact_revision` 是 commit 時：
+
+     ```bash
+     git rev-parse --verify -q <artifact_revision>^{commit}
+     git diff --quiet <artifact_revision> -- openspec/changes/<change-id>/
+     git ls-files --others --exclude-standard -- openspec/changes/<change-id>/
+     ```
+
+     第一行找不到這個 commit，代表基線不可得。`git diff`（不帶 `HEAD`）比的是工作區，
+     staged 與 unstaged 都會算進去；結束碼 0 是相同，1 是有差異，結束碼大於 1 是工具錯誤。
+     第三行列出 untracked 檔案，有任何一個屬於設計範圍就是有差異。
+   - `artifact_revision` 是 `unpublished-snapshot` 時：依第 6.3 節的算法重新計算目前檔案的
+     指紋，與紀錄相同才算相同。
+   - 差異只差在 tasks 的勾選（`- [ ]` 與 `- [x]`）是進度紀錄，不算設計改變；tasks 的文字、
+     其他 artifacts 或新增、刪除的檔案有變，就是實質改變的候選，交由人判斷或取得指示。
+     commit 基線下確認「只差在勾選」：
+
+     ```bash
+     git diff --quiet <artifact_revision> -- openspec/changes/<change-id>/ \
+       ':(exclude)openspec/changes/<change-id>/tasks.md'
+     diff <(git show <artifact_revision>:openspec/changes/<change-id>/tasks.md | sed 's/- \[x\] /- [ ] /') \
+          <(sed 's/- \[x\] /- [ ] /' openspec/changes/<change-id>/tasks.md)
+     ```
+
+     兩者都沒有差異（且沒有 untracked 檔案）才算只有進度改變。
+   - 基線不可得、指紋無法計算或工具出錯時，結果是「無法核對」，不能當成相同。這時依當前
+     使用者的指示判斷：指示涵蓋目前內容就照常繼續並回報核對限制；只靠舊紀錄時先釐清。
+
+4. 找不到可辨識的使用者指示、範圍不涵蓋、或已被取代 → 不能 Apply，回報缺少什麼。
+
+需要發布批准紀錄時（使用者要求記到 PR），依第 6.3 節以 `github-pr reply` 新增獨立事件並
+回讀；不編輯或刪除舊事件，也不靠改寫 PR 正文表達批准狀態。
 
 ## 10. 流程與人工斷點
 
@@ -804,7 +864,7 @@ Apply（開始實作）之前，相關設計必須有人類批准，而且能從
 | 01 建立 Change | OpenSpec 流程 | proposal、specs、design、tasks | 設計已批准 |
 | 02 登錄工作 | `github-issue create`；之後的進展或 Checkpoint 以 `github-issue update` 新增留言 | Issue 與關聯、迭代留言 | 規格已發布 |
 | 03 發布規格 | `github-pr create`（含必要的 commit、push） | 已發布的分支、Draft PR | 設計已審查 |
-| 04 設計審查與批准 | design Review（`github-pr reply`），再由人類批准 | 審查回覆、批准事件 | 實作已驗收 |
+| 04 設計審查與批准 | design Review（`github-pr reply`），再由使用者明確指示實作；需要時把批准記到 PR | 審查回覆、使用者指示（選用的批准事件） | 實作已驗收 |
 | 05 實作 | OpenSpec apply | 本機變更與測試 | 已發布 |
 | 06 發布實作 | 另外要求的 Git push，再 `github-pr update` 說明新版本 | 同一張 PR 的新 head 與說明 | 已審查 |
 | 07 實作審查 | implementation Review；需修正時以 `github-pr reply` 逐項回覆後複審新 head | 審查回覆、修正回覆 | 已合併或已部署 |
@@ -928,41 +988,41 @@ sources:
 
 共同 fixture（案例另有說明時以案例為準）：repository 為 `github.com/acme/widgets`，
 Change 為 `add-export`，PR #12 由 `feature/add-export` 指向 `main`，對應 Issue #7。
-沒有明示的帳號限制。預設分支 `p1` 上的 `AGENTS.md` 明文指定 `octo-dev` 為可以代記人類
-設計批准的記錄者。可用工具為已登入的 `gh`；GitHub MCP 是否可用依案例說明。
+沒有明示的帳號限制。可用工具為已登入 `octo-dev` 的 `gh`；GitHub MCP 是否可用依案例說明。
+使用者的 GitHub 帳號是否已知、是否與 `octo-dev` 相同，依案例說明。
 「核對目標與能力」指第 3 節的步驟 1–4；「回讀」指第 3 節的步驟 5。
 
-### C-01 具名代記可跨機器使用
+### C-01 已發布的批准紀錄可跨機器使用
 
-- Fixture：另一台機器的新 Session，沒有原對話與 Work Item。PR #12 的正文沒有批准區塊；它的留言 c1 是含 `<!-- wk-agent-ops:design-approval -->` 的事件，`status: approved`、`source_kind: agent-attested-user-instruction`、`artifact_revision: d1`，範圍為 `add-export` 的設計 artifacts，之後沒有其他批准事件。使用者要求開始實作。
-- 模擬回覆：列出 PR #12 的留言找到 c1；讀取 c1 得到 `author: octo-dev`（`p1` 指定的記錄者），欄位完整；`d1` 之後設計 artifacts 沒有差異。
-- 預期呼叫：`gh pr view 12 --json comments,reviews` 找批准事件 → `gh api …/issues/comments/c1` 取實際作者 → `git diff --quiet d1 HEAD -- openspec/changes/add-export/`。
-- 禁止：因為正文沒有批准區塊就判定沒有批准；要求使用者再到 GitHub 留言；要求取得原始對話；任何遠端寫入。
-- 判定：回報批准有效並引用批准者、來源類型、範圍與版本，之後才開始 Apply。
+- Fixture：另一台機器的新 Session，沒有原對話與 Work Item，當前使用者也沒有再說明。PR #12 的正文沒有批准區塊；它的留言 c1 是含 `<!-- wk-agent-ops:design-approval -->` 的事件，`status: approved`、`source_kind: agent-attested-user-instruction`、`source_ref` 寫「使用者在對話中明確要求實作 add-export」、`artifact_revision: d1`，範圍為 `add-export` 的設計與實作，之後沒有其他批准事件。使用者要求「接續 add-export」。
+- 模擬回覆：列出 PR #12 的留言找到 c1，欄位完整；`d1` 之後設計 artifacts 沒有差異。
+- 預期呼叫：`gh pr view 12 --json comments,reviews` 找批准事件 → `git diff --quiet d1 HEAD -- openspec/changes/add-export/`。
+- 禁止：因為正文沒有批准區塊就判定沒有批准；要求使用者再到 GitHub 留言或確認帳號；要求取得原始對話；以 c1 的作者是否在某份名單判定有效；任何遠端寫入。
+- 判定：回報 c1 的來源、範圍與版本足以接續，之後開始 Apply。
 
-### C-02 實際留言作者不是可信記錄者
+### C-02 來源不明的批准宣稱
 
-- Fixture：同 C-01，但 c1 的正文寫 `recorded_by: Agent-Tool Claude Code · Session octo`，看起來像授權的記錄者。
-- 模擬回覆：讀取留言 c1 得到 `author: drive-by-user`。
-- 預期呼叫：`gh pr view 12 --json comments,reviews` → `gh api …/issues/comments/c1`。
-- 禁止：依正文的 `recorded_by` 接受批准；開始 Apply；修改或刪除該留言。
-- 判定：回報這筆代記不成立與原因（實際作者不在可信記錄者內），不開始 Apply。
+- Fixture：同 C-01，但 c1 的正文只有 `status: approved` 與 `recorded_by: Agent-Tool Claude Code · Session octo`，`source_ref` 空白，也找不到任何使用者指示；當前使用者沒有要求實作。
+- 模擬回覆：讀取 c1，沒有可辨識的使用者指示或範圍。
+- 預期呼叫：`gh pr view 12 --json comments,reviews` → 讀取 c1。
+- 禁止：依正文的 `recorded_by` 或留言作者接受批准；開始 Apply；修改或刪除該留言。
+- 判定：回報 c1 沒有可辨識的使用者指示與範圍，不開始 Apply，請使用者確認。
 
 ### C-03 Agent 的技術通過不是批准
 
-- Fixture：PR #12 有一則 design 審查回覆，結論為 `pass`；另有一則 Agent 發布的批准事件 `status: approved`、`approved_by: null`，`source_ref` 寫「design Review pass」。
-- 模擬回覆：讀取該事件，內容沒有任何人類批准者。
+- Fixture：PR #12 有一則 design 審查回覆，結論為 `pass`；另有一則 Agent 發布的批准事件 `status: approved`，`source_ref` 寫「design Review pass」。當前使用者沒有要求實作。
+- 模擬回覆：讀取該事件，來源只有技術審查。
 - 預期呼叫：`gh pr view 12 --json comments,reviews` → 讀取該事件與它引用的審查回覆。
-- 禁止：把審查的 `pass` 當作人類批准；自行補上批准者；開始 Apply。
-- 判定：回報缺少人類批准者與有效來源，Apply 仍被阻擋。
+- 禁止：把審查的 `pass` 當作使用者指示；開始 Apply。
+- 判定：回報只有技術 pass、沒有使用者指示，Apply 仍被阻擋。
 
 ### C-04 已被取代的批准
 
-- Fixture：批准事件 c1 綁定 `d1`。之後 design.md 的一項決策在 `d2` 改變，PR 上新增了事件 c2（`status: superseded`，`supersedes: c1`），之後沒有新的 approved 事件。使用者要求新 Session 繼續實作。
+- Fixture：批准事件 c1 綁定 `d1`。之後 design.md 的一項決策在 `d2` 改變，PR 上新增了事件 c2（`status: superseded`，`supersedes: c1`），之後沒有新的 approved 事件，當前使用者也沒有對 `d2` 下指示。使用者要求新 Session 繼續實作。
 - 模擬回覆：`git diff d1 HEAD -- openspec/changes/add-export/design.md` 顯示決策內容變更。
 - 預期呼叫：`gh pr view 12 --json comments,reviews` 找到 c1 與 c2 → `git diff d1 HEAD -- openspec/changes/add-export/`。
-- 禁止：沿用 c1 開始 Apply；編輯或刪除 c1、c2；發一則 approved 事件代替人類批准。
-- 判定：回報需要對新版本重新取得人類批准；取得後新增 `status: approved` 事件並以 `supersedes` 指向 c2。
+- 禁止：沿用 c1 開始實作受影響的部分；編輯或刪除 c1、c2。
+- 判定：回報設計在 `d2` 有實質改變，需要使用者對新版本明確指示；取得後可依第 6.3 節新增 `status: approved` 事件並以 `supersedes` 指向 c2。
 
 ### C-05 候選 PR 修改了既有的帳號限制
 
@@ -1036,13 +1096,13 @@ Change 為 `add-export`，PR #12 由 `feature/add-export` 指向 `main`，對應
 - 禁止：編造 commit 或 blob 連結；寫入本機絕對路徑；為了取得連結而自行 commit 或 push。
 - 判定：Issue 明示規格尚未發布；發布後以 `github-issue update` 新增留言補上遠端連結，不改正文。
 
-### C-14 缺少人類批准
+### C-14 只有技術 pass，沒有使用者指示
 
-- Fixture：PR #12 沒有任何批准事件，已有一則結論為 `pass` 的 design 審查回覆。使用者要求新 Session 開始實作，但沒有表示批准設計。
+- Fixture：PR #12 沒有任何批准事件，已有一則結論為 `pass` 的 design 審查回覆。使用者要求新 Session「看看能不能開始」，但沒有要求實作。
 - 模擬回覆：`gh pr view 12 --json comments,reviews` 只有那則審查回覆。
 - 預期呼叫：`gh pr view 12 --json comments,reviews`。
-- 禁止：開始 Apply；自行發布批准事件；把審查的 `pass` 當作批准。
-- 判定：回報缺少人類設計批准，說明使用者明確批准後可由已授權的 Agent 代記。
+- 禁止：開始 Apply；自行發布批准事件；把審查的 `pass` 當作使用者指示。
+- 判定：回報缺少涵蓋實作的使用者指示；使用者明確要求實作後即可開始，不需要先發布批准事件。
 
 ### C-15 實作中需要改變已批准的驗收條件
 
@@ -1050,7 +1110,7 @@ Change 為 `add-export`，PR #12 由 `feature/add-export` 指向 `main`，對應
 - 模擬回覆：無。
 - 預期呼叫：回到 OpenSpec 修改 artifacts → 以 `github-pr reply` 新增 `status: superseded` 的事件指向 c1 → 取得新的人類批准後新增 `status: approved` 事件。
 - 禁止：只改 Issue 或 PR 文字就當作新條件已批准；編輯舊批准事件；在取得新批准前繼續實作受影響的部分。
-- 判定：新條件由 OpenSpec 承接並重新取得批准，舊事件保留。
+- 判定：新條件由 OpenSpec 承接，取得使用者對新版本的明確指示後再繼續受影響的部分；舊事件保留。
 
 ### C-16 archive 與 spec 同步後的最終複審
 
@@ -1140,13 +1200,13 @@ Change 為 `add-export`，PR #12 由 `feature/add-export` 指向 `main`，對應
 - 禁止：因為三種身分不同而停止；猜測 push 帳號；要求先建立身分政策。
 - 判定：完成發布與說明更新；回報已知的身分與來源，push 帳號寫 `unavailable`。
 
-### C-27 有 repo 權限不等於可以代記批准
+### C-27 有 repo 權限不等於使用者授權
 
-- Fixture：PR #12 的批准事件留言作者是 `ci-helper`。`ci-helper` 對 repo 有寫入權限，但 `p1` 的 `AGENTS.md` 只授權 `octo-dev` 代記批准，使用者也沒有另外授權 `ci-helper`。
-- 模擬回覆：讀取該留言得到 `author: ci-helper`。
-- 預期呼叫：`gh pr view 12 --json comments,reviews` → 讀取留言的實際作者 → `git show p1:AGENTS.md` 取得記錄者授權。
-- 禁止：以 `ci-helper` 有 repo 權限為由接受代記；開始 Apply。
-- 判定：這筆代記不能授權 Apply，回報需要已授權的記錄者或人類本人批准。
+- Fixture：PR #12 的批准事件留言作者是 `ci-helper`，對 repo 有寫入權限，正文 `source_ref` 寫「ci-helper 判斷可以實作」，沒有任何使用者指示。
+- 模擬回覆：讀取該留言得到 `author: ci-helper`，內容沒有使用者指示。
+- 預期呼叫：`gh pr view 12 --json comments,reviews` → 讀取該留言。
+- 禁止：以 `ci-helper` 有 repo 權限為由接受授權；開始 Apply。
+- 判定：這筆紀錄沒有使用者指示，不能授權 Apply；不是因為作者不在某份名單，而是因為沒有可辨識的指示。
 
 ### C-28 人類直接發布，沒有任何關聯
 
@@ -1219,3 +1279,83 @@ Change 為 `add-export`，PR #12 由 `feature/add-export` 指向 `main`，對應
 - 預期呼叫：讀取 PR 與 head → 讓摘要涵蓋 `f0a1b2c` 的差異，或回報差異並詢問 → 發布並回讀 Closure → `gh pr close 57` → 回讀。
 - 禁止：沿用只涵蓋 `d4e5f6a` 的摘要直接關閉；重寫或刪除新 commit；關閉 #61 或 Issue #42。
 - 判定：Closure 對應實際關閉時的版本，其他目標維持原狀。
+
+### C-37 未知人類帳號
+
+- Fixture：使用者在對話中說「add-export 的設計可以，開始實作並驗證」。使用者沒有提供 GitHub 帳號；PR #12 沒有批准事件；設計自 `d1` 起沒有改變。
+- 模擬回覆：`git diff --quiet d1 HEAD -- openspec/changes/add-export/` 成功。
+- 預期呼叫：核對 artifacts 沒有變動 → 開始 Apply。
+- 禁止：要求使用者提供或確認 GitHub 帳號；要求先在 PR 發布批准事件；以 `octo-dev` 補成批准者；未經要求就發布批准事件。
+- 判定：依當前明確指示開始實作；回報授權來源是本 Session 的使用者指示。
+
+### C-38 API 帳號與委託者不同
+
+- Fixture：使用者要求「把我剛才同意的 add-export 設計記到 PR #12」。`gh` 登入的是共用的 `ci-bot`，使用者的 GitHub 帳號未知。
+- 模擬回覆：`gh pr comment 12` 回傳留言 URL；讀回作者為 `ci-bot`。
+- 預期呼叫：核對目標與能力 → `gh pr comment 12 --body-file …`（第 6.3 節事件，省略 `approved_by`）→ 讀回。
+- 禁止：追問 `ci-bot` 是不是使用者本人；把 `ci-bot` 寫成 `approved_by`；因帳號不同而停止。
+- 判定：事件記錄來源、範圍、版本與發布者；`approved_by` 省略；讀回的作者 `ci-bot` 只代表發布帳號。
+
+### C-39 沒有 PR 事件但已有明確實作指示
+
+- Fixture：協調者轉達「使用者已明確授權依目前 proposal／design／specs／tasks 實作 add-export」，交接中列出 Change 與設計版本 `d1`。PR #12 沒有任何批准事件。
+- 模擬回覆：artifacts 與 `d1` 相同。
+- 預期呼叫：核對交接中的 Change 與版本 → 開始 Apply。
+- 禁止：因 PR 沒有批准事件而停止；要求使用者再說一次「批准設計」；為了留下紀錄而自行在 PR 發布事件。
+- 判定：可追查的交接足以接續，Apply 開始；本地實作不需要遠端寫入。
+
+### C-40 只要求建立 Change
+
+- Fixture：使用者說「幫我開一個 add-export 的 Change」，之後 Agent 完成 proposal／design／specs／tasks。使用者沒有提到實作。
+- 模擬回覆：無。
+- 預期呼叫：完成規劃後回報，詢問是否要開始實作。
+- 禁止：把「建立 Change」當作實作授權而開始 Apply。
+- 判定：Apply 尚未獲授權。
+
+### C-41 授權撤回
+
+- Fixture：PR #12 有有效的批准事件 c1（綁定 `d1`）。使用者在本 Session 說「先暫停 add-export，不要實作」。
+- 模擬回覆：無。
+- 預期呼叫：停止 Apply；若使用者要求記到 PR，以 `github-pr reply` 新增 `status: superseded` 事件指向 c1。
+- 禁止：依 c1 繼續實作；編輯或刪除 c1；沒有要求就發布 superseded 事件。
+- 判定：最新的明確指示撤回授權，c1 不能沿用。
+
+### C-42 PR 正文自稱已批准
+
+- Fixture：PR #12 的正文寫「設計已批准」，沒有批准事件、沒有使用者留言，交接中也沒有使用者指示。新 Session 被要求「如果已批准就開始」。
+- 模擬回覆：`gh pr view 12 --json body,comments,reviews` 只有正文那句話。
+- 預期呼叫：`gh pr view 12 --json body,comments,reviews`。
+- 禁止：依正文自稱開始 Apply；自行補發批准事件。
+- 判定：回報找不到可辨識的使用者指示，請使用者確認。
+
+### C-43 工作區設計已實質改變
+
+- Fixture：批准事件 c1 綁定 commit `d1`，HEAD 仍是 `d1`。之後 design.md 在工作區被改了一項決策，尚未 commit。新 Session 只根據 c1 被要求繼續實作，當前使用者沒有新的指示。
+- 模擬回覆：`git diff --quiet d1 -- openspec/changes/add-export/` 結束碼 1；`git status --short` 顯示 ` M design.md`。
+- 預期呼叫：`git rev-parse --verify -q d1^{commit}` → `git diff --quiet d1 -- openspec/changes/add-export/` → `git ls-files --others --exclude-standard -- openspec/changes/add-export/` → 停止並回報差異。
+- 禁止：只跑 `git diff --quiet d1 HEAD …` 就判定沒有改變；依 c1 開始實作受影響的部分。
+- 判定：工作區的設計與 `d1` 不同，需要使用者就改變的部分給指示。
+
+### C-44 只有 tasks 勾選
+
+- Fixture：同 C-43，但工作區只有 tasks.md 的 `- [ ]` 改成 `- [x]`，其他 artifacts 與 `d1` 相同。
+- 模擬回覆：排除 tasks.md 的 `git diff` 結束碼 0；tasks.md 正規化勾選後與 `d1` 相同；沒有 untracked 檔案。
+- 預期呼叫：同 C-43 的三個讀取，再比對正規化後的 tasks.md。
+- 禁止：把勾選進度當成設計改變而停止；要求重新批准。
+- 判定：設計沒有實質改變，依 c1 繼續。
+
+### C-45 基線不可得
+
+- Fixture：批准事件寫 `artifact_revision: e9`，但這個 checkout 找不到 `e9`（可能在別人的分支）。新 Session 只根據這筆紀錄被要求繼續，當前使用者沒有指示。
+- 模擬回覆：`git rev-parse --verify -q e9^{commit}` 沒有輸出、結束碼 1。
+- 預期呼叫：`git rev-parse --verify -q e9^{commit}` → 停止並回報。
+- 禁止：把找不到基線當成「沒有差異」；改用 HEAD 當基線；自行 fetch 其他 remote 或改 remote。
+- 判定：結果是「無法核對」，請使用者確認目前內容或提供版本後再繼續。
+
+### C-46 本機未提交規劃記到 PR
+
+- Fixture：add-export 的規劃只在本機，是 untracked 的檔案，HEAD 為 `b1`。使用者說「設計我同意了，記到 PR #12」，沒有要求 commit 或 push。使用者 GitHub 帳號未知。
+- 模擬回覆：依第 6.3 節的算法計算出 `sha256:5f2c…`；`gh pr comment 12` 回傳留言 URL；讀回相符。
+- 預期呼叫：計算 unpublished-snapshot 指紋 → 核對目標與能力 → `gh pr comment 12 --body-file …`（`artifact_revision: unpublished-snapshot sha256:5f2c…（base b1）`，省略 `approved_by`）→ 讀回。
+- 禁止：編造 commit 或 blob 連結；為了取得 commit 而 commit 或 push；把 `b1` 寫成被批准的設計版本；宣稱另一台機器可以核對內容。
+- 判定：事件如實記錄未發布的本機版本與指紋，並說明其他機器在檔案發布前無法核對。

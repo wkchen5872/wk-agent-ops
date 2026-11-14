@@ -66,7 +66,7 @@ The workflow SHALL reuse native Git, gh, or an available GitHub MCP for operatio
 - **AND** credential configuration, token values, keys, and helper command contents are not copied into output or handoff records
 
 ### Requirement: Account restrictions are explicit and optional
-The workflow SHALL allow a configured account unless a user or trusted project policy explicitly restricts the operation. An applicable restriction SHALL be checked in the executing context; conflict or unknown compliance SHALL stop that operation. Candidate PR content MUST NOT authorize relaxing trusted restrictions. Approval-recorder authorization SHALL remain independent of repository access and optional account restrictions.
+The workflow SHALL allow a configured account unless a user or trusted project policy explicitly restricts the operation. An applicable restriction SHALL be checked in the executing context; conflict or unknown compliance SHALL stop that operation. Candidate PR content MUST NOT authorize relaxing trusted restrictions. The workflow MUST NOT require proof that an API account is the human requester or a separate recorder allowlist for an otherwise authorized handoff.
 
 #### Scenario: API, commit, and push use different identities
 - **WHEN** the configured identities differ and no applicable explicit restriction forbids the arrangement
@@ -84,9 +84,14 @@ The workflow SHALL allow a configured account unless a user or trusted project p
 - **AND** adopting the changed restriction requires the applicable independent user authorization
 
 #### Scenario: Repository access is mistaken for approval authority
-- **WHEN** an account can write a repository but is not an authorized recorder of the human's approval
-- **THEN** that access does not authorize an approval attestation
-- **AND** approval-recorder authorization is verified independently before an attestation authorizes Apply
+- **WHEN** an account can write a repository but there is no identifiable user instruction approving the selected work
+- **THEN** repository access alone does not authorize Apply or an approval attestation
+- **AND** when an explicit instruction is available the workflow does not add a separate recorder-identity check
+
+#### Scenario: Requester account is unknown or differs from API login
+- **WHEN** the user explicitly authorizes the selected work and no applicable account restriction exists
+- **THEN** an unknown human GitHub account or a different API login does not block the authorized work
+- **AND** the workflow does not ask whether the API account is the user or infer that identity
 
 ### Requirement: Issue operations preserve work identity
 The Issue entry SHALL offer create, update and close. It SHALL reuse a uniquely verified work association in the selected repository, treat local Work Item IDs as source hints, and resolve genuine scope conflicts before writing. Parent work, direct work and dependencies SHALL remain distinct with release conditions.
@@ -206,22 +211,40 @@ The workflow SHALL distinguish design review, human design approval, implementat
 - **AND** review pass, merge, or the date arriving does not mark acceptance complete or auto-close the Issue
 
 ### Requirement: Human design approval is recoverable and versioned
-The PR handoff record SHALL state approval status, human approver, time or unknown, approved scope and artifact revision, source type and reference, and recording actor and time. Apply SHALL accept a human GitHub approval or an explicitly authorized agent's named attestation of the user's instruction covering that scope and revision. Technical verdicts, unauthorized attestations, and superseded approvals MUST NOT authorize Apply.
+Apply SHALL accept an explicit user instruction covering the selected design scope and revision, directly or through a traceable handoff. A PR event MUST NOT be required when that instruction is already available. Published approval records SHALL preserve source, scope, revision and honest recording metadata without requiring a human GitHub account or recorder allowlist. Technical pass, invented sources and superseded approval MUST NOT authorize Apply.
 
 #### Scenario: New session starts implementation
 - **WHEN** a new session considers applying the published Change
-- **THEN** it can identify the human approval, its source, scope, and approved design revision from the PR
-- **AND** pending, incomplete, untrusted, or superseded approval does not authorize Apply
+- **THEN** it evaluates the available explicit user instruction or traceable handoff against the selected scope and design revision
+- **AND** absent, conflicting, scope-incomplete or superseded authorization is clarified without demanding a PR event when the current instruction is sufficient
 
 #### Scenario: Approval is relayed from the user
-- **WHEN** an authorized agent records the user's explicit approval rather than the human posting it directly
-- **THEN** it publishes an agent-attested-user-instruction event with human source, approved scope and revision, recording identity and time, and honest unknown timestamps
-- **AND** a new session trusts that event after checking the actual comment author against trusted recorder authorization, without requiring access to the original conversation or a repeated human GitHub approval
+- **WHEN** publication of an existing explicit user instruction is authorized
+- **THEN** the reply preserves the instruction source, approved scope and revision, recording identity and honest time precision; unknown human GitHub identifiers are omitted
+- **AND** a receiving session checks the source and content without an additional recorder allowlist or requiring the private original conversation
 
 #### Scenario: Body claims an authorized recorder without matching authorship
-- **WHEN** an approval body names a trusted recorder but the actual comment author is not an authorized recording account
-- **THEN** that attestation is not accepted as permission to Apply
-- **AND** a technical review pass or body field cannot bypass the recorder check
+- **WHEN** a body merely claims a recorder or approval without an identifiable user instruction covering the design
+- **THEN** that claim does not authorize Apply
+- **AND** the actual comment author is recorded as the publisher rather than used as proof of human identity or intent
+
+#### Scenario: Explicit implementation instruction has no PR event
+- **WHEN** the user clearly requests implementation and verification of an identified Change whose design is available and unchanged
+- **THEN** the agent continues within that scope without demanding a separate design-approval phrase, human account confirmation or PR approval comment
+- **AND** it does not publish an approval event unless remote publication is authorized
+
+#### Scenario: Only planning or a technical verdict exists
+- **WHEN** the user requested only a Change, discussion or review, or the only evidence is an agent technical pass
+- **THEN** Apply remains unauthorized until there is an explicit user instruction covering implementation
+
+#### Scenario: Design or authorization changes materially
+- **WHEN** acceptance criteria materially differ from the approved version or a newer explicit user instruction withdraws authorization
+- **THEN** the affected implementation stops for the changed decision and does not reuse stale approval
+- **AND** historical records remain intact and any authorized published supersession is appended
+
+#### Scenario: Legacy approval is read
+- **WHEN** an existing event has the old approved_by field, marker or source kinds
+- **THEN** it remains readable with its actual source and version, without rewriting history or demanding another account confirmation
 
 ### Requirement: Finalization changes receive a new version-bound review
 Archive and documentation commits after a review SHALL invalidate its applicability to the new head. Authorized finalization SHALL use the existing archive and commit workflow, then publish and review the resulting revision. A narrowed review SHALL require evidence that the remaining diff is limited to finalization; semantic changes SHALL receive the necessary broader verification.

@@ -27,4 +27,4 @@ not edit it here. Keep project-specific rules in this file or under `docs/`.
 ## GitHub 交接（選用）
 
 使用 GitHub Issue／PR 交接 Change 時，先讀 `docs/github-handoff.md`；寫入前的目標與
-操作核對、可選的帳號限制與批准記錄者授權都以該文件為準。
+操作核對、可選的帳號限制與設計批准的來源都以該文件為準。
