@@ -3,7 +3,7 @@ type: Reference
 title: 架構與流程圖索引
 description: 現行開發、Review、GitHub 交接及 Worktree 圖稿的閱讀順序、來源與維護位置。
 tags: [architecture, workflow, diagrams]
-generated: { by: codex/GPT-6, at: 2026-11-14T12:41:58+08:00 }
+generated: { by: Codex/GPT-6.1-Sol, at: 2026-11-14T13:48:40+08:00 }
 sources:
   - id: review-source
     resource: /template/common/skills/change-review/SKILL.md
@@ -15,7 +15,7 @@ sources:
     resource: /scripts/workflow/runtime.sh
     title: Worktree runtime
   - id: delivery-design
-    resource: /openspec/changes/extend-openspec-commit-delivery/design.md
+    resource: /openspec/changes/archive/2026-11-14-extend-openspec-commit-delivery/design.md
     title: Commit 交付擴充設計
 ---
 
@@ -33,7 +33,7 @@ sources:
 | 01 開立規格：[SVG](local-development-define.svg)／[PNG](local-development-define.png) | [本機四階段](../workflow/local-development.md#01-開立規格)；先分支再 Change，人工確認，Issue／設計 PR 選用 | 本 repo 的 `docs/`；不新增前兩階段整合 Skill |
 | 02 實作與發布：[SVG](local-development-implement.svg)／[PNG](local-development-implement.png) | [本機四階段](../workflow/local-development.md#02-實作與發布)；發布前人工檢核，可留在本地 Review | 本 repo 的 `docs/` |
 | 03 Review：[SVG](local-development-review.svg)／[PNG](local-development-review.png) | [本機四階段](../workflow/local-development.md#03-review-與修正交接)；三種結論與修正重入 | 依現行 `change-review`，不包含尚在規劃的本地通知優化[^review-source] |
-| 04 封存與交付：[SVG](local-development-finish.svg)／[PNG](local-development-finish.png) | [Commit 工作流](../workflow/commit.md)；本地完成、成功交付、取消／被取代三分支 | 已確認的交付擴充設計；遠端能力須搭配對應 Skill 實作，新 head 要有相符 pass[^delivery-design] |
+| 04 封存與交付：[SVG](local-development-finish.svg)／[PNG](local-development-finish.png) | [Commit 工作流](../workflow/commit.md)；本地完成、成功交付、取消／被取代三分支 | 本版本 Skill 已實作並完成本地驗證；真實遠端發布仍待端到端驗收，新 head 要有相符 pass[^delivery-design] |
 | 一輪 Review 詳細流程：[SVG](change-review-workflow.svg) | 已確認 PR 的三種結論都 reply 並回讀；無 PR、PR 不明或 local-only 只在本地回報；符合資格才核對原實作者並通知 | 原稿為 [review-loop.svg](../../template/common/skills/change-review/references/review-loop.svg)；更新來源後同步本圖，再由 installer 更新 Skill 副本[^review-source] |
 | 團隊 GitHub 交接：[SVG](github-handoff.svg) | [交接契約](../github-handoff.md)；設計批准、版本審查、Closure 回讀、結案再核對及 Issue 獨立結案 | managed；修改 `template/common/docs/diagrams/github-handoff.svg`，再跑 installer |
 | Worktree 解析：[SVG](wt-work-resolution.svg)／[PNG](wt-work-resolution.png) | [wt-work 解析](../workflow/wt-work-flow.md)；明確 path → project path → named → detached，無候選才建立 | 以 runtime／launcher 為準；固定 planning SHA 的人工核對與當前 branch tip 的腳本檢查分開[^runtime-source] |
@@ -62,4 +62,4 @@ sources:
 [^review-source]: [Change Review 來源](../../template/common/skills/change-review/SKILL.md)，§5–7。
 [^commit-source]: [OpenSpec Commit 來源](../../template/common/skills/openspec-commit/SKILL.md)，本地 archive → docs → commit。
 [^runtime-source]: [runtime.sh](../../scripts/workflow/runtime.sh)，`workflow_check_candidate`、`workflow_resolve_worktree`；[wt-work.sh](../../scripts/workflow/wt-work.sh) 管理建立流程。
-[^delivery-design]: [Commit 交付擴充設計](../../openspec/changes/extend-openspec-commit-delivery/design.md)，Decisions 1–6；實作另行交付。
+[^delivery-design]: [Commit 交付擴充設計](../../openspec/changes/archive/2026-11-14-extend-openspec-commit-delivery/design.md)，Decisions 1–6；本地驗證見 [`r02`](../verification/openspec-commit/2026-11-14-extend-delivery-r02.md)。

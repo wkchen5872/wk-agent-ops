@@ -3,7 +3,7 @@ type: Playbook
 title: 本機開發四階段流程
 description: 使用者確認的本機開發流程：開立規格、實作與發布、Review 與修正交接、封存與交付；各階段的呼叫、人工檢核點、停止條件與交接產物。
 tags: [workflow, openspec, github, local-development]
-generated: { by: codex/GPT-6, at: 2026-11-14T12:41:58+08:00 }
+generated: { by: Codex/GPT-6.1-Sol, at: 2026-11-14T13:48:40+08:00 }
 sources:
   - id: review-skill
     resource: /template/common/skills/change-review/SKILL.md
@@ -15,7 +15,7 @@ sources:
     resource: /docs/github-handoff.md
     title: GitHub 交接契約
   - id: delivery-design
-    resource: /openspec/changes/extend-openspec-commit-delivery/design.md
+    resource: /openspec/changes/archive/2026-11-14-extend-openspec-commit-delivery/design.md
     title: Commit 交付擴充設計
 ---
 
@@ -33,11 +33,11 @@ Issue／PR 的格式、寫入前核對與結案規則一律以 [GitHub 交接契
 | 01 開立規格 | 已確認 | 沿用既有 Skills，不新增整合 Skill |
 | 02 實作與發布 | 已確認 | 沿用既有 Skills，不新增整合 Skill；發布前保留人工發布檢核 |
 | 03 Review 與修正交接 | 已確認 | 沿用現有 `change-review`；本地交接優化仍在規劃，見下方限制 |
-| 04 封存與交付 | 已確認 | 本地三步沿用既有 Skill；遠端交付與 commit 後恢復須搭配交付擴充的 Skill 實作版本 |
+| 04 封存與交付 | 已確認 | 遠端交付與 commit 後恢復已在本版本 Skill 實作並完成本地驗證；真實遠端發布仍待端到端驗收 |
 
-Review 的本地交接優化仍在規劃。第 04 階段的遠端部分是已確認的交付設計；本地已提交的
-Skill 基線只做 archive → docs → commit，遠端整合實作另行交付。流程文件及圖稿確認不代表
-對應 Skill 已發布或遠端操作已實測。[^review-skill][^delivery-design]
+Review 的本地交接優化仍在規劃。第 04 階段的遠端部分已由本版本 Skill 實作，
+並完成本地 bare remote、installer、離線重播與 Change delta strict validate；真實 Git 發布、
+PR update 與最終 published-head Review 的完整路徑仍待端到端驗收。[^review-skill][^delivery-design]
 
 每張圖都有 SVG 原稿與 1600 px 寬的手機 PNG 預覽。
 
@@ -119,10 +119,10 @@ Skill 基線只做 archive → docs → commit，遠端整合實作另行交付�
 ## 來源與驗收範圍
 
 - Review 的現行規則見 `change-review`；本地交接優化另由 `improve-change-review-local-handoff` 規劃，圖稿不提前採用其目標行為。
-- Commit 交付擴充的剩餘驗收見 [tasks](../../openspec/changes/extend-openspec-commit-delivery/tasks.md)。
+- Commit 交付擴充的完成 tasks 與驗證範圍見 [archive tasks](../../openspec/changes/archive/2026-11-14-extend-openspec-commit-delivery/tasks.md) 及 [r02 驗證紀錄](../verification/openspec-commit/2026-11-14-extend-delivery-r02.md)。
 - 圖稿索引與維護位置見 [正式圖稿索引](../diagrams/README.md)。
 
 [^review-skill]: [Change Review 來源](../../template/common/skills/change-review/SKILL.md)。
 [^commit-skill]: [OpenSpec Commit 來源](../../template/common/skills/openspec-commit/SKILL.md)。
 [^github-contract]: [GitHub 交接契約](../github-handoff.md)，§5–6、§10。
-[^delivery-design]: [Commit 交付擴充設計](../../openspec/changes/extend-openspec-commit-delivery/design.md)；實作與驗收狀態以對應 Change 為準。
+[^delivery-design]: [Commit 交付擴充設計](../../openspec/changes/archive/2026-11-14-extend-openspec-commit-delivery/design.md)；實作與本地驗證狀態以對應 archive 與驗證紀錄為準。

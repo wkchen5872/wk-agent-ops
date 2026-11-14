@@ -3,13 +3,13 @@ type: Architecture
 title: wk-agent-ops Architecture Guide
 description: Template propagation, provider entrypoints, and repository module boundaries.
 tags: [architecture, agents, distribution]
-generated: { by: codex/GPT-6, at: 2026-11-14T12:41:58+08:00 }
+generated: { by: Codex/GPT-6.1-Sol, at: 2026-11-14T13:48:40+08:00 }
 sources:
   - id: delivery-policy
     resource: /docs/openspec-workflow.md
     title: OpenSpec Workflow
   - id: commit-workflow
-    resource: /openspec/changes/extend-openspec-commit-delivery/design.md
+    resource: /openspec/changes/archive/2026-11-14-extend-openspec-commit-delivery/design.md
     title: Commit 交付擴充設計
 ---
 
@@ -159,4 +159,4 @@ branch 完成。每個 Worktree 同一時間只能有一個 active writer，跨 
 | `bash tests/test_github_handoff.sh` | Contract presence and managed delivery of the GitHub handoff assets |
 
 [^delivery-policy]: [OpenSpec Workflow](openspec-workflow.md)，§4–5。
-[^commit-workflow]: [Commit 交付擴充設計](../openspec/changes/extend-openspec-commit-delivery/design.md)，Decisions 1–4；遠端 Skill 實作另行交付。
+[^commit-workflow]: [Commit 交付擴充設計](../openspec/changes/archive/2026-11-14-extend-openspec-commit-delivery/design.md)，Decisions 1–4；本版本 Skill 已完成本地驗證；真實遠端發布路徑仍待端到端驗收。

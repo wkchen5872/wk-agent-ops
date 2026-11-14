@@ -3,7 +3,7 @@ type: Playbook
 title: OpenSpec Commit Workflow
 description: Archive, documentation, and commit orchestration across Claude, Codex, and Antigravity.
 tags: [workflow, openspec, agents]
-generated: { by: codex/GPT-6, at: 2026-11-14T12:41:58+08:00 }
+generated: { by: Codex/GPT-6.1-Sol, at: 2026-11-14T13:48:40+08:00 }
 sources:
   - id: commit-skill
     resource: /template/common/skills/openspec-commit/SKILL.md
@@ -12,7 +12,7 @@ sources:
     resource: /docs/github-handoff.md
     title: GitHub 交接契約
   - id: delivery-design
-    resource: /openspec/changes/extend-openspec-commit-delivery/design.md
+    resource: /openspec/changes/archive/2026-11-14-extend-openspec-commit-delivery/design.md
     title: Commit 交付擴充設計
 ---
 
@@ -30,9 +30,9 @@ archive、文件判斷或 commit 邏輯，只依序呼叫三個能力：
 只有使用者授權時，它才在本地完成後，把結果交付到 Change 既有的 PR（見下方
 「遠端交付」）。這是[本機開發四階段流程](local-development.md)的第 04 階段。
 
-**版本範圍**：已提交的 Skill 基線只有上述本地三步。本頁的遠端交付與 commit 後恢復為
-`extend-openspec-commit-delivery` 的已確認設計，須搭配該 Change 的 Skill 實作版本；
-文件與圖稿先行交付不代表遠端能力已發布或完成端到端驗收。[^delivery-design]
+**版本範圍**：本版本 Skill 已實作遠端交付與 commit 後恢復，並有本地 bare remote、
+installer、離線重播與 Change delta strict validate 的驗證紀錄。真實 Git 發布、PR update 與
+最終 published-head Review 的完整路徑仍待端到端驗收，單獨結案操作不代表該路徑已驗證。[^delivery-design]
 
 ## 進入方式
 
@@ -230,11 +230,11 @@ Installer 對 `.codex/` 的管理只限於 project-owned `.codex/agents/`；不�
 
 ## 來源與外部參考
 
-本地流程以 Skill 為準，遠端交付以交付擴充設計為準。下列既有外部入口參考保留供查閱，未在本輪重新核對版本。
+本地與遠端交付行為以目前 Skill 為準；archive 保留設計意圖與驗證範圍。下列既有外部入口參考保留供查閱，未在本輪重新核對版本。
 
-[^commit-skill]: [OpenSpec Commit 來源](../../template/common/skills/openspec-commit/SKILL.md)，本地三步與 provider routing；遠端及 commit 後恢復見交付擴充設計。
+[^commit-skill]: [OpenSpec Commit 來源](../../template/common/skills/openspec-commit/SKILL.md)，本地三步、遠端交付與 commit 後恢復。
 [^handoff-contract]: [GitHub 交接契約](../github-handoff.md)，§6.7、§10。
-[^delivery-design]: [Commit 交付擴充設計](../../openspec/changes/extend-openspec-commit-delivery/design.md)。
+[^delivery-design]: [Commit 交付擴充設計](../../openspec/changes/archive/2026-11-14-extend-openspec-commit-delivery/design.md)；本地驗證見 [`r02`](../verification/openspec-commit/2026-11-14-extend-delivery-r02.md)。
 
 [1] [OpenSpec supported tools](https://github.com/Fission-AI/OpenSpec/blob/main/docs/supported-tools.md)
 
