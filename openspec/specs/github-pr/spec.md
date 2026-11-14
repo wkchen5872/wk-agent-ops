@@ -247,7 +247,7 @@ The skill SHALL use configured gh or GitHub MCP with explicit host, owner, repos
 - **AND** it reports unresolved uncertainty instead of resending through either channel
 
 ### Requirement: Shared review and approval integrations retain their meaning
-The shared handoff contract SHALL own the simplified PR and reply templates, and change-review SHALL use compatible presentation without changing its review criteria. Version binding, finding identity, technical verdicts, and human approval SHALL retain their evidence and authority. Approval events SHALL be independently discoverable without requiring an approval block in every PR body.
+The shared handoff contract SHALL own the simplified PR and reply templates, and change-review SHALL use compatible presentation without changing its review criteria. Version binding, finding identity, technical verdicts, and human approval SHALL retain their evidence and authority. Authorized approval replies SHALL be independently discoverable. An available explicit user instruction SHALL NOT require a PR event, human GitHub identifier or separate recorder qualification to authorize its stated work.
 
 #### Scenario: Local record policy is independent of GitHub publication
 - **WHEN** GitHub skills read a Work Item as source material
@@ -261,8 +261,18 @@ The shared handoff contract SHALL own the simplified PR and reply templates, and
 
 #### Scenario: A recorded design approval is needed
 - **WHEN** OpenSpec work requires human design approval
-- **THEN** the workflow validates the independent approval event's source, scope, revision, and recording authority
+- **THEN** the workflow checks the available instruction or published event for its actual source, approved scope and revision without a separate recorder-account qualification
 - **AND** technical pass, body edits, and the absence of a mandatory approval block do not confer approval
+
+#### Scenario: Approval reply is requested with an unknown human account
+- **WHEN** the user authorizes recording an explicit instruction but their GitHub account is unknown
+- **THEN** reply records source, scope, revision and posting metadata without asking whether the API login is the user
+- **AND** it omits the unknown human identifier, reads back the result and preserves earlier events
+
+#### Scenario: Apply is requested without publication
+- **WHEN** the current user explicitly requests implementation but has not requested a GitHub approval reply
+- **THEN** the workflow does not force a reply or block the authorized local work for a missing PR event
+- **AND** permission to implement does not implicitly authorize platform writes
 
 ### Requirement: PR closure summary distinguishes merged and abandoned changes
 PR Closure SHALL state published or reviewed revision, intended or existing outcome, delivered changes, verification, unresolved findings and follow-up references. Successful implementation handoff SHALL distinguish ready-to-merge from merged. Close MUST NOT merge. A replaced or abandoned PR SHALL explain its replacement or cancellation without treating its underlying Issue as finished.

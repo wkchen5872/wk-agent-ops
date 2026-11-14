@@ -55,12 +55,17 @@ Design review SHALL assess requirements, scope, interfaces, dependencies, feasib
 #### Scenario: Approval has date-only precision
 - **WHEN** the human approval date is known but its time is not
 - **THEN** the reviewer follows the shared contract and preserves YYYY-MM-DD without fabricating a time or replacing it with recorded_at
-- **AND** approved_by identifies the human GitHub account and an honestly dated approval is not rejected solely for lacking an exact time
+- **AND** an honestly dated instruction is not rejected for lacking an exact time or a human GitHub account; unknown optional identifiers are omitted
 
 #### Scenario: Approval recorder has access but lacks authorization
-- **WHEN** a comment author can write the repository but has no trusted authorization to attest the human's approval
-- **THEN** that attestation does not authorize Apply, even if the candidate PR names the author as a recorder
-- **AND** readonly review and separately authorized technical report publication remain possible with the approval limitation stated
+- **WHEN** a comment author can write the repository but the content provides no identifiable user instruction authorizing the selected design
+- **THEN** repository access and a self-declared recorder name do not authorize Apply
+- **AND** review and separately authorized report publication remain possible without introducing a recorder allowlist
+
+#### Scenario: Explicit user instruction already covers implementation
+- **WHEN** the current user or a traceable handoff explicitly requests implementation of the identified unchanged design
+- **THEN** the workflow recognizes that instruction without requiring another approval phrase, human-account match or PR event
+- **AND** it keeps the technical review verdict distinct from the instruction authorizing implementation
 
 ### Requirement: Integration separates dependency readiness from acceptance
 Integration SHALL require an obtainable version of the shared handoff contract, not a prior final pass from the Skill being introduced. Reviewing the upstream PR MAY serve as a real integration case. The upstream verdict and the Review Skill's own acceptance SHALL remain separate; neither an automatic pass nor an artificial defect is required to exercise the workflow.
