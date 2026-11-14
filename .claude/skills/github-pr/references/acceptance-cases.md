@@ -11,8 +11,8 @@ GP-01–GP-20 是舊版 create／publish（含 commit 與 push）的案例，已
 `main`，head 與 base 在同一個 repository。沒有明示的帳號限制。可用工具為已登入
 `octo-dev` 的 `gh`；GitHub MCP 是否可用依案例說明。貼文工具為 Claude Code，當下模型為
 `Claude Opus 5.5`。runtime 提供原生 Session ID `sess-7781`（`CLAUDE_CODE_SESSION_ID`）與
-Xirp 管理 ID `xirp-42`（`CHIRP_SESSION_ID`），兩者都屬於本次貼文 Session 且可以公開。委託的
-使用者沒有確認可公開的 GitHub 帳號，所以 Author 不寫 `人類`。正文與回覆依契約第 6 節的共同外框
+Xirp 管理 ID `xirp-42`（`CHIRP_SESSION_ID`），兩者都屬於本次貼文 Session 且可以公開。Agent 發文
+的 Author 只有工具、已知模型與兩個 Session ID，不寫「方式」或「人類」行。正文與回覆依契約第 6 節的共同外框
 （Handoff → 主體 → Next actions → Author）。案例中的 repo、編號、名稱、版本與 ID 全部是虛構的。
 
 「核對」指契約第 3 節的步驟 1–4。「查 PR」指 `gh pr list --head <branch> --state all --json
@@ -115,7 +115,6 @@ Xirp 管理 ID `xirp-42`（`CHIRP_SESSION_ID`），兩者都屬於本次貼文 S
 
   ## Author
 
-  方式: Agent 協助
   Co-Authored-By: Claude Code
   AI-Assisted-By: Claude Opus 5.5
   SESSION-ID: sess-7781
@@ -215,7 +214,6 @@ Xirp 管理 ID `xirp-42`（`CHIRP_SESSION_ID`），兩者都屬於本次貼文 S
 
   ## Author
 
-  方式: Agent 協助
   Co-Authored-By: Claude Code
   AI-Assisted-By: Claude Opus 5.5
   SESSION-ID: sess-7781
@@ -271,7 +269,6 @@ Xirp 管理 ID `xirp-42`（`CHIRP_SESSION_ID`），兩者都屬於本次貼文 S
 
   ## Author
 
-  方式: Agent 協助
   Co-Authored-By: Claude Code
   AI-Assisted-By: Claude Opus 5.5
   SESSION-ID: sess-7781
@@ -540,7 +537,7 @@ Xirp 管理 ID `xirp-42`（`CHIRP_SESSION_ID`），兩者都屬於本次貼文 S
 - 模擬回覆：同 GP-32。
 - 預期呼叫：讀取 runtime 的 Session 鍵（沒有值）→ 其餘同 GP-32。
 - 禁止：共同禁止；未查詢就寫 `null`；把 `codex-s02` 或任何別名寫進任一 Session 欄位；把 `GPT-5.6` 寫進 `AI-Assisted-By`；為了 ID 停止建立或要求使用者提供；傾印整個環境變數。
-- 判定：Author 為 `方式: Agent 協助`、`Co-Authored-By: Claude Code`、`SESSION-ID: null`、`XIRP-SESSION-ID: null`，省略 `AI-Assisted-By`；PR 照常建立，回報三者未知的原因。
+- 判定：Author 為 `Co-Authored-By: Claude Code`、`SESSION-ID: null`、`XIRP-SESSION-ID: null`，省略 `AI-Assisted-By`；PR 照常建立，回報三者未知的原因。
 
 ## reply
 
@@ -591,7 +588,6 @@ Xirp 管理 ID `xirp-42`（`CHIRP_SESSION_ID`），兩者都屬於本次貼文 S
 
   ## Author
 
-  方式: Agent 協助
   Co-Authored-By: Claude Code
   AI-Assisted-By: Claude Opus 5.5
   SESSION-ID: sess-7781
@@ -640,7 +636,6 @@ Xirp 管理 ID `xirp-42`（`CHIRP_SESSION_ID`），兩者都屬於本次貼文 S
 
   ## Author
 
-  方式: Agent 協助
   Co-Authored-By: Claude Code
   AI-Assisted-By: Claude Opus 5.5
   SESSION-ID: sess-7781
@@ -707,13 +702,13 @@ Xirp 管理 ID `xirp-42`（`CHIRP_SESSION_ID`），兩者都屬於本次貼文 S
 - 禁止：共同禁止；`gh pr close` 或 `gh pr merge`；寫成「已合併」；關閉或留言到 Issue #42。
 - 判定：Closure 的 Outcome 寫最終受審版本 `d4e5f6a` 準備合併，Delivered、Verification（連到 pass 回覆）、Remaining work 齊全；Next actions 指向負責人依授權合併，並另行核對 #42 的完成條件。PR 保持 open。
 
-### GP-48 代發他人的 Review
+### GP-48 代發他人的 Review：新格式代發報告
 
 - Fixture：Reviewer `@kai` 的 Session 產生了 `reviewer-b-r01` 的報告，已發布在驗證文件連結 r1，明確提供工具 Codex 與模型 `gpt-6.1-sol`，沒有提供 Session ID。使用者請本 Session 把它代貼到 PR #57。
 - 模擬回覆：讀取 r1；`gh pr comment 57` 回傳留言 URL；讀回相符。
 - 預期呼叫：讀取 r1 → 核對 → `gh pr comment 57 --body-file …` → 讀回。
-- 禁止：共同禁止；把本 Session 的 `sess-7781` 寫成原作者的 Session；替原作者補 Session ID；改動 verdict 或 Finding ID。
-- 判定：Author 第一行為 `原報告作者: @kai，來源為 <r1>`（可附其明確提供的 Codex 與 `gpt-6.1-sol`），其後為 `方式: Agent 協助代發` 與本 Session 的工具、模型、`SESSION-ID: sess-7781`、`XIRP-SESSION-ID: xirp-42`。
+- 禁止：共同禁止；把本 Session 的 `sess-7781` 寫成原作者的 Session；替原作者補 Session ID；改動 verdict 或 Finding ID；加入 `方式: Agent 協助代發` 或其他標籤。
+- 判定：Author 第一行為 `原報告作者: @kai，來源為 <r1>`（可附其明確提供的 Codex 與 `gpt-6.1-sol`），其後為本 Session 的工具、模型、`SESSION-ID: sess-7781`、`XIRP-SESSION-ID: xirp-42`。
 
 ### GP-49 人類直接發布的回覆
 
@@ -721,7 +716,7 @@ Xirp 管理 ID `xirp-42`（`CHIRP_SESSION_ID`），兩者都屬於本次貼文 S
 - 模擬回覆：無（由人類自行發布）。
 - 預期呼叫：讀取草稿並回報格式建議，沒有任何遠端寫入。
 - 禁止：替草稿加上 `Co-Authored-By`、`AI-Assisted-By` 或 Session 欄位；代為發布。
-- 判定：建議的 Author 只有 `方式: 人類直接發布` 與 `人類: @kai`，其他外框與 Review 欄位照共同規則。
+- 判定：建議的內容沒有 Author 段落，其他外框與 Review 欄位照共同規則。
 
 ## close
 

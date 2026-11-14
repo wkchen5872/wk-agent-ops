@@ -41,8 +41,6 @@ Reviewer 對 b2c3d4e 檢查權限與上述驗收條件。
 
 ## Author
 
-方式: Agent 協助
-人類: @mei
 Co-Authored-By: Codex
 AI-Assisted-By: gpt-6.1-sol
 SESSION-ID: example-impl-session
@@ -80,8 +78,6 @@ github-pr reply 新增一則 Review 留言。
 
 ## Author
 
-方式: Agent 協助
-人類: @kai
 Co-Authored-By: Codex
 AI-Assisted-By: gpt-6.1-sol
 SESSION-ID: example-review-session
@@ -112,8 +108,6 @@ Reviewer 對 d4e5f6a 複審 F-01 與受影響行為。
 
 ## Author
 
-方式: Agent 協助
-人類: @mei
 Co-Authored-By: Codex
 AI-Assisted-By: gpt-6.1-sol
 SESSION-ID: example-impl-session
@@ -150,8 +144,6 @@ XIRP-SESSION-ID: example-xirp-impl
 
 ## Author
 
-方式: Agent 協助
-人類: @kai
 Co-Authored-By: Codex
 AI-Assisted-By: gpt-6.1-sol
 SESSION-ID: example-review-session
@@ -187,8 +179,6 @@ update 修改已授權的正文段落，保留無關人類註記與所有歷史�
 
 ## Author
 
-方式: Agent 協助
-人類: @mei
 Co-Authored-By: Codex
 AI-Assisted-By: gpt-6.1-sol
 SESSION-ID: example-impl-session
@@ -223,8 +213,6 @@ F-01 已複審為 Resolved，證據見 reviewer-b-r02。
 
 ## Author
 
-方式: Agent 協助
-人類: @mei
 Co-Authored-By: Codex
 AI-Assisted-By: gpt-6.1-sol
 SESSION-ID: example-impl-session
@@ -262,8 +250,6 @@ XIRP-SESSION-ID: example-xirp-impl
 
 ## Author
 
-方式: Agent 協助
-人類: @mei
 Co-Authored-By: Codex
 AI-Assisted-By: gpt-6.1-sol
 SESSION-ID: example-impl-session
@@ -301,8 +287,6 @@ Issue #42 仍需完成，由 PR #61 接續。此次不關閉 Issue。
 
 ## Author
 
-方式: Agent 協助
-人類: @mei
 Co-Authored-By: Codex
 AI-Assisted-By: gpt-6.1-sol
 SESSION-ID: example-impl-session
@@ -317,8 +301,6 @@ XIRP-SESSION-ID: example-xirp-impl
 ## Author
 
 原報告作者: @kai，來源為已核對的 Review 報告連結
-方式: Agent 協助代發
-人類: @mei
 Co-Authored-By: Codex
 AI-Assisted-By: gpt-6.1-sol
 SESSION-ID: example-publisher-session

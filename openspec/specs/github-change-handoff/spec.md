@@ -159,7 +159,7 @@ Issue updates SHALL append comments. PR description updates SHALL read current c
 - **AND** read-before-write alone is not reported as a concurrency lock
 
 ### Requirement: Provenance records known event participants safely
-Each new body or comment SHALL identify human-direct or agent-assisted authorship. Agent posts SHALL retain current posting tool, known root-session model and separate native and Xirp IDs. Unknown identities SHALL remain honest. Relayed substantive reports SHALL identify their original author and source separately. Extended provenance SHALL appear only when needed for evidence.
+Agent posts SHALL retain current tool, known root-session model and separate native/Xirp IDs, without Author mode or human-account fields or synonymous replacements. Unknown values SHALL remain honest. Pure human-direct posts SHALL omit empty Author sections and Agent metadata. Relayed substantive reports SHALL identify original author and source separately from the posting Agent. Legacy records SHALL remain readable without rewriting history.
 
 #### Scenario: Model or session is unavailable
 - **WHEN** the current model or native Session ID is unknown or not approved for disclosure
@@ -172,9 +172,31 @@ Each new body or comment SHALL identify human-direct or agent-assisted authorshi
 - **AND** it does not publish raw hostname, private absolute Work Item paths, credentials, or an invented provider email
 
 #### Scenario: Default remote provenance disclosure
-- **WHEN** an Issue, PR, or Review record is published without a stricter explicit project or user restriction
+- **WHEN** an Agent-assisted Issue, PR, or Review record is published without a stricter explicit project or user restriction
 - **THEN** it retains the executing tool, known model, and known native session ID in dedicated fields
 - **AND** unknown values are not guessed and routine posts do not require machine metadata
+
+#### Scenario: Agent posts with reduced Author fields
+- **WHEN** an agent creates or updates an Issue or PR body or publishes a review, repair, Checkpoint or Closure reply
+- **THEN** Author retains Co-Authored-By, known AI-Assisted-By and both SESSION-ID and XIRP-SESSION-ID
+- **AND** it omits the mode and human-account fields without adding synonymous labels or treating the API account as the requester
+
+#### Scenario: A human directly publishes without an agent
+- **WHEN** the content is written and published directly by a human without Agent assistance
+- **THEN** it has no empty Author section or fabricated Agent fields and retains meaningful work content and Next actions
+
+#### Scenario: Agent publishes on behalf of a human
+- **WHEN** a human asks an agent to prepare or publish content
+- **THEN** the new content retains that posting Agent's metadata rather than using the human-direct exception
+
+#### Scenario: A substantive report is relayed
+- **WHEN** the posting agent relays another author's Review or implementation report
+- **THEN** it preserves the original author and verified source separately from its own metadata without requiring a mode label
+- **AND** unknown original identity is not invented and a verified publisher alone does not become the implementer
+
+#### Scenario: Old Author contains removed fields
+- **WHEN** a consumer reads an existing record containing mode, human-account or old relay markers
+- **THEN** it can recover the known source and Session namespaces without rewriting that record or copying removed fields into new output
 
 ### Requirement: Remote review records extend a shared local baseline
 The shared handoff contract SHALL own the remote review schema, reuse local review field and finding-status semantics, and define phase, verdict, provenance, and identifiers. Verdict SHALL be pass, changes-required, or blocked. A review ID SHALL be assignable before publication and unique within the PR; each finding SHALL retain its origin-review ID and local finding number across later rounds.
@@ -288,11 +310,11 @@ Issue, PR, Review, and comment operations SHALL use an available, already config
 - **AND** unrelated or locally modified project scripts and authentication configuration are preserved rather than indiscriminately deleted
 
 ### Requirement: Team publication uses one shared content frame
-The shared contract SHALL own Issue and PR templates for bodies, progress, reviews, fixes, checkpoints and closure. New posts SHALL start with Handoff, explain their purpose, include concise Next actions and end with Author. Unknown optional associations and empty optional sections SHALL be omitted. PR bodies SHALL identify the verified head branch. Next actions SHALL state genuine continuation, waiting or no remaining action.
+The shared contract SHALL own Issue and PR templates for bodies, progress, reviews, fixes, checkpoints and closure. New posts SHALL start with Handoff, explain their purpose and include concise Next actions. Agent-assisted posts SHALL end with the reduced shared Author; pure human-direct posts SHALL omit empty Author sections and Agent metadata. Unknown optional associations and empty optional sections SHALL be omitted. PR bodies SHALL identify the verified head branch. Next actions SHALL state genuine continuation, waiting or no remaining action.
 
 #### Scenario: Human opens unplanned work
 - **WHEN** a human publishes a concrete request without a Change or branch
-- **THEN** the post has a readable goal, supported completion conditions, Next actions and human Author without manufacturing tracking records
+- **THEN** the post has a readable goal, supported completion conditions, Next actions without an empty Author section, Agent metadata or manufactured tracking records
 
 #### Scenario: Agent publishes linked work
 - **WHEN** an agent posts with confirmed Change, branch and related Issue or PR
@@ -318,7 +340,7 @@ A pause, transfer or substantial multi-round discussion SHALL support a self-con
 - **THEN** the conflict is exposed for coordination rather than silently resolved by timestamp or a claimed read-before-write lock
 
 ### Requirement: Closure preserves outcome evidence before state mutation
-Closing an Issue or PR SHALL first publish and confirm a Handoff, Closure, Next actions and Author summary. Closure SHALL explain intended outcome, delivered or cancelled scope, verification, remaining work and references. Only then SHALL the authorized state change run and be read back. Summaries SHALL NOT attest unperformed close or merge actions. Partial results and retries SHALL be reconciled independently.
+Closing an Issue or PR SHALL first publish and confirm a Handoff, Closure and Next actions summary, with the shared reduced Author for Agent-assisted content and no empty Author for pure human-direct content. Closure SHALL explain intended outcome, delivered or cancelled scope, verification, remaining work and references. Only then SHALL the authorized state change run and be read back. Summaries SHALL NOT attest unperformed close or merge actions. Partial results and retries SHALL be reconciled independently.
 
 #### Scenario: Summary succeeded but close failed
 - **WHEN** Closure was confirmed but the state operation failed

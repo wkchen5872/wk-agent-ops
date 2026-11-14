@@ -136,7 +136,11 @@ for t in 'PR pass 發布' 'pass 發布失敗' 'PR unknown 的 pass' 'pass 後 he
     && ok "change-review has a case for '$t'" || bad "change-review has a case for '$t'"
 done
 want "$CASES" '## Next actions' "full report cases show Next actions"
-want "$CASES" '方式: Agent 協助' "full report cases use the shared Author"
+want "$CASES" 'Co-Authored-By: Claude Code' "full report cases use the shared Author"
+# simplify-github-author-format: relay detection works with and without the old mode marker.
+for t in '新格式代發只核對到代發者' '舊代發標記仍可讀'; do
+  grep -E '^### CR-[0-9]+' "$CASES" | grep -qF -- "$t" && ok "case for '$t'" || bad "case for '$t'"
+done
 want "$SVG" '含 pass' "diagram posts every verdict, pass included"
 deny "$SVG" '通過：回報本輪版本與限制。' "diagram no longer returns a PR pass directly"
 
