@@ -14,7 +14,7 @@
 <rect x="80" y="334" width="850" height="118" rx="16" class="blue"/>
 <text x="104" y="372" class="heading">02　github-issue create</text>
 <text x="104" y="406" class="body">選來源 → 核對 repo／能力 → 查關聯 → 建 Issue 並回讀</text>
-<text x="104" y="436" class="body">之後的進展以 github-issue update 新增留言</text>
+<text x="104" y="436" class="body">進展與 Checkpoint 以 github-issue update 新增留言</text>
 <path d="M505 452 V492" class="line"/>
 <rect x="80" y="492" width="850" height="118" rx="16" class="blue"/>
 <text x="104" y="530" class="heading">03　github-pr create</text>
@@ -47,9 +47,9 @@
 <text x="104" y="1384" class="body">merge、deploy、真實資料驗收分開；等待時 Issue 不關閉</text>
 <path d="M505 1400 V1440" class="line"/>
 <rect x="80" y="1440" width="850" height="118" rx="16" class="green"/>
-<text x="104" y="1478" class="heading">09　確認完成條件，再依授權結案</text>
-<text x="104" y="1512" class="body">不 merge 時以 github-pr close 關 PR 與直接 Issue</text>
-<text x="104" y="1542" class="body">Review pass 或日期到達都不等於全部完成</text>
+<text x="104" y="1478" class="heading">09　先發 Closure 摘要，再依授權結案</text>
+<text x="104" y="1512" class="body">github-pr close 只關該 PR；準備合併時以 reply 交接</text>
+<text x="104" y="1542" class="body">Issue 驗收或取消後以 github-issue close 另行結案</text>
 <rect x="1050" y="176" width="470" height="140" rx="16" class="blue"/>
 <text x="1074" y="214" class="heading">Issue 是工作入口</text>
 <text x="1074" y="248" class="body">正文說明工作，迭代記在留言</text>

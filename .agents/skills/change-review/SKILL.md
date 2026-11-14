@@ -5,10 +5,11 @@ description: >
   from a Change name, a GitHub Issue (URL or #N), or a PR. It resolves the
   Change and any PR, fixes the exact version under review, runs the mandatory
   openspec-verify-change plus any suitable installed quality review and the
-  project's required tests, and reports the result. With a PR that does not
-  pass, it appends a review through github-pr reply, reads it back, and hands
-  the repair to the verified local implementer session; without a PR, or on a
-  pass, it returns the report directly. Use whenever the user asks to review,
+  project's required tests, and reports the result. With a confirmed PR it
+  appends the review — pass, changes-required, or blocked — through github-pr
+  reply and reads it back, and hands a needed repair to the verified local
+  implementer session; without a PR, when the PR lookup is unknown, or when the
+  user asks for local-only, it returns the report directly. Use whenever the user asks to review,
   accept, verify, or re-review a change, an Issue, or a PR — for example
   "review PR #12", "驗收 add-export", "驗收 #7", "幫我審查這個 change",
   "設計審查", "複審新版本", "看一下修正好了沒".
@@ -16,7 +17,7 @@ license: MIT
 compatibility: "Requires git, the openspec-verify-change skill, and either GitHub CLI (gh) or a GitHub MCP when a PR is involved. Optional: openspec CLI, ponytail-review, code-review, a local session tool such as xirp."
 metadata:
   author: wkchen
-  version: "2.0"
+  version: "3.0"
 ---
 
 # Change Review
@@ -151,27 +152,37 @@ assigned before publication; a finding keeps its ID in later rounds. A fix the
 implementer claims stays Accepted until you verify the fixing revision and the
 affected behavior; only that evidence makes it Resolved.
 
-Write the report as the reviewer reply of contract section 6.2: the reviewed
-version (PR head, or local `HEAD` plus included paths) and purpose, the
-Review-ID and verdict, each finding as an actionable item a reader without the
-local records understands (impact, location or evidence, how to tell it is
-fixed), the checks actually run and their results, what was not executed, and
-the next step. No findings means no filler items. Author carries both
+Write the report as the reviewer reply of contract section 6.2, inside the
+shared frame of section 6: Handoff (the PR and branch, or the Change for a local
+review), Review with the reviewed version (PR head, or local `HEAD` plus
+included paths), purpose, Review-ID, and verdict, then each finding under its
+stable ID as an actionable item a reader without the local records understands
+(impact, location or evidence, how to tell it is fixed); Verification with the
+checks actually run, their results, and what was not executed; Next actions
+saying who acts next and on what condition; Author last. No findings means no
+filler items. Author is this reviewer session: `方式: Agent 協助`, the person
+only when confirmed and publishable, the tool, the known model, and both
 `SESSION-ID` (this reviewer session's native ID) and `XIRP-SESSION-ID` (its
 Xirp management ID). Look both up from the runtime before writing either as
 `null`, read only those keys, and explain any `null` in your report; an alias is
-never written as either ID, and one ID never fills the other's field.
+never written as either ID, one ID never fills the other's field, and the
+implementer's IDs are never copied into the reviewer's Author.
 
 Before any post, read the PR head again. If it moved, keep the report bound to
 the reviewed head, mark it **stale**, and say the new head needs its own round.
+Stale is a note, not a fourth verdict: the result stays `pass`,
+`changes-required`, or `blocked` for the reviewed head, and the report is still
+posted under Step 5.
 
 ## Step 5 — Where the result goes
 
-- **No PR, PR unknown, or `pass`** — the report is returned directly. A pass is
-  posted only when the user asks; such a post never notifies anyone to "fix".
-- **A PR with `changes-required` or `blocked`** — invoking this workflow
-  authorizes posting the report through `github-pr reply`, unless the user asked
-  for **local-only**. Then **回讀** the stored comment: parent PR, repository,
+- **No PR, PR unknown, or local-only** — the report is returned directly. An
+  unknown PR is never treated as permission to post somewhere.
+- **A confirmed PR with any verdict** — `pass`, `changes-required`, or
+  `blocked`: invoking this workflow authorizes posting the report through
+  `github-pr reply`, unless the user asked for **local-only** or another explicit
+  restriction excludes it. A posted pass never notifies anyone to "fix". Then
+  **回讀** the stored comment: parent PR, repository,
   reviewed head, Review-ID, and full content, and note its URL. Only a match is
   a confirmed publication. A denial, a timeout, or a failed or mismatched
   readback is recorded as publication 「可能已發布／尚未確認」 or failed —
@@ -185,8 +196,9 @@ reviews remain readable history.
 
 ## Step 6 — Hand off to the implementer
 
-Only after a confirmed failed-review reply, unless the user excluded
-notification, and only when the result asks the implementer to act. A `blocked`
+Only after a confirmed `changes-required` or `blocked` reply, unless the user
+excluded notification, and only when the result asks the implementer to act. A
+pass never sends a repair notification. A `blocked`
 caused by the reviewer's side — a missing review skill or a missing test
 environment the implementer cannot provide — is reported and posted, but not
 sent to the implementer as a repair request.
@@ -196,6 +208,15 @@ sent to the implementer as a repair request.
    `SESSION-ID`, `XIRP-SESSION-ID`. The newest reply may be a reviewer's; never
    take a reviewer's or your own identity for the implementer's. Several
    plausible implementers, or none: send nothing, return the message.
+   **Relayed report** — when that Author says `方式: Agent 協助代發` or carries a
+   `原報告作者` line, its main fields identify the publisher, not the
+   implementer. Take the implementer from the `原報告作者` line and its verified
+   source (the linked report or record, and any tool, model, or Session that
+   author explicitly published). If that source gives no identity you can tie
+   to a local session, the implementer is unverified: send nothing and return
+   the message — never the publisher as a fallback, even when the publisher's
+   session verifies locally. Only an explicit user instruction naming another
+   recipient changes the target, and that recipient is verified the same way.
 2. **Verify locally** with an available session tool. The implementer's
    `XIRP-SESSION-ID` is only a lookup hint: confirm it belongs to the same tool,
    project, and native `SESSION-ID` before using it as the target the tool
@@ -208,8 +229,9 @@ sent to the implementer as a repair request.
    that session is already working on the PR, this is a handoff, not a new
    writer. A sent message is not a read one, and neither is a started repair.
 4. **Cannot verify or reach it** — tool unavailable, session elsewhere or gone,
-   ID `null`, mapping unclear: return a transferable message with the same
-   content and say why it was not sent. Repository notifiers such as Telegram
+   ID `null`, mapping unclear, or a relayed report whose original implementer
+   cannot be verified: return a transferable message with the same content and
+   say why it was not sent. Repository notifiers such as Telegram
    or waiting prompts are not session channels.
 
 ## Step 7 — End the round
@@ -230,5 +252,7 @@ notification.
 replayable cases: entry by Change, Issue, `#N`, or PR; no PR and unknown PR;
 ambiguity; versions and moving heads; mandatory verify and optional skills;
 design review; required tests; full reports for no PR, a failed PR that can be
-notified, a blocked PR that cannot, and a pass; publication readback and
-failures; implementer identity and local sessions; local-only; and re-review.
+notified, a blocked PR that cannot, and a posted pass; pass with an unknown PR,
+a failed pass publication, and a head that moves before a pass is posted;
+publication readback and failures; implementer identity and local sessions;
+local-only; and re-review.

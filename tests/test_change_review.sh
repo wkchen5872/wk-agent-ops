@@ -123,6 +123,36 @@ want "$SVG" 'openspec-verify-change' "skill diagram shows the mandatory verify"
 want "$SVG" '無 PR' "skill diagram shows the no-PR branch"
 deny "$ROOT/README.md" '提供 PR、phase（`design` 或 `implementation`）' "README no longer requires PR and phase"
 
+# ── standardize-github-collaboration-records: remote pass is posted too ──────
+echo "SCR remote verdicts and shared frame"
+deny "$SKILL" 'posted only when the user asks' "a remote pass is no longer held back for a request"
+want "$SKILL" 'any verdict' "any verdict on a confirmed PR is posted"
+want "$SKILL" 'Next actions' "report carries Next actions"
+want "$SKILL" 'pass never' "a posted pass sends no repair notification"
+sed -n '/^description:/,/^[a-z]*:/p' "$SKILL" | grep -qF 'on a pass, it returns' \
+  && bad "description no longer returns a PR pass locally" || ok "description no longer returns a PR pass locally"
+for t in 'PR pass 發布' 'pass 發布失敗' 'PR unknown 的 pass' 'pass 後 head 移動'; do
+  grep -E '^### CR-[0-9]+' "$CASES" 2>/dev/null | grep -qF -- "$t" \
+    && ok "change-review has a case for '$t'" || bad "change-review has a case for '$t'"
+done
+want "$CASES" '## Next actions' "full report cases show Next actions"
+want "$CASES" '方式: Agent 協助' "full report cases use the shared Author"
+want "$SVG" '含 pass' "diagram posts every verdict, pass included"
+deny "$SVG" '通過：回報本輪版本與限制。' "diagram no longer returns a PR pass directly"
+
+# codex-sol-r01/F-01: a relayed implementation report names its publisher in the
+# main Author fields; notification must target the original implementer.
+echo "F-01 relayed implementation reports"
+step6() { sed -n '/^## Step 6/,/^## Step 7/p' "$SKILL" 2>/dev/null; }
+step6 | grep -qF '原報告作者' && ok "Step 6 reads the original author of a relayed report" \
+  || bad "Step 6 reads the original author of a relayed report"
+step6 | grep -qF 'never the publisher' && ok "Step 6 never defaults to the publisher" \
+  || bad "Step 6 never defaults to the publisher"
+for t in '代發實作 A 可定位' '代發實作 A 不可定位'; do
+  grep -E '^### CR-[0-9]+' "$CASES" 2>/dev/null | grep -qF -- "$t" \
+    && ok "change-review has a case for '$t'" || bad "change-review has a case for '$t'"
+done
+
 # ── 2.x Phase checklists and findings ────────────────────────────────────────
 echo "2.x checklists and findings"
 [[ -f "$CHECKS" ]] && ok "phase checklists exist" || bad "phase checklists exist"

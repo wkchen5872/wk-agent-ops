@@ -1,71 +1,254 @@
 # github-issue 範例
 
-範本與規則見 `docs/github-handoff.md` 第 6.1 節；這裡只示範如何依內容整理。範例中的
-編號、日期與名稱都是虛構的。
+欄位、外框與缺值規則以 `docs/github-handoff.md` 第 6 節（共同外框）、第 6.1 節（Issue）、
+第 6.6 節（Checkpoint）與第 6.7 節（Closure）為準；這裡只示範同一件工作從建立到結案的
+連續寫法，不另定格式。可重播的判定見 `acceptance-cases.md`。
 
-## Change 與 Work Item 一起登錄
+以下人名、repo、編號、版本、Session、測試與驗收結果全部為虛構。共同情境為 Issue #42「新增
+訂單 CSV 匯出」、PR #57、Change `add-order-export`。`a1b2c3d` 是設計草案，`d4e5f6a` 是修正
+後實作。正式發布時優先使用已查核的遠端 URL。
 
-來源是 `add-export` 與 `WI-20261101-export`。Goal 讓只讀 Issue 的人看懂問題與預期結果，
-Tasks 只列有意義的完成條件，不搬 `tasks.md`；規格尚未 push，所以 References 標明
-local-only：
+## 建立 Issue
+
+情境為需求已討論一部分，準備跨成員交接。標題為「新增訂單 CSV 匯出功能」。
 
 ```markdown
 ## Handoff
 
-- openspec-change: add-export
-- work-item: WI-20261101-export
-- pull-request: null
+- openspec-change: add-order-export
+- branch: feature/add-order-export
+- work-item: WI-20261114-order-export（local-only）
 
 ## Goal
 
-客服目前只能逐筆複製訂單資料。新增 CSV 匯出，讓客服依日期區間下載訂單，檔名帶日期，
-欄位與後台列表一致。
+客服目前逐筆複製訂單，整理大量資料時容易漏項。希望有訂單檢視權限的使用者，能依日期區間匯出 CSV。本次涵蓋訂單基本資料，付款明細與附件另行處理。
 
-## Tasks
+## Acceptance criteria
 
-- [ ] 依日期區間匯出 CSV，欄位與列表一致
-- [ ] 大量資料時以背景工作產生，完成後通知
-- [ ] 匯出權限沿用既有的訂單檢視權限
+- 可以下載指定日期區間的 CSV。
+- 欄位包含訂單編號、日期、金額與狀態。
+- 沒有訂單檢視權限的使用者無法匯出。
+- 空資料區間仍可取得含欄位標題的 CSV。
+
+## Checkpoint
+
+### Current state
+設計草案已發布於 a1b2c3d，尚未實作及建立 PR。
+
+### Confirmed decisions
+採 CSV，沿用既有的訂單檢視權限。
+
+### Open questions
+需確認一般匯出資料量，再決定大量資料的處理方式。
+
+## Next actions
+
+@mei 提供常見資料量，設計負責人補齊限制與驗收方式後安排設計審查。
 
 ## References
 
-- `openspec/changes/add-export/`（local-only，尚未發布）
+- 規格草案位於 feature/add-order-export 的 openspec/changes/add-order-export/，版本 a1b2c3d。
+- 本地討論位於 work-items/WI-20261114-order-export/，僅供原工作環境查閱。
 
 ## Author
 
-Co-Authored-By: Claude Code
-AI-Assisted-By: Claude Opus 5.5
+方式: Agent 協助
+人類: @mei
+Co-Authored-By: Codex
+AI-Assisted-By: gpt-6.1-sol
+SESSION-ID: example-planning-session
+XIRP-SESSION-ID: example-xirp-planning
 ```
 
-## Session-only，包含依賴與未決事項
+## 追加進度或回覆
 
-沒有 Work Item 或 Change，內容來自本次 Session 的討論。三個 Handoff 欄位都是 `null`；
-中間段落依工作調整，沒有 Tasks／References 可寫就省略：
+update 新增一則留言，原始正文與舊留言保留。
 
 ```markdown
 ## Handoff
 
-- openspec-change: null
-- work-item: null
-- pull-request: null
+- issue: https://github.com/acme/widgets/issues/42
+- openspec-change: add-order-export
+- pull-request: https://github.com/acme/widgets/pull/57
 
-## Goal
+## Changes
 
-夜間匯出排程在資料量大時逾時，整批失敗且不會重試。目標是逾時的批次自動重試，
-連續失敗才通知值班人員。
+已確認單次支援 5,000 筆，超過時回傳明確訊息。此限制已納入設計並取得人類確認。PR #57 已發布初版，正在等待權限與日期篩選 Review。
 
-## Dependencies
+## Next actions
 
-- 等 https://github.com/acme/widgets/pull/12 合併後再開始：重試要沿用 PR #12 引入的新匯出格式；PR #12 合併即解除，不需等部署。
-
-## Open questions
-
-- 重試次數與間隔尚未決定。
+Reviewer 對 PR #57 的發布版本檢查上述驗收條件。
 
 ## Author
 
-Co-Authored-By: Claude Code
-AI-Assisted-By: Claude Opus 5.5
+方式: Agent 協助
+人類: @mei
+Co-Authored-By: Codex
+AI-Assisted-By: gpt-6.1-sol
+SESSION-ID: example-impl-session
+XIRP-SESSION-ID: example-xirp-impl
 ```
 
-模型無法確認時省略 `AI-Assisted-By` 那一行，並在回報中說明。
+## 換人時的 Checkpoint
+
+已有多輪留言，需要讓另一個環境接手。讀取時仍需核對此留言之後的事件及目前版本。
+
+```markdown
+## Handoff
+
+- issue: https://github.com/acme/widgets/issues/42
+- openspec-change: add-order-export
+- pull-request: https://github.com/acme/widgets/pull/57
+
+## Checkpoint
+
+### Current state
+實作已發布至 d4e5f6a，權限問題已修正並通過複審，尚未合併。
+
+### Confirmed results
+日期篩選、空資料及權限測試通過。單次上限為 5,000 筆。證據見 PR #57 的 reviewer-b-r02 回覆。
+
+### Open questions
+原範圍內無未決需求。高於上限的背景匯出為額外提案，追蹤於 Issue #63。
+
+## Next actions
+
+接手者核對目前 head 及後續留言，再由負責人完成交付整理與授權的合併操作。
+
+## Author
+
+方式: Agent 協助
+人類: @mei
+Co-Authored-By: Codex
+AI-Assisted-By: gpt-6.1-sol
+SESSION-ID: example-impl-session
+XIRP-SESSION-ID: example-xirp-impl
+```
+
+## 完成結案摘要
+
+此例假設 PR 已合併且原範圍驗收有證據。先新增並回讀摘要，再將 Issue 以 completed 關閉並回讀。
+
+```markdown
+## Handoff
+
+- issue: https://github.com/acme/widgets/issues/42
+- pull-request: https://github.com/acme/widgets/pull/57
+- openspec-change: add-order-export
+
+## Closure
+
+### Outcome
+原範圍已完成，準備以 completed 關閉。
+
+### Result
+客服可以匯出最多 5,000 筆指定日期區間的訂單 CSV，權限沿用訂單檢視權限。
+
+### Acceptance
+已驗證欄位、日期區間、空資料、上限及未授權拒絕。證據見 PR #57 的最終驗證回覆。該 PR 已合併。
+
+### Remaining work
+原範圍內無未完成事項。超過上限的背景匯出提案由 Issue #63 追蹤。
+
+## Next actions
+
+關閉本 Issue，額外提案接續於 #63。
+
+## Author
+
+方式: Agent 協助
+人類: @mei
+Co-Authored-By: Codex
+AI-Assisted-By: gpt-6.1-sol
+SESSION-ID: example-impl-session
+XIRP-SESSION-ID: example-xirp-impl
+```
+
+## 取消結案摘要
+
+這是另一個取消情境，與前述完成案例互斥。close reason 使用 not planned。
+
+```markdown
+## Handoff
+
+- issue: https://github.com/acme/widgets/issues/42
+
+## Closure
+
+### Outcome
+使用者已取消本需求，準備以 not planned 關閉。
+
+### Result
+團隊決定沿用既有報表，不新增 CSV 匯出。
+
+### Remaining work
+PR #57 仍需負責人另外決定是否關閉，此次 Issue close 不操作該 PR。
+
+## Next actions
+
+關閉本 Issue，將 PR #57 的處置交給負責人確認。
+
+## Author
+
+方式: Agent 協助
+人類: @mei
+Co-Authored-By: Codex
+AI-Assisted-By: gpt-6.1-sol
+SESSION-ID: example-impl-session
+XIRP-SESSION-ID: example-xirp-impl
+```
+
+## 人類直接建立的最小案例
+
+沒有 OpenSpec 或 branch 的初步問題，也能由人類發布。
+
+```markdown
+## Handoff
+
+目前尚無 Change、branch 或 PR 關聯。
+
+## Goal
+
+客服發現跨月查詢結果與月報不同，請協助確認日期邊界是否一致。
+
+## Next actions
+
+@mei 補上可重現的日期區間與已去識別化資料。
+
+## Author
+
+方式: 人類直接發布
+人類: @mei
+```
+
+## 模型與 Session 無法取得
+
+Agent 已查核可用來源但模型未知、沒有原生 ID，只有已確認的 Xirp ID。省略模型與未確認的
+人類，原生 ID 寫 `null`，操作回報說明查核限制。
+
+```markdown
+## Author
+
+方式: Agent 協助
+Co-Authored-By: Codex
+SESSION-ID: null
+XIRP-SESSION-ID: example-xirp-planning
+```
+
+兩個 ID 都無法確認屬於本次發布 Session 時，兩欄都寫 `null`，仍照常發布並在回報說明：
+
+```markdown
+## Author
+
+方式: Agent 協助
+Co-Authored-By: Claude Code
+AI-Assisted-By: Claude Opus 5.5
+SESSION-ID: null
+XIRP-SESSION-ID: null
+```
+
+## 摘要成功但 close 失敗
+
+這段不是貼文，而是 `github-issue close` 的操作回報。
+
+已回讀 Closure 留言後，狀態操作遭拒。操作回報寫「摘要已發布，Issue 仍為 OPEN，關閉失敗」，附已確認的留言 URL。重試先查目前 state、reason 與摘要是否仍適用，再執行缺少且仍獲授權的操作。摘要中原本的「準備關閉」不改寫為成功。

@@ -238,16 +238,20 @@ Codex 版本：`.codex/agents/doc-updater-agent.toml`（`gpt-5.6-terra`、medium
 
 **位置：** `template/common/skills/github-issue/`、`template/common/skills/github-pr/`
 
-**用途：** 以 GitHub Issue／PR 交接工作的兩個薄入口。`github-issue` 提供 create／update：
+**用途：** 以 GitHub Issue／PR 交接工作的兩個薄入口。`github-issue` 提供 create／update／close：
 來源可為指定的 Work Item、OpenSpec Change、兩者、目前分支的關聯，或沒有本機紀錄時的
-目前 Session；create 寫精簡的 Handoff／Goal／Author 正文，update 只新增 Changes 留言、
-不改寫正文。`github-pr` 提供 create／update／reply／close：create 會做必要的檢查、只含本次
-工作的 commit 與正常 push，再開 Draft PR；reply 新增審查或修正回覆（也用來代記人類的設計
-批准），close 不 merge 地關閉 PR 與它直接處理的 Issue。只有 create 會寫 Git；Author 同時記錄
-`SESSION-ID` 與 `XIRP-SESSION-ID`。
+目前 Session；create 寫 Handoff／Goal／Acceptance criteria／Next actions／Author 正文，update
+（含「回覆 Issue」）只新增進度或 Checkpoint 留言、不改寫正文，close 先發布並回讀 Closure，
+再以 completed 或 not planned 只關閉該 Issue。`github-pr` 提供 create／update／reply／close：
+create 會做必要的檢查、只含本次工作的 commit 與正常 push，再開 Draft PR；reply 新增審查、修正、
+Checkpoint 或 Closure 回覆（也用來代記人類的設計批准），close 先發布 Closure，再不 merge 地只
+關閉該 PR，關聯 Issue 保持原狀。只有 create 會寫 Git；Agent Author 同時記錄 `SESSION-ID` 與
+`XIRP-SESSION-ID`，人類直接發布只記人類身分，代發另列原報告作者。Work Item 只是 local-only 的
+來源線索，不同本地 ID 不構成衝突、相同本地 ID 也不證明是同一件工作。
 
-- 範本、關聯鍵、provenance、Review 格式與流程只存在於 managed
-  `docs/github-handoff.md`；兩個 Skill 與之後的 Review Skill 都只引用，不各存一份。
+- 範本（共同外框、Checkpoint、Closure）、關聯鍵、provenance、Review 格式與流程只存在於
+  managed `docs/github-handoff.md`；兩個 Skill 與 `change-review` 都只引用，不各存一份。
+  各 Skill 的 `references/examples.md` 示範同一件工作的完整生命週期。
 - 每次寫入前核對完整 host／owner／repo、操作與授權，寫入後回讀；GitHub 操作使用可用的
   `gh` 或 GitHub MCP，commit／push 用本機 Git，認證交給本機工具。預設不限制帳號，
   明示限制才核對。舊的 `check-identity.sh` 已移除，installer 只刪未修改的舊副本。

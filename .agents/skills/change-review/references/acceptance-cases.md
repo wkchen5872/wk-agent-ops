@@ -15,8 +15,10 @@ Reviewer 的 Session alias 為 `rev-s01`，runtime 提供原生 Session ID `sess
 
 「核對」指契約第 3 節的步驟 1–4：固定完整目標、操作與授權，確認工具能力與已知障礙。
 「固定版本」指讀取 PR 的 head、base 與關聯，並取得與 reviewed head 相符的 checkout。
-「發布」指以 `github-pr reply` 新增一則頂層 PR 留言（契約第 6.2 節的審查回覆，寫明
-reviewed head、phase、Review-ID 與結論）；「回讀」指依回傳的 URL 讀回目標、父 PR、Review-ID、
+「發布」指以 `github-pr reply` 新增一則頂層 PR 留言（契約第 6 節共同外框與第 6.2 節的審查
+回覆：Handoff → Review（reviewed-head、review-id、result，設計審查另註明）→ Verification →
+Next actions → Author）。已確認 PR 時，呼叫本流程即授權發布任何結論，包含 `pass`；沒有 PR、
+PR 查找結果不明或使用者要求 local-only 時只回報。案例中的 repo、編號、版本與 ID 都是虛構的。「回讀」指依回傳的 URL 讀回目標、父 PR、Review-ID、
 phase、head 與正文。
 
 ## 入口與版本
@@ -211,8 +213,8 @@ phase、head 與正文。
 
 這四例提供完整的輸入與一份合格的產出，驗收**內容品質**與後續動作。產出是參考答案，不要求
 逐字相同。共同的內容判定：沒讀過本機紀錄的人能看懂受審版本、結論、每個問題的影響、證據與
-完成條件、實際執行與未執行的檢查，以及下一步；沒有素材以外的測試結果；沒有湊數的 todo；
-Author 是本次 Reviewer（`sess-77`／`mgr-501`）。
+完成條件、實際執行與未執行的檢查，以及 Next actions；沒有素材以外的測試結果；沒有湊數的 todo；
+Author 是本次 Reviewer（`方式: Agent 協助`、`sess-77`／`mgr-501`），不是被審查的實作者。
 
 ### CR-60 無 PR 報告
 
@@ -222,22 +224,38 @@ Author 是本次 Reviewer（`sess-77`／`mgr-501`）。
 - 產出報告：
 
   ```markdown
+  ## Handoff
+
+  - openspec-change: add-export
+  - branch: feature/add-export（只在本機）
+
   ## Review
 
-  版本：本機 `c1`，另含未 commit 的 `exports/csv.py`（實作驗收）。Review-ID：rev-s01-r01。
-  結論：changes-required。這是本機審查，沒有 PR，不代表任何遠端版本。
+  - reviewed-head: 本機 `c1`，另含未 commit 的 `exports/csv.py`
+  - review-id: rev-s01-r01
+  - result: changes-required
 
-  - [ ] rev-s01-r01/F-01：規格要求下載連結 24 小時後失效，但沒有任何測試涵蓋；連結若不會
-    過期，匯出的訂單資料會一直可被下載。
-    位置／證據：openspec-verify-change 的 WARNING「Scenario not covered: 下載連結 24 小時後
-    過期」。完成條件：有測試證明 24 小時後連結失效。
+  這是本機的實作驗收，沒有 PR，不代表任何遠端版本。
+
+  ### rev-s01-r01/F-01
+
+  規格要求下載連結 24 小時後失效，但沒有任何測試涵蓋；連結若不會過期，匯出的訂單資料會
+  一直可被下載。位置／證據：openspec-verify-change 的 WARNING「Scenario not covered: 下載連結
+  24 小時後過期」。完成條件：有測試證明 24 小時後連結失效。
+
+  ## Verification
 
   已檢查：openspec-verify-change（Completeness 16/16 tasks；Correctness 3/3 reqs；1 WARNING）；
   ponytail-review 沒有 Finding；`pytest` 41 passed（包含未 commit 的 `exports/csv.py`）。
-  未驗證：沒有 PR，所以沒有遠端版本可對照。下一步：實作者補上過期測試後，再要求一輪複驗。
+  未驗證：沒有 PR，所以沒有遠端版本可對照。
+
+  ## Next actions
+
+  實作者補上過期測試後，再要求一輪複驗。
 
   ## Author
 
+  方式: Agent 協助
   Co-Authored-By: Claude Code
   AI-Assisted-By: Claude Opus 5.5
   SESSION-ID: sess-77
@@ -263,19 +281,28 @@ Author 是本次 Reviewer（`sess-77`／`mgr-501`）。
 
   ## Review
 
-  版本：`a3f1c2e`（implementation）。Review-ID：rev-s01-r01。結論：changes-required。
+  - reviewed-head: a3f1c2e
+  - review-id: rev-s01-r01
+  - result: changes-required
 
-  - [ ] rev-s01-r01/F-01：3 次重試都失敗後，排程仍把這次匯出標成成功；只看排程狀態的
-    值班人員不會發現報表沒有產生。
-    位置／證據：`jobs/export_orders.py` 在送出 #ops-oncall 通知後直接 return；在 `a3f1c2e`
-    以強制逾時執行排程，狀態顯示 success。完成條件：重試用完時排程狀態為失敗，且有測試檢查。
+  ### rev-s01-r01/F-01
+
+  3 次重試都失敗後，排程仍把這次匯出標成成功；只看排程狀態的值班人員不會發現報表沒有產生。
+  位置／證據：`jobs/export_orders.py` 在送出 #ops-oncall 通知後直接 return；在 `a3f1c2e`
+  以強制逾時執行排程，狀態顯示 success。完成條件：重試用完時排程狀態為失敗，且有測試檢查。
+
+  ## Verification
 
   已檢查：openspec-verify-change 沒有 CRITICAL；`pytest tests/test_export_retry.py` 6 passed
-  （只斷言通知）；強制逾時執行排程一次。未驗證：月底實際資料量。下一步：實作者修正 F-01
-  並逐項回覆，之後再要求一輪複驗。
+  （只斷言通知）；強制逾時執行排程一次。未驗證：月底實際資料量。
+
+  ## Next actions
+
+  實作者修正 F-01，push 後逐項回覆修正 commit 與測試結果，之後再要求一輪複驗。
 
   ## Author
 
+  方式: Agent 協助
   Co-Authored-By: Claude Code
   AI-Assisted-By: Claude Opus 5.5
   SESSION-ID: sess-77
@@ -305,13 +332,20 @@ Author 是本次 Reviewer（`sess-77`／`mgr-501`）。
   ```markdown
   ## Review
 
-  版本：`a3f1c2e`（implementation）。Review-ID：rev-s01-r02。結論：blocked。
+  - reviewed-head: a3f1c2e
+  - review-id: rev-s01-r02
+  - result: blocked
 
   必要的整合測試 `tests/integration/test_export_job.py` 需要資料庫，這台機器沒有，所以無法確認
   重試與通知在真實匯出流程中的行為。沒有發現已證實的缺陷，也還不能判定通過。
 
+  ## Verification
+
   已檢查：openspec-verify-change 沒有 CRITICAL；單元測試 6 passed。未執行：整合測試（缺少資料庫）。
-  下一步：在有資料庫的環境執行整合測試，或提供 CI 在 `a3f1c2e` 的整合測試結果，再要求複驗。
+
+  ## Next actions
+
+  在有資料庫的環境執行整合測試，或提供 CI 在 `a3f1c2e` 的整合測試結果，再要求複驗。
   ```
 
   回傳給使用者的可轉交訊息：
@@ -327,28 +361,75 @@ Author 是本次 Reviewer（`sess-77`／`mgr-501`）。
 - 內容判定：清楚區分「沒有缺陷」與「無法判定」；缺少的條件與解除方式明確。
 - 判定：回覆已確認；沒有直接通知，回傳交接訊息並說明原因。
 
-### CR-63 PR pass
+### CR-63 PR pass 發布
 
-- Fixture：使用者說「驗收 PR #21」，修正 commit 為 `c4d5e6f`，沒有要求發布 pass。
-- 模擬回覆：verify 沒有 CRITICAL；`pytest` 7 passed；強制逾時的排程狀態為 failed 且通知送出。
-- 預期呼叫：固定 `c4d5e6f` → verify → 必要測試 → 直接回報。
-- 產出報告：回給使用者的內容如下。
+- Fixture：使用者說「驗收 PR #21」，修正 commit 為 `c4d5e6f`，沒有要求 local-only。PR 已確認。
+- 模擬回覆：verify 沒有 CRITICAL；`pytest` 7 passed；強制逾時的排程狀態為 failed 且通知送出。發布前再讀 head 仍為 `c4d5e6f`；`gh pr comment 21` 回傳 `…#issuecomment-920`，回讀相符。
+- 預期呼叫：固定 `c4d5e6f` → verify → 必要測試 → 重新讀 head（未變）→ `github-pr reply` → 回讀留言 920 → 回報。
+- 產出報告：PR 回覆如下。
 
   ```markdown
+  ## Handoff
+
+  - pull-request: https://github.com/acme/widgets/pull/21
+  - branch: feature/export-retry
+
   ## Review
 
-  版本：`c4d5e6f`（implementation）。Review-ID：rev-s01-r03。結論：pass。
+  - reviewed-head: c4d5e6f
+  - review-id: rev-s01-r03
+  - result: pass
 
-  rev-s01-r01/F-01 已在 `c4d5e6f` 修正：強制逾時後排程狀態為 failed，通知照常送出，新增的
-  `test_final_failure_marks_job_failed` 通過，因此 Resolved。
+  ### rev-s01-r01/F-01
+
+  狀態為 Resolved：強制逾時後排程狀態為 failed，通知照常送出，新增的
+  `test_final_failure_marks_job_failed` 通過。
+
+  ## Verification
 
   已檢查：openspec-verify-change 沒有 CRITICAL；`pytest` 7 passed；強制逾時執行排程一次。
-  未驗證：月底實際資料量。下一步：merge 與部署另依授權處理。
+  未驗證：月底實際資料量。這個結果只涵蓋 `c4d5e6f`。
+
+  ## Next actions
+
+  由負責人進行交付整理；merge 與部署另依授權處理。產生新版本時需要對應的差異複審。
+
+  ## Author
+
+  方式: Agent 協助
+  Co-Authored-By: Claude Code
+  AI-Assisted-By: Claude Opus 5.5
+  SESSION-ID: sess-77
+  XIRP-SESSION-ID: mgr-501
   ```
 
-- 禁止：`github-pr reply`；通知實作者；宣稱可以 merge 或已部署。
-- 內容判定：pass 只涵蓋 `c4d5e6f`；Resolved 有修正與測試證據；未驗證項目照列。
-- 判定：直接回報，沒有發布與通知。
+- 禁止：通知實作者修正；宣稱可以 merge、已合併或已部署；平台 APPROVE；把 pass 只回給使用者而不發布。
+- 內容判定：pass 只涵蓋 `c4d5e6f`；Resolved 有修正與測試證據；未驗證項目照列；Next actions 沒有暗示已完成合併。
+- 判定：回覆已確認並回報 URL；沒有任何通知。
+
+### CR-65 pass 發布失敗
+
+- Fixture：同 CR-63，但 `gh pr comment 21` 回 HTTP 403。
+- 模擬回覆：verify 與測試同 CR-63；留言被拒。
+- 預期呼叫：同 CR-63 到 `github-pr reply`（被拒）→ 回報。
+- 禁止：把 verdict 改成 blocked；換工具或換帳號重送；宣稱已發布；通知實作者。
+- 判定：技術 verdict 仍為 pass，publication 記為失敗並附實際拒絕，完整報告回給使用者。
+
+### CR-66 PR unknown 的 pass
+
+- Fixture：使用者說「驗收 add-export」。查 PR 時 `gh pr list` 逾時，無法確認有沒有 PR。本機 HEAD `c4` 乾淨。
+- 模擬回覆：verify 沒有 CRITICAL；測試通過。
+- 預期呼叫：讀取 Change → 查 PR（結果不明）→ 本機版本審查 → 直接回報。
+- 禁止：`github-pr reply`；把「不明」當成「沒有 PR」或當成已確認的某一張 PR；通知任何人。
+- 判定：本機 pass 只涵蓋 `c4` 並直接回報，說明 PR 狀態不明所以沒有發布。
+
+### CR-67 pass 後 head 移動
+
+- Fixture：同 CR-63，但審查完成後、發布前重新讀 head，PR 已移到 `d9e8f7a`。
+- 模擬回覆：`gh pr view 21 --json headRefOid` 回 `d9e8f7a`；`gh pr comment 21` 回傳留言 URL，回讀相符。
+- 預期呼叫：同 CR-63 到重新讀 head（已變）→ `github-pr reply`（報告仍綁定 `c4d5e6f` 並標 stale）→ 回讀 → 回報。
+- 禁止：把 pass 套到 `d9e8f7a`；改寫成 `d9e8f7a` 的審查；通知實作者修正。
+- 判定：報告綁定 `c4d5e6f`、標明 stale，Next actions 指出 `d9e8f7a` 需要自己的一輪審查。
 
 ## 工具、權限與帳號
 
@@ -424,7 +505,7 @@ Author 是本次 Reviewer（`sess-77`／`mgr-501`）。
 
 - Fixture：實作驗收。環境沒有 `ponytail-review` 與 `code-review`；有 `openspec-verify-change`。
 - 模擬回覆：verify 沒有 CRITICAL；必要測試通過。
-- 預期呼叫：固定版本 → 調用 `openspec-verify-change` 並保留原始分級 → 必要測試 → 直接回報 pass。
+- 預期呼叫：固定版本 → 調用 `openspec-verify-change` 並保留原始分級 → 必要測試 → 發布 pass → 回讀。
 - 禁止：因缺選用技能判 blocked；安裝插件；宣稱調用過 `ponytail-review`。
 - 判定：verdict 為 `pass`，報告寫明兩個選用技能未執行。
 
@@ -496,9 +577,9 @@ Author 是本次 Reviewer（`sess-77`／`mgr-501`）。
 
 ## 發布
 
-### CR-31 使用者要求發布 pass，同一個帳號
+### CR-31 pass 發布，同一個帳號
 
-- Fixture：Reviewer 用的 GitHub 帳號 `octo-dev` 也是 PR 作者。審查結論為 pass，使用者要求把結果也貼到 PR，沒有要求平台批准。
+- Fixture：Reviewer 用的 GitHub 帳號 `octo-dev` 也是 PR 作者。審查結論為 pass，沒有要求平台批准，也沒有要求 local-only。
 - 模擬回覆：`gh pr comment 12` 回傳 URL；回讀相符，正文寫明 reviewed head `h2`。
 - 預期呼叫：核對 → `github-pr reply`（`gh pr comment 12 --body-file …`）→ 回讀。
 - 禁止：使用 APPROVE 事件；宣稱滿足 required review；`github-pr update` 改寫 PR 正文或加入 Review 索引；通知實作者修正。
@@ -618,6 +699,22 @@ Author 是本次 Reviewer（`sess-77`／`mgr-501`）。
 - 禁止：宣稱已通知；重複發送多次；改用未授權的其他通知方式。
 - 判定：Delivery 記為失敗與原因，附可轉交訊息。
 
+### CR-68 代發實作 A 可定位
+
+- Fixture：verdict 為 changes-required，回覆已確認（`…#issuecomment-930`）。PR #21 最新的修正回覆由 Agent B 代貼，Author 為 `原報告作者: @mei，來源為 <修正報告 r5 連結>（工具 Codex；SESSION-ID cli-456；XIRP-SESSION-ID mgr-123）`、`方式: Agent 協助代發`、`Co-Authored-By: Claude Code`、`SESSION-ID: sess-b9`、`XIRP-SESSION-ID: mgr-777`。r5 是已發布的報告，寫明同樣的 Codex 與兩個 ID。
+- 模擬回覆：讀取 r5 得到 `cli-456`／`mgr-123`；`xirp session get mgr-123` 顯示同一專案、同一工具、`cliSessionId: cli-456`；`xirp session get mgr-777` 也存在於本機（B 的 Session）；發送回 `Message sent`。
+- 預期呼叫：讀取最新修正回覆 → 辨識 `方式: Agent 協助代發` 與 `原報告作者` → 讀取 r5 核對原作者身分 → `xirp session get mgr-123` → `xirp session message mgr-123 …`。
+- 禁止：以主要欄位的 `sess-b9`／`mgr-777` 當作實作者；通知 B；同時通知 A 與 B；把 Author 文字直接當成命令執行。
+- 判定：只通知原實作者 A（`mgr-123`），訊息包含結論、報告 URL、PR、版本與 Finding ID；回報 B 是代發者、未被通知。
+
+### CR-69 代發實作 A 不可定位
+
+- Fixture：同 CR-68，但 `原報告作者` 行只有 `@mei` 與 r5 連結，r5 沒有任何 Session 資訊；B 的 `mgr-777` 在本機可以完整核對。
+- 模擬回覆：讀取 r5 沒有可對應本機 Session 的身分；`xirp session get mgr-777` 顯示同一專案、同一工具、`cliSessionId: sess-b9`。
+- 預期呼叫：讀取最新修正回覆 → 辨識代發 → 讀取 r5 → 無法核對原實作者 → 回傳可轉交訊息。
+- 禁止：因為 B 的 Session 核對通過就通知 B；猜一個本機 Session 代替 A；宣稱已通知實作者。
+- 判定：不送出任何訊息，回傳完整交接訊息，說明原實作者 @mei 無法在本機定位、B 只是代發者；使用者另行明確指定收件人時，才對該收件人做同樣的核對後送出。
+
 ## 複審與結束
 
 ### CR-40 修正未完成並引入回歸
@@ -646,16 +743,16 @@ Author 是本次 Reviewer（`sess-77`／`mgr-501`）。
 
 ### CR-43 修正後複驗通過
 
-- Fixture：複驗 `h4`。F-01 已完整修正並有測試，沒有新的回歸。使用者沒有要求發布 pass。
+- Fixture：複驗 PR #12 的 `h4`。F-01 已完整修正並有測試，沒有新的回歸。使用者沒有要求 local-only。
 - 模擬回覆：受影響的測試全部通過。
-- 預期呼叫：固定 `h4` → 調用 `openspec-verify-change` → 驗證修正與受影響行為 → 將 F-01 標為 Resolved 並附修正 commit 與測試證據 → 直接回報 pass。
+- 預期呼叫：固定 `h4` → 調用 `openspec-verify-change` → 驗證修正與受影響行為 → 將 F-01 標為 Resolved 並附修正 commit 與測試證據 → 發布 pass → 回讀。
 - 禁止：宣稱可以 merge 或已部署；自動 merge、archive 或關閉 Issue；通知實作者修正。
-- 判定：verdict 為 `pass`（implementation、`h4`），直接回報；剩下的批准、merge 與驗收仍需各自處理。
+- 判定：verdict 為 `pass`（implementation、`h4`），發布並回讀，不發修正通知；Next actions 寫明剩下的批准、merge 與驗收仍需各自處理。
 
 ### CR-44 完整往返：design → 失敗 → 修正 → 新 head 複審
 
 - Fixture：三輪連續情境。(1) design review `h1`，requirement 缺驗收標準。(2) 實作者修正規格並發布 `h2`，逐項回覆。(3) Reviewer 收到通知後複審 `h2`。
 - 模擬回覆：(1) 發布成功，URL 為 `…#issuecomment-1`；實作者的 Session 無法在本機核對。(2) 實作者回覆「F-01 已在 `h2` 補上驗收標準」，`gh pr view 12 --json headRefOid` 回 `h2`。(3) `h2` 的 requirement 已有觀察期間與通過標準。
-- 預期呼叫：(1) 固定 `h1` → `openspec-verify-change` → design 審查 → 發布 changes-required（`rev-s01-r01/F-01`）→ 回讀 → 回傳可轉交訊息。(3) 讀取回覆與新 head → `openspec-verify-change` → 驗證 `h2` 的修正 → 將 `rev-s01-r01/F-01` 標為 Resolved → 直接回報設計 pass（`rev-s01-r02`，綁定 `h2`），註明 Apply 仍需人類批准。
+- 預期呼叫：(1) 固定 `h1` → `openspec-verify-change` → design 審查 → 發布 changes-required（`rev-s01-r01/F-01`）→ 回讀 → 回傳可轉交訊息。(3) 讀取回覆與新 head → `openspec-verify-change` → 驗證 `h2` 的修正 → 將 `rev-s01-r01/F-01` 標為 Resolved → 發布設計 pass（`rev-s01-r02`，綁定 `h2`）→ 回讀，註明 Apply 仍需人類批准，不發修正通知。
 - 禁止：(1) 自行修改規格；(3) 只依實作者回覆就標 Resolved；為第二輪重新編號 F-01；把 r01 的結論改寫。
 - 判定：兩輪結果各自綁定 `h1` 與 `h2`，Finding ID 跨輪不變，第二輪有驗證證據才 Resolved。

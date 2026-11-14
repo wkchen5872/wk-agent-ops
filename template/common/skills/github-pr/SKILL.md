@@ -7,30 +7,32 @@ description: >
   someone who missed the conversation understands it. create does what opening
   the PR needs — checks, a commit scoped to this work, a normal push — then opens
   a Draft PR (or returns the existing one); update edits the authorized parts of
-  its description; reply adds a Review, Changes, or other report as a new
-  top-level comment; close closes the PR without merging and then its directly
-  corresponding Issues. Only create publishes Git. Every write checks the full
+  its description; reply adds a Review, Changes, Checkpoint, Closure, or other
+  report as a new top-level comment; close posts and reads back a Closure
+  summary, then closes only that PR without merging — linked Issues stay as they
+  are. Only create publishes Git. Every write checks the full
   base and head repositories (including forks) and is read back. Works through gh or a
   configured GitHub MCP. Use whenever the user asks to open, describe, refresh,
-  review-reply, report fixes on, or close a PR — for example "建立 PR", "開 PR",
-  "更新 PR 說明", "回覆 review", "回報修正", "關閉 PR", "把批准記到 PR".
+  review-reply, report fixes on, hand off, summarize, or close a PR — for
+  example "建立 PR", "開 PR", "更新 PR 說明", "回覆 review", "回報修正",
+  "交接摘要", "結案摘要", "關閉 PR", "把批准記到 PR".
 license: MIT
 compatibility: "Requires git and either GitHub CLI (gh) or a GitHub MCP, already configured for the target host. Optional: openspec CLI, git-commit-writer."
 metadata:
   author: wkchen
-  version: "2.1"
+  version: "3.0"
 ---
 
 # GitHub PR
 
 A thin entry for the PR side of the GitHub handoff. The description explains the
 work and the version that is published; replies keep each round of review,
-repair, or reporting; close ends a PR that will not be merged.
+repair, handoff, or closure; close ends a PR that will not be merged.
 
 `docs/github-handoff.md` owns every template, field meaning, and rule. This
 skill only sequences the work. **Read that contract first** — sections 3, 4, 5,
-6.2, 6.3, 8, 9 and 11 — and take the body and reply layouts from section 6.2
-rather than from memory.
+6 (the shared Handoff / Next actions / Author frame), 6.2, 6.3, 6.6, 6.7, 8, 9
+and 11 — and take the body and reply layouts from there rather than from memory.
 
 ## What each operation may change
 
@@ -38,8 +40,8 @@ rather than from memory.
 |---|---|---|
 | `create` | The work to open as a PR (local or already pushed); material to describe | Checks, a scoped commit and a normal push when needed, then one Draft PR — or returns the existing open one |
 | `update` | The PR, what to change | Rewrites the authorized parts of its description |
-| `reply` | The PR, this round's review, fixes, or report | Adds one top-level comment |
-| `close` | The PR | Closes the PR without merging, then its confirmed directly corresponding Issues |
+| `reply` | The PR, this round's review, fixes, Checkpoint, Closure, or report | Adds one top-level comment |
+| `close` | The PR, and why it ends without a merge | Adds one Closure comment, then closes only that PR without merging |
 
 A request to create a PR is the authorization for everything opening it needs:
 the project's checks, a commit of this PR's changes, a normal push, the Draft PR,
@@ -111,7 +113,7 @@ the PR. Say such work is not yet published.
 
 Pick `gh` or a configured GitHub MCP and check, in that tool's own context, that
 it reaches the base repository and has the operation you need (list, view,
-create, edit, comment, close, and Issue close for `close`). Read whatever
+create, edit, comment, and comment plus close for `close`). Read whatever
 permission information it offers, and use it only for what it actually covers.
 One tool's login is never evidence that another tool can act.
 
@@ -236,21 +238,31 @@ credentials, or by resending through another tool.
 ### Step 6 — Compose the description
 
 Write it from what Step 5 actually published. Follow the body in contract
-section 6.2. Handoff first, with `branch` always and other associations only
-when confirmed — no empty fields. Then the work: what the problem is and whom it
-affects, what is in and out of scope, the design or the published changes, how
-to check the result, and what is still open, as far as the material supports
-each. Pick headings that fit (Goal, Design, Implementation, Verification, Open
-questions); do not add empty sections. Do not keep a record's layout (Sessions,
-coordinators, decision IDs, per-agent next actions), do not shorten the tasks
-list group by group, and do not post bare IDs in place of an explanation. Point
-to a task plan by linking it, without enumerating its groups or counts. A
-design-only PR describes the design and claims no implementation. Never invent a
-decision, number, owner, date, or test result.
+section 6.2 inside the shared frame of section 6. Handoff first, with `branch`
+always and other associations only when confirmed — no empty fields; a Work Item
+is marked `（local-only）`, and `issue` names work this PR addresses without
+authorizing its closure. Then the work: what the problem is and whom it affects,
+what is in and out of scope, the design or the published changes, how the
+published version was checked, and what is still open, as far as the material
+supports each. Summary, Changes, and Verification are the default headings; pick
+others that fit (Design, Open questions) and add no empty sections. Do not keep
+a record's layout (Sessions, coordinators, decision IDs, per-agent next
+actions), do not shorten the tasks list group by group, and do not post bare IDs
+in place of an explanation. Point to a task plan by linking it,
+without enumerating its groups or counts. A design-only PR describes the design and
+claims no implementation. Never invent a decision, number, owner, date, or test
+result.
 
-**Author** last (contract section 6.2): the tool posting now, the known current
-root-session model, `SESSION-ID`, and `XIRP-SESSION-ID`; look up both IDs before
-writing either one as `null`:
+**Next actions** says what happens next to this published version — usually who
+reviews which head — with the owner and condition when known, or what still
+needs confirming.
+
+**Author** last (contract section 6). A human posting directly gets only
+`方式: 人類直接發布` and `人類`. When you post: `方式: Agent 協助`, `人類` only
+when the person is confirmed and may be named (never inferred from the API
+account), the tool posting now, the known current root-session model,
+`SESSION-ID`, and `XIRP-SESSION-ID`; look up both IDs before writing either one
+as `null`:
 
 - `SESSION-ID` — the native ID the current tool's runtime exposes for this
   session (for example `CLAUDE_CODE_SESSION_ID` in Claude Code, or
@@ -266,7 +278,10 @@ reason in your report; the other field is unaffected and the post goes ahead.
 Never copy one ID into the other field, take an ID from a source record or
 another agent, or ask the user to type one in. The model comes from what the
 current root session knows, never from the environment; an unknown model is
-omitted and reported.
+omitted and reported. When you post a report someone else wrote, keep its
+original author: add `原報告作者` with the verified source link, and any tool,
+model, or Session that author explicitly published, above your own fields — your
+Session is never presented as the one that reached their conclusions.
 
 ### Step 7 — Create, then verify
 
@@ -301,7 +316,8 @@ create a second PR; if the state stays unclear, report that instead.
    which appends a newline every round trip.
 2. Change only what was authorized: Handoff associations confirmed since (an
    Issue, a Change, a Work Item, a dependency with its release condition), the
-   work sections for the currently published head, or this posting's Author.
+   work sections, Verification, and Next actions — all for the same currently
+   published head — or this posting's Author.
    Unrelated human text, legacy approval evidence, and every comment stay as they
    are. New PRs need no HTML markers. A legacy body with exactly one start and
    one end marker is updated inside them, text outside untouched. Broken or
@@ -325,20 +341,32 @@ create a second PR; if the state stays unclear, report that instead.
 
 1. Confirm the PR (Step 4) and that the tool can comment. Read the existing
    comments that matter so the reply does not repeat an earlier round.
-2. Compose one comment from contract section 6.2: Handoff with `branch` and
-   `pull-request`, then the body, then Author.
-   - **Review** — the actual reviewed head and phase, the Review-ID and verdict,
-     then each finding as an actionable item: its stable ID, the problem and its
+2. Compose one comment in the shared frame (contract sections 6 and 6.2):
+   Handoff with `pull-request` and `branch`, then the body, then Next actions,
+   then Author (Step 6's rules, including `原報告作者` for a relayed report).
+   - **Review** — `reviewed-head`, `review-id`, and `result`, a design review
+     marked as such, then each finding under its stable ID: the problem and its
      impact in words a reader without the local records understands, the
-     location or evidence, and how to tell it is fixed. Then the checks actually
-     run, the limits, and the next step with who takes it. No findings: say
-     `pass` for the checked scope and add no filler tasks; a design `pass` adds
-     that Apply still needs human approval. Required verification unavailable:
-     `blocked`, with what is missing and what would unblock it.
-   - **Changes** — per finding: what changed, the fixing commit, the checks
+     location or evidence, and how to tell it is fixed. A re-review lists the
+     earlier IDs with their new status. Verification holds the checks actually
+     run and the limits; Next actions says who acts next. No findings: `pass`
+     for the checked scope and no filler tasks; a design `pass` adds that
+     Apply still needs human approval. Required verification unavailable: `blocked`,
+     with what is missing and what would unblock it.
+   - **Changes** — per finding ID: what changed, the fixing commit, the checks
      actually run and their results, or an evidenced disagreement; whatever is
      still open stays open. Never report a test that was not run, and never mark
      a finding Resolved — that is the reviewer's call after re-checking.
+   - **Checkpoint** (contract section 6.6) — when the work pauses or changes
+     hands: current state and published head, confirmed results with links to
+     the replies that prove them, open questions, and what the receiver checks
+     first. It links the earlier rounds instead of reposting every finding.
+   - **Closure** (contract section 6.7) — when the reviewed head is ready to
+     merge, or after a merge the user asks to summarize: Outcome, Delivered,
+     Verification, Remaining work, and Next actions pointing at the authorized
+     merge or follow-up. It says "ready to merge" until a merge has actually
+     happened, records real merge evidence afterwards, and never closes or
+     merges anything itself.
    - Other reports use a fitting heading (Report, Fix) with the same frame.
 3. Post and verify:
 
@@ -380,49 +408,50 @@ request after the approved design changed materially.
 
 ## Operation: close
 
-Close means ending the PR without merging. A close request authorizes the PR and
-its **confirmed directly corresponding** Issues, nothing else.
+Close ends one PR without merging: post the Closure first, confirm it, then
+close. A close request covers that PR only. The Issues it addresses, its
+dependencies, other PRs, and its branch stay exactly as they are — closing an
+Issue is a separate `github-issue close`. A PR whose work is done and ready to
+merge is not closed: post its Closure with `reply` and leave the merge to the
+authorized flow.
 
-1. **Inventory before any write.** Read the PR (Step 4) and list: the PR, the
-   Issues it directly addresses — the Handoff `issue`, cross-checked with
-   GitHub's linked Issues and the work itself, reading an Issue when needed —
-   with each repository and current state. References, `depends-on` items, other
-   PRs, and superseded links are not corresponding work and are never closed.
-   A plausible Issue you cannot classify: ask before closing anything. Fix the
-   close reason from evidence too: cancelled or superseded work is
-   `not planned`; `completed` only when the work is actually done. No evidence
-   for either: ask. If the tool cannot close PRs or Issues, or cannot set the
-   reason, report the gap before starting.
-2. **Close the PR, then confirm it:**
+1. **Read before any write.** Read the PR (Step 4): state, head, body, and the
+   latest comments, and fix the reason from evidence — cancelled, superseded by
+   a named PR, or done elsewhere. No evidence for the reason: ask. A PR that is
+   already merged or closed counts as ended: report its actual state, do
+   not close or reopen it, and post a missing Closure only when the user asks
+   for one (recording real merge evidence for a merged PR).
+2. **Post the Closure and read it back.** Compose it from contract section 6.7:
+   Outcome (about to close, and why — never "closed" yet), Result, Verification
+   (what the existing reviews covered, and that nothing was merged), Remaining
+   work (for example "Issue #42 stays open; continued in PR #61"), Next actions,
+   Author.
 
    ```bash
-   gh pr close <number> -R <host>/<owner>/<repo> --comment "<reason with evidence>"
+   gh pr comment <number> -R <host>/<owner>/<repo> --body-file <file>
+   gh api --hostname <host> repos/<owner>/<repo>/issues/comments/<comment-id> \
+     --jq '{url: .html_url, issue: .issue_url, body: .body}'
+   ```
+
+   Do not close on a summary that timed out or failed readback: list the PR's
+   comments and compare first, and never post it twice.
+3. **Re-check, then close.** Read the PR again. A new head or new comments since
+   the summary was prepared are reconciled first — a follow-up Closure covering
+   the difference, or a question to the user.
+
+   ```bash
+   gh pr close <number> -R <host>/<owner>/<repo>
    gh pr view <number> -R <host>/<owner>/<repo> --json state,url
    ```
 
-   The branch stays; nothing is merged. Write only a reason you have evidence
-   for (cancelled, superseded by …, done elsewhere); closing proves no
-   acceptance, merge, or deployment. A PR that is already merged or closed counts as ended
-   and is not closed again. Otherwise, if the PR you closed is not confirmed
-   `CLOSED`, close no Issue — report the PR as failed or uncertain.
-3. **Then each confirmed Issue, one by one:**
-
-   ```bash
-   gh issue close <number> -R <host>/<owner>/<repo> --reason "not planned" --comment "<reason>"
-   gh issue view <number> -R <host>/<owner>/<repo> --json state,stateReason,url
-   ```
-
-   Use `--reason "not planned"` for cancelled or superseded work and
-   `--reason completed` only for finished work; with an MCP, set the equivalent
-   `state_reason` (`not_planned` or `completed`). The readback must show
-   `CLOSED` with the intended `stateReason`; a closed Issue with the wrong reason
-   is reported as a reason mismatch, not as success, and is not reopened.
-   A comment cannot fix the stored reason. No corresponding Issue: only the PR is closed. One Issue failing does not undo
-   the others; report each target as closed, failed, or uncertain.
-4. **Reruns** read the actual states and do only what remains. An already closed
-   or merged PR is reported as it is — not reopened, not closed again — and its
-   confirmed Issues can still be closed. Nothing already closed is reopened, and
-   nothing is resent through another tool while its state is uncertain.
+   The branch stays; nothing is merged. The readback must show `CLOSED`.
+4. **Partial results and reruns.** Report the Closure URL and the PR state
+   separately. Summary confirmed but close denied, failed, or unconfirmed: keep
+   the URL, report the PR as still open or uncertain, and leave the summary's
+   wording as it is. A rerun reads the comments and state first, reuses a
+   confirmed Closure that still covers the PR, and does only what is missing.
+   Nothing is resent through another tool while its state is uncertain, and no
+   Issue is touched either way.
 
 ## Reporting
 
@@ -440,6 +469,8 @@ real write.
 cases with full source text and expected PRs and replies, existing and forked
 PRs, missing or empty remote branches, design-only and dirty checkouts, plain
 and legacy bodies, concurrent writers, associations added later, the removed
-publish, reply and approval events, close scope and partial failures, and
-readback or uncertain results for every operation. Worked examples are in
+publish, reply and approval events, Checkpoint and Closure replies, relayed
+reports and human Authors, close scope (ready to merge, superseded, already
+merged or closed, summary posted but close failed), and readback or uncertain
+results for every operation. Worked examples are in
 `references/examples.md`.

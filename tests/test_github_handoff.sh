@@ -259,8 +259,10 @@ done
 # ── simplify-github-issue 2.1: comment-only update, legacy Issues, association ─
 echo "SGI-2 Issue update appends a comment"
 comment="$(fence_headings 2 | tr '\n' '|')"
-[[ "$comment" == '## Handoff|## Changes|## Author|' ]] \
-  && ok "update comment is Handoff → Changes → Author" || bad "update comment is Handoff → Changes → Author ($comment)"
+# standardize-github-collaboration-records: every post carries Next actions before Author.
+[[ "$comment" == '## Handoff|## Changes|## Next actions|## Author|' ]] \
+  && ok "update comment is Handoff → Changes → Next actions → Author" \
+  || bad "update comment is Handoff → Changes → Next actions → Author ($comment)"
 update_part() { sed -n '/^## Operation: update/,/^## Reporting/p' "$ISSUE_SKILL/SKILL.md" 2>/dev/null; }
 update_part | grep -qF 'gh issue comment' && ok "github-issue update posts a comment" || bad "github-issue update posts a comment"
 update_part | grep -qF 'comments' && ok "github-issue update reads existing comments" || bad "github-issue update reads existing comments"
@@ -377,10 +379,12 @@ want "$PR_SKILL/SKILL.md" 'already merged or closed counts as ended' "close trea
 # ── simplify-github-pr 2.x: replies and independent approval events ─────────
 echo "SGP-2 PR replies and approval events"
 review="$(pr_fence 2 | tr '\n' '|')"; changes="$(pr_fence 3 | tr '\n' '|')"
-[[ "$review" == '## Handoff|## Review|## Author|' ]] && ok "reviewer reply is Handoff → Review → Author" \
-  || bad "reviewer reply is Handoff → Review → Author ($review)"
-[[ "$changes" == '## Handoff|## Changes|## Author|' ]] && ok "implementer reply is Handoff → Changes → Author" \
-  || bad "implementer reply is Handoff → Changes → Author ($changes)"
+[[ "$review" == '## Handoff|## Review|## Verification|## Next actions|## Author|' ]] \
+  && ok "reviewer reply is Handoff → Review → Verification → Next actions → Author" \
+  || bad "reviewer reply is Handoff → Review → Verification → Next actions → Author ($review)"
+[[ "$changes" == '## Handoff|## Changes|## Next actions|## Author|' ]] \
+  && ok "implementer reply is Handoff → Changes → Next actions → Author" \
+  || bad "implementer reply is Handoff → Changes → Next actions → Author ($changes)"
 pr_section | grep -qF -- '- pull-request:' && ok "reply Handoff names the PR" || bad "reply Handoff names the PR"
 reply_part() { sed -n '/^## Operation: reply/,/^## Operation: close/p' "$PR_SKILL/SKILL.md" 2>/dev/null; }
 reply_part | grep -qF 'gh pr comment' && ok "reply posts a top-level comment" || bad "reply posts a top-level comment"
@@ -404,13 +408,15 @@ doc_section 9 10 | grep -qF 'source_ref' \
 echo "SGP-3 close and result checks"
 close_part() { sed -n '/^## Operation: close/,/^## Reporting/p' "$PR_SKILL/SKILL.md" 2>/dev/null; }
 close_part | grep -qF 'gh pr close' && ok "close closes the PR" || bad "close closes the PR"
-close_part | grep -qF 'gh issue close' && ok "close closes confirmed corresponding Issues" || bad "close closes confirmed corresponding Issues"
+# standardize-github-collaboration-records: PR close no longer closes Issues.
+close_part | grep -vE '^- (禁止|Forbidden)：' | grep -qF 'gh issue close' \
+  && bad "PR close never closes an Issue" || ok "PR close never closes an Issue"
 if instructions "$PR_SKILL/SKILL.md" | grep -qE 'gh pr merge|--delete-branch|gh pr reopen|gh issue reopen'; then
   bad "github-pr never instructs merge, branch deletion or reopen"
 else
   ok "github-pr never instructs merge, branch deletion or reopen"
 fi
-for t in '直接 Issue 與依賴' '沒有 Issue' '關聯歧義' '多個直接 Issue' 'PR close 失敗' 'Issue 部分失敗' '已 closed' '已 merged'; do
+for t in '直接 Issue 與依賴' '沒有 Issue' '關聯歧義' '多個直接 Issue' 'PR close 失敗' 'Closure 已發布' '已 closed' '已 merged'; do
   grep -E '^### GP-[0-9]+' "$PR_CASES" 2>/dev/null | grep -qF -- "$t" \
     && ok "github-pr has a close case for '$t'" || bad "github-pr has a close case for '$t'"
 done
@@ -422,25 +428,27 @@ for op in create update reply close; do
 done
 
 # codex-simplify-pr-r02/F-01: a cancelled Issue was stored as closed/completed.
+# standardize-github-collaboration-records moves Issue closure into github-issue close.
 echo "SGP-4 Issue close reason follows the evidence"
-close_part | grep -qE 'gh issue close .*--reason' && ok "close sets an explicit Issue close reason" \
-  || bad "close sets an explicit Issue close reason"
-close_part | grep -qF '"not planned"' && ok "cancelled or superseded work closes as not planned" \
+issue_close_part() { sed -n '/^## Operation: close/,/^## Reporting/p' "$ISSUE_SKILL/SKILL.md" 2>/dev/null; }
+issue_close_part | grep -qE 'gh issue close .*--reason' && ok "Issue close sets an explicit close reason" \
+  || bad "Issue close sets an explicit close reason"
+issue_close_part | grep -qF '"not planned"' && ok "cancelled or superseded work closes as not planned" \
   || bad "cancelled or superseded work closes as not planned"
-close_part | grep -qF 'stateReason' && ok "close reads back the stored close reason" || bad "close reads back the stored close reason"
-close_part | grep -qF 'state_reason' && ok "close names the MCP state_reason field" || bad "close names the MCP state_reason field"
-if instructions "$PR_SKILL/SKILL.md" | grep -E 'gh issue close' | grep -vqF -- '--reason'; then
-  bad "every github-pr Issue close command carries --reason"
+issue_close_part | grep -qF 'stateReason' && ok "Issue close reads back the stored close reason" || bad "Issue close reads back the stored close reason"
+issue_close_part | grep -qF 'state_reason' && ok "Issue close names the MCP state_reason field" || bad "Issue close names the MCP state_reason field"
+if instructions "$ISSUE_SKILL/SKILL.md" | grep -E 'gh issue close' | grep -vqF -- '--reason'; then
+  bad "every github-issue close command carries --reason"
 else
-  ok "every github-pr Issue close command carries --reason"
+  ok "every github-issue close command carries --reason"
 fi
-if grep -E '^- 預期呼叫：' "$PR_CASES" 2>/dev/null | grep -E 'gh issue close [0-9]+' | grep -vqF -- '--reason'; then
+if grep -E '^- 預期呼叫：' "$ISSUE_CASES" "$PR_CASES" 2>/dev/null | grep -E 'gh issue close [0-9]+' | grep -vqF -- '--reason'; then
   bad "every expected Issue close call in the cases carries --reason"
 else
   ok "every expected Issue close call in the cases carries --reason"
 fi
-grep -qF 'stateReason: NOT_PLANNED' "$PR_CASES" && ok "a case reads back NOT_PLANNED" || bad "a case reads back NOT_PLANNED"
-grep -qF 'stateReason: COMPLETED' "$PR_CASES" && ok "a case keeps COMPLETED for finished work" || bad "a case keeps COMPLETED for finished work"
+grep -qF 'stateReason: NOT_PLANNED' "$ISSUE_CASES" && ok "an Issue case reads back NOT_PLANNED" || bad "an Issue case reads back NOT_PLANNED"
+grep -qF 'stateReason: COMPLETED' "$ISSUE_CASES" && ok "an Issue case keeps COMPLETED for finished work" || bad "an Issue case keeps COMPLETED for finished work"
 doc_section 10 11 | grep -qF 'not planned' && ok "contract §10 ties Issue close reason to evidence" \
   || bad "contract §10 ties Issue close reason to evidence"
 
@@ -486,6 +494,95 @@ fi
 for t in '漏查' '兩者都有' '只有原生' '只有 Xirp' '兩者皆無' 'ID 衝突'; do
   grep -E '^### GP-[0-9]+' "$PR_CASES" 2>/dev/null | grep -qF -- "$t" \
     && ok "github-pr has a session case for '$t'" || bad "github-pr has a session case for '$t'"
+done
+
+# ── standardize-github-collaboration-records ─────────────────────────────────
+# Maps to openspec/changes/standardize-github-collaboration-records specs.
+# Static presence only; source-to-output replays are recorded separately.
+echo "SCR-1 shared frame: Handoff, Next actions, Author"
+frame_part() { awk '/^## 6\. /{f=1;next} /^### 6\.1 /{f=0} f' "$DOC" 2>/dev/null; }
+for term in '## Next actions' '方式: Agent 協助' '方式: 人類直接發布' '人類:' '原報告作者:' \
+            'SESSION-ID:' 'XIRP-SESSION-ID:' '（local-only）'; do
+  frame_part | grep -qF -- "$term" && ok "§6 shared frame defines '$term'" || bad "§6 shared frame defines '$term'"
+done
+frame_part | grep -qF '舊紀錄的 `null`' && ok "§6 keeps legacy null fields readable" || bad "§6 keeps legacy null fields readable"
+[[ "$initial" == '## Handoff|'*'## Goal|'*'## Next actions|## Author|' ]] \
+  && ok "initial Issue body ends with Next actions → Author" || bad "initial Issue body ends with Next actions → Author ($initial)"
+[[ "$body" == '## Handoff|'*'## Next actions|## Author|' ]] \
+  && ok "PR body ends with Next actions → Author" || bad "PR body ends with Next actions → Author ($body)"
+n="$(issue_section | grep -c '^XIRP-SESSION-ID:')"; m="$(issue_section | grep -c '^SESSION-ID:')"
+[[ "${n:-0}" -ge 2 && "$n" == "$m" ]] && ok "every §6.1 Issue Author has both Session IDs ($m/$n)" \
+  || bad "every §6.1 Issue Author has both Session IDs ($m/$n)"
+issue_section | grep -qF 'Acceptance criteria' && ok "Issue body names Acceptance criteria" || bad "Issue body names Acceptance criteria"
+doc_section 7 8 | grep -qF '（貼文工具與已知模型）' && bad "§7 no longer exempts Issues from Session IDs" \
+  || ok "§7 no longer exempts Issues from Session IDs"
+pr_section | grep -qF 'close 時一起關閉的 Issue' && bad "PR Handoff issue no longer implies closure" \
+  || ok "PR Handoff issue no longer implies closure"
+
+echo "SCR-2 Checkpoint and Closure"
+cp_part() { awk '/^### 6\.6 /{f=1;next} /^### 6\.7 /{f=0} f' "$DOC" 2>/dev/null; }
+cl_part() { awk '/^### 6\.7 /{f=1;next} /^## 7\. /{f=0} f' "$DOC" 2>/dev/null; }
+grep -qE '^### 6\.6 Checkpoint' "$DOC" && ok "contract defines Checkpoint (§6.6)" || bad "contract defines Checkpoint (§6.6)"
+grep -qE '^### 6\.7 Closure' "$DOC" && ok "contract defines Closure (§6.7)" || bad "contract defines Closure (§6.7)"
+for h in '### Current state' '### Open questions' '## Next actions'; do
+  cp_part | grep -qF -- "$h" && ok "Checkpoint has '$h'" || bad "Checkpoint has '$h'"
+done
+cp_part | grep -qF '之後的事件' && ok "receivers reconcile events after a Checkpoint" || bad "receivers reconcile events after a Checkpoint"
+for h in '### Outcome' '### Remaining work' '## Next actions'; do
+  cl_part | grep -qF -- "$h" && ok "Closure has '$h'" || bad "Closure has '$h'"
+done
+cl_part | grep -qF '先發布並回讀 Closure' && ok "Closure is confirmed before the state change" \
+  || bad "Closure is confirmed before the state change"
+cl_part | grep -qF '不 merge' && ok "Closure never implies a merge" || bad "Closure never implies a merge"
+deny "$DOC" '關閉 PR 與直接對應的 Issue' "§10 PR close no longer closes Issues"
+deny "$DOC" '使用者要求時才把 pass 發布到 PR' "§8 remote pass is posted, not only on request"
+deny "$SVG" 'github-pr close 關 PR 與直接 Issue' "diagram no longer closes Issues from PR close"
+want "$SVG" 'github-issue close' "diagram shows the separate Issue close"
+for t in '接手缺本地資料' '摘要過時' '平行摘要衝突' 'close 部分失敗' '重試' 'target 變更' \
+         '人類直接發布' '代發' '雙 Session' '未知 metadata' 'legacy'; do
+  grep -E '^### C-[0-9]+' "$DOC" | grep -qF -- "$t" && ok "shared case for '$t'" || bad "shared case for '$t'"
+done
+
+echo "SCR-3 github-issue close, reply and work identity"
+grep -qE '^## Operation: close' "$ISSUE_SKILL/SKILL.md" && ok "github-issue defines close" || bad "github-issue defines close"
+icp="$(issue_close_part | grep -nE 'gh issue comment|gh issue close' | head -2 | cut -d: -f2- | tr '\n' '|')"
+[[ "$icp" == *'gh issue comment'*'|'*'gh issue close'* ]] && ok "Issue close posts Closure before closing" \
+  || bad "Issue close posts Closure before closing ($icp)"
+issue_close_part | grep -vE '^- (禁止|Forbidden)：' | grep -qF 'gh pr close' \
+  && bad "Issue close never closes a PR" || ok "Issue close never closes a PR"
+want "$ISSUE_SKILL/SKILL.md" 'XIRP-SESSION-ID' "github-issue Author carries the Xirp session field"
+want "$ISSUE_SKILL/SKILL.md" 'source hint' "local Work Item IDs are source hints"
+want "$ISSUE_SKILL/SKILL.md" 'reply to an Issue' "an Issue reply is an append-only update"
+sed -n '/^description:/,/^[a-z]*:/p' "$ISSUE_SKILL/SKILL.md" | grep -qw 'close' \
+  && ok "github-issue description names close" || bad "github-issue description names close"
+for t in 'close 完成' 'close 取消' '驗收未完成' '已關閉' '理由不符' 'close 逾時' '摘要成功但 close 失敗' \
+         '不同 WI 同一工作' '相同本地 ID' 'Issue 回覆' '人類直接發布' 'Checkpoint'; do
+  grep -E '^### GI-[0-9]+' "$ISSUE_CASES" 2>/dev/null | grep -qF -- "$t" \
+    && ok "github-issue has a case for '$t'" || bad "github-issue has a case for '$t'"
+done
+EX="$ISSUE_SKILL/references/examples.md"
+for term in '## Next actions' '方式: 人類直接發布' '## Checkpoint' '## Closure' 'XIRP-SESSION-ID: null' '虛構' '（local-only）'; do
+  want "$EX" "$term" "Issue examples show '$term'"
+done
+
+echo "SCR-4 github-pr Closure, Checkpoint and close scope"
+cpp="$(close_part | grep -nE 'gh pr comment|gh pr close' | head -2 | cut -d: -f2- | tr '\n' '|')"
+[[ "$cpp" == *'gh pr comment'*'|'*'gh pr close'* ]] && ok "PR close posts Closure before closing" \
+  || bad "PR close posts Closure before closing ($cpp)"
+reply_part | grep -qF 'Checkpoint' && ok "reply covers Checkpoint" || bad "reply covers Checkpoint"
+reply_part | grep -qF 'Closure' && ok "reply covers a Closure summary" || bad "reply covers a Closure summary"
+want "$PR_SKILL/SKILL.md" 'original author' "relayed reports keep the original author"
+sed -n '/^description:/,/^[a-z]*:/p' "$PR_SKILL/SKILL.md" | grep -qF 'corresponding Issues' \
+  && bad "github-pr description no longer closes Issues" || ok "github-pr description no longer closes Issues"
+if grep -E '^- 預期呼叫：' "$PR_CASES" 2>/dev/null | grep -qF 'gh issue close'; then
+  bad "no PR case expects an Issue close"; else ok "no PR case expects an Issue close"; fi
+for t in '準備合併' '被取代' 'Closure 已發布' 'Checkpoint' '代發' '人類直接發布'; do
+  grep -E '^### GP-[0-9]+' "$PR_CASES" 2>/dev/null | grep -qF -- "$t" \
+    && ok "github-pr has a case for '$t'" || bad "github-pr has a case for '$t'"
+done
+PEX="$PR_SKILL/references/examples.md"
+for term in '## Closure' '## Checkpoint' 'reviewer-b-r01/F-01' 'result: pass' '方式: Agent 協助代發' '虛構'; do
+  want "$PEX" "$term" "PR examples show '$term'"
 done
 
 # ── 4.1 Managed delivery and legacy script retirement ────────────────────────

@@ -36,7 +36,7 @@ The skill SHALL inspect the actual selected PR or published base-to-head changes
 - **AND** it does not paste or merely shorten the internal record layout
 
 ### Requirement: PR formatting uses a minimal frame with optional associations
-PR bodies and replies SHALL begin with Handoff and end with Author. Handoff SHALL use branch, not brach, for the verified target head branch. Confirmed Change, Work Item, Issue, and dependency links SHALL be included when available and omitted otherwise. Purpose, design, implementation, review, and fix content SHALL use appropriate headings without mandatory empty sections.
+PR bodies and replies SHALL begin with Handoff, include concise Next actions and end with shared Author. Handoff SHALL identify the verified head branch. Confirmed work and dependency links SHALL be optional and Work Items marked local-only. Bodies SHALL explain purpose, published changes and actual verification. Review, repair, Checkpoint and Closure replies SHALL use corresponding shared content.
 
 #### Scenario: PR begins without local identifiers
 - **WHEN** a published branch has no associated Work Item, Change, or Issue
@@ -47,6 +47,10 @@ PR bodies and replies SHALL begin with Handoff and end with Author. Handoff SHAL
 - **WHEN** a later update confirms a Change, Work Item, or directly corresponding Issue
 - **THEN** the description can add those associations without creating another PR
 - **AND** dependency links remain distinguishable from Issues whose work this PR addresses
+
+#### Scenario: Description follows a newer published version
+- **WHEN** an authorized update describes a newer remote head
+- **THEN** changes, verification and Next actions match that published version while unrelated human notes and historical reports are preserved
 
 ### Requirement: Creating a PR includes necessary Git publication without repeated approval
 A request to create a PR SHALL authorize the necessary checks, scoped commit, normal push, Draft PR creation and readback for the selected work. The workflow MUST NOT request separate approval solely because work is uncommitted, unpushed or its head branch is absent remotely. It SHALL resolve routine target and base choices from repository and session evidence and proceed when permitted.
@@ -122,7 +126,7 @@ Create SHALL return one verified existing open PR without duplicate creation or 
 - **AND** it does not keep asking for approval already given, alter authentication or claim that granting conversational permission repairs the credentials
 
 ### Requirement: PR Author includes native and Xirp session identifiers independently
-Every newly created PR body or reply SHALL end with Author containing the executing tool, known root-session model, SESSION-ID for the native session and XIRP-SESSION-ID for its Xirp management session. Both session fields SHALL be present; unavailable values SHALL independently be null with reasons reported. Unknown session metadata MUST NOT block the authorized PR operation or be fabricated.
+Bodies and replies SHALL end with shared human or agent-assisted Author. Agent posts SHALL retain tool, known root-session model, SESSION-ID and XIRP-SESSION-ID. Unavailable IDs SHALL independently be null with reasons reported and unknown models omitted. Human-direct posts SHALL identify the human without fabricated Agent metadata. Relayed substantive reports SHALL preserve source authorship separately.
 
 #### Scenario: Both identifiers are available
 - **WHEN** the current posting session has verified native and Xirp identifiers
@@ -176,7 +180,7 @@ Update, reply and close SHALL retain their existing operation scope and MUST NOT
 #### Scenario: Description update or close is requested
 - **WHEN** the user requests only PR description changes or closure
 - **THEN** the operation preserves its existing authorized scope without creating commits or pushing
-- **AND** close still excludes dependencies, preserves branches and verifies evidence-based Issue closure reasons
+- **AND** close affects only its PR, preserves branches and leaves linked Issue states unchanged
 
 ### Requirement: Update preserves unrelated content and historical records
 Update SHALL read the latest description and change authorized content or confirmed associations while preserving unrelated human text, earlier replies, and approval evidence. Managed markers SHALL NOT be required for new PRs. Legacy managed content SHALL remain readable, and unclear section ownership or concurrent summary writers MUST be resolved before replacement.
@@ -191,7 +195,7 @@ Update SHALL read the latest description and change authorized content or confir
 - **THEN** the skill obtains a single writer before modifying that shared content
 
 ### Requirement: Reply adds actionable review or fix evidence
-Reply SHALL append a top-level comment using Handoff, an appropriate Review, Report, Fix, or Changes body, and Author. Review content SHALL identify the reviewed revision, verdict, concrete findings, checks, and limits. Fix replies SHALL map fixes or disagreements to findings with revision and validation evidence. Existing comments MUST NOT be rewritten and an implementer's claim MUST NOT resolve a finding without reviewer verification.
+Reply SHALL append one shared-frame Review, Changes, Checkpoint or Closure comment with Next actions. Reviews SHALL identify actual version, verdict, findings, checks and limits. Repair replies SHALL map changes to stable Finding IDs and fixing evidence. Only Reviewer verification SHALL resolve findings. Prior comments SHALL remain intact. Checkpoint and closure content SHALL retain their distinct evidence requirements.
 
 #### Scenario: Reviewer reports a defect
 - **WHEN** an agent posts a changes-required review
@@ -208,27 +212,27 @@ Reply SHALL append a top-level comment using Handoff, an appropriate Review, Rep
 - **THEN** the reply reports pass for the checked scope or blocked with concrete limits, without manufacturing tasks or platform approval
 
 ### Requirement: Closing a PR affects only confirmed corresponding Issues
-Close SHALL establish the exact PR and directly corresponding Issues before mutation, close the PR without merging, verify its closed state, then close and verify the confirmed Issues. References, dependencies, and other PRs MUST NOT be closed as corresponding work. Closing SHALL NOT assert implementation acceptance, deployment, or merge.
+Close SHALL use the shared Closure-before-state-change sequence and close only the selected PR without merging. Direct Issue links SHALL convey work association without closure authority. Linked Issues, dependencies, other PRs and branches SHALL remain unchanged. Already closed or merged PRs SHALL report actual state and receive only missing explicitly authorized summary work.
 
 #### Scenario: PR links both task and dependency Issues
 - **WHEN** close targets a PR directly addressing Issue A and depending on Issue B or another PR
-- **THEN** only the selected PR and Issue A are closed after target verification
-- **AND** Issue B and the dependency PR remain unchanged
+- **THEN** only the selected PR is closed after its Closure summary is verified
+- **AND** Issues A and B and the dependency PR remain unchanged
 
 #### Scenario: No corresponding Issue or ambiguous relationships
 - **WHEN** no corresponding Issue exists
 - **THEN** close can close only the PR without creating an Issue
-- **AND** if plausible corresponding Issues exist but cannot be classified, the skill asks before any closure
+- **AND** uncertain optional Issue links are disclosed and remain untouched
 
 #### Scenario: PR closure fails or Issue closure partially succeeds
-- **WHEN** the PR cannot be confirmed closed or one corresponding Issue fails to close
-- **THEN** no Issue is closed before confirmed PR closure, and the result reports each completed, failed, or uncertain target separately
+- **WHEN** the summary or PR closure cannot be confirmed
+- **THEN** no Issue is mutated and summary publication and PR state are reported separately
 - **AND** a later invocation reconciles state and attempts only the remaining authorized work
 
 #### Scenario: Target is already closed or merged
 - **WHEN** close is requested for an already closed or merged PR
 - **THEN** the skill reports its actual existing state without reopening, merging, or repeating a completed closure
-- **AND** it can finish closing explicitly confirmed corresponding Issues within the close request
+- **AND** Issue closure requires its own explicit operation and authorization
 
 ### Requirement: Every operation verifies stored results and uncertain writes
 The skill SHALL use configured gh or GitHub MCP with explicit host, owner, repository, target, and authorized operation. Each write SHALL be read back by its returned identifier and checked for target and content or state. Uncertain writes SHALL be reconciled before retrying, and known denial SHALL stop the affected action without credential changes or probe writes.
@@ -259,3 +263,18 @@ The shared handoff contract SHALL own the simplified PR and reply templates, and
 - **WHEN** OpenSpec work requires human design approval
 - **THEN** the workflow validates the independent approval event's source, scope, revision, and recording authority
 - **AND** technical pass, body edits, and the absence of a mandatory approval block do not confer approval
+
+### Requirement: PR closure summary distinguishes merged and abandoned changes
+PR Closure SHALL state published or reviewed revision, intended or existing outcome, delivered changes, verification, unresolved findings and follow-up references. Successful implementation handoff SHALL distinguish ready-to-merge from merged. Close MUST NOT merge. A replaced or abandoned PR SHALL explain its replacement or cancellation without treating its underlying Issue as finished.
+
+#### Scenario: Implementation awaits merge
+- **WHEN** the reviewed head passes but no merge occurred
+- **THEN** Closure says ready for authorized merge without claiming merged or closing the PR as a substitute
+
+#### Scenario: Replaced proposal
+- **WHEN** PR A is replaced by PR B while its Issue remains necessary
+- **THEN** Closure links PR B, closes only authorized PR A and leaves the Issue open
+
+#### Scenario: Already merged target
+- **WHEN** a summary is explicitly requested after merge
+- **THEN** the reply records actual merge evidence without another close or invented acceptance

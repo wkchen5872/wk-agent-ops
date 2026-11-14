@@ -180,18 +180,21 @@ Installer 會把忽略規則合併進專案版控的 `.gitignore`，並以 Git �
 ### GitHub 交接（選用）
 
 要讓另一個 Session 或另一台機器只靠 GitHub Issue／PR 接手某個 OpenSpec Change 時，
-使用 `github-issue`（create／update）與 `github-pr`（create／update／reply／close）。
+使用 `github-issue`（create／update／close）與 `github-pr`（create／update／reply／close）。
 `github-issue` 可從指定的 Work Item、Change、兩者、目前分支的關聯或目前 Session 整理出
-精簡的 Issue；之後的迭代以新增留言保存，不改寫正文。`github-pr` 用同樣的素材說明這份工作：
+精簡的 Issue；之後的進度、回覆與交接 Checkpoint 以新增留言保存，不改寫正文；close 先發布
+Closure 摘要再以 completed 或 not planned 關閉該 Issue。`github-pr` 用同樣的素材說明這份工作：
 create 會做開 PR 需要的檢查、只含本次工作的 commit 與正常 push，再開 Draft PR；update 改說明、
-reply 新增審查或修正回覆、close 不 merge 地關閉 PR 與它直接處理的 Issue。
-兩個入口只負責操作順序；範本、關聯鍵、provenance、人類設計批准與完整流程都在
+reply 新增審查、修正、Checkpoint 或 Closure 回覆、close 先發布 Closure 再不 merge 地只關閉該 PR，
+它處理的 Issue 由 `github-issue close` 另行結案。每則內容都以 Handoff 開頭，接著依用途撰寫的
+正文、Next actions，最後是 Author（人類直接發布，或 Agent 協助時的工具、模型與兩個 Session ID）；
+Work Item 只標為 local-only。兩個入口只負責操作順序；範本、關聯鍵、provenance、人類設計批准與完整流程都在
 managed 的 [`docs/github-handoff.md`](docs/github-handoff.md)。GitHub 操作使用當下
 可用且已配置的 `gh` 或 GitHub MCP。只有 `github-pr create` 會 commit 與 push，且不 force、
 不略過 hooks、保留無關的工作區內容；`github-issue` 與 github-pr 的其他操作都不寫 Git，SSH／HTTPS
 認證交給 Git 與本機設定。舊的 `github-pr publish` 已移除：對既有 PR 推送新 commit 是另外的
-Git 請求，之後以 `github-pr update` 說明新版本。PR 與回覆的 Author 同時記錄原生的
-`SESSION-ID` 與 Xirp 的 `XIRP-SESSION-ID`。
+Git 請求，之後以 `github-pr update` 說明新版本。Issue、PR 與回覆的 Agent Author 同時記錄
+原生的 `SESSION-ID` 與 Xirp 的 `XIRP-SESSION-ID`。
 
 每次寫入前，入口會核對完整的 host／owner／repo、操作與使用者授權（PR 另核對 base／head
 repository 與分支），寫入後回讀結果。預設不限制帳號；只有使用者或可信專案規範明示
@@ -201,9 +204,10 @@ repository 與分支），寫入後回讀結果。預設不限制帳號；只有
 
 審查與驗收使用 `change-review` Skill：給它 Change 名稱、Issue URL／`#N` 或 PR 即可，PR 不是
 必要條件，目的預設為實作驗收（明確要求時做設計審查）。它解析 Change 與 PR、固定受審版本，
-實際調用必用的 `openspec-verify-change`、已安裝且適合的選用品質技能與專案測試。沒有 PR 或
-通過時直接回報；有 PR 且未通過時，以 `github-pr reply` 發布審查回覆並回讀，再經本機 session
-工具核對後通知實作者，無法定位時回傳可轉交訊息。每次呼叫只做一輪，不改產品程式、不
+實際調用必用的 `openspec-verify-change`、已安裝且適合的選用品質技能與專案測試。沒有 PR、
+PR 查找不明或要求 local-only 時直接回報；已確認 PR 時，任何結論（含 pass）都以
+`github-pr reply` 發布並回讀；需要修正時再經本機 session 工具核對後通知實作者，無法定位時回傳
+可轉交訊息，pass 不發修正通知。每次呼叫只做一輪，不改產品程式、不
 commit／push，也不走 PR 的 create／update／close。
 
 | 工具 | 呼叫方式 |

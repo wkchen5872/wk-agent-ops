@@ -12,7 +12,9 @@ GP-01–GP-20 是舊版 create／publish（含 commit 與 push）的案例，已
 `AGENTS.md` 指定 `octo-dev` 為可以代記人類設計批准的記錄者。可用工具為已登入
 `octo-dev` 的 `gh`；GitHub MCP 是否可用依案例說明。貼文工具為 Claude Code，當下模型為
 `Claude Opus 5.5`。runtime 提供原生 Session ID `sess-7781`（`CLAUDE_CODE_SESSION_ID`）與
-Xirp 管理 ID `xirp-42`（`CHIRP_SESSION_ID`），兩者都屬於本次貼文 Session 且可以公開。
+Xirp 管理 ID `xirp-42`（`CHIRP_SESSION_ID`），兩者都屬於本次貼文 Session 且可以公開。委託的
+使用者沒有確認可公開的 GitHub 帳號，所以 Author 不寫 `人類`。正文與回覆依契約第 6 節的共同外框
+（Handoff → 主體 → Next actions → Author）。案例中的 repo、編號、名稱、版本與 ID 全部是虛構的。
 
 「核對」指契約第 3 節的步驟 1–4。「查 PR」指 `gh pr list --head <branch> --state all --json
 …,headRepository,headRepositoryOwner,baseRefName,isCrossRepository` 並讀取候選。「讀比較」指
@@ -27,7 +29,7 @@ Xirp 管理 ID `xirp-42`（`CHIRP_SESSION_ID`），兩者都屬於本次貼文 S
 這三例提供完整來源實文與一份合格的產出 PR，驗收**內容品質**。產出是參考答案，不要求
 逐字相同，以「內容判定」逐項判斷。共同內容判定：
 
-- 內容判定：沒有參與原對話的人讀完能理解問題與影響、範圍、這個版本實際的改變或設計、怎麼檢查結果，以及還沒決定或尚未發布的部分（素材有的才寫）；Handoff 有 `branch`，其他關聯只在已確認時出現，沒有 `null` 佔位；沒有沿用紀錄格式（Sessions、Coordinator、決策編號、各 Agent 的下一步）；沒有把 tasks 的群組或編號刪短後貼上；沒有素材以外的決策、數字或測試結果；Author 是本次貼文者。
+- 內容判定：沒有參與原對話的人讀完能理解問題與影響、範圍、這個版本實際的改變或設計、怎麼檢查結果，以及還沒決定或尚未發布的部分（素材有的才寫）；Handoff 有 `branch`，其他關聯只在已確認時出現，沒有 `null` 佔位；沒有沿用紀錄格式（Sessions、Coordinator、決策編號、各 Agent 的下一步）；沒有把 tasks 的群組或編號刪短後貼上；沒有素材以外的決策、數字或測試結果；Next actions 對應這個發布版本且不捏造負責人；Author 是本次貼文者。
 
 ### GP-30 Work Item、對話新決策與未發布的修改
 
@@ -83,15 +85,15 @@ Xirp 管理 ID `xirp-42`（`CHIRP_SESSION_ID`），兩者都屬於本次貼文 S
   ## Handoff
 
   - branch: feature/export-retry
-  - work-item: WI-20261105-export-retry
+  - work-item: WI-20261105-export-retry（local-only）
 
-  ## Goal
+  ## Summary
 
   每天 02:00 的訂單匯出排程上限是 30 分鐘。月底資料量大時會逾時，整批失敗而且不會重試，
   客服隔天早上拿不到前一日的報表，只能等人工重跑。這張 PR 讓逾時與暫時性錯誤自動重試，
   重試用完仍失敗時通知值班人員。匯出格式與排程時間不在範圍內。
 
-  ## Implementation
+  ## Changes
 
   這個版本（`a3f1c2e`）：
 
@@ -108,8 +110,13 @@ Xirp 管理 ID `xirp-42`（`CHIRP_SESSION_ID`），兩者都屬於本次貼文 S
   - 防止重試重複寫入同一天檔案的保護還在本機修改、尚未 commit，不在這個版本。推上來
     之前，重試仍可能重複寫檔。
 
+  ## Next actions
+
+  Reviewer 對 `a3f1c2e` 檢查重試與通知行為；冪等保護推上來後再更新本說明並安排差異審查。
+
   ## Author
 
+  方式: Agent 協助
   Co-Authored-By: Claude Code
   AI-Assisted-By: Claude Opus 5.5
   SESSION-ID: sess-7781
@@ -185,7 +192,7 @@ Xirp 管理 ID `xirp-42`（`CHIRP_SESSION_ID`），兩者都屬於本次貼文 S
   - branch: feature/add-export
   - openspec-change: add-export
 
-  ## Goal
+  ## Summary
 
   客服回覆對帳問題時，只能從後台訂單列表逐筆複製到試算表，一次平均花 40 分鐘，月底常有
   錯漏。這張 PR 提出讓客服直接把目前篩選出的訂單匯出成 CSV 的設計，請先審查設計；這個
@@ -203,8 +210,13 @@ Xirp 管理 ID `xirp-42`（`CHIRP_SESSION_ID`），兩者都屬於本次貼文 S
 
   - 背景產生的檔案要放現有的物件儲存 bucket 還是另開一個，等維運回覆。
 
+  ## Next actions
+
+  Reviewer 對 `d1e2f30` 做設計審查；通過後仍需人類批准才能開始實作。
+
   ## Author
 
+  方式: Agent 協助
   Co-Authored-By: Claude Code
   AI-Assisted-By: Claude Opus 5.5
   SESSION-ID: sess-7781
@@ -239,12 +251,12 @@ Xirp 管理 ID `xirp-42`（`CHIRP_SESSION_ID`），兩者都屬於本次貼文 S
 
   - branch: fix/refund-search
 
-  ## Goal
+  ## Summary
 
   退款單建立後，要等搜尋索引每 15 分鐘一次的同步才搜得到，客人剛退款就來電時客服查不到。
   這張 PR 讓退款建立後立刻更新該筆的搜尋索引。訂單與會員的搜尋不變。
 
-  ## Implementation
+  ## Changes
 
   - 建立退款後立刻觸發這一筆的索引更新。
   - 單筆更新失敗時只記錄 log，退款照常建立，由原本 15 分鐘的同步補上。
@@ -254,8 +266,13 @@ Xirp 管理 ID `xirp-42`（`CHIRP_SESSION_ID`），兩者都屬於本次貼文 S
   - `tests/test_refund_search.py` 在 `b77c9d0` 的 CI：4 passed。
   - 搜尋服務的寫入上限是每秒 50 次，使用者已向搜尋服務確認足夠；這張 PR 沒有做負載測試。
 
+  ## Next actions
+
+  Reviewer 對 `b77c9d0` 檢查退款搜尋與失敗退路。
+
   ## Author
 
+  方式: Agent 協助
   Co-Authored-By: Claude Code
   AI-Assisted-By: Claude Opus 5.5
   SESSION-ID: sess-7781
@@ -271,7 +288,7 @@ Xirp 管理 ID `xirp-42`（`CHIRP_SESSION_ID`），兩者都屬於本次貼文 S
 - Fixture：PR #30（GP-32 建立）之後，使用者建立了 Issue #44 追蹤同一件事，並說「把 #44 連到這張 PR」。#30 的正文是 GP-32 的產出，結尾另有一段人工附註「QA：週五前測過」。
 - 模擬回覆：`gh pr view 30 --json body` 回傳上述正文；`gh issue view 44` 確認是退款搜尋的工作；`gh pr edit` 成功；回讀相符。
 - 預期呼叫：核對 → 讀取 #30 與 #44 → `gh pr edit 30 --body-file …` → `gh pr view 30 --json body`。
-- 禁止：共同禁止；建立第二張 PR；改寫 Goal 或刪掉人工附註；把 #44 寫成 `Closes #44`。
+- 禁止：共同禁止；建立第二張 PR；改寫 Summary 或刪掉人工附註；把 #44 寫成 `Closes #44`。
 - 判定：Handoff 新增 `- issue: https://github.com/acme/widgets/issues/44`，其餘內容（含人工附註）逐字不變。
 
 ## 既有 PR 與發布前提
@@ -524,7 +541,7 @@ Xirp 管理 ID `xirp-42`（`CHIRP_SESSION_ID`），兩者都屬於本次貼文 S
 - 模擬回覆：同 GP-32。
 - 預期呼叫：讀取 runtime 的 Session 鍵（沒有值）→ 其餘同 GP-32。
 - 禁止：共同禁止；未查詢就寫 `null`；把 `codex-s02` 或任何別名寫進任一 Session 欄位；把 `GPT-5.6` 寫進 `AI-Assisted-By`；為了 ID 停止建立或要求使用者提供；傾印整個環境變數。
-- 判定：Author 為 `Co-Authored-By: Claude Code`、`SESSION-ID: null`、`XIRP-SESSION-ID: null`，省略 `AI-Assisted-By`；PR 照常建立，回報三者未知的原因。
+- 判定：Author 為 `方式: Agent 協助`、`Co-Authored-By: Claude Code`、`SESSION-ID: null`、`XIRP-SESSION-ID: null`，省略 `AI-Assisted-By`；PR 照常建立，回報三者未知的原因。
 
 ## reply
 
@@ -553,20 +570,29 @@ Xirp 管理 ID `xirp-42`（`CHIRP_SESSION_ID`），兩者都屬於本次貼文 S
 
   ## Review
 
-  版本：`a3f1c2e`（implementation）。Review-ID：rev-s03-r01。結論：changes-required。
+  - reviewed-head: a3f1c2e
+  - review-id: rev-s03-r01
+  - result: changes-required
 
-  - [ ] rev-s03-r01/F-01：3 次重試都失敗後，排程仍把這次匯出標成成功；只看排程狀態的
-    值班人員不會發現報表沒有產生。
-    位置／證據：`jobs/export_orders.py` 在送出 #ops-oncall 通知後直接 return；以強制逾時在
-    本機執行排程一次，狀態顯示 success。完成條件：重試用完時排程狀態為失敗，通知照常送出，
-    且有測試檢查排程狀態。
+  ### rev-s03-r01/F-01
+
+  3 次重試都失敗後，排程仍把這次匯出標成成功；只看排程狀態的值班人員不會發現報表沒有產生。
+  位置／證據：`jobs/export_orders.py` 在送出 #ops-oncall 通知後直接 return；以強制逾時在
+  本機執行排程一次，狀態顯示 success。完成條件：重試用完時排程狀態為失敗，通知照常送出，
+  且有測試檢查排程狀態。
+
+  ## Verification
 
   已檢查：`pytest tests/test_export_retry.py` 6 passed（只斷言通知）；本機強制逾時執行排程
-  一次。未驗證：月底實際資料量；正式環境的 #ops-oncall 送達。下一步：實作者修正 F-01 並
-  逐項回覆，Reviewer 再以新的 head 複審。
+  一次。未驗證：月底實際資料量；正式環境的 #ops-oncall 送達。
+
+  ## Next actions
+
+  實作者修正 F-01，push 後逐項回覆修正版本與測試證據，Reviewer 再以新的 head 複審。
 
   ## Author
 
+  方式: Agent 協助
   Co-Authored-By: Claude Code
   AI-Assisted-By: Claude Opus 5.5
   SESSION-ID: sess-7781
@@ -574,7 +600,7 @@ Xirp 管理 ID `xirp-42`（`CHIRP_SESSION_ID`），兩者都屬於本次貼文 S
   ```
 
 - 禁止：共同禁止；平台 REQUEST_CHANGES；`gh pr edit`；省略 reviewed head；把沒測的項目寫成已測。
-- 內容判定：沒讀過審查筆記的人能看懂問題、影響、證據與完成條件；已檢查與未驗證分開。
+- 內容判定：沒讀過審查筆記的人能看懂問題、影響、證據與完成條件；Verification 中已檢查與未驗證分開；Next actions 指出誰接續。
 - 判定：新增一則回覆並回讀，回報留言 URL。
 
 ### GP-41 實作者回覆
@@ -601,14 +627,21 @@ Xirp 管理 ID `xirp-42`（`CHIRP_SESSION_ID`），兩者都屬於本次貼文 S
 
   ## Changes
 
-  - rev-s03-r01/F-01：重試用完後改為拋出例外，排程會把這次匯出標成失敗，通知照常送出。
-    修正 commit：`c4d5e6f`。驗證：`pytest tests/test_export_retry.py` 7 passed（新增
-    `test_final_failure_marks_job_failed`）；本機強制逾時執行排程這次沒有重跑。
+  ### rev-s03-r01/F-01
 
-  尚未處理：防止重複寫入同一天檔案的保護仍未發布。請 Reviewer 以 `c4d5e6f` 複審 F-01。
+  重試用完後改為拋出例外，排程會把這次匯出標成失敗，通知照常送出。修正 commit：`c4d5e6f`。
+  驗證：`pytest tests/test_export_retry.py` 7 passed（新增 `test_final_failure_marks_job_failed`）；
+  本機強制逾時執行排程這次沒有重跑。目前為已修正、待 Reviewer 複審。
+
+  尚未處理：防止重複寫入同一天檔案的保護仍未發布。
+
+  ## Next actions
+
+  Reviewer 以 `c4d5e6f` 複審 F-01 與受影響行為。
 
   ## Author
 
+  方式: Agent 協助
   Co-Authored-By: Claude Code
   AI-Assisted-By: Claude Opus 5.5
   SESSION-ID: sess-7781
@@ -625,7 +658,7 @@ Xirp 管理 ID `xirp-42`（`CHIRP_SESSION_ID`），兩者都屬於本次貼文 S
 - 模擬回覆：留言並回讀相符。
 - 預期呼叫：核對 → 讀取 #12 → `gh pr comment 12 …` → 回讀。
 - 禁止：共同禁止；為了湊格式列出 todo；把 `pass` 寫成人類批准；平台 APPROVE。
-- 判定：Review 寫明 `d1e2f30`、design、`pass`、檢查範圍與下一步，並說明 Apply 仍需人類批准。
+- 判定：Review 寫明 `reviewed-head: d1e2f30`、設計審查、`result: pass`，Verification 寫檢查範圍，Next actions 說明 Apply 仍需人類批准。
 
 ### GP-43 無法完成的審查
 
@@ -651,101 +684,133 @@ Xirp 管理 ID `xirp-42`（`CHIRP_SESSION_ID`），兩者都屬於本次貼文 S
 - 禁止：共同禁止；在使用者沒有明確批准時代記；以 repo 寫入權限作為記錄者授權；把 `approved_by` 寫成 Agent；捏造時間；為了記批准去改寫 PR 正文。
 - 判定：批准事件是獨立回覆，`approved_by: alice-h`，寫明範圍、`d1e2f30`、來源類型與記錄者；`approved_at` 只寫當天日期 `YYYY-MM-DD`。
 
+### GP-46 Checkpoint 交接
+
+- Fixture：PR #57 的 F-01 已在 `d4e5f6a` 複審為 Resolved（回覆 `reviewer-b-r02`），尚未完成交付整理與合併。使用者要暫停，請 Agent 發一則接手摘要。
+- 模擬回覆：讀取 #57 的 head 與留言；`gh pr comment 57` 回傳留言 URL；讀回相符。
+- 預期呼叫：核對 → `gh pr view 57 --json headRefOid,comments` → `gh pr comment 57 --body-file …` → 讀回。
+- 禁止：共同禁止；重貼每輪 Findings 全文；複製 tasks；把尚未完成的交付整理寫成已完成。
+- 判定：主體是 Checkpoint：Current state（`d4e5f6a`、複審通過、未合併）、Confirmed results（連到 `reviewer-b-r02`）、Open questions；Next actions 要接手者先核對目前 head 與之後的留言。
+
+### GP-47 準備合併的 Closure 回覆
+
+- Fixture：PR #57 的最終受審版本 `d4e5f6a` 已 pass，使用者說「交付完成了，發個結案摘要，合併我自己來」。Issue #42 仍 open。
+- 模擬回覆：讀取 #57（`OPEN`，head `d4e5f6a`）；`gh pr comment 57` 回傳留言 URL；讀回相符。
+- 預期呼叫：核對 → `gh pr view 57 --json state,headRefOid,comments` → `gh pr comment 57 --body-file …` → 讀回。
+- 禁止：共同禁止；`gh pr close` 或 `gh pr merge`；寫成「已合併」；關閉或留言到 Issue #42。
+- 判定：Closure 的 Outcome 寫最終受審版本 `d4e5f6a` 準備合併，Delivered、Verification（連到 pass 回覆）、Remaining work 齊全；Next actions 指向負責人依授權合併，並另行核對 #42 的完成條件。PR 保持 open。
+
+### GP-48 代發他人的 Review
+
+- Fixture：Reviewer `@kai` 的 Session 產生了 `reviewer-b-r01` 的報告，已發布在驗證文件連結 r1，明確提供工具 Codex 與模型 `gpt-6.1-sol`，沒有提供 Session ID。使用者請本 Session 把它代貼到 PR #57。
+- 模擬回覆：讀取 r1；`gh pr comment 57` 回傳留言 URL；讀回相符。
+- 預期呼叫：讀取 r1 → 核對 → `gh pr comment 57 --body-file …` → 讀回。
+- 禁止：共同禁止；把本 Session 的 `sess-7781` 寫成原作者的 Session；替原作者補 Session ID；改動 verdict 或 Finding ID。
+- 判定：Author 第一行為 `原報告作者: @kai，來源為 <r1>`（可附其明確提供的 Codex 與 `gpt-6.1-sol`），其後為 `方式: Agent 協助代發` 與本 Session 的工具、模型、`SESSION-ID: sess-7781`、`XIRP-SESSION-ID: xirp-42`。
+
+### GP-49 人類直接發布的回覆
+
+- Fixture：Reviewer `@kai` 自己在 PR #57 留下審查意見，請 Agent 只檢查格式，不代為發布。
+- 模擬回覆：無（由人類自行發布）。
+- 預期呼叫：讀取草稿並回報格式建議，沒有任何遠端寫入。
+- 禁止：替草稿加上 `Co-Authored-By`、`AI-Assisted-By` 或 Session 欄位；代為發布。
+- 判定：建議的 Author 只有 `方式: 人類直接發布` 與 `人類: @kai`，其他外框與 Review 欄位照共同規則。
+
 ## close
 
-close 的共同禁止另外包括：關閉 `depends-on`、`references` 或其他 PR；在 PR 確認已結束
-（這次關閉並回讀為 closed，或原本就已 closed／merged）之前關閉 Issue；把關閉寫成完成、
-合併、部署或驗收；關閉 Issue 時不指定原因，或指定與證據不符的原因。除非案例另有說明，
-關閉的理由是使用者說的「決定不做」，Issue 以 `--reason "not planned"` 關閉，回讀
-`gh issue view <N> --json state,stateReason,url` 應為 `state: CLOSED`、`stateReason: NOT_PLANNED`。
+close 先以 `gh pr comment` 發布契約第 6.7 節的 Closure 並讀回，再 `gh pr close`，最後
+`gh pr view <N> --json state,url` 核對。close 只處理被指定的 PR：共同禁止另外包括關閉、
+留言或改變任何 Issue（包含 Handoff 的 `issue`）、`depends-on`、`references` 或其他 PR；在
+Closure 讀回確認前 close；在 Closure 中宣稱尚未發生的關閉、合併、部署或驗收；以 close 代替
+準備合併的交接。除非案例另有說明，關閉的理由是使用者說的「決定不做」。
 
 ### GP-50 close 直接 Issue 與依賴
 
 - Fixture：使用者要求關閉 PR #21（決定不做了）。正文 Handoff 有 `issue: …/issues/7`（A）與 `depends-on: …/issues/8`（B）。
-- 模擬回覆：讀取 #21 與 #7；`gh pr close 21` 成功，回讀 `CLOSED`；`gh issue close 7` 成功，回讀 `state: CLOSED`、`stateReason: NOT_PLANNED`。
-- 預期呼叫：核對 → 讀取 #21 → 讀取 #7 → `gh pr close 21 --comment …` → `gh pr view 21 --json state` → `gh issue close 7 --reason "not planned" --comment …` → `gh issue view 7 --json state,stateReason,url`。
-- 禁止：共同禁止；關閉 #8；在 #21 回讀前關閉 #7；以 `completed` 或不帶 `--reason` 關閉 #7。
-- 判定：#21 與 #7 關閉並回讀，#7 的原因為 not planned，#8 不變；關閉理由只寫「決定不做」。
+- 模擬回覆：讀取 #21；Closure c1 讀回相符；`gh pr close 21` 成功，回讀 `CLOSED`。
+- 預期呼叫：核對 → `gh pr view 21 …` → `gh pr comment 21 --body-file …` → 讀回 c1 → `gh pr view 21 …` → `gh pr close 21` → `gh pr view 21 --json state,url`。
+- 禁止：共同禁止；關閉或留言到 #7、#8。
+- 判定：只關閉 #21；Closure 的 Remaining work 寫明 Issue #7 保持原狀，需要時由 `github-issue close` 另行處理；#7、#8 都不變。
 
 ### GP-51 close 沒有 Issue
 
 - Fixture：要求關閉 PR #30。Handoff 沒有 `issue`，GitHub 也沒有連結的 Issue。
-- 模擬回覆：`gh pr close 30` 成功，回讀 `CLOSED`。
-- 預期呼叫：核對 → 讀取 #30 → `gh pr close 30 …` → `gh pr view 30 --json state`。
-- 禁止：共同禁止；為了結案建立 Issue；搜尋所有提到這個主題的 Issue 一起關。
+- 模擬回覆：Closure 讀回相符；`gh pr close 30` 成功，回讀 `CLOSED`。
+- 預期呼叫：核對 → 讀取 #30 → `gh pr comment 30 …` → 讀回 → `gh pr close 30` → `gh pr view 30 --json state,url`。
+- 禁止：共同禁止；為了結案建立 Issue；搜尋所有提到這個主題的 Issue。
 - 判定：只關閉 PR。
 
 ### GP-52 close 關聯歧義
 
 - Fixture：要求關閉 PR #22。Handoff 沒有 `issue`，但正文提到「另見 #9」，GitHub 的連結 Issue 是 #9，內容看起來可能是同一件事也可能只是相關。
-- 模擬回覆：讀取 #22 與 #9。
-- 預期呼叫：核對 → 讀取 #22 → 讀取 #9，之後停下詢問。
-- 禁止：共同禁止；關閉 #22 或 #9。
-- 判定：說明 #9 無法判定是否為直接對應的 Issue，請使用者確認後才開始關閉。
+- 模擬回覆：Closure 讀回相符；`gh pr close 22` 成功，回讀 `CLOSED`。
+- 預期呼叫：核對 → 讀取 #22 → `gh pr comment 22 …` → 讀回 → `gh pr close 22` → 回讀。
+- 禁止：共同禁止；因為無法分類 #9 就把它一起關閉或留言。
+- 判定：只關閉 #22；回報 #9 的關聯不確定且保持原狀，是否處理由使用者另行決定。
 
 ### GP-53 close 多個直接 Issue
 
 - Fixture：要求關閉 PR #23。Handoff 有 `issue: …/issues/10` 與 `issue: …/issues/11`，兩者都是這張 PR 的工作。
-- 模擬回覆：PR 關閉並回讀；#10、#11 分別關閉並回讀。
-- 預期呼叫：核對 → 讀取 #23、#10、#11 → `gh pr close 23 …` → 回讀 → `gh issue close 10 --reason "not planned" …` → 回讀 → `gh issue close 11 --reason "not planned" …` → 回讀。
-- 禁止：共同禁止。
-- 判定：三個目標逐一關閉並回讀，逐項回報。
+- 模擬回覆：Closure 讀回相符；PR 關閉並回讀 `CLOSED`。
+- 預期呼叫：核對 → 讀取 #23 → `gh pr comment 23 …` → 讀回 → `gh pr close 23` → 回讀。
+- 禁止：共同禁止；關閉 #10 或 #11。
+- 判定：只關閉 #23；Remaining work 寫明 #10、#11 仍 open，需另行以 `github-issue` 處理。
 
 ### GP-54 PR close 失敗
 
 - Fixture：要求關閉 PR #21（直接 Issue #7）。
-- 模擬回覆：`gh pr close 21` 回 HTTP 403。
-- 預期呼叫：核對 → 讀取 #21 與 #7 → `gh pr close 21 …`（被拒）。
-- 禁止：共同禁止；關閉 #7；換工具或換帳號重送。
-- 判定：回報 PR 關閉被拒，#7 未動。
+- 模擬回覆：Closure c2 讀回相符；`gh pr close 21` 回 HTTP 403。
+- 預期呼叫：核對 → 讀取 #21 → `gh pr comment 21 …` → 讀回 c2 → `gh pr close 21`（被拒）。
+- 禁止：共同禁止；回報已關閉；改寫 c2；換工具或換帳號重送。
+- 判定：回報 c2 已發布、PR 仍為 OPEN、關閉被拒；#7 未動。
 
 ### GP-55 close 回讀失敗
 
-- Fixture：要求關閉 PR #21（直接 Issue #7）。
-- 模擬回覆：`gh pr close 21` 回成功；`gh pr view 21 --json state` 回 HTTP 502。
-- 預期呼叫：核對 → 讀取 → `gh pr close 21 …` → `gh pr view 21 --json state`（失敗）。
-- 禁止：共同禁止；在 PR 狀態未確認時關閉 #7；再關一次。
-- 判定：回報 PR 可能已關閉但尚未確認，#7 尚未處理；重跑時先讀狀態。
+- Fixture：要求關閉 PR #21。
+- 模擬回覆：Closure 讀回相符；`gh pr close 21` 回成功；`gh pr view 21 --json state,url` 回 HTTP 502。
+- 預期呼叫：核對 → 讀取 → `gh pr comment 21 …` → 讀回 → `gh pr close 21` → `gh pr view 21 --json state,url`（失敗）。
+- 禁止：共同禁止；再關一次；宣稱已確認關閉。
+- 判定：回報 Closure 已確認、PR 可能已關閉但尚未確認；重跑時先讀狀態。
 
 ### GP-56 close 結果不明
 
-- Fixture：要求關閉 PR #21（直接 Issue #7）。
-- 模擬回覆：`gh pr close 21` 逾時；重新讀取得到 `state: CLOSED`；`gh issue close 7` 成功並回讀 `CLOSED`／`NOT_PLANNED`。
-- 預期呼叫：核對 → 讀取 → `gh pr close 21 …`（逾時）→ `gh pr view 21 --json state` → `gh issue close 7 --reason "not planned" …` → 回讀。
+- Fixture：要求關閉 PR #21。
+- 模擬回覆：Closure 讀回相符；`gh pr close 21` 逾時；重新讀取得到 `state: CLOSED`。另有 MCP 可用。
+- 預期呼叫：核對 → 讀取 → `gh pr comment 21 …` → 讀回 → `gh pr close 21`（逾時）→ `gh pr view 21 --json state,url`。
 - 禁止：共同禁止；逾時後直接再關一次；換工具重送。
-- 判定：查清楚 PR 已關閉後才關閉 #7，兩者逐項回報。
+- 判定：查清楚後回報 PR 已關閉，Closure 與狀態逐項回報。
 
-### GP-57 Issue 部分失敗
+### GP-57 Closure 已發布但 close 失敗後重跑
 
-- Fixture：要求關閉 PR #23（直接 Issue #10、#11）。
-- 模擬回覆：PR 關閉並回讀；#10 關閉並回讀；`gh issue close 11` 回 HTTP 403。
-- 預期呼叫：PR 與 #10 同 GP-53 → `gh issue close 11 --reason "not planned" …`（被拒）。
-- 禁止：共同禁止；reopen #10 或 PR 來「回復一致」；換工具重送 #11。
-- 判定：逐項回報：PR 與 #10 已關閉，#11 被拒；之後重跑只處理 #11。
+- Fixture：GP-54 之後使用者補上權限，再次要求關閉 PR #21。
+- 模擬回覆：讀取 #21 `OPEN`，c2 仍在且之後沒有新 commit 或留言；`gh pr close 21` 成功，回讀 `CLOSED`。
+- 預期呼叫：核對 → `gh pr view 21 --json state,headRefOid,comments` → `gh pr close 21` → `gh pr view 21 --json state,url`。
+- 禁止：共同禁止；再發一則相同的 Closure；改寫 c2。
+- 判定：沿用仍適用的 c2，只執行缺少的 close 並回讀。
 
 ### GP-58 已 closed 的 PR 重跑
 
-- Fixture：GP-57 之後使用者補上權限，再次要求關閉 PR #23。
-- 模擬回覆：#23 `CLOSED`，#10 `CLOSED`，#11 `OPEN`；`gh issue close 11` 成功並回讀。
-- 預期呼叫：核對 → 讀取 #23、#10、#11 → `gh issue close 11 --reason "not planned" …` → 回讀。
-- 禁止：共同禁止；再關一次 #23 或 #10。
-- 判定：只關閉剩下的 #11，回報 PR 與 #10 原本已關閉。
+- Fixture：再次要求關閉 PR #23，#23 已是 `CLOSED`，留言中已有 Closure。
+- 模擬回覆：讀取 #23 `CLOSED` 與既有 Closure。
+- 預期呼叫：核對 → 讀取 #23。
+- 禁止：共同禁止；再關一次；再發一則 Closure；reopen。
+- 判定：回報 #23 原本已關閉與摘要 URL，沒有寫入。
 
 ### GP-59 已 merged 的 PR
 
-- Fixture：要求關閉 PR #12 與它直接處理的 Issue #7。#12 已 merged，#7 仍 open。使用者說「#7 的驗收資料我看過了，工作已完成，把它關掉」。
-- 模擬回覆：讀取 #12 `MERGED`、#7 `OPEN`；`gh issue close 7` 成功並回讀 `state: CLOSED`、`stateReason: COMPLETED`。
-- 預期呼叫：核對 → 讀取 #12、#7 → `gh issue close 7 --reason completed --comment …` → `gh issue view 7 --json state,stateReason,url`。
-- 禁止：共同禁止；對 #12 執行 close；只因為 #12 已 merged 就推定完成；把「已 merged」寫成「已驗收」；以 not planned 關閉已完成的工作。
-- 判定：回報 #12 原本已 merged，只關閉 #7，原因為 completed（依使用者確認的驗收），回讀相符。
+- Fixture：PR #12 已 merged。使用者要求「關閉 #12 並補一則結案摘要」。Issue #7 仍 open。
+- 模擬回覆：讀取 #12 `MERGED`、merge commit `m9`；`gh pr comment 12` 回傳留言 URL；讀回相符。
+- 預期呼叫：核對 → `gh pr view 12 --json state,mergeCommit,comments` → `gh pr comment 12 --body-file …` → 讀回。
+- 禁止：共同禁止；對 #12 執行 close；把「已 merged」寫成「已驗收」；關閉 #7。
+- 判定：回報 #12 原本已 merged；Closure 記錄實際的 merge 證據 `m9`；#7 的結案需另行以 `github-issue close` 授權。
 
-### GP-66 close 被取代時的關閉原因不符
+### GP-66 close 被取代
 
-- Fixture：使用者要求關閉 PR #24，理由是「被 #31 取代了」。Handoff 有 `issue: …/issues/12`。
-- 模擬回覆：`gh pr close 24` 成功，回讀 `CLOSED`；`gh issue close 12 --reason "not planned"` 回成功，但 `gh issue view 12 --json state,stateReason,url` 回 `state: CLOSED`、`stateReason: COMPLETED`。
-- 預期呼叫：核對 → 讀取 #24 與 #12 → `gh pr close 24 --comment …` → `gh pr view 24 --json state` → `gh issue close 12 --reason "not planned" --comment …` → `gh issue view 12 --json state,stateReason,url`。
-- 禁止：共同禁止；回報 #12 已正確關閉；reopen #12 再關一次；以留言代替修正原因；換工具重送。
-- 判定：回報 #24 已關閉；#12 已關閉但原因不符（預期 NOT_PLANNED，讀回 COMPLETED），交由使用者決定如何更正。
+- Fixture：使用者要求關閉 PR #57，理由是「改由 PR #61 取代」。Handoff 有 `issue: …/issues/42`，#42 仍需完成。
+- 模擬回覆：Closure 讀回相符；`gh pr close 57` 成功，回讀 `CLOSED`。
+- 預期呼叫：核對 → 讀取 #57 → `gh pr comment 57 …` → 讀回 → `gh pr close 57` → `gh pr view 57 --json state,url`。
+- 禁止：共同禁止；關閉 #61 或 #42；把 #42 寫成已完成。
+- 判定：Closure 說明由 #61 取代、本 PR 未合併、現有 Review 只對本方案的受審版本有效，Remaining work 寫 #42 由 #61 接續；只關閉 #57。
 
 ## 回讀失敗與結果不明
 

@@ -89,7 +89,7 @@ The workflow SHALL allow a configured account unless a user or trusted project p
 - **AND** approval-recorder authorization is verified independently before an attestation authorizes Apply
 
 ### Requirement: Issue operations preserve work identity
-The Issue entry SHALL offer explicit create and update operations, use the selected Change and repository to discover existing associations, and reuse a unique confirmed Issue. Ambiguous or contradictory associations MUST be resolved before writing. Parent work, child work, and dependencies SHALL remain distinct; dependency records SHALL state their release condition.
+The Issue entry SHALL offer create, update and close. It SHALL reuse a uniquely verified work association in the selected repository, treat local Work Item IDs as source hints, and resolve genuine scope conflicts before writing. Parent work, direct work and dependencies SHALL remain distinct with release conditions.
 
 #### Scenario: Repeated create invocation
 - **WHEN** create is invoked again and one Issue is positively associated with the same Change
@@ -97,7 +97,7 @@ The Issue entry SHALL offer explicit create and update operations, use the selec
 
 #### Scenario: Similar titles do not prove association
 - **WHEN** search returns an Issue with a similar title
-- **THEN** the workflow reads its managed `openspec-change` and `repository` keys and verifies the selected target before reuse
+- **THEN** the workflow reads its confirmed associations in body and comments and actual repository metadata and verifies the selected target before reuse
 - **AND** a search match alone is not accepted as a positive association
 
 #### Scenario: Several matching Issues
@@ -110,20 +110,20 @@ The Issue entry SHALL offer explicit create and update operations, use the selec
 - **AND** dependencies state whether they require design approval, merge, deployment, or acceptance instead of only naming another task
 
 ### Requirement: PR operations separate publication from description updates
-The PR entry SHALL distinguish create, publish-existing-version, and update-description operations. Create and publish SHALL work only within the authorized Change and branch scope; update-description SHALL perform metadata changes without commit or push. Reuse SHALL be based on verified repository, branch, and Change association, with conflicts reported before writes.
+The PR entry SHALL expose create, update, reply and close. Create SHALL retain necessary scoped Git publication. Other operations SHALL use only their authorized metadata or state scope. Publishing new commits to an existing PR SHALL remain an authorized Git action followed by an optional update. Reuse SHALL verify repository, branch and work association.
 
 #### Scenario: Reviewer needs to add a report link
-- **WHEN** an authorized caller invokes update-description for an existing PR
+- **WHEN** an authorized caller invokes update for an existing PR
 - **THEN** only the requested description section is updated
 - **AND** no staging, commit, push, merge, base change, or closure is triggered
 
 #### Scenario: Same PR receives implementation
 - **WHEN** the selected PR already contains the design revision and its authorized branch receives implementation
-- **THEN** publish updates that same PR branch and reports the new remote head
+- **THEN** authorized Git publication updates that same branch and verifies its new remote head, and update describes the published content
 - **AND** it does not open a second PR automatically
 
 ### Requirement: Publication inspects the full change before committing
-Create and publish SHALL inspect staged, unstaged, untracked, and base-to-head changes before any commit delegation. The workflow MUST stop when a stage-all writer would include unauthorized work. It SHALL reuse valid existing commits, invoke the existing writer only for authorized uncommitted content, respect its input contract and checks, then verify the pushed head before publishing a matching PR description.
+Create and separately authorized Git publication SHALL inspect staged, unstaged, untracked, and base-to-head changes before any commit delegation. The workflow MUST stop when a stage-all writer would include unauthorized work. It SHALL reuse valid existing commits, invoke the existing writer only for authorized uncommitted content, respect its input contract and checks, then verify the pushed head before publishing a matching PR description.
 
 #### Scenario: Unrelated dirty file exists
 - **WHEN** the selected Change has uncommitted work and another agent has an unrelated dirty file
@@ -141,7 +141,7 @@ Create and publish SHALL inspect staged, unstaged, untracked, and base-to-head c
 - **AND** the result distinguishes the local commit from the unavailable remote revision and does not claim successful publication
 
 ### Requirement: Shared content is updated without erasing other authors
-Issue and PR templates SHALL define bounded managed sections and minimum information per operation. Updates SHALL read the latest body, preserve unrelated text and prior provenance, and change only the caller-owned sections or requested fields. Concurrent summary ownership conflicts MUST stop shared-body writes; review reports and repair replies SHALL remain separate records owned by their authors.
+Issue updates SHALL append comments. PR description updates SHALL read current content and change only authorized sections while preserving unrelated text and history. New bodies SHALL use shared headings without mandatory managed markers. Legacy sections SHALL remain readable. Concurrent shared-body writers SHALL resolve ownership before replacement.
 
 #### Scenario: Human edits outside managed section
 - **WHEN** the latest PR body contains a human note outside the managed section
@@ -154,11 +154,11 @@ Issue and PR templates SHALL define bounded managed sections and minimum informa
 - **AND** read-before-write alone is not reported as a concurrency lock
 
 ### Requirement: Provenance records known event participants safely
-Planning, implementation, publication, and review records SHALL distinguish their roles, executing tool, known current root-session model, session reference type, optional machine alias, timestamp with timezone, and artifact revision or explicit unpublished state. Unknown values MUST NOT be guessed. Publishing a later update MUST preserve earlier authorship; a publisher MUST identify a separately authored source report.
+Each new body or comment SHALL identify human-direct or agent-assisted authorship. Agent posts SHALL retain current posting tool, known root-session model and separate native and Xirp IDs. Unknown identities SHALL remain honest. Relayed substantive reports SHALL identify their original author and source separately. Extended provenance SHALL appear only when needed for evidence.
 
 #### Scenario: Model or session is unavailable
 - **WHEN** the current model or native Session ID is unknown or not approved for disclosure
-- **THEN** the workflow reports the omission or uses an explicitly labeled session alias
+- **THEN** the workflow reports the omission, uses null for unavailable Session IDs and keeps aliases separate
 - **AND** it does not infer a model from history or mislabel an alias as a native ID
 
 #### Scenario: Machine information is recorded
@@ -168,8 +168,8 @@ Planning, implementation, publication, and review records SHALL distinguish thei
 
 #### Scenario: Default remote provenance disclosure
 - **WHEN** an Issue, PR, or Review record is published without a stricter explicit project or user restriction
-- **THEN** it retains the executing tool, known model, and known native session ID with its source
-- **AND** machine information is limited to a neutral configured alias or null; unknown values are not guessed
+- **THEN** it retains the executing tool, known model, and known native session ID in dedicated fields
+- **AND** unknown values are not guessed and routine posts do not require machine metadata
 
 ### Requirement: Remote review records extend a shared local baseline
 The shared handoff contract SHALL own the remote review schema, reuse local review field and finding-status semantics, and define phase, verdict, provenance, and identifiers. Verdict SHALL be pass, changes-required, or blocked. A review ID SHALL be assignable before publication and unique within the PR; each finding SHALL retain its origin-review ID and local finding number across later rounds.
@@ -180,7 +180,7 @@ The shared handoff contract SHALL own the remote review schema, reuse local revi
 - **AND** later reports retain the original finding IDs instead of deriving them from a nonexistent or changing URL
 
 ### Requirement: Review reports expose session and Git baseline explicitly
-Review reports SHALL contain Scope and Baseline, Findings, and Summary and Limitations sections. The baseline SHALL identify session ID with source or null and reason, a separate alias, tool and known model, review scope and time, repository and PR context, branch and commit baselines, actual checkout revision, unpublished content, snapshot evidence, and actual checks. Unknown values MUST NOT be fabricated or masked by aliases.
+Remote Review replies SHALL use Handoff, version-bound Review, Verification, Next actions and Author. Full Scope and Baseline, Findings, Summary and Limitations records SHALL remain available as supplementary evidence. Reports SHALL identify reviewed and checked content, separate IDs from aliases, and expose unpublished or mismatched versions without fabricating evidence.
 
 #### Scenario: Native session ID is supplied by the user
 - **WHEN** the reviewer knows a native session ID from explicit user input
@@ -263,3 +263,59 @@ Issue, PR, Review, and comment operations SHALL use an available, already config
 - **WHEN** the new workflow is installed for a new or existing project
 - **THEN** the old identity-check script is no longer installed or required by Skills, rules, or the protocol
 - **AND** unrelated or locally modified project scripts and authentication configuration are preserved rather than indiscriminately deleted
+
+### Requirement: Team publication uses one shared content frame
+The shared contract SHALL own Issue and PR templates for bodies, progress, reviews, fixes, checkpoints and closure. New posts SHALL start with Handoff, explain their purpose, include concise Next actions and end with Author. Unknown optional associations and empty optional sections SHALL be omitted. PR bodies SHALL identify the verified head branch. Next actions SHALL state genuine continuation, waiting or no remaining action.
+
+#### Scenario: Human opens unplanned work
+- **WHEN** a human publishes a concrete request without a Change or branch
+- **THEN** the post has a readable goal, supported completion conditions, Next actions and human Author without manufacturing tracking records
+
+#### Scenario: Agent publishes linked work
+- **WHEN** an agent posts with confirmed Change, branch and related Issue or PR
+- **THEN** Handoff includes relevant associations and marks a local Work Item local-only
+
+#### Scenario: Next step is unknown
+- **WHEN** the sources establish no owner or actionable next step
+- **THEN** the post states what needs confirmation without inventing an assignee or deadline
+
+### Requirement: Checkpoint summarizes recoverable published context
+A pause, transfer or substantial multi-round discussion SHALL support a self-contained Checkpoint through Issue update or PR reply. It SHALL identify current state, confirmed decisions or results, open questions, published version or unavailable work, evidence and Next actions. Routine progress SHALL stay concise. Receivers SHALL reconcile later events and current versions. Checkpoints SHALL link formal tasks instead of duplicating them.
+
+#### Scenario: Transfer without local records
+- **WHEN** another environment lacks the original Work Item
+- **THEN** the checkpoint explains known facts, unavailable work and continuation using published references
+
+#### Scenario: Later event supersedes summary
+- **WHEN** a fix or decision was posted after the last checkpoint
+- **THEN** the receiver reconciles that event and current version instead of assuming the latest checkpoint label proves freshness
+
+#### Scenario: Parallel summaries disagree
+- **WHEN** overlapping checkpoints claim conflicting state
+- **THEN** the conflict is exposed for coordination rather than silently resolved by timestamp or a claimed read-before-write lock
+
+### Requirement: Closure preserves outcome evidence before state mutation
+Closing an Issue or PR SHALL first publish and confirm a Handoff, Closure, Next actions and Author summary. Closure SHALL explain intended outcome, delivered or cancelled scope, verification, remaining work and references. Only then SHALL the authorized state change run and be read back. Summaries SHALL NOT attest unperformed close or merge actions. Partial results and retries SHALL be reconciled independently.
+
+#### Scenario: Summary succeeded but close failed
+- **WHEN** Closure was confirmed but the state operation failed
+- **THEN** the result preserves the summary URL and actual state, and retry reuses unchanged valid evidence
+
+#### Scenario: Summary result is uncertain
+- **WHEN** the closure comment times out or cannot be verified
+- **THEN** the skill reconciles the comment before closing or posting again
+
+#### Scenario: New work arrives before closing
+- **WHEN** the target changes after summary preparation
+- **THEN** the skill reconciles scope or version and publishes new closure evidence when needed
+
+### Requirement: Reference examples demonstrate the full publication lifecycle
+Skill references SHALL provide coherent examples of create, update, review, fix, pass, checkpoint and closure with the shared frame. Synthetic identities, revisions and results SHALL be labeled. Examples SHALL cover human authors, missing Agent metadata, local-only records, cancellation and partial failure. They SHALL link the common contract rather than define a competing schema.
+
+#### Scenario: Full PR lifecycle
+- **WHEN** a reader follows the PR reference through repair and closure
+- **THEN** Finding IDs, versions, Author and Next actions remain consistent across rounds
+
+#### Scenario: Human and unknown metadata
+- **WHEN** a human posts directly or Agent metadata is unavailable
+- **THEN** the human example invents no Agent fields and the Agent example discloses unknown values

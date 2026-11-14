@@ -42,22 +42,23 @@
 <text x="976" y="963" class="p">依工具實際支援與安裝狀態</text>
 <path d="M480 1020 V1075" class="line"/>
 <rect class="box" x="180" y="1075" width="600" height="90" rx="16" fill="#fff6df" stroke="#c19a40"/>
-<text x="206" y="1113" class="h">有 PR，且驗收未通過或 blocked？</text>
+<text x="206" y="1113" class="h">已確認 PR，且未要求 local-only？</text>
 <path d="M780 1120 H950" class="line"/>
 <text x="852" y="1105" class="label">否</text>
 <rect class="box" x="950" y="1075" width="360" height="150" rx="16" fill="#eaf8ef" stroke="#76a68a"/>
 <text x="976" y="1113" class="h">回傳審查結果</text>
-<text x="976" y="1151" class="p">無 PR：單純回報 Review。</text>
-<text x="976" y="1182" class="p">通過：回報本輪版本與限制。</text>
+<text x="976" y="1151" class="p">無 PR、PR 不明或 local-only：</text>
+<text x="976" y="1182" class="p">直接回報本輪版本與限制。</text>
 <path d="M480 1165 V1240" class="line"/>
 <text x="503" y="1208" class="label">是</text>
 <rect class="box" x="100" y="1240" width="760" height="155" rx="16" fill="#eaf2ff" stroke="#6c96ce"/>
-<text x="126" y="1278" class="h">05  用 github-pr reply 新增審查留言</text>
+<text x="126" y="1278" class="h">05  用 github-pr reply 發布結果（含 pass）</text>
 <text x="126" y="1316" class="p">回報版本、結論、問題、證據、測試與未驗證事項</text>
 <text x="126" y="1347" class="p">回讀確認，保留原 PR 正文與歷史回覆</text>
+<text x="126" y="1378" class="p">pass 到此結束，不通知修正</text>
 <path d="M480 1395 V1450" class="line"/>
 <rect class="box" x="130" y="1450" width="700" height="95" rx="16" fill="#fff6df" stroke="#c19a40"/>
-<text x="156" y="1488" class="h">Author 對應的實作者 Session 可在本機定位？</text>
+<text x="156" y="1488" class="h">需修正，且實作者 Session 可在本機定位？</text>
 <path d="M830 1497 H1130 V1640" class="line"/>
 <text x="920" y="1480" class="label">否／無法確認</text>
 <path d="M480 1545 V1640" class="line"/>

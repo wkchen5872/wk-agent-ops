@@ -112,9 +112,10 @@ branch 完成。每個 Worktree 同一時間只能有一個 active writer，跨 
 - **Managed convention ≠ collaboration records** — the installer refreshes only
   `work-items/AGENTS.md`; it never creates, changes, or removes local `work-items/WI-*/` records
 - **GitHub handoff has one contract** — `docs/github-handoff.md` owns the Issue, PR,
-  and review schema and the write-time checks (full repository target, operation,
-  authorization, readback); the `github-issue` and `github-pr` skills and the thin rule
-  only reference it. GitHub calls use an available gh or GitHub MCP. Only `github-pr create`
+  review, Checkpoint, and Closure formats (Handoff → content → Next actions → Author) and
+  the write-time checks (full repository target, operation, authorization, readback); the
+  `github-issue`, `github-pr`, and `change-review` skills and the thin rule only reference
+  it. Issue close and PR close each change only their selected target. GitHub calls use an available gh or GitHub MCP. Only `github-pr create`
   commits and pushes — scoped to its own work, without force or hook bypass; every other
   operation leaves Git alone. Git owns commit, push, and authentication; there is no custom
   identity script. No hook enforces this

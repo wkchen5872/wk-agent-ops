@@ -11,7 +11,7 @@ The skill SHALL use explicitly selected Work Items and/or Changes before branch 
 
 #### Scenario: Explicit Work Item without Change
 - **WHEN** the user selects an existing Work Item without an associated Change
-- **THEN** the skill summarizes that Work Item and relevant discussion and sets openspec-change to null
+- **THEN** the skill summarizes that Work Item and relevant discussion and omits unavailable optional associations while retaining legacy null compatibility
 - **AND** it does not substitute the current branch's unrelated Change
 
 #### Scenario: Explicit Change or combined sources
@@ -31,19 +31,19 @@ The skill SHALL use explicitly selected Work Items and/or Changes before branch 
 - **THEN** the skill reports the unavailable source rather than silently switching to session-only creation
 
 ### Requirement: Session-only work does not require local tracking artifacts
-The skill SHALL allow creation from the current session's relevant work discussion when no Work Item or Change is available. It SHALL set absent identifiers to null and MUST NOT create a Work Item, Change, branch, or PR to fill those fields. Unconfirmed ideas MUST remain distinguishable from confirmed decisions.
+The skill SHALL allow creation from relevant session discussion without local tracking artifacts. New Handoff SHALL include only confirmed relevant associations and remain readable without associations. Legacy null fields SHALL remain supported. The skill MUST NOT create Work Items, Changes, branches or PRs to fill metadata. Unconfirmed ideas SHALL remain open questions.
 
 #### Scenario: No local association exists
 - **WHEN** no source is specified and branch discovery finds no related Work Item or Change
-- **THEN** the skill composes the Issue from relevant current-session content with both identifiers set to null
-- **AND** a verified PR URL is included only when one exists, otherwise pull-request is null
+- **THEN** the skill composes the Issue from relevant current-session content without manufacturing Change or Work Item identifiers
+- **AND** a PR reference is included only when verified
 
 #### Scenario: Session lacks a concrete subject
 - **WHEN** no local source exists and the current discussion does not identify the work to register
 - **THEN** the skill asks for the missing subject before creating an Issue
 
 ### Requirement: Initial Issue prioritizes work content
-An initial Issue SHALL start with Handoff containing openspec-change, work-item, and pull-request, each with a confirmed value or literal null, and end with Author. It SHALL contain Goal describing the problem and intended outcome. Tasks, References, and other explanatory sections SHALL appear only when useful; content MUST summarize rather than dump source files or require unused operational metadata.
+A new Issue SHALL begin with Handoff and end with shared Author. Goal SHALL explain the problem and result. Supported completion conditions SHALL use Acceptance criteria or another meaningful heading. Next actions SHALL state immediate continuation. Optional references and associations SHALL appear only when supported. Checkpoint SHALL appear when publishing a handoff state without dumping local logs.
 
 #### Scenario: Sources include detailed implementation tasks
 - **WHEN** a Change contains a long tasks document
@@ -72,7 +72,7 @@ The skill SHALL rewrite its sources into one task a reader without them can act 
 - **AND** it contains no record-only metadata, no task-list numbering or groups copied from the source, and no decision the material does not contain
 
 ### Requirement: Author identifies the current posting agent
-Each initial Issue and update comment SHALL end with Author containing Co-Authored-By for the actual posting tool and AI-Assisted-By for the known current root-session model. Unknown models MUST be omitted with the omission reported to the user. Issue posts MUST NOT require session IDs, machine aliases, role histories, provider email guesses, or accumulated provenance; PR and Review attribution requirements remain unchanged.
+Issue bodies and new comments SHALL use shared human or agent-assisted Author. Agent posts SHALL include posting tool, known root-session model and separate SESSION-ID and XIRP-SESSION-ID with honest nulls and reported limits. Unknown models SHALL be omitted. Relayed authors SHALL be distinguished from publishers. Private paths and credential metadata MUST NOT be published.
 
 #### Scenario: Posting agent differs from source author
 - **WHEN** an agent summarizes a Work Item written by another agent
@@ -83,7 +83,7 @@ Each initial Issue and update comment SHALL end with Author containing Co-Author
 - **THEN** it does not infer a model from source records and reports the omitted AI-Assisted-By field
 
 ### Requirement: Existing Issue association is verified within the target repository
-The skill SHALL resolve an explicit Issue target first or discover candidates using non-null source identifiers, then inspect actual bodies and relevant comments in the verified repository. It SHALL reuse one confirmed Issue, report ambiguity, and never treat null fields or title similarity as identity. Legacy managed fields SHALL remain readable without migration.
+The skill SHALL prefer an explicit Issue or verify candidate work associations and actual repository metadata, reading bodies and relevant comments. It SHALL reuse one confirmed work and resolve real ambiguity. Local Work Item IDs SHALL be source hints and SHALL NOT alone prove global identity or conflict. Legacy managed fields and null values SHALL remain readable.
 
 #### Scenario: Repeated create has one exact association
 - **WHEN** create finds one Issue for the same confirmed source identifiers
@@ -102,8 +102,16 @@ The skill SHALL resolve an explicit Issue target first or discover candidates us
 - **WHEN** an Issue began session-only and a later comment records its confirmed Change or Work Item
 - **THEN** discovery considers that comment when verifying the association without requiring a body rewrite
 
+#### Scenario: Different local records represent the same work
+- **WHEN** verified Change and work scope match but local Work Item IDs differ
+- **THEN** the difference alone does not block reuse and the local records remain source hints
+
+#### Scenario: Same local ID represents unrelated work
+- **WHEN** independent directories contain the same Work Item ID for different work
+- **THEN** that ID alone does not authorize reuse or a remote update
+
 ### Requirement: Updates append an iteration comment without rewriting history
-An update SHALL read the target Issue and relevant comments, then add a top-level comment beginning with Handoff, containing Changes, and ending with Author. Changes SHALL explain the current iteration and its consequences rather than repeat the original description. The skill MUST preserve the Issue body and all existing comments, and MUST NOT require managed markers or adoption.
+Update SHALL append one progress or Checkpoint comment using Handoff, substantive content, Next actions and shared Author. Progress SHALL explain this iteration. Handoff summaries SHALL follow shared Checkpoint rules. Update SHALL preserve body, title, state, labels, assignees and prior comments. A requested Issue reply SHALL use this append-only behavior.
 
 #### Scenario: Work has progressed
 - **WHEN** the user requests an update for an existing Issue
@@ -136,13 +144,32 @@ The skill SHALL use available configured gh or GitHub MCP with full host/owner/r
 - **AND** if the result remains uncertain it reports uncertainty instead of resending or switching tools to resend
 
 ### Requirement: Issue-specific rules coexist with shared PR and Review contracts
-The shared handoff contract SHALL own the Issue body and comment templates and define their exception to managed-body and extended provenance rules. PR descriptions, Review baselines, approvals, lifecycle authority, and native transport safeguards SHALL retain their existing behavior. Issue waiting and dependency details SHALL be expressed when relevant without mandatory empty sections.
+The shared contract SHALL own Issue bodies, progress, Checkpoint and Closure templates. Issue close SHALL own Issue state changes while PR close SHALL own its PR target. Native safeguards and lifecycle evidence SHALL remain applicable. Formal requirements SHALL stay in OpenSpec, with Issue summaries linking published artifacts and retaining unresolved acceptance work.
 
 #### Scenario: PR description is updated
 - **WHEN** github-pr updates its description after this capability is installed
-- **THEN** its existing managed-section and provenance behavior remains in effect
+- **THEN** its shared content frame and human or Agent attribution remain in effect
 
 #### Scenario: Acceptance still waits for real data
 - **WHEN** the work requires future data for acceptance
 - **THEN** the work explanation or update identifies the necessary window, evidence, owner, and next step as relevant
 - **AND** a date arriving, a review pass, or a merge does not imply acceptance or close the Issue
+
+### Requirement: Issue closure is independently authorized and evidenced
+Close SHALL require a selected Issue and supported completed or not-planned reason. It SHALL use the shared Closure-before-state-change sequence, verify state and reason, and preserve linked PRs, dependencies and parent work. Required unmet acceptance SHALL prevent a completed verdict. Cancellation SHALL explain replacement or remaining work. Retries SHALL reconcile existing comments and states without duplicate writes or implicit reopening.
+
+#### Scenario: Completed work
+- **WHEN** required acceptance has evidence and close is authorized
+- **THEN** Closure links results and remaining independent work, then only the selected Issue is closed completed and verified
+
+#### Scenario: Validation pending
+- **WHEN** a PR is merged but required real-data acceptance is unavailable
+- **THEN** the skill reports pending acceptance without closing the Issue as completed
+
+#### Scenario: Cancellation
+- **WHEN** the user authorizes cancelling an Issue
+- **THEN** Closure explains why and the Issue is closed not planned without closing linked PRs
+
+#### Scenario: Retry after partial failure
+- **WHEN** the comment or state change may have succeeded
+- **THEN** readback resolves existing steps, reuses valid evidence and reports any reason mismatch

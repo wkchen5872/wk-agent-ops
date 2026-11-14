@@ -1,7 +1,7 @@
 ---
 type: Reference
 title: GitHub 交接契約
-description: OpenSpec Change 與 GitHub Issue／PR 的關聯、寫入前的目標與操作核對、共用範本、provenance 與交接流程。
+description: OpenSpec Change 與 GitHub Issue／PR 的關聯、寫入前的目標與操作核對、共用內容外框（Handoff、Next actions、Author）、Checkpoint、Closure 與交接流程。
 tags: [agents, github, handoff, openspec, review]
 generated: { by: claude-code/Claude Opus 5.5, at: 2026-11-13T17:15:43+08:00 }
 ---
@@ -25,7 +25,8 @@ Review 報告都引用這裡，不各自保存一份格式。
 - Issue、PR、Review 與留言使用當下可用且已配置的 GitHub CLI `gh` 或 GitHub MCP。
   **只有 `github-pr create` 會發布 Git**：建立 PR 的要求本身就涵蓋必要的檢查、只含本次
   工作的 commit、正常 push、Draft PR 與回讀。github-pr 的 update、reply、close 與 Issue
-  的操作都不 commit、不 push；對既有 PR 推送新的 commit 是另外的 Git 請求。Git 使用本機
+  的 create、update、close 都不 commit、不 push；對既有 PR 推送新的 commit 是另外的 Git
+  請求。Issue close 與 PR close 各自只處理被指定的目標。Git 使用本機
   工具，SSH／HTTPS 認證交給 Git 與本機設定。本流程不提供 GitHub client、通用 adapter 或
   自訂的身分檢查程式。
 - 本文件與安裝的 rule 是規範，不是 hook：它們不會在執行期攔截指令。只有依本文件
@@ -142,20 +143,23 @@ repository 與 branch。
    確認就回報。搜尋索引在剛寫入後可能延遲，重新查找時另外列出紀錄直接比對。
 
 **Issue 的關聯**不用 managed 區塊與 `repository` 鍵：目標 repository 由 Issue 的 GitHub
-URL／metadata 核對，關聯由第 6.1 節 Handoff 的非 `null` ID 構成。
+URL／metadata 核對，關聯由 Handoff 中已確認的 Change、branch、PR 與工作範圍構成。
 
-1. 已知明確的 Issue URL 時直接讀取它。否則在已確認的 repository 以每個非 `null` 的
-   Change／Work Item ID 搜尋候選，再逐一讀取**正文與相關留言**（後補的關聯在留言）。
+1. 已知明確的 Issue URL 時直接讀取它。否則在已確認的 repository 以已確認的 Change ID、
+   branch 或 Work Item ID 搜尋候選，再逐一讀取**正文與相關留言**（後補的關聯在留言）。
    舊版 Issue 區塊中的 `openspec-change` 與 `repository` 仍可作為證據，不需遷移。
-2. 唯一確認 → 沿用，重複的 create 只回傳 URL。多個候選，或某個已知 ID 與候選衝突 →
-   列出並停止，澄清後才寫入。
-3. `null` 不是識別碼，`null` 相等與標題相似都不構成關聯。Session-only 的工作沒有穩定鍵：
+2. 唯一確認 → 沿用，重複的 create 只回傳 URL。多個候選，或已確認的 Change、branch 或
+   工作範圍與候選衝突 → 列出並停止，澄清後才寫入。
+3. **Work Item ID 是本機來源線索**（local-only），不是全域識別。Change 與工作範圍相符時，
+   Work Item ID 不同不構成衝突，同一工作可以由不同環境的本地紀錄接手；不同目錄碰巧有
+   相同的 Work Item ID，也不足以證明是同一件工作或授權遠端更新。
+4. `null` 不是識別碼，`null` 相等與標題相似都不構成關聯。Session-only 的工作沒有穩定鍵：
    優先沿用本次 Session 已知的 URL；否則讀取近期／相關 Issue 排除明顯重複，有合理疑似
    對象就詢問，沒有才建立。
-4. 建立或留言逾時、結果不明時，依原目標列出近期 Issue 或該 Issue 的留言，比對預備的
+5. 建立或留言逾時、結果不明時，依原目標列出近期 Issue 或該 Issue 的留言，比對預備的
    內容與可得的作者、時間；能唯一確認就回報，仍不明就停止，不重送也不換工具重送。
    沒有穩定鍵的寫入不宣稱 exactly-once。
-5. 回讀：建立後依回傳的編號讀回 Issue；留言後依回傳的 URL／id 讀回該則留言，核對
+6. 回讀：建立後依回傳的編號讀回 Issue；留言後依回傳的 URL／id 讀回該則留言，核對
    repository、父 Issue 與內容，回報留言 URL，不把留言說成建立了 Issue。
 
 正式紀錄不依賴本機 Work Item，也不另建 Change↔Issue 或 Change↔PR 對照檔。尚未發布的
@@ -164,51 +168,154 @@ URL／metadata 核對，關聯由第 6.1 節 Handoff 的非 `null` ID 構成。
 
 ## 6. 範本
 
-尖括號是待填值；不適用的區段整段省略，未知的值依各範本的規則處理。Issue 的正文與
-留言見第 6.1 節，PR 的正文與回覆見第 6.2 節。
+尖括號是待填值；不適用的區段整段省略，未知的選用值不寫。Issue 的正文與留言見第 6.1 節，
+PR 的正文與回覆見第 6.2 節，交接摘要見第 6.6 節，結案摘要見第 6.7 節。人類發文與各個 AI
+工具都使用同一套欄位語意；工具只影響能取得哪些 Session 資訊，不改變格式。
+
+### 共用外框
+
+每一則新的 Issue 正文、Issue 留言、PR 正文與 PR 回覆都依序包含：
+
+1. **Handoff** 在最前：這則內容屬於哪件工作。
+2. **依用途撰寫的正文**：Goal、Changes、Review、Checkpoint、Closure 等，見各節。
+3. **Next actions**：接下來立即可做的事。
+4. **Author** 在最後：本輪內容的來源與發布者。
+
+只有已讀取並核對過的內容才寫進去；不為了補欄位建立 Work Item、Change、分支、Issue 或 PR，
+也不放空白段落。
+
+#### Handoff
+
+```markdown
+## Handoff
+
+- issue: <已確認的 Issue URL>
+- pull-request: <已確認的 PR URL>
+- branch: <已核對的 branch；fork 時寫 <head-owner>:<branch>>
+- openspec-change: <已確認的 Change ID>
+- work-item: <已確認的 Work Item ID>（local-only）
+- depends-on: <依賴的 Issue／PR URL>（<解除條件>）
+```
+
+- 只列已確認、與這則內容相關的關聯，未知的選用關聯整行省略。PR 正文一定有 `branch`；
+  fork 保留 head owner。完全沒有關聯時，以一句話交代現況（例如「目前尚無 Change、branch
+  或 PR 關聯。」），不寫 `null` 佔位。
+- 優先使用已查核的遠端 URL。Work Item 一律標 `（local-only）`：它只存在原工作環境，
+  正文不能依賴它才看得懂；同一件工作可以由不同環境的本地紀錄接手（第 5 節）。
+- 直接處理的工作、只供參考的連結（`references`）與依賴（`depends-on`）分開寫；依賴要
+  寫出解除條件。不寫 `Closes`／`Fixes` 這類會自動關閉 Issue 的語句，需要時用 `Refs #N`。
+- 舊紀錄的 `null` 欄位（例如 `- work-item: null`）與舊的 managed 區塊仍可讀，表示「當時
+  未確認」，不需遷移；新內容不再寫 `null` 佔位。
+
+#### Next actions
+
+```markdown
+## Next actions
+
+<下一步：誰（已知時）做什麼，完成或解除的條件>
+```
+
+- 說明立即可接續的動作；負責方與完成或解除條件已知時寫出。
+- 沒有後續工作就如實寫明（例如「原範圍內無後續動作」）；在等待別人時寫等待什麼。
+- 素材沒有負責人或明確下一步時，寫出待確認的事項，不捏造負責人、期限或日期。
+
+#### Author
+
+```markdown
+## Author
+
+方式: Agent 協助
+人類: @<已確認且允許公開的使用者>
+Co-Authored-By: <本次發布的工具>
+AI-Assisted-By: <已知的當下 root-session model>
+SESSION-ID: <本次原生 Session ID｜null>
+XIRP-SESSION-ID: <本次 Xirp 管理 Session ID｜null>
+```
+
+- **方式**：`人類直接發布`、`Agent 協助`，或代發他人內容時 `Agent 協助代發`。
+- **人類直接發布**只寫兩行，不加任何 Agent 欄位：
+
+  ```markdown
+  方式: 人類直接發布
+  人類: @<發布者>
+  ```
+- **人類**：已確認且允許公開的 GitHub 帳號。未知或不公開時省略這一行；不從 API 帳號推定
+  實際委託者。
+- **Agent 欄位對應本輪發布者**：工具、模型與兩個 Session ID 都是這一則內容的發布 Session，
+  不沿用上一則回覆、來源紀錄或其他 Agent 的值，也不代表來源紀錄的全部作者。
+  - `Co-Authored-By`：本次發布的工具，name-only，不加 provider email，不套用 commit
+    trailer 的 email 規則。
+  - `AI-Assisted-By`：當下 root session 已知的模型，保留已知精度。未知時省略這一行並在
+    操作回報中說明；不從來源紀錄、環境變數或其他 Agent 推測。
+  - `SESSION-ID`：當下工具 runtime 提供的原生 Session ID。
+  - `XIRP-SESSION-ID`：本次 Session 的 Xirp 管理 ID，取自 runtime 或已配置的本機 session 工具。
+  - 兩個 Session 欄位在 Agent 參與時一定都出現。寫 `null` 之前先查詢可用的來源，只讀需要的
+    鍵，不傾印環境變數、對話或任何 credential。無法確認屬於本次發布 Session、不存在、未註冊
+    或明示不公開的值，各自在自己的欄位寫 `null` 並在操作回報中說明原因，另一欄不受影響，
+    也不因此停止發文。兩個 ID 不互填，不把本地別名寫成 ID，也不要求使用者手抄。
+- **代發**：發布他人撰寫的 Review 或實作報告時，第一行加 `原報告作者: @<作者>，來源為
+  <已核對的報告連結>`，原作者明確提供且可公開的工具、模型與 Session 以括號附在同一行
+  （例如 `（工具 <工具>，模型 <模型>；未提供 Session ID）`）；下面的
+  方式、人類、工具、模型與 Session 仍是本輪發布者。整合多份素材的摘要不宣稱單一來源作者
+  完成全部內容，以 References 指向各來源。之後要通知原作者（例如請實作者修正）時，對象取自
+  `原報告作者` 與其已核對的來源，不是代發者；無法核對原作者時回傳可轉交訊息，不改通知代發者。
+- 不寫本機絕對路徑、hostname、credential 或編造的 provider email。這些 ID 只是查找線索；
+  通知或接手前仍要核對工具、專案與原生 ID 的對應。
+- 舊紀錄只有 `Co-Authored-By`／`AI-Assisted-By`、只有 `SESSION-ID`，或以
+  `SESSION-ID: <id> (xirp)` 標示管理 ID 的 Author 仍然可讀，保留它標示的命名空間，正常更新
+  不改寫歷史紀錄。
 
 ### 6.1 Issue
 
-Issue 不使用 managed 區塊，也不套用第 7 節的完整 provenance。它的正文是工作的起點，
-之後的迭代以新增留言保存；PR 與 Review 的格式不受影響。
+Issue 不使用 managed 區塊。它的正文是工作的起點，之後的迭代以新增留言保存；PR 與
+Review 的格式見第 6.2 節。
 
 #### 初始正文
 
 ```markdown
 ## Handoff
 
-- openspec-change: <已確認的 Change ID｜null>
-- work-item: <已確認的 Work Item ID｜null>
-- pull-request: <已確認的 PR URL｜null>
+- openspec-change: <已確認的 Change ID>
+- branch: <已確認的 branch>
+- pull-request: <已確認的 PR URL>
+- work-item: <已確認的 Work Item ID>（local-only）
 
 ## Goal
 
-<問題、理解它所需的背景，以及預期結果>
+<問題、理解它所需的背景、影響對象，以及預期結果與範圍>
 
-## Tasks
+## Acceptance criteria
 
-- [ ] <有意義的工作或完成條件>
+- <從使用者或維運者看得到的完成條件>
 
 ## References
 
 - <有用的連結，或標明 local-only／尚未發布的 repo-relative 路徑>
 
+## Next actions
+
+<下一步與負責方>
+
 ## Author
 
-Co-Authored-By: <本次貼文工具>
+方式: Agent 協助
+人類: @<已確認的使用者>
+Co-Authored-By: <本次發布的工具>
 AI-Assisted-By: <已知的當下 root-session model>
+SESSION-ID: <本次原生 Session ID｜null>
+XIRP-SESSION-ID: <本次 Xirp 管理 Session ID｜null>
 ```
 
-- **Handoff、Goal、Author 必須出現**，Handoff 在最前、Author 在最後。三個 Handoff 欄位
-  只填已讀取並核對過的值，沒有就寫 `null`；不為了補欄位建立 Work Item、Change、分支或 PR。
-- Tasks、References 有內容才保留；其他中間段落（例如未決事項、依賴、等待資料）依工作
-  需要加入，不放空白段落。標題直接描述工作目的，不強制加 Change ID 前綴。
+- **Handoff、Goal、Next actions、Author 必須出現**。Acceptance criteria 寫素材支持的完成
+  條件，也可以用更貼切的標題；References、Open questions、Dependencies 有內容才保留。
+  需要交接目前狀態時，可以加第 6.6 節的 Checkpoint 段落。標題直接描述工作目的，不強制加
+  Change ID 前綴。
 - **Work Item、Change 與 Session 是素材，不是貼文。** 讀取後重組成一份只讀 Issue 的人
   也能理解、可以交辦的任務：問題與影響、範圍（含不處理的事項）、要做的工作、完成條件
   與未決事項，依素材實際有的內容寫清楚。這是內容標準，不是每篇都要有的固定章節。
 - 不沿用 Work Item 的紀錄格式（Sessions、Coordinator、決策編號、各 Agent 的下一步），
-  不把內部清單刪短後貼出，不只貼 ID，也不搬整份 `tasks.md` 或 Session 逐字稿。
-- Tasks 寫可檢查的結果或完成條件，從使用者或維運者看得到的行為描述；不照搬實作計畫的群組、
+  不把內部清單刪短後貼出，不只貼 ID，也不搬整份 `tasks.md`、Session 逐字稿或本機日誌。
+- 完成條件寫可檢查的結果，從使用者或維運者看得到的行為描述；不照搬實作計畫的群組、
   編號或實作步驟（endpoint、job、儲存、逐項測試）。實作計畫留在 Change，以 References 連結。
 - 指定的紀錄與本輪對話一起整合：對話中使用者後來確認的決策取代紀錄中的舊值；無法判定
   何者為準時才詢問。沒有人確認的想法寫成未決事項；不捏造素材沒有的決策、數字、負責人
@@ -218,42 +325,50 @@ AI-Assisted-By: <已知的當下 root-session model>
 - 依賴寫出解除條件（例如等待哪個 Issue／PR 的批准、合併、部署或驗收），不能只寫另一個
   工作的名稱。需要等待真實資料時，寫出所需的資料區間、證據、負責人與下一步；時間到、
   Review 通過或 PR 合併都不代表驗收完成，也不自動關閉 Issue。
-- **Author** 只記本次貼文的工具與已知的當下 root-session model，name-only，不加 provider
-  email，也不套用 commit trailer 的 email 規則。模型未知時省略 `AI-Assisted-By` 並在回報
-  中說明，不從來源紀錄或其他 Agent 推測。Author 不代表來源紀錄的全部作者。
+- 人類直接建立時，Author 只有 `方式: 人類直接發布` 與 `人類`；沒有 Change 或 branch 的初步
+  問題，Handoff 以一句話說明尚無關聯即可。
 
 #### 更新留言
 
 ```markdown
 ## Handoff
 
-- openspec-change: <已確認的 Change ID｜null>
-- work-item: <已確認的 Work Item ID｜null>
-- pull-request: <已確認的 PR URL｜null>
+- issue: <Issue URL>
+- openspec-change: <已確認的 Change ID>
+- pull-request: <已確認的 PR URL>
 
 ## Changes
 
 <這一輪改變了什麼、為什麼重要>
 
+## Next actions
+
+<下一步與負責方>
+
 ## Author
 
-Co-Authored-By: <本次貼文工具>
+方式: Agent 協助
+人類: @<已確認的使用者>
+Co-Authored-By: <本次發布的工具>
 AI-Assisted-By: <已知的當下 root-session model>
+SESSION-ID: <本次原生 Session ID｜null>
+XIRP-SESSION-ID: <本次 Xirp 管理 Session ID｜null>
 ```
 
 - 更新**永遠是新增一則頂層留言**，不改 Issue 的正文、標題、狀態、label、assignee，也不
   編輯或刪除先前的留言。正文是人工撰寫、舊版 managed 格式或標記破損都一樣，不需要採用或
-  遷移。
-- 寫之前讀取正文與相關留言，Changes 只寫這一輪的新內容（決策、進度、測試結果、阻礙、
-  下一步，依實際情況），不重貼初始目標或已發布的更新。
-- Handoff 沿用 Issue 已確認的關聯。確認是同一件工作後，新的 ID 寫在這則留言；之後查找
+  遷移。使用者說「回覆 Issue」時也是這個操作。
+- 寫之前讀取正文與相關留言，Changes 只寫這一輪的新內容（決策、進度、測試結果、阻礙，
+  依實際情況），不重貼初始目標或已發布的更新。換人、暫停或多輪討論需要整合時，主體改用
+  第 6.6 節的 Checkpoint。
+- Handoff 沿用 Issue 已確認的關聯。確認是同一件工作後，新的關聯寫在這則留言；之後查找
   關聯必須連同留言一起讀，不只看正文。
+- 結案摘要使用第 6.7 節的 Closure，由 `github-issue close` 發布。
 
 ### 6.2 PR
 
-PR 的正文說明這張 PR 的工作，之後依授權更新；每一輪的審查、修正或回報用新增的頂層
-回覆保存。兩者都以 Handoff 開頭、Author 結尾，中間依內容而定。PR 不使用 managed 區塊，
-不需要完整 provenance、Review 索引或正文中的批准欄位。
+PR 的正文說明這張 PR 的工作，之後依授權更新；每一輪的審查、修正、交接或結案用新增的
+頂層回覆保存。PR 不使用 managed 區塊，不需要完整 provenance、Review 索引或正文中的批准欄位。
 
 #### 正文
 
@@ -262,72 +377,82 @@ PR 的正文說明這張 PR 的工作，之後依授權更新；每一輪的審�
 
 - branch: <已核對的 head branch；fork 時寫 <head-owner>:<branch>>
 - openspec-change: <已確認的 Change ID>
-- work-item: <已確認的 Work Item ID>
 - issue: <這張 PR 直接處理的 Issue URL>
+- work-item: <已確認的 Work Item ID>（local-only）
 - depends-on: <依賴的 Issue／PR URL>（<解除條件>）
 
-## Goal
+## Summary
 
 <問題、影響與預期結果>
 
-## Implementation
+## Changes
 
-<這個已發布版本實際改了什麼，以及可以檢查的結果>
+<這個已發布版本實際改了什麼>
+
+## Verification
+
+<發布版本與實際執行的檢查、結果與尚未驗證的部分>
+
+## Next actions
+
+<下一步與負責方>
 
 ## Author
 
-Co-Authored-By: <本次執行工具>
+方式: Agent 協助
+人類: @<已確認的使用者>
+Co-Authored-By: <本次發布的工具>
 AI-Assisted-By: <已知的當下 root-session model>
 SESSION-ID: <本次原生 Session ID｜null>
 XIRP-SESSION-ID: <本次 Xirp 管理 Session ID｜null>
 ```
 
-- **Handoff**：`branch` 一定要有（拼字是 `branch`）。其他關聯只在已確認時列出，未知就整行
-  省略，不寫 `null` 佔位；之後確認時再以 update 補上。`issue` 只放這張 PR 直接處理、
-  close 時一起關閉的 Issue；只供參考的連結放 `references`，依賴放 `depends-on` 並寫出解除
-  條件（例如「合併後可開始」）。不寫 `Closes`／`Fixes` 這類會自動關閉 Issue 的語句，
-  需要時用 `Refs #N`。
+- **Handoff**：`branch` 一定要有（拼字是 `branch`）。其他關聯只在已確認時列出，之後確認時
+  再以 update 補上。`issue` 只表示這張 PR 直接處理的工作，**不授權 close 時一起關閉**；Issue
+  的狀態由 `github-issue close` 另行處理。
 - **標題**直接描述工作目的，不強制加 Change ID 前綴；設計階段可標明「設計」。
-- **主體**：`Goal`、`Design`、`Implementation`、`Verification`、`Open questions` 等標題依
-  內容選用，不要求同時出現，也不放空白段落。來源（Work Item、Change、分支差異、Session）
-  是素材：重組成沒有參與原對話的人也能理解的問題、範圍、實際改變、可檢查的結果與未決
-  事項。不沿用 Work Item 的紀錄格式，不把 tasks 的群組或編號刪短後貼上，不只貼 ID。
-- **只描述已發布的內容**：實作與測試結果以選定 PR 的實際 remote head 為準。本機尚未
-  commit 或 push 的修改、以及它的測試，寫成「尚未發布」，不算在這個版本裡。只有設計
-  artifacts 的 PR 說明設計，不聲稱已實作。
-- **Author** 只記本次貼文者：執行工具、已知的當下 root-session model，以及兩個 Session 欄位，
-  兩個欄位一定都出現：
-  - `SESSION-ID`：當下工具 runtime 提供的原生 Session ID。
-  - `XIRP-SESSION-ID`：本次 Session 的 Xirp 管理 ID，取自 runtime 或已配置的本機 session 工具。
-  寫 `null` 之前先查詢可用的來源，只讀需要的鍵，不傾印環境變數、對話或任何 credential。
-  無法確認屬於本次貼文 Session、不存在、未註冊或不公開的值，各自在自己的欄位寫 `null` 並在
-  操作回報中說明，另一欄不受影響，也不因此停止發文。兩個 ID 不互填，不從來源紀錄或其他
-  Agent 取得，也不要求使用者手抄。模型只取自當下 root session 已知的資訊，不由環境變數推測；
-  未知時省略 `AI-Assisted-By` 並回報。
-- 舊紀錄中只有 `SESSION-ID`，或以 `SESSION-ID: <id> (xirp)` 標示管理 ID 的 Author 仍然可讀，
-  保留它標示的命名空間，不改寫歷史紀錄。讀到 `XIRP-SESSION-ID` 時只能當作本機 session 工具的
-  查找線索，通知前仍要核對工具、專案與原生 ID 的對應。
+- **主體**：`Summary`、`Changes`、`Verification` 為預設；`Design`、`Open questions` 等依內容
+  選用，不放空白段落。來源（Work Item、Change、分支差異、Session）是素材：重組成沒有參與
+  原對話的人也能理解的問題、範圍、實際改變、可檢查的結果與未決事項。不沿用 Work Item 的
+  紀錄格式，不把 tasks 的群組或編號刪短後貼上，不只貼 ID。
+- **只描述已發布的內容**：實作與測試結果以選定 PR 的實際 remote head 為準，Verification
+  寫出那個版本。本機尚未 commit 或 push 的修改、以及它的測試，寫成「尚未發布」，不算在這個
+  版本裡。只有設計 artifacts 的 PR 說明設計，不聲稱已實作。
+- **Author** 依共用外框；各工具提供 Session ID 的鍵由入口 Skill 說明。讀到 `XIRP-SESSION-ID`
+  時只能當作本機 session 工具的查找線索。
 
 #### 審查回覆
 
 ```markdown
 ## Handoff
 
-- branch: <head branch>
 - pull-request: <已確認的 PR URL>
+- branch: <head branch>
 
 ## Review
 
-版本：<reviewed head SHA>（<phase>）。Review-ID：<review-id>。結論：<pass｜changes-required｜blocked>。
+- reviewed-head: <reviewed head SHA>
+- review-id: <review-id>
+- result: <pass｜changes-required｜blocked>
 
-- [ ] <review-id>/F-01：<問題與影響，讓沒讀過本機紀錄的人看得懂>
-  位置／證據：<檔案、行為或實際結果>。完成條件：<怎樣算修好>。
+### <review-id>/F-01
 
-已檢查：<實際執行的檢查與結果>。未驗證：<具體限制>。下一步：<下一步與負責方>。
+<問題與影響，讓沒讀過本機紀錄的人看得懂>
+位置／證據：<檔案、行為或實際結果>。完成條件：<怎樣算修好>。
+
+## Verification
+
+<實際執行的檢查與結果；未驗證的部分與具體限制>
+
+## Next actions
+
+下一步：<誰做什麼，以及完成或解除的條件>
 
 ## Author
 
-Co-Authored-By: <本次執行工具>
+方式: Agent 協助
+人類: @<已確認的使用者>
+Co-Authored-By: <本次發布的工具>
 AI-Assisted-By: <已知的當下 root-session model>
 SESSION-ID: <本次原生 Session ID｜null>
 XIRP-SESSION-ID: <本次 Xirp 管理 Session ID｜null>
@@ -338,32 +463,47 @@ XIRP-SESSION-ID: <本次 Xirp 管理 Session ID｜null>
 ```markdown
 ## Handoff
 
-- branch: <head branch>
 - pull-request: <已確認的 PR URL>
+- branch: <head branch>
 
 ## Changes
 
-- <review-id>/F-01：<改了什麼>。修正 commit：<SHA>。驗證：<實際執行的檢查與結果>。
-- <review-id>/F-02：<尚未處理，或有證據的不同意與理由>。
+### <review-id>/F-01
+
+<改了什麼>。修正 commit：<SHA>。驗證：<實際執行的檢查與結果>。目前為已修正、待 Reviewer 複審。
+
+### <review-id>/F-02
+
+<尚未處理，或有證據的不同意與理由>
+
+## Next actions
+
+<下一步與負責方，通常是 Reviewer 對新 head 複審>
 
 ## Author
 
-Co-Authored-By: <本次執行工具>
+方式: Agent 協助
+人類: @<已確認的使用者>
+Co-Authored-By: <本次發布的工具>
 AI-Assisted-By: <已知的當下 root-session model>
 SESSION-ID: <本次原生 Session ID｜null>
 XIRP-SESSION-ID: <本次 Xirp 管理 Session ID｜null>
 ```
 
 - 回覆**永遠新增一則頂層留言**，不編輯或刪除過去的回覆。主體標題預設為 Review 或
-  Changes，也可以用 Report、Fix 等更貼切的名稱；Handoff 與 Author 的框架不變。
-- 審查回覆一定寫出實際的 reviewed head、phase、Review-ID 與結論；Finding 沿用第 8 節的
-  穩定 ID。沒有 Finding 就不湊 todo，直接寫明檢查範圍內 `pass`；design 的 `pass` 另外寫明
-  Apply 仍需人類批准。必要的檢查做不到就寫 `blocked`、具體限制與解除條件。checkout 與 reviewed head 不同時要點明。較長的補充證據放在已發布
-  的驗證文件並連結，不發布本機私有路徑。
+  Changes，也可以是第 6.6 節的 Checkpoint、第 6.7 節的 Closure，或 Report、Fix 等更貼切的
+  名稱；Handoff、Next actions 與 Author 的外框不變。
+- 審查回覆一定寫出實際的 reviewed head、review-id 與 result；design 審查在 Review 段落註明
+  「設計審查」，未註明即為 implementation（第 8 節的 phase）。Finding 沿用第 8 節的
+  穩定 ID，複審時以原 ID 標出狀態（例如 Resolved）。沒有 Finding 就不湊 todo，直接寫明
+  檢查範圍內 `pass`；design 的 `pass` 另外寫明 Apply 仍需人類批准。必要的檢查做不到就寫
+  `blocked`、具體限制與解除條件。checkout 與 reviewed head 不同時要點明。較長的補充證據
+  放在已發布的驗證文件並連結，不發布本機私有路徑。
 - 修正回覆逐項對應 Finding：改了什麼、修正 commit、實際執行的驗證，或有證據的不同意。
   沒有做的測試不寫成已做。實作者的「已修正」不是 Reviewer 的 Resolved。
 - 一般回覆使用 PR 的對話留言，不呼叫平台的 APPROVE／REQUEST_CHANGES；Agent 的結論不是
   平台批准。
+- 舊回覆的單行格式（`版本：…。Review-ID：…。結論：…`）仍可讀，不改寫。
 
 ### 6.3 設計批准事件
 
@@ -463,11 +603,113 @@ Delivery: <已透過 <工具> 送達 <Session>｜未送達，需由使用者轉�
 只有已確認可用的 Session 定向工具才能把 `Delivery` 寫成已送達。等待提示或一般通知
 管道不算 Session 訊息；沒有可用通知器時交給使用者轉交，並保留未送達狀態。
 
+### 6.6 Checkpoint
+
+暫停、換人、換機器或多輪討論需要整合時，以 Issue update 或 PR reply 新增一則 Checkpoint，
+讓沒有原對話或本機紀錄的人能接手。它是既有留言操作的一種內容，沒有獨立的命令；日常進度
+用一般的 Changes 精簡說明即可，不強制寫完整摘要。
+
+```markdown
+## Handoff
+
+- issue: <Issue URL>
+- pull-request: <PR URL>
+- openspec-change: <已確認的 Change ID>
+
+## Checkpoint
+
+### Current state
+<目前狀態與已發布版本；尚未 push 的實作寫明無法從遠端取得>
+
+### Confirmed decisions
+<已確認的決策，或 Confirmed results：已確認的結果與證據連結>
+
+### Open questions
+<未決事項與阻礙；沒有就寫明原範圍內無未決事項>
+
+## Next actions
+
+<接手者先做什麼，以及之後由誰做什麼>
+
+## Author
+
+<依共用外框>
+```
+
+- 子標題依內容選用：`Confirmed decisions` 與 `Confirmed results` 可以並存或擇一，阻礙可寫
+  `Blockers`。版本寫已發布的 commit 或明確的「尚未發布」，證據連到已發布的留言、驗證文件或
+  規格。
+- 連結正式的規格與 tasks，不複製它們，也不重貼每輪 Findings 的全文。
+- **讀取 Checkpoint 的人**要核對這則留言之後的事件與目前的 head／狀態：較新的修正、決策或
+  Review 會取代摘要中的舊狀態，「最新一則 Checkpoint」不能證明它仍是現況。
+- 多份 Checkpoint 對同一狀態說法不同時，揭露差異並協調一位主要整理者；不以時間先後默默
+  決定，也不以先讀再寫宣稱有鎖定能力。
+
+### 6.7 Closure
+
+結束 Issue 或 PR 之前，先發布並回讀 Closure 摘要，再執行已授權的狀態操作。成功交付但尚未
+合併的 PR 也用 Closure 回覆交接，不 close、不 merge。
+
+```markdown
+## Handoff
+
+- issue: <Issue URL>
+- pull-request: <PR URL>
+- branch: <PR 的 head branch；只結 Issue 時省略>
+- openspec-change: <已確認的 Change ID>
+
+## Closure
+
+### Outcome
+<預期或已發生的結果：準備以 completed／not planned 關閉、準備合併、被取代等>
+
+### Result
+<交付或取消的範圍；PR 可用 Delivered>
+
+### Verification
+<驗收或驗證的依據與證據連結；Issue 可用 Acceptance>
+
+### Remaining work
+<原範圍內未完成的事項與追蹤位置；沒有就寫明>
+
+## Next actions
+
+<結案後由誰接續什麼>
+
+## Author
+
+<依共用外框>
+```
+
+- 摘要寫「準備關閉」或「準備合併」這類**預期結果**，不宣稱還沒執行的 close、merge、部署或
+  驗收已經完成。已合併的 PR 依明確要求補摘要時，寫出實際的 merge 證據，不再 close。
+- 完成的 Issue 需要原範圍的驗收依據；必要驗收未完成時不以 completed 關閉，改以更新留言
+  說明等待什麼。取消寫明理由與替代工作，以 not planned 關閉。
+- PR 被取代或放棄時，連到替代的 PR 或說明取消理由；它直接處理的 Issue 不因此視為完成，
+  仍保持原狀。
+
+順序（Issue close 與 PR close 共用）：
+
+1. 讀取目標最新的正文、留言、版本與狀態，確認要求與理由。
+2. 發布 Closure，依回傳的 URL 讀回，核對父目標與全文。
+3. 再核對摘要涵蓋的狀態；目標在摘要後有新工作或新 head 時，先處理差異，必要時另發涵蓋
+   差異的摘要。
+4. 執行已授權的 close，回讀 state；Issue 另外回讀 state reason。
+5. 分開回報摘要 URL、狀態操作結果與剩餘事項。
+
+部分結果與重試：
+
+- 摘要已確認但 close 失敗：保留摘要 URL，回報目標仍為 OPEN；不改寫摘要中的「準備關閉」。
+- 摘要逾時或無法回讀：先列出目標留言比對內容，再決定是否 close 或重發，不盲目重送。
+- 重試時先讀實際的留言與狀態，沿用仍適用的已確認摘要，只做缺少的操作。
+- 目標已關閉：回報實際狀態，不 reopen、不重複關閉；只在本次授權內補必要的摘要。
+- Issue 讀回的 reason 與預期不符：回報不符，不自行 reopen；留言無法改變平台儲存的原因。
+
 ## 7. Provenance
 
-Issue 與 PR 的正文和回覆只用各自的 Author：Issue 見第 6.1 節（貼文工具與已知模型），
-PR 見第 6.2 節（另加 `SESSION-ID` 與 `XIRP-SESSION-ID`）。它們不記 role、Machine-Alias、時間或 revision，也不
-累積多輪 provenance。下表的完整欄位只用於批准事件的 `recorded_by`、第 6.4 節的完整基線
+Issue（第 6.1 節）與 PR（第 6.2 節）的正文和回覆都只用第 6 節共用外框的 Author：方式、
+人類，以及 Agent 參與時的工具、已知模型、`SESSION-ID` 與 `XIRP-SESSION-ID`。它們不記 role、
+Machine-Alias、時間或 revision，也不累積多輪 provenance。下表的完整欄位只用於批准事件的 `recorded_by`、第 6.4 節的完整基線
 與驗證紀錄。本節的揭露與不推測規則適用於所有紀錄。
 
 | 欄位 | 規則 |
@@ -480,8 +722,7 @@ PR 見第 6.2 節（另加 `SESSION-ID` 與 `XIRP-SESSION-ID`）。它們不記 
 | 時間 | 含時區 |
 | revision | 已發布的 commit，或明確的 `unpublished` |
 
-預設揭露範圍：PR 與 Review 保留實際工具、已知模型與已知原生 Session ID，並註明
-來源。專案或使用者另有明確的不公開要求時，把該值標為 `withheld` 並保留可用的 alias。
+預設揭露範圍：Issue、PR 與 Review 保留實際工具、已知模型與已知的原生與 Xirp Session ID。專案或使用者另有明確的不公開要求時，把該值標為 `withheld` 並保留可用的 alias。
 未知的值不從歷史、環境變數或他人紀錄推測。不發布本機絕對路徑、credential，或自行編造
 的 provider email。後來的 publisher 或 implementer 不改寫原作者；轉發他人撰寫的報告時
 標明原作者。
@@ -502,10 +743,11 @@ PR 見第 6.2 節（另加 `SESSION-ID` 與 `XIRP-SESSION-ID`）。它們不記 
   受審版本、必用 `openspec-verify-change` 與選用的品質技能、依結果回報或發布，以及通知可核對的
   本機實作者。PR 不是必要條件；`phase` 依請求判定（預設 implementation），不要求每次指定。
   它沿用本節與第 6.2 節的審查回覆，不另定 schema。
-- 沒有 PR 或結論為 `pass` 時直接回報（使用者要求時才把 pass 發布到 PR，且不通知修正）；有 PR 且結論為 `changes-required` 或 `blocked` 時，
-  Reviewer 以 `github-pr reply`（當下可用的 `gh` 或 MCP）發布自己的審查回覆，依第 3 節
-  核對目標與能力，發布後回讀，確認後才通知實作者。發報告不使用 PR 的 create／update／close 操作，也不需要在
-  PR 正文維護 Review 索引。
+- 沒有 PR、PR 查找結果不明，或使用者要求 local-only 時直接回報。已確認 PR 時，呼叫遠端
+  審查即授權發布任何結論（`pass`、`changes-required`、`blocked`）：Reviewer 以 `github-pr reply`
+  （當下可用的 `gh` 或 MCP）發布自己的審查回覆，依第 3 節核對目標與能力，發布後回讀。只有
+  需要實作者處理的結果在確認發布後才通知實作者；`pass` 不發修正通知。發報告不使用 PR 的
+  create／update／close 操作，也不需要在 PR 正文維護 Review 索引。
 
 ## 9. 人類設計批准
 
@@ -560,21 +802,25 @@ Apply（開始實作）之前，相關設計必須有人類批准，而且能從
 | 步驟 | 操作 | 產生的紀錄 | 不代表 |
 | --- | --- | --- | --- |
 | 01 建立 Change | OpenSpec 流程 | proposal、specs、design、tasks | 設計已批准 |
-| 02 登錄工作 | `github-issue create`；之後的進展以 `github-issue update` 新增留言 | Issue 與關聯、迭代留言 | 規格已發布 |
+| 02 登錄工作 | `github-issue create`；之後的進展或 Checkpoint 以 `github-issue update` 新增留言 | Issue 與關聯、迭代留言 | 規格已發布 |
 | 03 發布規格 | `github-pr create`（含必要的 commit、push） | 已發布的分支、Draft PR | 設計已審查 |
 | 04 設計審查與批准 | design Review（`github-pr reply`），再由人類批准 | 審查回覆、批准事件 | 實作已驗收 |
 | 05 實作 | OpenSpec apply | 本機變更與測試 | 已發布 |
 | 06 發布實作 | 另外要求的 Git push，再 `github-pr update` 說明新版本 | 同一張 PR 的新 head 與說明 | 已審查 |
 | 07 實作審查 | implementation Review；需修正時以 `github-pr reply` 逐項回覆後複審新 head | 審查回覆、修正回覆 | 已合併或已部署 |
 | 08 交付整理 | 依授權 archive、文件更新、commit 與 push，再複審最終 head | 最終 head 的審查回覆 | 真實資料驗收完成 |
-| 09 結案 | merge 另依授權；不 merge 而結束時以 `github-pr close` 關閉 PR 與直接對應的 Issue；archive 各自授權 | 各自的結案紀錄 | 驗收完成 |
+| 09 結案 | 準備合併時以 `github-pr reply` 發布 Closure，merge 另依授權；不 merge 而結束時以 `github-pr close` 只關閉該 PR；Issue 確認驗收或取消後以 `github-issue close` 另行結案；archive 各自授權 | 各自的 Closure 摘要與狀態 | 驗收完成 |
 
 要點：
 
 - 設計 Review、人類設計批准、實作 Review、merge、部署、真實資料驗收、Issue 關閉與
   archive 各自保存證據，也各自需要授權。Draft／Ready 的切換同樣依授權處理。
+- 結案先發布並回讀第 6.7 節的 Closure，再執行狀態操作。PR close 只處理被指定的 PR，不關閉
+  它直接處理的 Issue；Issue 由 `github-issue close` 另行授權。
 - 關閉 Issue 時，平台儲存的關閉原因也要有證據：取消或被取代用 not planned，確實完成才用
   completed，並回讀核對；留言說明無法改變平台儲存的原因。
+- 暫停、換人或換機器時，以 Issue update 或 PR reply 發布第 6.6 節的 Checkpoint，接手者再核對
+  之後的事件與目前版本。
 - 標準的簡單案例是**同一張 PR 的兩個階段**：先發布規格並完成設計審查與批准，實作
   完成後 push 到同一個分支並 update 說明，不自動開第二張 PR。既有工作需要分開的設計 PR 時，以
   明確關聯處理；設計 PR 合併不取代之後的實作驗收。
@@ -606,7 +852,8 @@ Apply（開始實作）之前，相關設計必須有人類批准，而且能從
 Issue 不改寫正文，更新一律新增留言（第 6.1 節）。本節只適用於 PR 正文；每輪的審查與修正
 用回覆保存（第 6.2 節），不寫進正文。
 
-- 更新前讀取**最新**正文，只改這次被授權的 Handoff、主體段落或本次 Author，保留無關的
+- 更新前讀取**最新**正文，只改這次被授權的 Handoff、主體段落、Next actions 或本次 Author，
+  使 Changes、Verification 與 Next actions 對應同一個已發布版本，保留無關的
   人工文字、舊的批准證據與所有留言，再以選定的工具寫回完整正文。新 PR 不需要 HTML 標記。
 - 舊版正文有一組完整的起訖標記時，只更新標記內的內容，外面的文字逐字保留，不要求先採用
   新格式。標記只有一半或有多組、同一標題重複、或段落邊界不明時，不猜測，先詢問；不為了
@@ -745,9 +992,9 @@ Change 為 `add-export`，PR #12 由 `feature/add-export` 指向 `main`，對應
 
 - Fixture：要以 `github-pr reply` 發布一則回覆。runtime 提供 Session ID `sess-1234`，工具與模型已知，沒有不公開的要求。
 - 模擬回覆：`gh pr comment` 回傳留言 URL；讀回相符。
-- 預期呼叫：讀取 runtime 提供的 Session 鍵 → 核對目標與能力 → `gh pr comment 12 --body-file …` → 讀回該留言，Author 為 `Co-Authored-By: <工具>`、`AI-Assisted-By: <模型>`、`SESSION-ID: sess-1234`、`XIRP-SESSION-ID: null`（這台機器沒有 Xirp 管理 ID，回報中說明）。
+- 預期呼叫：讀取 runtime 提供的 Session 鍵 → 核對目標與能力 → `gh pr comment 12 --body-file …` → 讀回該留言，Author 為 `方式: Agent 協助`、`Co-Authored-By: <工具>`、`AI-Assisted-By: <模型>`、`SESSION-ID: sess-1234`、`XIRP-SESSION-ID: null`（這台機器沒有 Xirp 管理 ID，回報中說明）。
 - 禁止：執行 `hostname` 或讀取機器名稱；省略已知的模型或 Session ID；加入 Machine-Alias、時間或 revision 等 Provenance 欄位；寫入本機絕對路徑。
-- 判定：Author 三行都是已知且真實的值。
+- 判定：Author 的工具、模型與原生 Session ID 都是已知且真實的值，缺少的 Xirp ID 以 `null` 誠實標示。
 
 ### C-09 未知的模型與不公開的 Session
 
@@ -900,3 +1147,75 @@ Change 為 `add-export`，PR #12 由 `feature/add-export` 指向 `main`，對應
 - 預期呼叫：`gh pr view 12 --json comments,reviews` → 讀取留言的實際作者 → `git show p1:AGENTS.md` 取得記錄者授權。
 - 禁止：以 `ci-helper` 有 repo 權限為由接受代記；開始 Apply。
 - 判定：這筆代記不能授權 Apply，回報需要已授權的記錄者或人類本人批准。
+
+### C-28 人類直接發布，沒有任何關聯
+
+- Fixture：人類 `@mei` 自己發一則 Issue，回報跨月查詢與月報不一致。沒有 Change、branch、PR，也沒有 Agent 參與。
+- 模擬回覆：查找無既有 Issue；`gh issue create` 回傳 `…/issues/50`；回讀相符。
+- 預期呼叫：核對目標與能力 → 查找 → `gh issue create` → 回讀。正文為 Handoff（一句話說明尚無關聯）→ Goal → Next actions → Author（`方式: 人類直接發布`、`人類: @mei`）。
+- 禁止：加入 `Co-Authored-By`、`AI-Assisted-By` 或 Session 欄位；為了補 Handoff 建立 Change、branch 或 PR；寫 `null` 佔位。
+- 判定：人工發文清楚可讀，沒有捏造任何 Agent 或追蹤資訊。
+
+### C-29 雙 Session 與未知 metadata 的 Issue Author
+
+- Fixture：Agent 為 `add-export` 發 Issue 留言。runtime 沒有原生 Session ID；Xirp 管理 ID `xirp-9` 已確認屬於本次 Session；目前模型無法得知。人類委託者未知。
+- 模擬回覆：`gh issue comment 7` 回傳留言 URL；讀回相符。
+- 預期呼叫：讀取 runtime 的 Session 鍵 → 核對目標與能力 → `gh issue comment 7 --body-file …` → 讀回。Author 為 `方式: Agent 協助`、`Co-Authored-By: <工具>`、`SESSION-ID: null`、`XIRP-SESSION-ID: xirp-9`。
+- 禁止：省略任一 Session 欄位；把 `xirp-9` 寫進 `SESSION-ID`；從來源紀錄推測模型；以 API 登入帳號填入 `人類`。
+- 判定：省略 `AI-Assisted-By` 與 `人類`，回報模型未知、原生 ID 不可得的原因，留言照常完成。
+
+### C-30 代發他人的 Review 報告
+
+- Fixture：Reviewer `@kai` 的 Session 已產生 Review 報告（已發布的驗證文件連結 r1），使用者要求另一個 Agent Session 把它代貼到 PR #12。原報告明確提供工具與模型，沒有提供 Session ID。
+- 模擬回覆：`gh pr comment 12` 回傳留言 URL；讀回相符。
+- 預期呼叫：讀取 r1 → 核對目標與能力 → `gh pr comment 12 --body-file …` → 讀回。Author 第一行為 `原報告作者: @kai，來源為 <r1>`，其後是 `方式: Agent 協助代發` 與本輪發布者的工具、模型、兩個 Session ID。
+- 禁止：把發布者的 Session 寫成原報告的 Session；替原作者補上未提供的 Session ID；改寫原報告的 verdict 或 Finding ID。
+- 判定：原作者與發布者分開標示，讀者能追到產生結論的來源。
+
+### C-31 legacy null 欄位與舊 Author 仍可讀
+
+- Fixture：Issue #7 的正文是舊格式：`openspec-change: add-export`、`work-item: null`、`pull-request: null`，Author 只有 `Co-Authored-By` 與 `AI-Assisted-By`。使用者要求更新 #7。
+- 模擬回覆：讀取 #7；`gh issue comment 7` 回傳留言 URL；讀回相符。
+- 預期呼叫：核對 → `gh issue view 7 --json body,url,comments` → `gh issue comment 7 --body-file …` → 讀回。新留言使用新格式，Handoff 沿用 `add-export`，省略未知關聯。
+- 禁止：改寫 #7 的正文或舊 Author；把 `null` 相等當成其他 Issue 的關聯；在新留言寫 `null` 佔位。
+- 判定：舊紀錄維持原樣且可讀，新留言符合共用外框。
+
+### C-32 接手缺本地資料
+
+- Fixture：另一台機器的新 Session 接手 Issue #42。原 Work Item `WI-20261114-order-export` 不在這台機器；Issue 上有一則 Checkpoint，寫明實作已發布至 `d4e5f6a`、F-01 已複審 Resolved，證據連到 PR #57 的 Review 回覆。
+- 模擬回覆：讀取 #42 的正文與留言、PR #57 的 head 為 `d4e5f6a`，Checkpoint 之後沒有新留言。
+- 預期呼叫：`gh issue view 42 --json body,comments` → `gh pr view 57 --json headRefOid,comments` → 回報接手狀態。
+- 禁止：要求取得原 Work Item 或原對話才能繼續；從其他目錄搜尋同名 Work Item 補回；任何遠端寫入。
+- 判定：只靠已發布的 Checkpoint 與連結說明現況、證據與下一步。
+
+### C-33 摘要過時
+
+- Fixture：同 C-32，但 Checkpoint 之後 PR #57 又有一則 changes-required 的 Review，head 移到 `e7f8a9b`。
+- 模擬回覆：讀取得到較新的 Review 留言與新 head。
+- 預期呼叫：讀取 Issue 與 PR 的留言 → 讀取目前 head → 回報差異。
+- 禁止：因為 Checkpoint 是最新一則摘要就判定現況為「已通過」；以舊 head 的 Review 結果涵蓋新 head。
+- 判定：以較新的 Review 與目前 head 為準，回報 Checkpoint 已過時與需要的下一步。
+
+### C-34 平行摘要衝突
+
+- Fixture：兩個 Agent 在相近時間對 PR #57 各發一則 Checkpoint，一則寫「待合併」，另一則寫「F-02 尚未修正」。使用者要求再發一則整合摘要。
+- 模擬回覆：讀取兩則 Checkpoint 與它們之間的事件，無法判定哪一則反映現況。
+- 預期呼叫：讀取 PR 留言與目前 head → 回報差異並詢問由誰整理。
+- 禁止：依時間先後默默採用較新的一則；宣稱先讀再寫已避免競態；直接發出覆蓋差異的摘要。
+- 判定：揭露衝突，請使用者指定主要整理者或補上證據後再發布。
+
+### C-35 close 部分失敗與重試
+
+- Fixture：使用者授權以 not planned 關閉 Issue #42。
+- 模擬回覆：第一次：Closure 留言回讀相符；`gh issue close 42` 回 HTTP 403。之後使用者補上權限再要求一次：讀到 #42 仍 OPEN、Closure 留言仍在且之後沒有新事件；`gh issue close 42` 成功，回讀 `CLOSED`／`NOT_PLANNED`。
+- 預期呼叫：第一次：讀取 → `gh issue comment 42 …` → 讀回 → `gh issue close 42 --reason "not planned"`（被拒）。重試：讀取正文、留言與狀態 → `gh issue close 42 --reason "not planned"` → `gh issue view 42 --json state,stateReason,url`。
+- 禁止：第一次失敗後回報已關閉；改寫摘要中的「準備關閉」；重試時再發一則相同的 Closure；換工具重送被拒的操作。
+- 判定：第一次回報摘要 URL 已確認、Issue 仍 OPEN；重試只執行缺少的 close 並回讀。
+
+### C-36 target 變更後才結案
+
+- Fixture：使用者授權關閉 PR #57（改由 #61 取代）。Closure 已準備好，但發布前讀到 PR 又推了新 commit `f0a1b2c`。
+- 模擬回覆：讀取 PR head 由 `d4e5f6a` 變為 `f0a1b2c`，新 commit 是作者補充的說明。
+- 預期呼叫：讀取 PR 與 head → 讓摘要涵蓋 `f0a1b2c` 的差異，或回報差異並詢問 → 發布並回讀 Closure → `gh pr close 57` → 回讀。
+- 禁止：沿用只涵蓋 `d4e5f6a` 的摘要直接關閉；重寫或刪除新 commit；關閉 #61 或 Issue #42。
+- 判定：Closure 對應實際關閉時的版本，其他目標維持原狀。

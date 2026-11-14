@@ -88,7 +88,7 @@ Every finding SHALL identify a concrete impact, requirement or location, evidenc
 - **AND** the reviewer records the fixing revision and validation evidence when resolving it
 
 ### Requirement: Reports use the shared handoff contract
-Review reports SHALL follow the shared schema, native-tool operation checks, optional account restrictions, provenance, and ownership rules. An available configured gh or GitHub MCP SHALL perform PR operations without a custom identity script or blob. Each round SHALL record phase, revision, scope, verdict, checks, limits, findings, and verified publication results. The reviewer MUST NOT overwrite others' records or invoke PR create or publish.
+Review reports SHALL follow the shared schema, native-tool operation checks, optional account restrictions, provenance, and ownership rules. An available configured gh or GitHub MCP SHALL perform PR operations without a custom identity script or blob. Each round SHALL record phase, revision, scope, verdict, checks, limits, findings, Next actions, shared Author and verified publication results. The reviewer MUST NOT overwrite others' records or invoke PR create or publish.
 
 #### Scenario: Publishing feedback
 - **WHEN** review feedback is ready and remote publication is authorized
@@ -245,7 +245,7 @@ Each round SHALL report scope, actual reviewed version, verdict, concrete findin
 - **AND** unavailable checks and pending external acceptance remain explicit
 
 ### Requirement: Failed PR reviews are appended through github-pr reply
-For an identified PR with changes-required or blocked, invoking this workflow SHALL authorize a new Review comment through github-pr reply, subject to explicit user restrictions. The workflow SHALL confirm the stored report before remote handoff. It MUST preserve PR content and history and reconcile uncertain writes before retrying. Pass SHALL be returned directly unless publication was separately requested.
+For an identified PR, remote review invocation SHALL authorize a Review reply for pass, changes-required or blocked unless local-only or another explicit restriction excludes publication. The workflow SHALL read back reports and preserve PR history. Verdict, publication and notification SHALL remain separate. Pass SHALL NOT trigger repair notification.
 
 #### Scenario: PR review does not pass
 - **WHEN** a confirmed PR receives changes-required or blocked and publication is permitted
@@ -253,9 +253,9 @@ For an identified PR with changes-required or blocked, invoking this workflow SH
 - **AND** the workflow reads back the specific report and does not modify the PR body or earlier comments
 
 #### Scenario: PR review passes or publication was excluded
-- **WHEN** review passes without a publication request, or the user explicitly requests local-only review
-- **THEN** the workflow returns the result directly and respects the requested publication boundary
-- **AND** it does not post or notify contrary to that restriction
+- **WHEN** review passes during authorized remote review, or the user explicitly requests local-only review
+- **THEN** remote pass is posted and read back, while a local-only result is returned directly
+- **AND** neither path exceeds the publication restriction or sends a repair notification for pass
 
 #### Scenario: Report publication fails or is uncertain
 - **WHEN** reply is denied, unavailable, times out, or cannot be confirmed by readback
