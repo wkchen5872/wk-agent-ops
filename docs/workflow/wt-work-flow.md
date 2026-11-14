@@ -3,7 +3,14 @@ type: Reference
 title: wt-work Worktree and Branch Resolution Flow
 description: wt-work 如何解析既有 Worktree、銜接規劃 branch 並啟動可切換 Provider 的 RD Session。
 tags: [workflow, git, worktree, branches]
-timestamp: 2026-07-31T00:00:00+08:00
+generated: { by: codex/GPT-6, at: 2026-11-14T12:41:58+08:00 }
+sources:
+  - id: resolution-runtime
+    resource: /scripts/workflow/runtime.sh
+    title: Worktree resolution runtime
+  - id: work-launcher
+    resource: /scripts/workflow/wt-work.sh
+    title: wt-work launcher
 ---
 
 # wt-work Worktree and Branch Resolution Flow
@@ -24,48 +31,29 @@ timestamp: 2026-07-31T00:00:00+08:00
 
 ## Target Worktree Resolution
 
-```mermaid
-flowchart TD
-    A([wt-work &lt;change-id&gt;]) --> B{有 --path?}
-    B -- yes --> C[驗證為同 repository 的 registered Worktree]
-    B -- no --> D[搜尋 Git Worktree registry]
-    D --> E{可驗證候選數量?}
-    E -- one --> K[Attach 唯一候選<br/>保留 cleanup owner]
-    E -- many --> H[停止並列出候選<br/>要求 --path]
-    E -- zero --> F{feature branch / remote<br/>足以安全建立?}
-    C --> G[驗證 resolved HEAD<br/>包含 planning commit]
-    K --> G
-    F -- no --> I[停止並修正 hand-off]
-    F -- yes --> J[建立 Project-managed Worktree]
-    J --> G
-    G --> L[啟動 Provider adapter]
-```
+[SVG 原稿](../diagrams/wt-work-resolution.svg)
 
-`--path` 優先於自動搜尋，且必須指向同一 repository 已註冊的 Worktree。未提供時，
-`git worktree list --porcelain` 是唯一搜尋來源：先找固定 project path 或 exact
-`feature/<change-id>`，再嘗試唯一且同時包含 active change 與 `planning_commit`
-的 detached 候選。候選不唯一時停止並要求 `--path`；不保存額外 mapping。
+![wt-work 解析與 branch handoff](../diagrams/wt-work-resolution.png)
 
-Attach 或建立完成後，還必須驗證 resolved HEAD 包含 `planning_commit`，才能進入
-apply。零個既有候選時，預設建立 Project-managed Worktree。
+`git worktree list --porcelain` 是註冊資訊的唯一來源。解析依序執行，每層命中就驗證並返回，
+不是把所有路徑合併後計數：[^resolution-runtime]
+
+1. 有 `--path`：只驗證該路徑，無效就停止，不回退自動搜尋。
+2. 未指定時：先找同 repo 已註冊的固定 `.worktrees/<change-id>`。
+3. 固定路徑未命中：找 primary checkout 以外、持有 `feature/<change-id>` 的 named Worktree。
+4. named 候選為零：找 primary 以外、含 active change 且 HEAD 可達目前 feature branch tip 的 detached Worktree。
+5. named／detached 當層多於一個候選就停止並要求 `--path`；全部為零才進入下方建立流程。
+
+共用驗證檢查 active change 目錄、本地 feature branch，以及 **目前 branch tip** 是否為
+resolved HEAD 的祖先。這不是固定 `planning_commit` 參數的檢查；接手者仍須依
+[交接規則](provider-worktrees.md#starting-ref-必須包含-planning-commit) 另外核對已批准的精確 SHA。
+圖中的人工交接要求與腳本檢查分開標示。[^resolution-runtime]
 
 ## Branch Hand-off
 
-```mermaid
-flowchart TD
-    A([No eligible registered Worktree]) --> D{Local branch<br/>feature/change-id<br/>exists?}
-    D -- yes --> E{Primary checkout holds it?}
-    E -- yes, clean --> F[Switch primary to base]
-    E -- yes, dirty --> X[Stop without changing files]
-    E -- no --> G[Create .worktrees/change-id]
-    F --> G
-    D -- no --> H{Origin query result?}
-    H -- branch exists --> I[Fetch exact remote branch]
-    I --> G
-    H -- confirmed absent --> X
-    H -- infrastructure error --> X
-    G --> J[Copy allowlisted local files<br/>then start RD adapter]
-```
+上圖的建立分支只在解析回傳「無候選」時執行。local branch 優先；沒有時才查詢 origin。
+兩條路都必須含該 Change 的已提交 artifacts。origin 確定沒有 branch 與連線／認證失敗
+分別回報；兩者都停止。建立後重新做共用驗證，複製允許的 local files，再啟動 adapter。[^work-launcher]
 
 ## Path Details
 
@@ -148,3 +136,7 @@ Provider 矩陣見
 - [OpenSpec、Git 與 Session 邊界](/docs/workflow/concepts.md)
 - [Provider-native Worktree Reference](/docs/workflow/provider-worktrees.md)
 - [Workflow 腳本手冊](/scripts/workflow/README.md)
+- [正式圖稿索引](../diagrams/README.md)
+
+[^resolution-runtime]: [runtime.sh](../../scripts/workflow/runtime.sh)，`workflow_resolve_worktree`、`workflow_check_candidate`。
+[^work-launcher]: [wt-work.sh](../../scripts/workflow/wt-work.sh)，resolve status、local／origin branch 與 `copy_local_file` 路徑。

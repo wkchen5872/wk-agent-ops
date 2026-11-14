@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1450" height="1310" viewBox="0 0 1450 1310" role="img" aria-labelledby="title desc">
+  <title id="title">wt-work：分層解析、建立與啟動</title>
+  <desc id="desc">從 Git Worktree registry 依 explicit path、固定 project path、named branch、detached 順序解析。每層命中即驗證返回；無候選才從本地或 origin 的既有 feature branch 建立。共用檢查 active change、本地分支與當前 branch tip 的祖先關係；固定 planning SHA 是額外人工交接要求。</desc>
+  <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#647a94"/></marker></defs>
+  <style>text{font-family:"PingFang TC","Noto Sans CJK TC",sans-serif;fill:#19344c}.title{font-size:37px;font-weight:700}.h{font-size:26px;font-weight:650}.p{font-size:22px;fill:#42556d}.note{font-size:20px;fill:#526b83}.line{fill:none;stroke:#647a94;stroke-width:2.5;stroke-linejoin:round;marker-end:url(#arrow)}.join{fill:none;stroke:#647a94;stroke-width:2.5;stroke-linejoin:round}</style>
+  <rect width="1450" height="1310" fill="#f5f7fb"/>
+  <text x="70" y="72" class="title">wt-work：分層解析、建立與啟動</text>
+  <text x="70" y="114" class="p">唯一註冊來源：git worktree list --porcelain；每層命中即返回，不跨層合併計數</text>
+  <rect x="70" y="180" width="600" height="130" rx="18" fill="#fff" stroke="#b4c6d8" stroke-width="2"/>
+  <text x="96" y="220" class="h">01　明確 --path</text>
+  <text x="96" y="258" class="p">須為同 repo 已註冊的 Worktree；無效就停止</text>
+  <text x="96" y="288" class="note">沒有指定才進入下一層。</text>
+  <path d="M370 310 V375" class="line"/>
+  <text x="390" y="349" class="note">未指定</text>
+  <rect x="70" y="385" width="600" height="130" rx="18" fill="#fff" stroke="#b4c6d8" stroke-width="2"/>
+  <text x="96" y="425" class="h">02　固定 project path</text>
+  <text x="96" y="463" class="p">.worktrees/&lt;change-id&gt; 存在且已註冊</text>
+  <text x="96" y="493" class="note">未命中才繼續；命中但共用驗證失敗就停止。</text>
+  <path d="M370 515 V580" class="line"/>
+  <text x="390" y="554" class="note">未命中</text>
+  <rect x="70" y="590" width="600" height="130" rx="18" fill="#fff" stroke="#b4c6d8" stroke-width="2"/>
+  <text x="96" y="630" class="h">03　named-branch 候選</text>
+  <text x="96" y="668" class="p">primary 以外，持有 feature/&lt;change-id&gt;</text>
+  <text x="96" y="698" class="note">1 個就驗證；多個停止，要求 --path。</text>
+  <path d="M370 720 V785" class="line"/>
+  <text x="390" y="759" class="note">0 個</text>
+  <rect x="70" y="795" width="600" height="130" rx="18" fill="#fff" stroke="#b4c6d8" stroke-width="2"/>
+  <text x="96" y="835" class="h">04　detached 候選</text>
+  <text x="96" y="873" class="p">primary 以外；含 active change 且可達 branch tip</text>
+  <text x="96" y="903" class="note">1 個就驗證；多個停止，要求 --path。</text>
+  <path d="M670 245 H710 M670 450 H710 M670 655 H710 M670 860 H710 M710 245 V860" class="join"/>
+  <path d="M710 280 H760" class="line"/>
+  <text x="714" y="175" class="note">命中</text>
+  <rect x="760" y="180" width="580" height="230" rx="18" fill="#fff5dc" stroke="#d2a14a" stroke-width="2"/>
+  <text x="786" y="220" class="h">共用候選驗證</text>
+  <text x="786" y="258" class="p">active change 目錄存在</text>
+  <text x="786" y="296" class="p">本地 feature branch 存在</text>
+  <text x="786" y="334" class="p">目前 branch tip 是 resolved HEAD 的祖先</text>
+  <text x="786" y="377" class="note">任一失敗就停止；不回退到較低優先層。</text>
+  <path d="M1050 410 V470" class="line"/>
+  <text x="1070" y="449" class="note">通過</text>
+  <rect x="760" y="480" width="580" height="155" rx="18" fill="#e7f5ed" stroke="#85bca0" stroke-width="2"/>
+  <text x="786" y="520" class="h">在 resolved path 啟動 Provider</text>
+  <text x="786" y="558" class="p">新建時先複製允許的 local files</text>
+  <text x="786" y="590" class="p">明確 --session 才 resume；否則新 Session</text>
+  <text x="786" y="620" class="note">attach 保留 cleanup owner；同時只准一個 writer。</text>
+  <path d="M370 925 V1060 H1050 V1025" class="line"/>
+  <text x="400" y="1042" class="note">0 個：建立 Project-managed Worktree</text>
+  <rect x="760" y="750" width="580" height="265" rx="18" fill="#eaf3ff" stroke="#73a2d5" stroke-width="2"/>
+  <text x="786" y="790" class="h">從既有 feature branch 建立</text>
+  <text x="786" y="828" class="p">local 優先；否則確認 origin branch 並 fetch</text>
+  <text x="786" y="866" class="p">branch 必須含該 Change 的已提交 artifacts</text>
+  <text x="786" y="904" class="p">primary 持有 branch：乾淨才切回 base</text>
+  <text x="786" y="947" class="note">origin 無 branch／查詢失敗各自回報並停止。</text>
+  <text x="786" y="980" class="note">git worktree add 後再做共用驗證。</text>
+  <path d="M1340 860 H1390 V280 H1350" class="line"/>
+  <rect x="70" y="1120" width="1270" height="130" rx="18" fill="#eaf0f7"/>
+  <text x="96" y="1158" class="h">人工交接要求與腳本 gate 分開</text>
+  <text x="96" y="1196" class="note">固定 planning_commit 仍須另外核對；runtime 沒有接收該 SHA 參數，也不判定人類設計是否已批准。</text>
+  <text x="96" y="1228" class="note">圖例：左側向下表示未命中；向右匯入同一驗證。箭頭表示實際解析順序，顏色僅輔助。</text>
+  <text x="70" y="1286" class="note">來源：scripts/workflow/runtime.sh、wt-work.sh；規則與細節見 docs/workflow/wt-work-flow.md。</text>
+</svg>

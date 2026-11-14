@@ -46,10 +46,11 @@
 <text x="104" y="1354" class="body">授權 archive／doc／commit／push → update → 新 head 複審</text>
 <text x="104" y="1384" class="body">merge、deploy、真實資料驗收分開；等待時 Issue 不關閉</text>
 <path d="M505 1400 V1440" class="line"/>
-<rect x="80" y="1440" width="850" height="118" rx="16" class="green"/>
-<text x="104" y="1478" class="heading">09　先發 Closure 摘要，再依授權結案</text>
-<text x="104" y="1512" class="body">github-pr close 只關該 PR；準備合併時以 reply 交接</text>
-<text x="104" y="1542" class="body">Issue 驗收或取消後以 github-issue close 另行結案</text>
+<rect x="80" y="1440" width="850" height="165" rx="16" class="green"/>
+<text x="104" y="1478" class="heading">09　依結果交接或獨立結案</text>
+<text x="104" y="1512" class="note">成功：reply Closure，等待授權 merge；取消或被取代：PR close</text>
+<text x="104" y="1542" class="note">close：Closure 回讀 → 再核對版本／事件 → 關閉 → 回讀 state</text>
+<text x="104" y="1572" class="note">Issue 另行驗收，github-issue close；核對 completed／not planned</text>
 <rect x="1050" y="176" width="470" height="140" rx="16" class="blue"/>
 <text x="1074" y="214" class="heading">Issue 是工作入口</text>
 <text x="1074" y="248" class="body">正文說明工作，迭代記在留言</text>
@@ -59,7 +60,7 @@
 <text x="1074" y="564" class="body">設計及實作各自綁定 reviewed head</text>
 <text x="1074" y="594" class="body">第一版示範同張 PR 的兩個階段</text>
 <rect x="1050" y="808" width="470" height="140" rx="16" class="box"/>
-<text x="1074" y="846" class="heading">只有 PR create 會寫 Git</text>
+<text x="1074" y="846" class="heading">PR Skill 僅 create 會寫 Git</text>
 <text x="1074" y="880" class="body">PR 說明保留人工內容；Issue 只加留言</text>
 <text x="1074" y="910" class="body">審查與修正以 reply 新增留言</text>
 <rect x="1050" y="1124" width="470" height="140" rx="16" class="gold"/>

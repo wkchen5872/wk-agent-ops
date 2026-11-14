@@ -3,7 +3,17 @@ type: Playbook
 title: OpenSpec Commit Workflow
 description: Archive, documentation, and commit orchestration across Claude, Codex, and Antigravity.
 tags: [workflow, openspec, agents]
-timestamp: 2026-07-31T00:00:00+08:00
+generated: { by: Codex/GPT-6.1-Sol, at: 2026-11-14T13:48:40+08:00 }
+sources:
+  - id: commit-skill
+    resource: /template/common/skills/openspec-commit/SKILL.md
+    title: OpenSpec Commit
+  - id: handoff-contract
+    resource: /docs/github-handoff.md
+    title: GitHub 交接契約
+  - id: delivery-design
+    resource: /openspec/changes/archive/2026-11-14-extend-openspec-commit-delivery/design.md
+    title: Commit 交付擴充設計
 ---
 
 # OpenSpec Commit Workflow
@@ -14,6 +24,15 @@ archive、文件判斷或 commit 邏輯，只依序呼叫三個能力：
 1. `openspec-archive-change`
 2. `doc-updater`
 3. `git-commit-writer`
+
+本地三步與 provider routing 由現有 Skill 管理。[^commit-skill]
+
+只有使用者授權時，它才在本地完成後，把結果交付到 Change 既有的 PR（見下方
+「遠端交付」）。這是[本機開發四階段流程](local-development.md)的第 04 階段。
+
+**版本範圍**：本版本 Skill 已實作遠端交付與 commit 後恢復，並有本地 bare remote、
+installer、離線重播與 Change delta strict validate 的驗證紀錄。真實 Git 發布、PR update 與
+最終 published-head Review 的完整路徑仍待端到端驗收，單獨結案操作不代表該路徑已驗證。[^delivery-design]
 
 ## 進入方式
 
@@ -132,6 +151,25 @@ model 與 effort 由 agent 設定檔決定，文件與 commit subagent 的模型
 驗證 context 後執行 final `git add -A`；若 staged diff 為空則停止；pre-commit
 hook 修正檔案後必須重新 staging，再重試 commit。
 
+## 遠端交付
+
+開始時先決定交付路徑：
+
+| 路徑 | 何時 | 結果 |
+|---|---|---|
+| 本地完成（預設） | 只要求封存與 commit，或沒有 PR | archive、docs、commit；不 push、不建立 PR、不 merge、不 close |
+| 成功交付 | 授權發布到既有 PR | 正常 push 並讀回 remote head → `github-pr update` → 確認最終 head 的 pass → `github-pr reply` Closure，等待另外授權的 merge |
+| 取消或被取代 | 明確授權關閉 PR 並給理由 | 委派 `github-pr close`（先 Closure 再關閉）；不 push 放棄的成果，Issue 與分支不動 |
+
+PR 或目標不明、或缺少授權時，本地結果照常完成，遠端步驟回報為 pending 或 blocked。
+最終 head 已有相符的 pass 時可沿用；需要新一輪 Review 時，必須另有審查／驗收授權。
+沒有該授權就停在 Closure 前，不因授權發布而自動開啟審查。[^delivery-design]
+封存與文件 commit 會產生新 head，先前的 pass 不涵蓋它。推送被拒、head 移動或最終 Review
+未通過時，停在 Closure 之前，不 force、不自動修正或重跑。各段結果（archive、docs、commit、
+push、PR update、最終 Review、Closure、close）分開回報；merge、部署與 Issue 驗收不由本流程
+宣稱完成。PR 留言的格式見 [GitHub 交接契約](../github-handoff.md)。
+Closure 的發布、回讀及 Issue 的獨立結案規則由該契約管理。[^handoff-contract]
+
 ## Provider 邊界
 
 OpenSpec CLI 產生的原生 action 與 wk-agent-ops 安裝的 portable workflow 是
@@ -175,14 +213,28 @@ Installer 對 `.codex/` 的管理只限於 project-owned `.codex/agents/`；不�
 | Doc update 衝突 | 顯示衝突檔案並停止 |
 | Claude Code／Codex 缺少必要 subagent | 顯示 provider 配置錯誤並停止，不改走 skill |
 | Commit hook 失敗 | 修正、重新 `git add -A`、檢查 cached diff、重試 |
+| 工作區混有其他工作 | archive 前停止並列出路徑，不 stash、不刪除 |
+| commit 已完成、push 失敗 | 以 `git log -1 --format=%H -- openspec/changes/archive/<archive-dir>/` 找回 commit，只補已授權的 push |
+| push 已確認、PR update 失敗 | 保留 push，只補 `github-pr update` |
+| Closure 已確認、close 失敗 | 由 `github-pr close` 沿用既有摘要，只補 close |
+| 任一寫入結果不明 | 先讀現況；查不清就回報 uncertain，不重送 |
+
+這些接續都靠現有證據判斷，不另建狀態檔；同一個 Change 有多個已提交的 archive 時，詢問使用者。
 
 ## 相關文件
 
 - [多 Agent 協作工作流](/docs/workflow/guide.md)
+- [本機開發四階段流程](/docs/workflow/local-development.md)
 - [Doc Updater](/docs/skills/doc-updater.md)
 - [Git Commit Writer](/docs/skills/git-commit-writer.md)
 
-# Citations
+## 來源與外部參考
+
+本地與遠端交付行為以目前 Skill 為準；archive 保留設計意圖與驗證範圍。下列既有外部入口參考保留供查閱，未在本輪重新核對版本。
+
+[^commit-skill]: [OpenSpec Commit 來源](../../template/common/skills/openspec-commit/SKILL.md)，本地三步、遠端交付與 commit 後恢復。
+[^handoff-contract]: [GitHub 交接契約](../github-handoff.md)，§6.7、§10。
+[^delivery-design]: [Commit 交付擴充設計](../../openspec/changes/archive/2026-11-14-extend-openspec-commit-delivery/design.md)；本地驗證見 [`r02`](../verification/openspec-commit/2026-11-14-extend-delivery-r02.md)。
 
 [1] [OpenSpec supported tools](https://github.com/Fission-AI/OpenSpec/blob/main/docs/supported-tools.md)
 

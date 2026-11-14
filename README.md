@@ -89,6 +89,8 @@ opsx-branch <change-id>              wt-work <change-id> --agent <provider>
 
 詳細說明：[docs/workflow/guide.md](docs/workflow/guide.md)
 
+- [正式圖稿索引](docs/diagrams/README.md) 列出開發與交付全貌、本機四階段、Review、GitHub 交接及 Worktree 解析；發布前人工檢核與 Review 停止點以該索引連結的現行流程為準。
+
 ---
 
 ## Workflow 指令
@@ -162,7 +164,11 @@ wt-done feature123 --base main
 project-owned `.codex/agents/` custom agents。它不接管 `.codex/config.toml`、
 `.codex/skills/` 或單數 `.agent/`；OpenSpec provider setup 產生的原生檔案
 仍屬於另一個分發邊界。完整路徑與呼叫規則見
-[OpenSpec Commit 工作流](docs/workflow/commit.md)。
+[OpenSpec Commit 工作流](docs/workflow/commit.md)。`openspec-commit` 預設只做本地的
+archive → docs → commit；交付擴充設計在授權時才接上既有 PR：成功時發 Closure 等待 merge，
+取消時委派 `github-pr close`。本版本已完成這段整合並通過本地驗證，
+真實遠端發布路徑仍待端到端驗收。本 repo 採用的四階段開發流程見
+[本機開發四階段流程](docs/workflow/local-development.md)。
 
 ### Work Item 協作紀錄
 
@@ -216,7 +222,7 @@ commit／push，也不走 PR 的 create／update／close。
 | Codex | `$change-review`，或以自然語言要求 review PR |
 | Antigravity | 從 `.agents/skills/change-review/` 載入，或以自然語言要求 |
 
-`ponytail-review`、`openspec-verify-change` 是可選加強，沒有安裝時改用 Skill 內建的基線。
+`openspec-verify-change` 是必要驗證；`ponytail-review` 等品質審查是可選加強，未安裝時使用 Skill 內建基線。
 
 ### Python Profile
 

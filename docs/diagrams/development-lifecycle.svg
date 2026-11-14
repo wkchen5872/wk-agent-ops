@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1640" viewBox="0 0 1200 1640" role="img" aria-labelledby="title desc">
+  <title id="title">開發、審查與交付概覽</title>
+  <desc id="desc">從需求探索與分支規劃，選擇原分支或 Worktree 實作，經驗證與人工發布檢核進入本地或 PR Review。需要修正時返回實作；通過後依授權封存提交，預設本地完成。遠端交付、merge 與 cleanup 各有獨立授權及證據。</desc>
+  <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#647a94"/></marker></defs>
+  <style>text{font-family:"PingFang TC","Noto Sans CJK TC",sans-serif;fill:#19344c}.title{font-size:38px;font-weight:700}.h{font-size:27px;font-weight:650}.p{font-size:22px;fill:#42556d}.note{font-size:20px;fill:#526b83}.line{fill:none;stroke:#647a94;stroke-width:2.5;stroke-linejoin:round;marker-end:url(#arrow)}</style>
+  <rect width="1200" height="1640" fill="#f5f7fb"/>
+  <text x="70" y="76" class="title">開發、審查與交付概覽</text>
+  <text x="70" y="118" class="p">OpenSpec 管規格；Git 管版本；Session 管執行；交付依授權逐段完成</text>
+  <rect x="220" y="165" width="760" height="120" rx="18" fill="#fff" stroke="#b4c6d8" stroke-width="2"/>
+  <text x="248" y="205" class="h">01　探索需求，達到 Scope Ready</text>
+  <text x="248" y="243" class="p">一般 Session／openspec-explore；需要時使用本地 Work Item</text>
+  <text x="248" y="271" class="note">範圍尚未清楚就繼續探索，不先建立持久化 Change。</text>
+  <path d="M600 285 V325" class="line"/>
+  <rect x="220" y="325" width="760" height="150" rx="18" fill="#fff5dc" stroke="#d2a14a" stroke-width="2"/>
+  <text x="248" y="365" class="h">02　準備分支、規劃並取得人類設計確認</text>
+  <text x="248" y="403" class="p">opsx-branch → new／ff／continue → artifacts → planning commit</text>
+  <text x="248" y="435" class="p">Scope／設計與實作授權要清楚；Issue、設計 Draft PR 選用</text>
+  <text x="248" y="462" class="note">分支準備失敗先停止；OpenSpec artifacts 是正式規劃來源。</text>
+  <path d="M600 475 V515" class="line"/>
+  <rect x="220" y="515" width="760" height="120" rx="18" fill="#fff" stroke="#b4c6d8" stroke-width="2"/>
+  <text x="248" y="555" class="h">03　選擇執行 checkout</text>
+  <text x="248" y="593" class="p">原 feature branch，或可選的 project／provider Worktree</text>
+  <text x="248" y="621" class="note">單一 active writer；切換 Provider 前停止舊 writer，保留 cleanup owner。</text>
+  <path d="M600 635 V675" class="line"/>
+  <rect x="220" y="675" width="760" height="120" rx="18" fill="#eaf3ff" stroke="#73a2d5" stroke-width="2"/>
+  <text x="248" y="715" class="h">04　逐項實作與驗證</text>
+  <text x="248" y="753" class="p">openspec-apply-change／TDD</text>
+  <text x="248" y="781" class="note">openspec-verify-change／必要測試；驗證未通過就修正。</text>
+  <path d="M600 795 V835" class="line"/>
+  <rect x="220" y="835" width="760" height="155" rx="18" fill="#fff5dc" stroke="#d2a14a" stroke-width="2"/>
+  <text x="248" y="875" class="h">05　人工發布檢核，再進入一輪 Review</text>
+  <text x="248" y="913" class="p">留在本地，或依授權 commit／push／建立或更新既有 PR</text>
+  <text x="248" y="945" class="p">change-review 固定版本；三種結論依 PR／local-only 決定回報去向</text>
+  <text x="248" y="976" class="note">changes-required 回實作；blocked 先補證據；新 head 不沿用舊 pass。</text>
+  <path d="M220 915 H65 V735 H220" class="line" stroke-dasharray="7 6"/>
+  <text x="77" y="824" class="note">需修正</text>
+  <path d="M600 990 V1040" class="line"/>
+  <text x="619" y="1022" class="note">pass，且授權交付</text>
+  <rect x="220" y="1040" width="760" height="155" rx="18" fill="#e7f5ed" stroke="#85bca0" stroke-width="2"/>
+  <text x="248" y="1080" class="h">06　openspec-commit：預設本地完成</text>
+  <text x="248" y="1118" class="p">archive → doc-updater → git-commit-writer</text>
+  <text x="248" y="1150" class="p">授權遠端交付才 push／update／最終 head Review／Closure</text>
+  <text x="248" y="1181" class="note">新一輪 Review 另需授權；取消 PR 用 close，不 push 放棄成果。</text>
+  <path d="M600 1195 V1255" class="line" stroke-dasharray="7 6"/>
+  <text x="620" y="1230" class="note">另行授權</text>
+  <rect x="220" y="1255" width="760" height="120" rx="18" fill="#fff" stroke="#b4c6d8" stroke-width="2"/>
+  <text x="248" y="1295" class="h">Git 整合、Issue 驗收與清理</text>
+  <text x="248" y="1333" class="p">遠端 merge 另行處理；wt-done 只做本地 merge／project cleanup</text>
+  <text x="248" y="1361" class="note">Provider Worktree 仍由原 owner 清理；Issue 依原範圍獨立結案。</text>
+  <rect x="70" y="1430" width="1060" height="145" rx="18" fill="#eaf0f7"/>
+  <text x="96" y="1468" class="h">閱讀與執行邊界</text>
+  <text x="96" y="1505" class="note">圖例：實線為主路徑；虛線為修正回路或另行授權的步驟。顏色僅輔助。</text>
+  <text x="96" y="1536" class="note">人工／Agent 規範不等同腳本已強制檢查；wt-done 不執行 Review、verify 或 archive。</text>
+  <text x="96" y="1566" class="note">遠端交付是已確認的擴充設計，須搭配對應 Skill 實作版本。</text>
+  <text x="70" y="1610" class="note">來源與細節：docs/workflow/guide.md、local-development.md、commit.md、wt-work-flow.md。</text>
+</svg>

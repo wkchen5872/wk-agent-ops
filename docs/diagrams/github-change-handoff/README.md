@@ -14,3 +14,4 @@ tags: [github, handoff, diagrams, history]
 - [PR 報告與 Session 通知修正複審子流程](github-review-repair-loop.svg)
 
 現行 Issue、PR 與 Review 寫入格式及操作邊界以 [GitHub handoff 契約](../../github-handoff.md) 為準；Change review workflow 以 [現行流程圖](../change-review-workflow.svg) 為準。
+開發全貌、本機四階段與所有現行圖稿見 [正式圖稿索引](../README.md)。
