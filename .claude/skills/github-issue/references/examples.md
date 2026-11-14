@@ -52,8 +52,6 @@
 
 ## Author
 
-方式: Agent 協助
-人類: @mei
 Co-Authored-By: Codex
 AI-Assisted-By: gpt-6.1-sol
 SESSION-ID: example-planning-session
@@ -81,8 +79,6 @@ Reviewer 對 PR #57 的發布版本檢查上述驗收條件。
 
 ## Author
 
-方式: Agent 協助
-人類: @mei
 Co-Authored-By: Codex
 AI-Assisted-By: gpt-6.1-sol
 SESSION-ID: example-impl-session
@@ -117,8 +113,6 @@ XIRP-SESSION-ID: example-xirp-impl
 
 ## Author
 
-方式: Agent 協助
-人類: @mei
 Co-Authored-By: Codex
 AI-Assisted-By: gpt-6.1-sol
 SESSION-ID: example-impl-session
@@ -156,8 +150,6 @@ XIRP-SESSION-ID: example-xirp-impl
 
 ## Author
 
-方式: Agent 協助
-人類: @mei
 Co-Authored-By: Codex
 AI-Assisted-By: gpt-6.1-sol
 SESSION-ID: example-impl-session
@@ -190,8 +182,6 @@ PR #57 仍需負責人另外決定是否關閉，此次 Issue close 不操作該
 
 ## Author
 
-方式: Agent 協助
-人類: @mei
 Co-Authored-By: Codex
 AI-Assisted-By: gpt-6.1-sol
 SESSION-ID: example-impl-session
@@ -214,22 +204,16 @@ XIRP-SESSION-ID: example-xirp-impl
 ## Next actions
 
 @mei 補上可重現的日期區間與已去識別化資料。
-
-## Author
-
-方式: 人類直接發布
-人類: @mei
 ```
 
 ## 模型與 Session 無法取得
 
-Agent 已查核可用來源但模型未知、沒有原生 ID，只有已確認的 Xirp ID。省略模型與未確認的
-人類，原生 ID 寫 `null`，操作回報說明查核限制。
+Agent 已查核可用來源但模型未知、沒有原生 ID，只有已確認的 Xirp ID。省略模型，原生 ID 寫
+`null`，操作回報說明查核限制。
 
 ```markdown
 ## Author
 
-方式: Agent 協助
 Co-Authored-By: Codex
 SESSION-ID: null
 XIRP-SESSION-ID: example-xirp-planning
@@ -240,7 +224,6 @@ XIRP-SESSION-ID: example-xirp-planning
 ```markdown
 ## Author
 
-方式: Agent 協助
 Co-Authored-By: Claude Code
 AI-Assisted-By: Claude Opus 5.5
 SESSION-ID: null

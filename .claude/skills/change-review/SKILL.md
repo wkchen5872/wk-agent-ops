@@ -262,8 +262,8 @@ sent to the implementer as a repair request.
    `SESSION-ID`, `XIRP-SESSION-ID`. The newest reply may be a reviewer's; never
    take a reviewer's or your own identity for the implementer's. Several
    plausible implementers, or none: send nothing, return the message.
-   **Relayed report** — when that Author says `方式: Agent 協助代發` or carries a
-   `原報告作者` line, its main fields identify the publisher, not the
+   **Relayed report** — identified by `原報告作者` and its source; an
+   older `方式: Agent 協助代發` line marks one too. Then the Author's main fields identify the publisher, not the
    implementer. Take the implementer from the `原報告作者` line and its verified
    source (the linked report or record, and any tool, model, or Session that
    author explicitly published). If that source gives no identity you can tie

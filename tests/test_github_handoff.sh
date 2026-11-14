@@ -501,7 +501,8 @@ done
 # Static presence only; source-to-output replays are recorded separately.
 echo "SCR-1 shared frame: Handoff, Next actions, Author"
 frame_part() { awk '/^## 6\. /{f=1;next} /^### 6\.1 /{f=0} f' "$DOC" 2>/dev/null; }
-for term in '## Next actions' '方式: Agent 協助' '方式: 人類直接發布' '人類:' '原報告作者:' \
+# simplify-github-author-format: the mode and human-account lines are gone (SAF-1).
+for term in '## Next actions' '原報告作者:' \
             'SESSION-ID:' 'XIRP-SESSION-ID:' '（local-only）'; do
   frame_part | grep -qF -- "$term" && ok "§6 shared frame defines '$term'" || bad "§6 shared frame defines '$term'"
 done
@@ -561,7 +562,7 @@ for t in 'close 完成' 'close 取消' '驗收未完成' '已關閉' '理由不�
     && ok "github-issue has a case for '$t'" || bad "github-issue has a case for '$t'"
 done
 EX="$ISSUE_SKILL/references/examples.md"
-for term in '## Next actions' '方式: 人類直接發布' '## Checkpoint' '## Closure' 'XIRP-SESSION-ID: null' '虛構' '（local-only）'; do
+for term in '## Next actions' '## Checkpoint' '## Closure' 'XIRP-SESSION-ID: null' '虛構' '（local-only）'; do
   want "$EX" "$term" "Issue examples show '$term'"
 done
 
@@ -581,7 +582,7 @@ for t in '準備合併' '被取代' 'Closure 已發布' 'Checkpoint' '代發' '�
     && ok "github-pr has a case for '$t'" || bad "github-pr has a case for '$t'"
 done
 PEX="$PR_SKILL/references/examples.md"
-for term in '## Closure' '## Checkpoint' 'reviewer-b-r01/F-01' 'result: pass' '方式: Agent 協助代發' '虛構'; do
+for term in '## Closure' '## Checkpoint' 'reviewer-b-r01/F-01' 'result: pass' '原報告作者:' '虛構'; do
   want "$PEX" "$term" "PR examples show '$term'"
 done
 
@@ -698,6 +699,58 @@ rm -f "$VR/$CH/specs/x/extra.md"
 changed "0000000000000000000000000000000000000000"; [[ $? == 2 ]] && ok "missing baseline is not verifiable, never 'same'" \
   || bad "missing baseline is not verifiable, never 'same'"
 rm -rf "$VT"
+
+# ── simplify-github-author-format (Issue #18) ────────────────────────────────
+# Maps to openspec/changes/simplify-github-author-format specs.
+echo "SAF-1 Author drops mode and human-account lines"
+sec6_all() { awk '/^## 6\. /{f=1} /^## 7\. /{f=0} f' "$DOC" 2>/dev/null; }
+in_fences() { awk '/^ *```/{f=!f; next} f'; }
+n="$(sec6_all | in_fences | grep -cE '^[[:space:]]*(方式|人類):')"
+[[ "$n" == 0 ]] && ok "no §6 template writes a mode or human-account line" || bad "no §6 template writes a mode or human-account line ($n)"
+if sec6_all | in_fences | grep -qE '^[[:space:]]*(mode|Mode|publisher-human|發布方式|委託者|Human):'; then
+  bad "no synonymous replacement label"; else ok "no synonymous replacement label"; fi
+n="$(sec6_all | in_fences | grep -c '^SESSION-ID:')"; m="$(sec6_all | in_fences | grep -c '^XIRP-SESSION-ID:')"
+[[ "${n:-0}" -ge 6 && "$n" == "$m" ]] && ok "Agent templates keep both Session fields ($n/$m)" || bad "Agent templates keep both Session fields ($n/$m)"
+frame_part | grep -qF '沒有 Agent 參與、由人類直接發布的內容不加 Author' && ok "pure human-direct posts omit Author" \
+  || bad "pure human-direct posts omit Author"
+frame_part | grep -qF 'Agent 代為整理或發布' && ok "agent-on-behalf posts keep Agent metadata" || bad "agent-on-behalf posts keep Agent metadata"
+frame_part | grep -qF '舊紀錄的 `方式`' && ok "legacy mode/human lines stay readable" || bad "legacy mode/human lines stay readable"
+sec63 | grep -qF 'approved_by' && ok "approval event keeps approved_by (Issue #17 untouched)" || bad "approval event keeps approved_by (Issue #17 untouched)"
+for t in 'Agent 代人類發布' '新格式代發' '舊格式後追加新內容'; do
+  grep -E '^### C-[0-9]+' "$DOC" | grep -qF -- "$t" && ok "shared case for '$t'" || bad "shared case for '$t'"
+done
+
+# codex-author-r01/F-01: prose rules and inline expectations, not only template fences.
+doc_section 7 8 | grep -qE '方式|人類' && bad "§7 Provenance names no mode/human Author line" || ok "§7 Provenance names no mode/human Author line"
+deny "$DOC" 'Handoff、Goal、Next actions、Author 必須出現' "§6.1 does not require Author unconditionally"
+issue_section | grep -qF 'Agent 參與時最後是 Author' && ok "§6.1 requires Author only when an Agent posts" || bad "§6.1 requires Author only when an Agent posts"
+inline_old() { grep -hE '^- (判定|預期呼叫|產出[^：]*)：' "$@" 2>/dev/null | grep -E '`(方式|人類): '; }
+if inline_old "$DOC" "$ISSUE_SKILL"/references/*.md "$PR_SKILL"/references/*.md \
+     "$COMMON"/skills/change-review/references/*.md "$COMMON"/skills/openspec-commit/references/*.md >/dev/null; then
+  bad "no expected output or judgement asks for a mode/human Author line"
+else
+  ok "no expected output or judgement asks for a mode/human Author line"
+fi
+deny "$ISSUE_SKILL/references/examples.md" '省略模型與未確認的' "Issue example no longer mentions an omitted human field"
+
+echo "SAF-2 entries and references write the reduced Author"
+CRS="$COMMON/skills/change-review/SKILL.md"
+for f in "$ISSUE_SKILL/SKILL.md" "$PR_SKILL/SKILL.md"; do
+  if grep -qE '方式: Agent 協助`|方式: 人類直接發布|`人類` only' "$f"; then bad "${f#"$ROOT"/} no longer instructs mode/human lines"
+  else ok "${f#"$ROOT"/} no longer instructs mode/human lines"; fi
+  want "$f" 'no Author section' "${f#"$ROOT"/} states the human-direct exception"
+done
+want "$CRS" 'older `方式: Agent 協助代發`' "change-review still reads the legacy relay marker"
+want "$CRS" 'identified by `原報告作者`' "change-review identifies relays by the original-author line"
+for f in "$ISSUE_SKILL/references/examples.md" "$ISSUE_CASES" "$PR_SKILL/references/examples.md" "$PR_CASES" \
+         "$COMMON/skills/change-review/references/acceptance-cases.md" "$COMMON/skills/openspec-commit/references/examples.md"; do
+  n="$(grep -cE '^[[:space:]]*(方式|人類): ' "$f")"
+  [[ "$n" == 0 ]] && ok "${f#"$ROOT"/} writes no mode/human Author line" || bad "${f#"$ROOT"/} writes no mode/human Author line ($n)"
+done
+grep -E '^### GI-[0-9]+' "$ISSUE_CASES" | grep -qF '舊格式 Issue 追加留言' && ok "github-issue case: new comment on a legacy Issue" \
+  || bad "github-issue case: new comment on a legacy Issue"
+grep -E '^### GP-[0-9]+' "$PR_CASES" | grep -qF '新格式代發報告' && ok "github-pr case: relay with the new markers" \
+  || bad "github-pr case: relay with the new markers"
 
 # ── 4.1 Managed delivery and legacy script retirement ────────────────────────
 echo "4.1 managed delivery"

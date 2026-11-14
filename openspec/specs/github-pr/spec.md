@@ -36,7 +36,7 @@ The skill SHALL inspect the actual selected PR or published base-to-head changes
 - **AND** it does not paste or merely shorten the internal record layout
 
 ### Requirement: PR formatting uses a minimal frame with optional associations
-PR bodies and replies SHALL begin with Handoff, include concise Next actions and end with shared Author. Handoff SHALL identify the verified head branch. Confirmed work and dependency links SHALL be optional and Work Items marked local-only. Bodies SHALL explain purpose, published changes and actual verification. Review, repair, Checkpoint and Closure replies SHALL use corresponding shared content.
+PR bodies and replies SHALL begin with Handoff and include concise Next actions. Agent-assisted content SHALL end with the reduced shared Author; pure human-direct content SHALL omit empty Author sections and Agent metadata. Handoff SHALL identify the verified head branch. Confirmed work and dependency links SHALL be optional and Work Items marked local-only. Bodies SHALL explain purpose, published changes and actual verification. Review, repair, Checkpoint and Closure replies SHALL use corresponding shared content.
 
 #### Scenario: PR begins without local identifiers
 - **WHEN** a published branch has no associated Work Item, Change, or Issue
@@ -126,7 +126,7 @@ Create SHALL return one verified existing open PR without duplicate creation or 
 - **AND** it does not keep asking for approval already given, alter authentication or claim that granting conversational permission repairs the credentials
 
 ### Requirement: PR Author includes native and Xirp session identifiers independently
-Bodies and replies SHALL end with shared human or agent-assisted Author. Agent posts SHALL retain tool, known root-session model, SESSION-ID and XIRP-SESSION-ID. Unavailable IDs SHALL independently be null with reasons reported and unknown models omitted. Human-direct posts SHALL identify the human without fabricated Agent metadata. Relayed substantive reports SHALL preserve source authorship separately.
+Agent-assisted bodies and replies SHALL end with the reduced shared Author without mode or human-account labels. Agent posts SHALL retain tool, known root-session model, SESSION-ID and XIRP-SESSION-ID. Unavailable IDs SHALL independently be null with reasons reported and unknown models omitted. Pure human-direct posts SHALL omit empty Author sections and fabricated Agent metadata. Relayed substantive reports SHALL preserve source authorship separately.
 
 #### Scenario: Both identifiers are available
 - **WHEN** the current posting session has verified native and Xirp identifiers
@@ -142,6 +142,21 @@ Bodies and replies SHALL end with shared human or agent-assisted Author. Agent p
 - **WHEN** neither identifier is available from the posting runtime or applicable local metadata
 - **THEN** both fields are null and the report explains the actual lookup limits
 - **AND** no ID is invented and PR creation is not blocked solely by that absence
+
+#### Scenario: Each PR operation writes reduced metadata
+- **WHEN** an agent creates or updates a description, or replies with Review, repair, Checkpoint or Closure content
+- **THEN** new Author content retains tool, known model and both Session namespaces without mode, human-account or synonymous labels
+- **AND** the operation retains its existing target, authorization, Git side-effect and readback boundaries
+
+#### Scenario: Relayed report has only the new source markers
+- **WHEN** an implementation or repair report identifies its original author and source without a mode field
+- **THEN** the consumer distinguishes the original implementer from the posting agent before any authorized session handoff
+- **AND** if only the publisher can be verified the consumer does not notify that publisher as the implementer
+
+#### Scenario: Legacy relay marker is still readable
+- **WHEN** an existing implementation record uses the old agent-relay mode marker
+- **THEN** consumers preserve source interpretation and existing session verification without rewriting that record
+- **AND** any new authorized reply uses the reduced format
 
 ### Requirement: Session discovery actively checks the current runtime before falling back
 Before posting Author, the workflow SHALL inspect the current tool's available runtime session metadata and applicable local Xirp metadata. It MUST NOT declare identifiers unknown without checking available sources, infer the current model from environment or records, substitute management IDs for native IDs, or expose unrelated environment, credentials or transcript content during discovery.

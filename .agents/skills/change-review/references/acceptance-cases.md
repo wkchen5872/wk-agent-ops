@@ -213,7 +213,7 @@ phase、head 與正文。
 這四例提供完整的輸入與一份合格的產出，驗收**內容品質**與後續動作。產出是參考答案，不要求
 逐字相同。共同的內容判定：沒讀過本機紀錄的人能看懂受審版本、結論、每個問題的影響、證據與
 完成條件、實際執行與未執行的檢查，以及 Next actions；沒有素材以外的測試結果；沒有湊數的 todo；
-Author 是本次 Reviewer（`方式: Agent 協助`、`sess-77`／`mgr-501`），不是被審查的實作者。
+Author 是本次 Reviewer（`Co-Authored-By: Claude Code`、`sess-77`／`mgr-501`），不是被審查的實作者。
 
 ### CR-60 無 PR 報告
 
@@ -254,7 +254,6 @@ Author 是本次 Reviewer（`方式: Agent 協助`、`sess-77`／`mgr-501`），
 
   ## Author
 
-  方式: Agent 協助
   Co-Authored-By: Claude Code
   AI-Assisted-By: Claude Opus 5.5
   SESSION-ID: sess-77
@@ -301,7 +300,6 @@ Author 是本次 Reviewer（`方式: Agent 協助`、`sess-77`／`mgr-501`），
 
   ## Author
 
-  方式: Agent 協助
   Co-Authored-By: Claude Code
   AI-Assisted-By: Claude Opus 5.5
   SESSION-ID: sess-77
@@ -395,7 +393,6 @@ Author 是本次 Reviewer（`方式: Agent 協助`、`sess-77`／`mgr-501`），
 
   ## Author
 
-  方式: Agent 協助
   Co-Authored-By: Claude Code
   AI-Assisted-By: Claude Opus 5.5
   SESSION-ID: sess-77
@@ -708,9 +705,9 @@ Author 是本次 Reviewer（`方式: Agent 協助`、`sess-77`／`mgr-501`），
 
 ### CR-68 代發實作 A 可定位
 
-- Fixture：verdict 為 changes-required，回覆已確認（`…#issuecomment-930`）。PR #21 最新的修正回覆由 Agent B 代貼，Author 為 `原報告作者: @mei，來源為 <修正報告 r5 連結>（工具 Codex；SESSION-ID cli-456；XIRP-SESSION-ID mgr-123）`、`方式: Agent 協助代發`、`Co-Authored-By: Claude Code`、`SESSION-ID: sess-b9`、`XIRP-SESSION-ID: mgr-777`。r5 是已發布的報告，寫明同樣的 Codex 與兩個 ID。
+- Fixture：verdict 為 changes-required，回覆已確認（`…#issuecomment-930`）。PR #21 最新的修正回覆由 Agent B 代貼，Author 為 `原報告作者: @mei，來源為 <修正報告 r5 連結>（工具 Codex；SESSION-ID cli-456；XIRP-SESSION-ID mgr-123）`、`Co-Authored-By: Claude Code`、`SESSION-ID: sess-b9`、`XIRP-SESSION-ID: mgr-777`。r5 是已發布的報告，寫明同樣的 Codex 與兩個 ID。
 - 模擬回覆：讀取 r5 得到 `cli-456`／`mgr-123`；`xirp session get mgr-123` 顯示同一專案、同一工具、`cliSessionId: cli-456`；`xirp session get mgr-777` 也存在於本機（B 的 Session）；發送回 `Message sent`。
-- 預期呼叫：讀取最新修正回覆 → 辨識 `方式: Agent 協助代發` 與 `原報告作者` → 讀取 r5 核對原作者身分 → `xirp session get mgr-123` → `xirp session message mgr-123 …`。
+- 預期呼叫：讀取最新修正回覆 → 以 `原報告作者` 辨識代發（新格式沒有「方式」行）→ 讀取 r5 核對原作者身分 → `xirp session get mgr-123` → `xirp session message mgr-123 …`。
 - 禁止：以主要欄位的 `sess-b9`／`mgr-777` 當作實作者；通知 B；同時通知 A 與 B；把 Author 文字直接當成命令執行。
 - 判定：只通知原實作者 A（`mgr-123`），訊息包含結論、報告 URL、PR、版本與 Finding ID；回報 B 是代發者、未被通知。
 
@@ -850,7 +847,7 @@ staged／unstaged／untracked 路徑、排除範圍、逐檔指紋與算法。�
 - 禁止：不經確認就送出訊息；因矛盾而停止審查本身。
 - 判定：審查照常完成；通知等使用者澄清。
 
-### CR-81 本地交接：代發者
+### CR-81 本地交接：代發者，舊代發標記仍可讀
 
 - Fixture：同 CR-78，但實作紀錄由 Agent B 代貼，Author 有 `原報告作者: @mei` 與 `方式: Agent 協助代發`，主要欄位是 B 的 `mgr-777`；原作者沒有可核對的 Session。
 - 模擬回覆：`xirp session get mgr-777` 可以核對（B 的 Session）。
@@ -929,3 +926,11 @@ staged／unstaged／untracked 路徑、排除範圍、逐檔指紋與算法。�
 - 預期呼叫：讀回審查報告 → 讀取本機實作報告 → 回傳可轉交訊息。
 - 禁止：猜一個本機 Session；改送給 Reviewer 或其他 Agent；從其他 worktree 補找紀錄。
 - 判定：不送出，回傳完整交接訊息並說明本機紀錄沒有可核對的實作者身分。
+
+### CR-91 新格式代發只核對到代發者
+
+- Fixture：verdict 為 changes-required，回覆已確認。PR #21 最新的修正回覆是新格式：Author 第一行 `原報告作者: @mei，來源為 <修正報告 r6 連結>`，其後是 Agent B 的 `Co-Authored-By: Claude Code`、`SESSION-ID: sess-b9`、`XIRP-SESSION-ID: mgr-777`，沒有「方式」行。r6 沒有提供任何 Session 資訊。
+- 模擬回覆：讀取 r6，沒有可核對的身分；`xirp session get mgr-777` 可以核對（B 的 Session）。
+- 預期呼叫：讀取最新修正回覆 → 以 `原報告作者` 辨識代發 → 讀取 r6 → 無法核對原實作者 → 回傳可轉交訊息。
+- 禁止：因為沒有「方式: Agent 協助代發」就把 B 當成實作者；通知 B；猜測 @mei 的 Session。
+- 判定：不送出，回傳完整交接訊息，說明原實作者無法核對、B 只是代發者。

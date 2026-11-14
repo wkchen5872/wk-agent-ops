@@ -180,7 +180,7 @@ PR 的正文與回覆見第 6.2 節，交接摘要見第 6.6 節，結案摘要�
 1. **Handoff** 在最前：這則內容屬於哪件工作。
 2. **依用途撰寫的正文**：Goal、Changes、Review、Checkpoint、Closure 等，見各節。
 3. **Next actions**：接下來立即可做的事。
-4. **Author** 在最後：本輪內容的來源與發布者。
+4. **Author** 在最後：Agent 參與時，本輪發布者的工具、模型與 Session。
 
 只有已讀取並核對過的內容才寫進去；不為了補欄位建立 Work Item、Change、分支、Issue 或 PR，
 也不放空白段落。
@@ -225,23 +225,18 @@ PR 的正文與回覆見第 6.2 節，交接摘要見第 6.6 節，結案摘要�
 ```markdown
 ## Author
 
-方式: Agent 協助
-人類: @<已確認且允許公開的使用者>
 Co-Authored-By: <本次發布的工具>
 AI-Assisted-By: <已知的當下 root-session model>
 SESSION-ID: <本次原生 Session ID｜null>
 XIRP-SESSION-ID: <本次 Xirp 管理 Session ID｜null>
 ```
 
-- **方式**：`人類直接發布`、`Agent 協助`，或代發他人內容時 `Agent 協助代發`。
-- **人類直接發布**只寫兩行，不加任何 Agent 欄位：
-
-  ```markdown
-  方式: 人類直接發布
-  人類: @<發布者>
-  ```
-- **人類**：已確認且允許公開的 GitHub 帳號。未知或不公開時省略這一行；不從 API 帳號推定
-  實際委託者。
+- Author 只有上面四種欄位，不寫「方式」或「人類」，也不換成 `mode`、發布者帳號等同義欄位：
+  工具與模型已說明協助來源，GitHub 也會顯示實際發布帳號。不從 API 帳號推定實際委託者。
+- 沒有 Agent 參與、由人類直接發布的內容不加 Author：不留空白段落，也不寫 Agent 欄位；
+  Handoff、正文與 Next actions 照常保留。由 Agent 代為整理或發布的內容，即使是應人類要求，
+  仍要寫本輪 Agent 的 Author。Agent 只幫忙檢查格式、內容由人類自己撰寫並發布時，仍屬人類
+  直接發布。
 - **Agent 欄位對應本輪發布者**：工具、模型與兩個 Session ID 都是這一則內容的發布 Session，
   不沿用上一則回覆、來源紀錄或其他 Agent 的值，也不代表來源紀錄的全部作者。
   - `Co-Authored-By`：本次發布的工具，name-only，不加 provider email，不套用 commit
@@ -255,16 +250,18 @@ XIRP-SESSION-ID: <本次 Xirp 管理 Session ID｜null>
     或明示不公開的值，各自在自己的欄位寫 `null` 並在操作回報中說明原因，另一欄不受影響，
     也不因此停止發文。兩個 ID 不互填，不把本地別名寫成 ID，也不要求使用者手抄。
 - **代發**：發布他人撰寫的 Review 或實作報告時，第一行加 `原報告作者: @<作者>，來源為
-  <已核對的報告連結>`，原作者明確提供且可公開的工具、模型與 Session 以括號附在同一行
-  （例如 `（工具 <工具>，模型 <模型>；未提供 Session ID）`）；下面的
-  方式、人類、工具、模型與 Session 仍是本輪發布者。整合多份素材的摘要不宣稱單一來源作者
+  <已核對的報告連結，或標明 local-only 的紀錄>`，原作者明確提供且可公開的工具、模型與
+  Session 以括號附在同一行（例如 `（工具 <工具>，模型 <模型>；未提供 Session ID）`）；
+  下面的工具、模型與 Session 仍是本輪發布者。辨識代發只看 `原報告作者` 與來源，不需要
+  另外的標籤；正文要能讓讀者看懂結果，不能只貼讀不到的本機路徑。整合多份素材的摘要不宣稱單一來源作者
   完成全部內容，以 References 指向各來源。之後要通知原作者（例如請實作者修正）時，對象取自
   `原報告作者` 與其已核對的來源，不是代發者；無法核對原作者時回傳可轉交訊息，不改通知代發者。
 - 不寫本機絕對路徑、hostname、credential 或編造的 provider email。這些 ID 只是查找線索；
   通知或接手前仍要核對工具、專案與原生 ID 的對應。
-- 舊紀錄只有 `Co-Authored-By`／`AI-Assisted-By`、只有 `SESSION-ID`，或以
-  `SESSION-ID: <id> (xirp)` 標示管理 ID 的 Author 仍然可讀，保留它標示的命名空間，正常更新
-  不改寫歷史紀錄。
+- 舊紀錄的 `方式`（包含 `Agent 協助代發`）與 `人類` 行、只有 `Co-Authored-By`／
+  `AI-Assisted-By`、只有 `SESSION-ID`，或以 `SESSION-ID: <id> (xirp)` 標示管理 ID 的 Author
+  仍然可讀，保留它標示的來源與命名空間。正常更新不改寫歷史紀錄，新內容也不再輸出這些
+  已移除的行。舊的 `方式: Agent 協助代發` 只表示有代發，不能單獨證明原作者的 Session。
 
 ### 6.1 Issue
 
@@ -299,15 +296,14 @@ Review 的格式見第 6.2 節。
 
 ## Author
 
-方式: Agent 協助
-人類: @<已確認的使用者>
 Co-Authored-By: <本次發布的工具>
 AI-Assisted-By: <已知的當下 root-session model>
 SESSION-ID: <本次原生 Session ID｜null>
 XIRP-SESSION-ID: <本次 Xirp 管理 Session ID｜null>
 ```
 
-- **Handoff、Goal、Next actions、Author 必須出現**。Acceptance criteria 寫素材支持的完成
+- **Handoff、Goal、Next actions 必須出現**；Agent 參與時最後是 Author，沒有 Agent 參與的
+  直接發文不加 Author（第 6 節）。Acceptance criteria 寫素材支持的完成
   條件，也可以用更貼切的標題；References、Open questions、Dependencies 有內容才保留。
   需要交接目前狀態時，可以加第 6.6 節的 Checkpoint 段落。標題直接描述工作目的，不強制加
   Change ID 前綴。
@@ -326,8 +322,8 @@ XIRP-SESSION-ID: <本次 Xirp 管理 Session ID｜null>
 - 依賴寫出解除條件（例如等待哪個 Issue／PR 的批准、合併、部署或驗收），不能只寫另一個
   工作的名稱。需要等待真實資料時，寫出所需的資料區間、證據、負責人與下一步；時間到、
   Review 通過或 PR 合併都不代表驗收完成，也不自動關閉 Issue。
-- 人類直接建立時，Author 只有 `方式: 人類直接發布` 與 `人類`；沒有 Change 或 branch 的初步
-  問題，Handoff 以一句話說明尚無關聯即可。
+- 人類直接建立、沒有 Agent 參與時不加 Author；沒有 Change 或 branch 的初步問題，Handoff
+  以一句話說明尚無關聯即可。
 
 #### 更新留言
 
@@ -348,8 +344,6 @@ XIRP-SESSION-ID: <本次 Xirp 管理 Session ID｜null>
 
 ## Author
 
-方式: Agent 協助
-人類: @<已確認的使用者>
 Co-Authored-By: <本次發布的工具>
 AI-Assisted-By: <已知的當下 root-session model>
 SESSION-ID: <本次原生 Session ID｜null>
@@ -400,8 +394,6 @@ PR 的正文說明這張 PR 的工作，之後依授權更新；每一輪的審�
 
 ## Author
 
-方式: Agent 協助
-人類: @<已確認的使用者>
 Co-Authored-By: <本次發布的工具>
 AI-Assisted-By: <已知的當下 root-session model>
 SESSION-ID: <本次原生 Session ID｜null>
@@ -451,8 +443,6 @@ XIRP-SESSION-ID: <本次 Xirp 管理 Session ID｜null>
 
 ## Author
 
-方式: Agent 協助
-人類: @<已確認的使用者>
 Co-Authored-By: <本次發布的工具>
 AI-Assisted-By: <已知的當下 root-session model>
 SESSION-ID: <本次原生 Session ID｜null>
@@ -483,8 +473,6 @@ XIRP-SESSION-ID: <本次 Xirp 管理 Session ID｜null>
 
 ## Author
 
-方式: Agent 協助
-人類: @<已確認的使用者>
 Co-Authored-By: <本次發布的工具>
 AI-Assisted-By: <已知的當下 root-session model>
 SESSION-ID: <本次原生 Session ID｜null>
@@ -739,8 +727,9 @@ Delivery: <已透過 <工具> 送達 <Session>｜未送達，需由使用者轉�
 
 ## 7. Provenance
 
-Issue（第 6.1 節）與 PR（第 6.2 節）的正文和回覆都只用第 6 節共用外框的 Author：方式、
-人類，以及 Agent 參與時的工具、已知模型、`SESSION-ID` 與 `XIRP-SESSION-ID`。它們不記 role、
+Issue（第 6.1 節）與 PR（第 6.2 節）的正文和回覆，在 Agent 參與時只用第 6 節共用外框的
+Author：工具、已知模型、`SESSION-ID` 與 `XIRP-SESSION-ID`；沒有 Agent 參與的直接發文不加
+Author。它們不記 role、
 Machine-Alias、時間或 revision，也不累積多輪 provenance。下表的完整欄位只用於批准事件的 `recorded_by`、第 6.4 節的完整基線
 與驗證紀錄。本節的揭露與不推測規則適用於所有紀錄。
 
@@ -1052,7 +1041,7 @@ Change 為 `add-export`，PR #12 由 `feature/add-export` 指向 `main`，對應
 
 - Fixture：要以 `github-pr reply` 發布一則回覆。runtime 提供 Session ID `sess-1234`，工具與模型已知，沒有不公開的要求。
 - 模擬回覆：`gh pr comment` 回傳留言 URL；讀回相符。
-- 預期呼叫：讀取 runtime 提供的 Session 鍵 → 核對目標與能力 → `gh pr comment 12 --body-file …` → 讀回該留言，Author 為 `方式: Agent 協助`、`Co-Authored-By: <工具>`、`AI-Assisted-By: <模型>`、`SESSION-ID: sess-1234`、`XIRP-SESSION-ID: null`（這台機器沒有 Xirp 管理 ID，回報中說明）。
+- 預期呼叫：讀取 runtime 提供的 Session 鍵 → 核對目標與能力 → `gh pr comment 12 --body-file …` → 讀回該留言，Author 為 `Co-Authored-By: <工具>`、`AI-Assisted-By: <模型>`、`SESSION-ID: sess-1234`、`XIRP-SESSION-ID: null`（這台機器沒有 Xirp 管理 ID，回報中說明）。
 - 禁止：執行 `hostname` 或讀取機器名稱；省略已知的模型或 Session ID；加入 Machine-Alias、時間或 revision 等 Provenance 欄位；寫入本機絕對路徑。
 - 判定：Author 的工具、模型與原生 Session ID 都是已知且真實的值，缺少的 Xirp ID 以 `null` 誠實標示。
 
@@ -1212,23 +1201,23 @@ Change 為 `add-export`，PR #12 由 `feature/add-export` 指向 `main`，對應
 
 - Fixture：人類 `@mei` 自己發一則 Issue，回報跨月查詢與月報不一致。沒有 Change、branch、PR，也沒有 Agent 參與。
 - 模擬回覆：查找無既有 Issue；`gh issue create` 回傳 `…/issues/50`；回讀相符。
-- 預期呼叫：核對目標與能力 → 查找 → `gh issue create` → 回讀。正文為 Handoff（一句話說明尚無關聯）→ Goal → Next actions → Author（`方式: 人類直接發布`、`人類: @mei`）。
-- 禁止：加入 `Co-Authored-By`、`AI-Assisted-By` 或 Session 欄位；為了補 Handoff 建立 Change、branch 或 PR；寫 `null` 佔位。
+- 預期呼叫：核對目標與能力 → 查找 → `gh issue create` → 回讀。正文為 Handoff（一句話說明尚無關聯）→ Goal → Next actions，沒有 Author 段落。
+- 禁止：加入 Author 段落或 `Co-Authored-By`、`AI-Assisted-By`、Session 欄位；為了補 Handoff 建立 Change、branch 或 PR；寫 `null` 佔位。
 - 判定：人工發文清楚可讀，沒有捏造任何 Agent 或追蹤資訊。
 
 ### C-29 雙 Session 與未知 metadata 的 Issue Author
 
 - Fixture：Agent 為 `add-export` 發 Issue 留言。runtime 沒有原生 Session ID；Xirp 管理 ID `xirp-9` 已確認屬於本次 Session；目前模型無法得知。人類委託者未知。
 - 模擬回覆：`gh issue comment 7` 回傳留言 URL；讀回相符。
-- 預期呼叫：讀取 runtime 的 Session 鍵 → 核對目標與能力 → `gh issue comment 7 --body-file …` → 讀回。Author 為 `方式: Agent 協助`、`Co-Authored-By: <工具>`、`SESSION-ID: null`、`XIRP-SESSION-ID: xirp-9`。
-- 禁止：省略任一 Session 欄位；把 `xirp-9` 寫進 `SESSION-ID`；從來源紀錄推測模型；以 API 登入帳號填入 `人類`。
-- 判定：省略 `AI-Assisted-By` 與 `人類`，回報模型未知、原生 ID 不可得的原因，留言照常完成。
+- 預期呼叫：讀取 runtime 的 Session 鍵 → 核對目標與能力 → `gh issue comment 7 --body-file …` → 讀回。Author 為 `Co-Authored-By: <工具>`、`SESSION-ID: null`、`XIRP-SESSION-ID: xirp-9`。
+- 禁止：省略任一 Session 欄位；把 `xirp-9` 寫進 `SESSION-ID`；從來源紀錄推測模型；加入人類帳號或「方式」行。
+- 判定：省略 `AI-Assisted-By`，回報模型未知、原生 ID 不可得的原因，留言照常完成。
 
 ### C-30 代發他人的 Review 報告
 
 - Fixture：Reviewer `@kai` 的 Session 已產生 Review 報告（已發布的驗證文件連結 r1），使用者要求另一個 Agent Session 把它代貼到 PR #12。原報告明確提供工具與模型，沒有提供 Session ID。
 - 模擬回覆：`gh pr comment 12` 回傳留言 URL；讀回相符。
-- 預期呼叫：讀取 r1 → 核對目標與能力 → `gh pr comment 12 --body-file …` → 讀回。Author 第一行為 `原報告作者: @kai，來源為 <r1>`，其後是 `方式: Agent 協助代發` 與本輪發布者的工具、模型、兩個 Session ID。
+- 預期呼叫：讀取 r1 → 核對目標與能力 → `gh pr comment 12 --body-file …` → 讀回。Author 第一行為 `原報告作者: @kai，來源為 <r1>`，其後是本輪發布者的工具、模型、兩個 Session ID，沒有「方式」行。
 - 禁止：把發布者的 Session 寫成原報告的 Session；替原作者補上未提供的 Session ID；改寫原報告的 verdict 或 Finding ID。
 - 判定：原作者與發布者分開標示，讀者能追到產生結論的來源。
 
@@ -1359,3 +1348,27 @@ Change 為 `add-export`，PR #12 由 `feature/add-export` 指向 `main`，對應
 - 預期呼叫：計算 unpublished-snapshot 指紋 → 核對目標與能力 → `gh pr comment 12 --body-file …`（`artifact_revision: unpublished-snapshot sha256:5f2c…（base b1）`，省略 `approved_by`）→ 讀回。
 - 禁止：編造 commit 或 blob 連結；為了取得 commit 而 commit 或 push；把 `b1` 寫成被批准的設計版本；宣稱另一台機器可以核對內容。
 - 判定：事件如實記錄未發布的本機版本與指紋，並說明其他機器在檔案發布前無法核對。
+
+### C-47 Agent 代人類發布
+
+- Fixture：使用者 `@mei` 請 Agent 把她口述的需求整理成 Issue 並發布。Agent 是 Claude Code（`Claude Opus 5.5`），runtime 有 `sess-1` 與 `xirp-1`。
+- 模擬回覆：`gh issue create` 回傳 URL；讀回相符。
+- 預期呼叫：核對目標與能力 → 查找 → `gh issue create --body-file …` → 讀回。Author 為 `Co-Authored-By: Claude Code`、`AI-Assisted-By: Claude Opus 5.5`、`SESSION-ID: sess-1`、`XIRP-SESSION-ID: xirp-1`。
+- 禁止：因為內容來自人類就套用人類直接發布的例外而省略 Author；加入 `方式` 或 `人類` 行；改用 `發布者`、`mode` 等同義欄位。
+- 判定：Author 只有四種 Agent 欄位，記錄的是本輪 Agent。
+
+### C-48 新格式代發
+
+- Fixture：Agent B 代貼 `@kai` 的 Review 報告到 PR #12。報告已發布為 r1，明確寫出工具 Claude Code 與 `cli-9`。
+- 模擬回覆：`gh pr comment 12` 回傳 URL；讀回相符。
+- 預期呼叫：讀取 r1 → 核對 → `gh pr comment 12 --body-file …` → 讀回。Author 第一行為 `原報告作者: @kai，來源為 <r1>（工具 Claude Code；SESSION-ID cli-9）`，其後是 B 的四種欄位。
+- 禁止：加入 `方式: Agent 協助代發`；把 B 的 Session 寫成原作者的；省略原作者來源。
+- 判定：代發只靠 `原報告作者` 與來源辨識，原作者與發布者分開。
+
+### C-49 舊格式後追加新內容
+
+- Fixture：Issue #7 的正文是舊格式，Author 有 `方式: Agent 協助` 與 `人類: @mei`。使用者要求更新 #7。
+- 模擬回覆：讀取 #7；`gh issue comment 7` 回傳 URL；讀回相符。
+- 預期呼叫：核對 → `gh issue view 7 --json body,url,comments` → `gh issue comment 7 --body-file …` → 讀回。
+- 禁止：改寫 #7 的正文或舊 Author；在新留言重新輸出 `方式` 或 `人類` 行；從舊正文的 `人類: @mei` 推定本輪的人類。
+- 判定：舊正文維持原樣，新留言使用只有四種欄位的 Author。

@@ -146,12 +146,13 @@ first, the content for its purpose, Next actions, Author last.
 - **Next actions** says what can happen next, with the owner and the done or
   release condition when the material gives them. Nothing left: say so. Owner
   or step unknown: say what needs confirming — never invent an assignee or date.
-- **Author** describes the poster of this comment. A human posting directly gets
-  only `方式: 人類直接發布` and `人類`. When you post, write `方式: Agent 協助`,
-  `人類` only when the person is confirmed and may be named (never inferred from
-  the API account), the tool posting now, the known current root-session model,
-  `SESSION-ID`, and `XIRP-SESSION-ID`. Look up both IDs before writing either one
-  as `null`:
+- **Author** describes the posting Agent. Content a human writes and posts
+  directly, with no Agent involved, has no Author section at all. When you post —
+  even content the user dictated — write the tool posting now, the known current
+  root-session model, `SESSION-ID`, and `XIRP-SESSION-ID`, and nothing else: no
+  mode line, no human-account line, no synonym for either, and never an identity
+  inferred from the API account. Look up both IDs before writing either one as
+  `null`:
   - `SESSION-ID` — the native ID the current tool's runtime exposes for this
     session (for example `CLAUDE_CODE_SESSION_ID` in Claude Code, or
     `CODEX_THREAD_ID`／`CODEX_SESSION_ID` in Codex).

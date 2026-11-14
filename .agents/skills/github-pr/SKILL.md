@@ -257,11 +257,12 @@ result.
 reviews which head — with the owner and condition when known, or what still
 needs confirming.
 
-**Author** last (contract section 6). A human posting directly gets only
-`方式: 人類直接發布` and `人類`. When you post: `方式: Agent 協助`, `人類` only
-when the person is confirmed and may be named (never inferred from the API
-account), the tool posting now, the known current root-session model,
-`SESSION-ID`, and `XIRP-SESSION-ID`; look up both IDs before writing either one
+**Author** last (contract section 6). Content a human writes and posts directly,
+with no Agent involved, has no Author section at all. When you post — even
+content the user dictated — write only the tool posting now, the known current
+root-session model, `SESSION-ID`, and `XIRP-SESSION-ID`: no mode line, no
+human-account line, no synonym for either, and never an identity inferred from
+the API account; look up both IDs before writing either one
 as `null`:
 
 - `SESSION-ID` — the native ID the current tool's runtime exposes for this

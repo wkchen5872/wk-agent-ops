@@ -246,7 +246,7 @@ Codex 版本：`.codex/agents/doc-updater-agent.toml`（`gpt-5.6-terra`、medium
 create 會做必要的檢查、只含本次工作的 commit 與正常 push，再開 Draft PR；reply 新增審查、修正、
 Checkpoint 或 Closure 回覆（也用來代記人類的設計批准），close 先發布 Closure，再不 merge 地只
 關閉該 PR，關聯 Issue 保持原狀。只有 create 會寫 Git；Agent Author 同時記錄 `SESSION-ID` 與
-`XIRP-SESSION-ID`，人類直接發布只記人類身分，代發另列原報告作者。Work Item 只是 local-only 的
+`XIRP-SESSION-ID`，不再寫「方式／人類」行；人類直接發文不加 Author，代發另列原報告作者。Work Item 只是 local-only 的
 來源線索，不同本地 ID 不構成衝突、相同本地 ID 也不證明是同一件工作。
 
 - 範本（共同外框、Checkpoint、Closure）、關聯鍵、provenance、Review 格式與流程只存在於

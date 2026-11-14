@@ -193,7 +193,7 @@ Closure 摘要再以 completed 或 not planned 關閉該 Issue。`github-pr` 用
 create 會做開 PR 需要的檢查、只含本次工作的 commit 與正常 push，再開 Draft PR；update 改說明、
 reply 新增審查、修正、Checkpoint 或 Closure 回覆、close 先發布 Closure 再不 merge 地只關閉該 PR，
 它處理的 Issue 由 `github-issue close` 另行結案。每則內容都以 Handoff 開頭，接著依用途撰寫的
-正文、Next actions，最後是 Author（人類直接發布，或 Agent 協助時的工具、模型與兩個 Session ID）；
+正文、Next actions，Agent 參與時最後是 Author（工具、已知模型與兩個 Session ID；人類直接發文不加 Author）；
 Work Item 只標為 local-only。兩個入口只負責操作順序；範本、關聯鍵、provenance、人類設計批准與完整流程都在
 managed 的 [`docs/github-handoff.md`](docs/github-handoff.md)。GitHub 操作使用當下
 可用且已配置的 `gh` 或 GitHub MCP。只有 `github-pr create` 會 commit 與 push，且不 force、

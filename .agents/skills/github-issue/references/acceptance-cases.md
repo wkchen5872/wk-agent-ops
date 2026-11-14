@@ -9,8 +9,8 @@ Change 為 `add-export`，對應的 Work Item 為 `WI-20261101-export`（位在�
 帳號限制。可用工具為已登入的 `gh`；GitHub MCP 是否可用依案例說明。貼文工具為
 Claude Code，當下 root-session 模型已知為 `Claude Opus 5.5`；runtime 提供原生 Session ID
 `sess-7781`（`CLAUDE_CODE_SESSION_ID`）與 Xirp 管理 ID `xirp-42`（`CHIRP_SESSION_ID`），兩者都
-屬於本次貼文 Session 且可以公開；委託的使用者沒有確認可公開的 GitHub 帳號，所以 Author 不寫
-`人類`。案例中的 repo、編號、名稱與 ID 全部是虛構的。「核對」指契約第 3 節的
+屬於本次貼文 Session 且可以公開。Agent 發文的 Author 只有工具、已知模型與兩個 Session ID，
+不寫「方式」或「人類」行。案例中的 repo、編號、名稱與 ID 全部是虛構的。「核對」指契約第 3 節的
 步驟 1–4：固定完整目標、操作與授權，確認工具能力與已知障礙；「回讀」指依回傳的編號
 讀回結果。所有 `gh` 呼叫都帶 `-R github.com/acme/widgets`。正文格式以契約第 6 節的共同外框
 與第 6.1、6.6、6.7 節為準；舊 Issue 中的 `null` 欄位仍可讀，新內容不寫 `null` 佔位。
@@ -87,7 +87,7 @@ Claude Code，當下 root-session 模型已知為 `Claude Opus 5.5`；runtime �
 - 模擬回覆：查找無既有 Issue；`gh issue create` 回傳 `…/issues/7`。
 - 預期呼叫：核對 → 查找 → `gh issue create` → 回讀。
 - 禁止：把 `GPT-5.6` 或任何來源紀錄的模型填入 `AI-Assisted-By`；以工具名稱充當模型。
-- 判定：Author 為 `方式: Agent 協助`、`Co-Authored-By: Claude Code`、`SESSION-ID: sess-7781`、`XIRP-SESSION-ID: xirp-42`，省略 `AI-Assisted-By`，並在回報中說明已省略。
+- 判定：Author 為 `Co-Authored-By: Claude Code`、`SESSION-ID: sess-7781`、`XIRP-SESSION-ID: xirp-42`，省略 `AI-Assisted-By`，並在回報中說明已省略。
 
 ### GI-26 local-only 參考
 
@@ -194,7 +194,6 @@ Claude Code，當下 root-session 模型已知為 `Claude Opus 5.5`；runtime �
 
   ## Author
 
-  方式: Agent 協助
   Co-Authored-By: Claude Code
   AI-Assisted-By: Claude Opus 5.5
   SESSION-ID: sess-7781
@@ -298,7 +297,6 @@ Claude Code，當下 root-session 模型已知為 `Claude Opus 5.5`；runtime �
 
   ## Author
 
-  方式: Agent 協助
   Co-Authored-By: Claude Code
   AI-Assisted-By: Claude Opus 5.5
   SESSION-ID: sess-7781
@@ -358,7 +356,6 @@ Claude Code，當下 root-session 模型已知為 `Claude Opus 5.5`；runtime �
 
   ## Author
 
-  方式: Agent 協助
   Co-Authored-By: Claude Code
   AI-Assisted-By: Claude Opus 5.5
   SESSION-ID: sess-7781
@@ -377,7 +374,7 @@ Claude Code，當下 root-session 模型已知為 `Claude Opus 5.5`；runtime �
 - 模擬回覆：讀取候選後沒有任何正文或留言帶 `openspec-change: add-export` 或 `work-item: WI-20261101-export`；`gh issue create` 回傳 `…/issues/7`。
 - 預期呼叫：讀取 Change 與 Work Item → 核對 → `gh issue list --state all --search …` 並讀取候選 → `gh issue create --title … --body-file …` → `gh issue view 7 --json body,url`。
 - 禁止：在核對完整目標之前寫入；`git add`／`commit`／`push`；只憑搜尋結果判定無重複；加入 managed 標記或 Provenance 區段。
-- 判定：建立一個 Issue，正文依序為 Handoff（`openspec-change: add-export`、`branch: feature/add-export`、`work-item: WI-20261101-export（local-only）`）、Goal、Acceptance criteria、有用時的 References、Next actions，最後是 Author（`方式: Agent 協助`、`Co-Authored-By: Claude Code`、`AI-Assisted-By: Claude Opus 5.5`、`SESSION-ID: sess-7781`、`XIRP-SESSION-ID: xirp-42`），並回報 URL。
+- 判定：建立一個 Issue，正文依序為 Handoff（`openspec-change: add-export`、`branch: feature/add-export`、`work-item: WI-20261101-export（local-only）`）、Goal、Acceptance criteria、有用時的 References、Next actions，最後是 Author（`Co-Authored-By: Claude Code`、`AI-Assisted-By: Claude Opus 5.5`、`SESSION-ID: sess-7781`、`XIRP-SESSION-ID: xirp-42`），並回報 URL。
 
 ### GI-02 重複呼叫 create
 
@@ -583,8 +580,8 @@ update 一律在目標 Issue 新增一則頂層留言（`gh issue comment <N> --
 - Fixture：使用者 `@mei` 請 Agent 只檢查格式，自己在 GitHub 上發布一則初步問題。沒有 Change 或 branch。
 - 模擬回覆：無（由人類自行發布）。
 - 預期呼叫：讀取草稿並回報格式建議，沒有任何遠端寫入。
-- 禁止：替草稿加上 `Co-Authored-By`、`AI-Assisted-By` 或 Session 欄位；為了補 Handoff 建立 Change；寫 `null` 佔位。
-- 判定：建議的正文為 Handoff（一句話說明尚無關聯）→ Goal → Next actions → Author（`方式: 人類直接發布`、`人類: @mei`）。
+- 禁止：替草稿加上 Author 段落、`Co-Authored-By`、`AI-Assisted-By` 或 Session 欄位；為了補 Handoff 建立 Change；寫 `null` 佔位。
+- 判定：建議的正文為 Handoff（一句話說明尚無關聯）→ Goal → Next actions，沒有 Author 段落。
 
 ## 拒絕、權限與秘密
 
@@ -674,3 +671,11 @@ close 先以 `gh issue comment` 發布契約第 6.7 節的 Closure 並讀回，�
 - 預期呼叫：核對 → 讀取 → 準備 Closure → 再讀取 #42，之後停下回報。
 - 禁止：共同禁止；忽略新留言直接發布摘要並關閉；把新錯誤寫成已解決。
 - 判定：回報新出現的事件與它對驗收的影響，請使用者決定是否仍要關閉；確認後的 Closure 必須涵蓋這個差異。
+
+### GI-51 舊格式 Issue 追加留言
+
+- Fixture：Issue #7 的正文是舊格式，Author 有 `方式: Agent 協助` 與 `人類: @mei`。使用者要求在 #7 記錄本輪進度。
+- 模擬回覆：讀取 #7；`gh issue comment 7` 回傳 c20；讀回相符。
+- 預期呼叫：核對 → `gh issue view 7 --json body,url,comments` → `gh issue comment 7 --body-file …` → 讀回 c20。
+- 禁止：共同禁止；改寫 #7 的正文或舊 Author；在 c20 輸出 `方式` 或 `人類` 行；以舊正文的 `人類: @mei` 當成本輪身分。
+- 判定：c20 的 Author 只有 `Co-Authored-By: Claude Code`、`AI-Assisted-By: Claude Opus 5.5`、`SESSION-ID: sess-7781`、`XIRP-SESSION-ID: xirp-42`；#7 正文不變。

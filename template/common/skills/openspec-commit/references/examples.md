@@ -78,7 +78,6 @@ Closure 回覆（經 `github-pr reply` 發布並回讀）：
 
 ## Author
 
-方式: Agent 協助
 Co-Authored-By: Claude Code
 AI-Assisted-By: Claude Opus 5.5
 SESSION-ID: sess-7781
