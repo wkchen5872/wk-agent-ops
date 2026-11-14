@@ -45,10 +45,12 @@
 <text x="206" y="1113" class="h">已確認 PR，且未要求 local-only？</text>
 <path d="M780 1120 H950" class="line"/>
 <text x="852" y="1105" class="label">否</text>
-<rect class="box" x="950" y="1075" width="360" height="150" rx="16" fill="#eaf8ef" stroke="#76a68a"/>
+<rect class="box" x="950" y="1075" width="360" height="200" rx="16" fill="#eaf8ef" stroke="#76a68a"/>
 <text x="976" y="1113" class="h">回傳審查結果</text>
 <text x="976" y="1151" class="p">無 PR、PR 不明或 local-only：</text>
-<text x="976" y="1182" class="p">直接回報本輪版本與限制。</text>
+<text x="976" y="1182" class="p">回報並保存本地報告與快照；</text>
+<text x="976" y="1213" class="p">不通知，明確要求才交接</text>
+<text x="976" y="1244" class="p">給已核對的實作者。</text>
 <path d="M480 1165 V1240" class="line"/>
 <text x="503" y="1208" class="label">是</text>
 <rect class="box" x="100" y="1240" width="760" height="155" rx="16" fill="#eaf2ff" stroke="#6c96ce"/>

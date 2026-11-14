@@ -9,7 +9,9 @@ description: >
   appends the review — pass, changes-required, or blocked — through github-pr
   reply and reads it back, and hands a needed repair to the verified local
   implementer session; without a PR, when the PR lookup is unknown, or when the
-  user asks for local-only, it returns the report directly. Use whenever the user asks to review,
+  user asks for local-only, it returns and saves a local report with a content
+  fingerprint, hands it to an implementer only on explicit request, and can
+  later post it to a PR only after comparing versions. Use whenever the user asks to review,
   accept, verify, or re-review a change, an Issue, or a PR — for example
   "review PR #12", "驗收 add-export", "驗收 #7", "幫我審查這個 change",
   "設計審查", "複審新版本", "看一下修正好了沒".
@@ -17,7 +19,7 @@ license: MIT
 compatibility: "Requires git, the openspec-verify-change skill, and either GitHub CLI (gh) or a GitHub MCP when a PR is involved. Optional: openspec CLI, ponytail-review, code-review, a local session tool such as xirp."
 metadata:
   author: wkchen
-  version: "3.0"
+  version: "3.1"
 ---
 
 # Change Review
@@ -93,13 +95,37 @@ reported back to the caller only — never posted to the PR and never notified. 
 the PR head never counts toward its result. When the PR carries other Changes,
 review only the selected one and its real dependencies.
 
-**Without a PR, or PR unknown.** Review the **local version**: record `HEAD`,
-the uncommitted paths included, and run the checks there. Say plainly that this
-is a local review and proves nothing about any remote version.
+**Without a PR, or PR unknown.** Review the **local version** and fix it as a
+snapshot before the checks:
+
+- the comparison baseline (`HEAD`, or the base the work starts from);
+- the included paths — staged, unstaged, and untracked — from
+  `git status --porcelain=v1 --untracked-files=all`, limited to this Change's
+  work, and the excluded paths named explicitly (other Changes, other agents'
+  files, ignored records);
+- a fingerprint of every included file and the algorithm, for example SHA-256
+  per file plus one digest over the sorted list of `path NUL sha256 LF` lines.
+  Hash the working-tree content — what the checks actually run against — and
+  note a path that is both staged and further edited.
+
+Say plainly that this is a local review and proves nothing about any remote
+version. Before the report is finished, take the fingerprints again: if any
+included content moved during the round, the report names the snapshot actually
+checked and what changed, and the moved content is not declared passed. A
+check that may have read the content while it changed does not count: re-run it
+on a fixed snapshot, or report the affected part as `blocked`.
 
 **Skill source.** If this skill or the contract you are following is
 uncommitted, record the files with a fingerprint and keep that apart from the
 reviewed content. A dirty skill checkout never vouches for another head.
+
+**Announce before checking.** In two or three lines, before the required
+checks: the Change, the purpose, the version fixed above, the PR state —
+confirmed PR, confirmed no PR, or unknown — and where the report will go (a
+reply on the confirmed PR, or a saved local report). Unknown is stated as
+unknown, never as "no PR". This is a status line, not an approval gate: when
+the target and authorization are already clear, carry on without waiting;
+ask only about a real ambiguity.
 
 ## Step 3 — Run the checks
 
@@ -163,13 +189,9 @@ stable ID as an actionable item a reader without the local records understands
 (impact, location or evidence, how to tell it is fixed); Verification with the
 checks actually run, their results, and what was not executed; Next actions
 saying who acts next and on what condition; Author last. No findings means no
-filler items. Author is this reviewer session: `方式: Agent 協助`, the person
-only when confirmed and publishable, the tool, the known model, and both
-`SESSION-ID` (this reviewer session's native ID) and `XIRP-SESSION-ID` (its
-Xirp management ID). Look both up from the runtime before writing either as
-`null`, read only those keys, and explain any `null` in your report; an alias is
-never written as either ID, one ID never fills the other's field, and the
-implementer's IDs are never copied into the reviewer's Author.
+filler items. Author follows contract section 6 for this reviewer session,
+including `SESSION-ID` and `XIRP-SESSION-ID`; never write an alias as either
+ID, and never copy the implementer's IDs into the reviewer's Author.
 
 Before any post, read the PR head again. If it moved, keep the report bound to
 the reviewed head, mark it **stale**, and say the new head needs its own round.
@@ -180,7 +202,15 @@ posted under Step 5.
 ## Step 5 — Where the result goes
 
 - **No PR, PR unknown, or local-only** — the report is returned directly. An
-  unknown PR is never treated as permission to post somewhere.
+  unknown PR is never treated as permission to post somewhere. Save it under
+  the local record rules of `work-items/AGENTS.md` (section 9): in this
+  directory's Work Item for the same work when one exists; when none exists,
+  record it as those rules allow — a missing Work Item never stops the review,
+  and a record created to hold the report is never a precondition for it.
+  The file is `<agent>-<session>-rNN.md`; a new round is a new file, and the
+  workflow never overwrites another reviewer's report, never restores records
+  from another worktree, and keeps no other registry. The saved report carries
+  the snapshot from Step 2 so a later reader can check the bytes reviewed.
 - **A confirmed PR with any verdict** — `pass`, `changes-required`, or
   `blocked`: invoking this workflow authorizes posting the report through
   `github-pr reply`, unless the user asked for **local-only** or another explicit
@@ -193,15 +223,36 @@ posted under Step 5.
   comments before any retry, never resent blindly, and never through another
   tool after a denial. No notification goes out for an unconfirmed report.
 
+**Later publication of a local report.** Creating a PR never publishes a
+saved report. When the user later asks to post one, read the report and the
+confirmed PR, then compare: recompute the snapshot's fingerprints at the PR
+head for the same paths (`git show <head>:<path>`), and look for anything the
+PR adds beyond them. A matching name or branch proves nothing.
+
+- **Same content** — post through `github-pr reply` and read it back, keeping
+  the original review-id and findings, with `reviewed-head` set to the PR head
+  and the original baseline and snapshot digest stated as what was actually
+  reviewed. Author is the posting session (contract section 6); when a session
+  other than the original reviewer posts, it uses the relayed form with
+  `原報告作者` pointing at the saved report.
+- **Different content** — name the difference. A verdict for the current head
+  needs a new round, with the original finding IDs carried forward;
+  a local result never inherits to a different head. Only an explicit request to post
+  the historical report posts it, labeled with its original scope and
+  snapshot — its `reviewed-head` names the local baseline and says it is not
+  the PR head — and never as the current head's verdict.
+- **Snapshot unavailable or not comparable** — report the limit; the old report
+  does not attest the current head.
+
 Use a platform APPROVE or REQUEST_CHANGES only on a separate explicit request
 when the account may; an Agent verdict is not a platform approval. Older COMMENT
 reviews remain readable history.
 
 ## Step 6 — Hand off to the implementer
 
-Only after a confirmed `changes-required` or `blocked` reply, unless the user
-excluded notification, and only when the result asks the implementer to act. A
-pass never sends a repair notification. A `blocked`
+With a PR: only after a confirmed `changes-required` or `blocked` reply,
+unless the user excluded notification, and only when the result asks the
+implementer to act. A pass never sends a repair notification. A `blocked`
 caused by the reviewer's side — a missing review skill or a missing test
 environment the implementer cannot provide — is reported and posted, but not
 sent to the implementer as a repair request.
@@ -220,6 +271,13 @@ sent to the implementer as a repair request.
    the message — never the publisher as a fallback, even when the publisher's
    session verifies locally. Only an explicit user instruction naming another
    recipient changes the target, and that recipient is verified the same way.
+   Without a PR, the same work's local implementation or repair record is the
+   source: an implementation or repair report in this directory's Work Item for
+   the same Change (or the record the user points to), read for the same
+   Author fields and relay markers — or a recipient the user explicitly names
+   with a session you can verify. Never take records from another worktree,
+   build a registry, or use the reviewer's own or a relaying publisher's IDs;
+   no such source means no send.
 2. **Verify locally** with an available session tool. The implementer's
    `XIRP-SESSION-ID` is only a lookup hint: confirm it belongs to the same tool,
    project, and native `SESSION-ID` before using it as the target the tool
@@ -236,6 +294,19 @@ sent to the implementer as a repair request.
    cannot be verified: return a transferable message with the same content and
    say why it was not sent. Repository notifiers such as Telegram
    or waiting prompts are not session channels.
+
+**Local handoff (no PR).** Without an explicit request, a no-PR review notifies no one: the report
+is returned and saved. When the user explicitly asks to hand the local findings
+to an implementer, send one message only if the report is saved and readable
+and the implementer verifies through steps 1–2 (a relayed author's publisher is
+never the target). The message carries the repo-relative report path, the
+reviewed snapshot (baseline and digest), the finding IDs, and the next action —
+no PR URL is made up. local-only or an explicit notification exclusion still
+wins: when the same request also asks for a handoff, point out the conflict
+and ask, and send nothing until the user answers. This path is never a fallback: a PR report that was denied, timed out, or
+is unconfirmed does not turn into a local handoff. Record "sent" separately from
+read or repair started, and return a transferable message when the target
+cannot be verified.
 
 ## Step 7 — End the round
 
@@ -258,4 +329,6 @@ design review; required tests; full reports for no PR, a failed PR that can be
 notified, a blocked PR that cannot, and a posted pass; pass with an unknown PR,
 a failed pass publication, and a head that moves before a pass is posted;
 publication readback and failures; implementer identity and local sessions;
-local-only; and re-review.
+local-only; the start announcement; local snapshots, saved reports and moved
+content; explicit local handoff; later publication of a local report; and
+re-review.
