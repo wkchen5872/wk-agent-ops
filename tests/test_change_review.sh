@@ -153,6 +153,57 @@ for t in '代發實作 A 可定位' '代發實作 A 不可定位'; do
     && ok "change-review has a case for '$t'" || bad "change-review has a case for '$t'"
 done
 
+# ── improve-change-review-local-handoff (Issue #13) ──────────────────────────
+# Maps to openspec/changes/improve-change-review-local-handoff specs.
+case_has() { grep -E '^### CR-[0-9]+' "$CASES" 2>/dev/null | grep -qF -- "$1" && ok "case for '$1'" || bad "case for '$1'"; }
+echo "ICR-1 announcement before checks (1.1)"
+want "$SKILL" '**Announce before checking.**' "the round is announced before the checks"
+want "$SKILL" 'not an approval gate' "the announcement adds no approval gate"
+want "$SKILL" 'confirmed no PR' "confirmed no PR is named in the announcement"
+for t in '開始提示：沒有 PR' '開始提示：PR 查找不明'; do case_has "$t"; done
+want "$CHECKS" '本地審查' "checklists cover the local review"
+
+echo "ICR-2 local report evidence (1.2)"
+for t in 'staged, unstaged, and untracked' 'fingerprint of every included file' 'work-items/AGENTS.md' '<agent>-<session>-rNN.md' \
+         "never overwrites another reviewer's report" 'another worktree' 'content moved'; do
+  want "$SKILL" "$t" "local evidence covers '$t'"
+done
+for t in 'dirty checkout 快照' '既有 Work Item' '缺少 Work Item' '他人報告不覆寫' '審查中內容變動'; do case_has "$t"; done
+
+echo "ICR-3 explicit local handoff (2.1)"
+want "$SKILL" '**Local handoff (no PR).**' "an explicit local handoff path exists"
+want "$SKILL" 'Without an explicit request, a no-PR review notifies no one' "default no-PR review sends nothing"
+want "$SKILL" 'never a fallback' "local handoff never replaces a failed PR publication"
+want "$SKILL" 'no PR URL' "local handoff fabricates no PR URL"
+for t in '本地交接：明確要求' '本地交接：未要求' '本地交接：local-only' '本地交接：代發者' '本地交接：mapping 不符' 'PR 發布失敗不改走本地交接'; do
+  case_has "$t"
+done
+
+# codex-local-handoff-r01/F-01: the no-PR handoff needs its own implementer source.
+step6_1() { sed -n '/^1\. \*\*Find the implementation Author\*\*/,/^2\. \*\*Verify locally\*\*/p' "$SKILL" 2>/dev/null; }
+step6_1 | grep -qF "Without a PR, the same work's local implementation or repair record" \
+  && ok "step 1 names the local implementation record as a source" || bad "step 1 names the local implementation record as a source"
+step6_1 | grep -qF 'a recipient the user explicitly names' \
+  && ok "step 1 allows an explicitly user-named recipient" || bad "step 1 allows an explicitly user-named recipient"
+step6_1 | grep -qF 'from another worktree' && ok "step 1 forbids pulling records from another worktree" \
+  || bad "step 1 forbids pulling records from another worktree"
+for t in '本地交接：只有本機實作紀錄' '本地交接：本機紀錄沒有身分'; do case_has "$t"; done
+
+echo "ICR-4 deferred publication (3.1)"
+want "$SKILL" '**Later publication of a local report.**' "deferred publication path exists"
+want "$SKILL" 'a local result never inherits' "an old local pass never covers a different head"
+want "$SKILL" 'Creating a PR never publishes' "creating a PR does not auto-post the report"
+for t in '後建 PR：內容相同' '後建 PR：新增差異' '後建 PR：原快照不可得' '後建 PR：歷史報告明確代發' '後建 PR：後續複審'; do
+  case_has "$t"
+done
+
+echo "ICR-5 diagram and name (3.2)"
+want "$SVG" '本地報告' "diagram shows the saved local report"
+want "$SVG" '明確要求才交接' "diagram shows the explicit local handoff"
+grep -qE '^name: change-review$' "$SKILL" && ok "skill is still named change-review" || bad "skill is still named change-review"
+n="$(grep -oE '^### CR-[0-9]+' "$CASES" | sort | uniq -d | wc -l | tr -d ' ')"
+[[ "$n" == 0 ]] && ok "case IDs are unique" || bad "case IDs are unique ($n duplicates)"
+
 # ── 2.x Phase checklists and findings ────────────────────────────────────────
 echo "2.x checklists and findings"
 [[ -f "$CHECKS" ]] && ok "phase checklists exist" || bad "phase checklists exist"

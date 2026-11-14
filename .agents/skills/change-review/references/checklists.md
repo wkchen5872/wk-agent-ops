@@ -16,6 +16,7 @@
 | 相連程式 | 被修改的介面或設定，其 callers 是否受影響（選用品質技能沒有涵蓋時才自己檢查） |
 | 範圍 | 只判斷選定 Change 與它實際的依賴；PR 中其他 Change 的未完成 tasks 不是 Finding |
 | 外部驗收 | 需要真實資料或部署後才能驗收的條件，寫明仍 pending，不算進 pass |
+| 本地審查 | 沒有 PR 或查找不明時：開始前已宣告 PR 狀態與報告去向；快照列出 baseline、包含的 staged／unstaged／untracked 路徑、排除範圍與逐檔指紋；結束前重算指紋，內容變動時報告實際檢查的版本 |
 
 ## design
 

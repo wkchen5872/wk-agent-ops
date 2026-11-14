@@ -32,7 +32,7 @@ sources:
 | 開發與交付全貌：[SVG](development-lifecycle.svg)／[PNG](development-lifecycle.png) | [多 Agent 工作流](../workflow/guide.md)；探索、規劃、checkout、實作、人工發布檢核、Review、交付與獨立 Git 整合 | 本 repo 的 `docs/`；各階段細節由下列文件管理 |
 | 01 開立規格：[SVG](local-development-define.svg)／[PNG](local-development-define.png) | [本機四階段](../workflow/local-development.md#01-開立規格)；先分支再 Change，人工確認，Issue／設計 PR 選用 | 本 repo 的 `docs/`；不新增前兩階段整合 Skill |
 | 02 實作與發布：[SVG](local-development-implement.svg)／[PNG](local-development-implement.png) | [本機四階段](../workflow/local-development.md#02-實作與發布)；發布前人工檢核，可留在本地 Review | 本 repo 的 `docs/` |
-| 03 Review：[SVG](local-development-review.svg)／[PNG](local-development-review.png) | [本機四階段](../workflow/local-development.md#03-review-與修正交接)；三種結論與修正重入 | 依現行 `change-review`，不包含尚在規劃的本地通知優化[^review-source] |
+| 03 Review：[SVG](local-development-review.svg)／[PNG](local-development-review.png) | [本機四階段](../workflow/local-development.md#03-review-與修正交接)；三種結論與修正重入 | 依現行 `change-review`；本地報告、明確交接與後補 PR 的版本核對以該 Skill 為準[^review-source] |
 | 04 封存與交付：[SVG](local-development-finish.svg)／[PNG](local-development-finish.png) | [Commit 工作流](../workflow/commit.md)；本地完成、成功交付、取消／被取代三分支 | 本版本 Skill 已實作並完成本地驗證；真實遠端發布仍待端到端驗收，新 head 要有相符 pass[^delivery-design] |
 | 一輪 Review 詳細流程：[SVG](change-review-workflow.svg) | 已確認 PR 的三種結論都 reply 並回讀；無 PR、PR 不明或 local-only 只在本地回報；符合資格才核對原實作者並通知 | 原稿為 [review-loop.svg](../../template/common/skills/change-review/references/review-loop.svg)；更新來源後同步本圖，再由 installer 更新 Skill 副本[^review-source] |
 | 團隊 GitHub 交接：[SVG](github-handoff.svg) | [交接契約](../github-handoff.md)；設計批准、版本審查、Closure 回讀、結案再核對及 Issue 獨立結案 | managed；修改 `template/common/docs/diagrams/github-handoff.svg`，再跑 installer |

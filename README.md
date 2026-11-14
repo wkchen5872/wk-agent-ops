@@ -211,8 +211,10 @@ repository 與分支），寫入後回讀結果。預設不限制帳號；只有
 審查與驗收使用 `change-review` Skill：給它 Change 名稱、Issue URL／`#N` 或 PR 即可，PR 不是
 必要條件，目的預設為實作驗收（明確要求時做設計審查）。它解析 Change 與 PR、固定受審版本，
 實際調用必用的 `openspec-verify-change`、已安裝且適合的選用品質技能與專案測試。沒有 PR、
-PR 查找不明或要求 local-only 時直接回報；已確認 PR 時，任何結論（含 pass）都以
-`github-pr reply` 發布並回讀；需要修正時再經本機 session 工具核對後通知實作者，無法定位時回傳
+PR 查找不明或要求 local-only 時，會回傳並依 Work Item 規範保存含內容指紋的本地報告，預設不通知；
+只有使用者明確要求且同一工作的本機實作紀錄或指定收件人可核對為原實作者時，才交接修正。稍後要把
+本地報告發到 PR，必須先比對已保存的快照與 PR head，未驗證的差異不得承接舊 pass。已確認 PR 時，任何結論
+（含 pass）都以 `github-pr reply` 發布並回讀；需要修正時再經本機 session 工具核對後通知實作者，無法定位時回傳
 可轉交訊息，pass 不發修正通知。每次呼叫只做一輪，不改產品程式、不
 commit／push，也不走 PR 的 create／update／close。
 

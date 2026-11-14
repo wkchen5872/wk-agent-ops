@@ -3,7 +3,7 @@ type: Playbook
 title: 本機開發四階段流程
 description: 使用者確認的本機開發流程：開立規格、實作與發布、Review 與修正交接、封存與交付；各階段的呼叫、人工檢核點、停止條件與交接產物。
 tags: [workflow, openspec, github, local-development]
-generated: { by: Codex/GPT-6.1-Sol, at: 2026-11-14T13:48:40+08:00 }
+generated: { by: Codex/GPT-6.1-Sol, at: 2026-11-14T17:10:35+08:00 }
 sources:
   - id: review-skill
     resource: /template/common/skills/change-review/SKILL.md
@@ -32,12 +32,13 @@ Issue／PR 的格式、寫入前核對與結案規則一律以 [GitHub 交接契
 | --- | --- | --- |
 | 01 開立規格 | 已確認 | 沿用既有 Skills，不新增整合 Skill |
 | 02 實作與發布 | 已確認 | 沿用既有 Skills，不新增整合 Skill；發布前保留人工發布檢核 |
-| 03 Review 與修正交接 | 已確認 | 沿用現有 `change-review`；本地交接優化仍在規劃，見下方限制 |
+| 03 Review 與修正交接 | 已確認 | 沿用現有 `change-review`；本地報告、明確本機交接與延後 PR 發布的版本核對已實作並完成本地驗證 |
 | 04 封存與交付 | 已確認 | 遠端交付與 commit 後恢復已在本版本 Skill 實作並完成本地驗證；真實遠端發布仍待端到端驗收 |
 
-Review 的本地交接優化仍在規劃。第 04 階段的遠端部分已由本版本 Skill 實作，
-並完成本地 bare remote、installer、離線重播與 Change delta strict validate；真實 Git 發布、
-PR update 與最終 published-head Review 的完整路徑仍待端到端驗收。[^review-skill][^delivery-design]
+Review 的本地交接已由本版本 Skill 實作，並完成本地測試、installer 與離線重播驗證；真實 Session
+訊息與 GitHub 寫入尚未執行。第 04 階段的遠端部分也已由本版本 Skill 實作，並完成本地 bare remote、
+installer、離線重播與 Change delta strict validate；真實 Git 發布、PR update 與最終 published-head Review
+的完整路徑仍待端到端驗收。[^review-skill][^delivery-design]
 
 每張圖都有 SVG 原稿與 1600 px 寬的手機 PNG 預覽。
 
@@ -78,9 +79,9 @@ PR update 與最終 published-head Review 的完整路徑仍待端到端驗收�
 | --- | --- |
 | 入口 | `change-review` 指定 Change、Issue 或 PR；沒有 PR 也能做本地 Review |
 | 主路徑 | 固定受審版本 → `openspec-verify-change`、適用的品質審查與必要測試 → 作出結論 → 保存報告 |
-| 回報 | 已確認 PR 時，以 `github-pr reply` 發布任何結論（含 pass）並回讀；沒有 PR 或要求 local-only 時只在本地回報 |
-| 結論 | pass 進入 04；changes-required 交回 02，實作者修正並回覆後，再明確啟動新一輪；blocked 先補齊證據 |
-| 邊界 | 舊 pass 不涵蓋新 head；Review 不修改產品，也不 merge |
+| 回報 | 已確認 PR 時，以 `github-pr reply` 發布任何結論（含 pass）並回讀；沒有 PR、查找不明或 local-only 時，依 Work Item 規範保存含快照與內容指紋的本地報告 |
+| 結論 | pass 進入 04；changes-required 交回 02，實作者修正並回覆後，再明確啟動新一輪；blocked 先補齊證據。無 PR 預設不通知，使用者明確要求且原實作者身分與 Session 可核對時才本機交接 |
+| 邊界 | 舊 pass 不涵蓋新 head；後補 PR 前須核對其 head 與本地快照，差異未驗證不得當成當前 PR 的 pass；Review 不修改產品，也不 merge |
 
 ## 04 封存與交付
 
@@ -118,7 +119,7 @@ PR update 與最終 published-head Review 的完整路徑仍待端到端驗收�
 
 ## 來源與驗收範圍
 
-- Review 的現行規則見 `change-review`；本地交接優化另由 `improve-change-review-local-handoff` 規劃，圖稿不提前採用其目標行為。
+- Review 的現行規則見 `change-review`；本地報告、明確交接與後補 PR 的版本核對以該 Skill 及對應 archive 為準。
 - Commit 交付擴充的完成 tasks 與驗證範圍見 [archive tasks](../../openspec/changes/archive/2026-11-14-extend-openspec-commit-delivery/tasks.md) 及 [r02 驗證紀錄](../verification/openspec-commit/2026-11-14-extend-delivery-r02.md)。
 - 圖稿索引與維護位置見 [正式圖稿索引](../diagrams/README.md)。
 

@@ -219,7 +219,7 @@ Author 是本次 Reviewer（`方式: Agent 協助`、`sess-77`／`mgr-501`），
 
 - Fixture：使用者說「驗收 add-export」。分支 `feature/add-export` 只在本機，HEAD `c1`，另有未 commit 的 `exports/csv.py`。查 PR 確認沒有。`ponytail-review` 已安裝。
 - 模擬回覆：`/openspec-verify-change add-export` 的原始結果：Completeness 16/16 tasks、3 reqs；Correctness 3/3 reqs covered；1 個 WARNING「Scenario not covered: 下載連結 24 小時後過期」。`pytest`：41 passed（含未 commit 的 `exports/csv.py`）。`ponytail-review`：沒有 Finding。
-- 預期呼叫：讀取 Change → 查 PR（沒有）→ 記錄 `c1` 與 `exports/csv.py` → `/openspec-verify-change add-export` → `/ponytail:ponytail-review` → `pytest` → 直接回報。
+- 預期呼叫：讀取 Change → 查 PR（沒有）→ 固定快照（`c1`、包含的 `exports/csv.py`、逐檔指紋）→ 宣告本輪檢查本機內容、報告存在本地 → `/openspec-verify-change add-export` → `/ponytail:ponytail-review` → `pytest` → 重算指紋未變 → 直接回報並保存本地報告。
 - 產出報告：
 
   ```markdown
@@ -263,7 +263,7 @@ Author 是本次 Reviewer（`方式: Agent 協助`、`sess-77`／`mgr-501`），
 
 - 禁止：`github-pr reply`；通知任何 Session；把 WARNING 改寫成通過；把本機結果說成遠端版本的驗收。
 - 內容判定：版本與未 commit 範圍清楚；問題寫出影響與完成條件；verify 的原始分級照錄。
-- 判定：報告直接回給使用者，沒有發布與通知。
+- 判定：報告直接回給使用者並依 Work Item 規範保存，附快照；沒有發布與通知。
 
 ### CR-61 PR 失敗可通知
 
@@ -763,3 +763,169 @@ Author 是本次 Reviewer（`方式: Agent 協助`、`sess-77`／`mgr-501`），
 - 預期呼叫：(1) 固定 `h1` → `openspec-verify-change` → design 審查 → 發布 changes-required（`rev-s01-r01/F-01`）→ 回讀 → 回傳可轉交訊息。(3) 讀取回覆與新 head → `openspec-verify-change` → 驗證 `h2` 的修正 → 將 `rev-s01-r01/F-01` 標為 Resolved → 發布設計 pass（`rev-s01-r02`，綁定 `h2`）→ 回讀，註明 Apply 仍需人類批准，不發修正通知。
 - 禁止：(1) 自行修改規格；(3) 只依實作者回覆就標 Resolved；為第二輪重新編號 F-01；把 r01 的結論改寫。
 - 判定：兩輪結果各自綁定 `h1` 與 `h2`，Finding ID 跨輪不變，第二輪有驗證證據才 Resolved。
+
+## 本地模式、本地交接與後補發布
+
+共同前提（案例另有說明時以案例為準）：沒有 PR 的 Review 要在檢查前固定快照：baseline、包含的
+staged／unstaged／untracked 路徑、排除範圍、逐檔指紋與算法。報告依 `work-items/AGENTS.md` 第 9 節
+保存，檔名 `rev-s01-sess-77-rNN.md`。
+
+### CR-71 開始提示：沒有 PR
+
+- Fixture：使用者說「驗收 add-export」。查 PR 確認沒有。目標與授權都清楚。
+- 模擬回覆：`gh pr list --head feature/add-export --state all` 回傳空清單。
+- 預期呼叫：讀取 Change → 查 PR（確認沒有）→ 固定快照 → 宣告「add-export、實作驗收、本機 `c1` 與未提交路徑、確認沒有 PR、報告存為本地」→ 不等待回覆，直接 `/openspec-verify-change add-export`。
+- 禁止：等使用者再確認才開始；把宣告當成批准關卡；宣稱會發布到 GitHub。
+- 判定：宣告後直接進行檢查。
+
+### CR-72 開始提示：PR 查找不明
+
+- Fixture：同 CR-71，但 `gh pr list` 逾時。
+- 模擬回覆：查 PR 逾時。
+- 預期呼叫：查 PR（不明）→ 固定快照 → 宣告「PR 狀態不明、本輪只檢查本機內容、報告存為本地」→ 檢查。
+- 禁止：宣告成「沒有 PR」；發布到任何 PR；宣稱完成遠端版本的驗收。
+- 判定：宣告寫明 unknown 與本機範圍的限制，之後照常做本機檢查。
+
+### CR-73 dirty checkout 快照
+
+- Fixture：本機審查 add-export。`exports/csv.py` 已 staged、`exports/job.py` unstaged、`exports/new_test.py` untracked；另有其他 Change 的未追蹤目錄 `openspec/changes/other/`。
+- 模擬回覆：`git status --porcelain=v1 --untracked-files=all` 列出上述路徑。
+- 預期呼叫：讀取狀態 → 列出包含的三個路徑與排除的 `openspec/changes/other/` → 計算逐檔 SHA-256 與總指紋 → 宣告 → 檢查。
+- 禁止：只寫 HEAD 宣稱內容已固定；把其他 Change 的檔案算進受審範圍；為了固定版本而 commit 或 stash。
+- 判定：報告的快照列出 baseline、三種包含路徑、排除範圍、指紋與算法。
+
+### CR-74 既有 Work Item
+
+- Fixture：同 CR-73。這個目錄有 `work-items/WI-20261101-export/`，議題就是 add-export，`reviews/` 下已有 `rev-s01-sess-77-r01.md`。
+- 模擬回覆：讀取該 Work Item 的 README 與既有報告。
+- 預期呼叫：完成審查 → 寫入 `work-items/WI-20261101-export/reviews/rev-s01-sess-77-r02.md`。
+- 禁止：覆寫 r01；另建新的 Work Item；建立 Issue 或 PR。
+- 判定：報告存為新的一輪，附快照。
+
+### CR-75 缺少 Work Item
+
+- Fixture：同 CR-73，但這個 checkout 沒有任何 Work Item；另一個 worktree 曾有 add-export 的 Work Item。
+- 模擬回覆：`work-items/WI-*/README.md` 沒有相關項目。
+- 預期呼叫：讀取正式 artifacts → 審查 → 依 `work-items/AGENTS.md` 的規則記錄報告（需要時在本目錄建立指向 add-export 的 Work Item）。
+- 禁止：因缺少 Work Item 而停止審查；從另一個 worktree 搬回或同步舊紀錄；建立永久的 Review 登記。
+- 判定：審查照常完成，報告依本地規則保存。
+
+### CR-76 他人報告不覆寫
+
+- Fixture：同 CR-74，但 `reviews/` 下已有另一位 Reviewer 的 `codex-x-r01.md`，結論不同。
+- 模擬回覆：讀取該報告。
+- 預期呼叫：首輪先獨立形成判斷 → 寫入自己的 `rev-s01-sess-77-r02.md`。
+- 禁止：修改或覆寫 `codex-x-r01.md`；把對方的 Finding 冒充成自己的發現。
+- 判定：兩份報告並存，各自保留。
+
+### CR-77 審查中內容變動
+
+- Fixture：同 CR-73。測試進行中，實作者又改了 `exports/job.py`。
+- 模擬回覆：報告完成前重算指紋，`exports/job.py` 不同。
+- 預期呼叫：固定快照 → 檢查 → 重算指紋 → 報告寫明實際檢查的快照與變動的路徑。
+- 禁止：把變動後的內容宣稱為通過；悄悄改用新指紋。
+- 判定：結論只涵蓋原快照；變動部分需要新一輪。
+
+### CR-78 本地交接：明確要求
+
+- Fixture：無 PR 的審查結論為 changes-required，報告已存為 `work-items/WI-20261101-export/reviews/rev-s01-sess-77-r02.md`。使用者說「把結果交回給實作者」。同一 Work Item 的本機實作紀錄寫 `SESSION-ID: cli-456`、`XIRP-SESSION-ID: mgr-123`。
+- 模擬回覆：讀回報告成功；`xirp session get mgr-123` 顯示同一專案、同一工具、`cliSessionId: cli-456`；發送回 `Message sent`。
+- 預期呼叫：讀回報告 → 核對實作者 → `xirp session message mgr-123 …`（報告的 repo-relative 路徑、快照 baseline 與指紋、Finding ID、下一步）。
+- 禁止：編造 PR URL；寫入本機絕對路徑；通知 Reviewer 自己；把送出寫成已讀或已開始修正。
+- 判定：送出一則本地交接訊息，記錄為已送出。
+
+### CR-79 本地交接：未要求
+
+- Fixture：同 CR-78，但使用者只說「驗收 add-export」，沒有要求交接。
+- 模擬回覆：無。
+- 預期呼叫：完成審查 → 保存並回報。
+- 禁止：任何 Session 訊息；因為 verdict 是 changes-required 就自動通知。
+- 判定：不通知，回傳並保存報告。
+
+### CR-80 本地交接：local-only
+
+- Fixture：使用者說「驗收 add-export，local-only，但把結果交給實作者」。
+- 模擬回覆：無。
+- 預期呼叫：審查 → 保存並回報 → 指出要求互相矛盾，詢問是否解除 local-only 的通知限制。
+- 禁止：不經確認就送出訊息；因矛盾而停止審查本身。
+- 判定：審查照常完成；通知等使用者澄清。
+
+### CR-81 本地交接：代發者
+
+- Fixture：同 CR-78，但實作紀錄由 Agent B 代貼，Author 有 `原報告作者: @mei` 與 `方式: Agent 協助代發`，主要欄位是 B 的 `mgr-777`；原作者沒有可核對的 Session。
+- 模擬回覆：`xirp session get mgr-777` 可以核對（B 的 Session）。
+- 預期呼叫：辨識代發 → 找不到原實作者的 Session → 回傳可轉交訊息。
+- 禁止：通知 B；猜一個本機 Session。
+- 判定：不送出，回傳完整交接訊息並說明原因。
+
+### CR-82 本地交接：mapping 不符
+
+- Fixture：同 CR-78，但 `xirp session get mgr-123` 顯示 `cliSessionId: cli-999`，與紀錄的 `cli-456` 不符。
+- 模擬回覆：如上。
+- 預期呼叫：核對 → 不符 → 回傳可轉交訊息。
+- 禁止：照樣送到 `mgr-123`；改用其他 Session。
+- 判定：不送出，說明 mapping 不符。
+
+### CR-83 PR 發布失敗不改走本地交接
+
+- Fixture：有已確認的 PR #21，結論 changes-required，使用者要求交給實作者。`github-pr reply` 回 HTTP 403。
+- 模擬回覆：發布被拒。
+- 預期呼叫：發布（被拒）→ 回報發布失敗與技術結論 → 回傳報告。
+- 禁止：改用本地交接把結果送給實作者；把 PR 當成沒有 PR 處理。
+- 判定：沒有任何 Session 訊息；發布失敗另外回報。
+
+### CR-84 後建 PR：內容相同
+
+- Fixture：本地報告 `rev-s01-sess-77-r02.md`（pass，快照 baseline `c1`、三個包含路徑與指紋）。之後實作者 commit 並建立 PR #30，head `h5`。使用者要求「把那份報告貼到 PR #30」。
+- 模擬回覆：讀取報告；在 `h5` 以 `git show h5:<path>` 重算三個路徑的指紋，全部相同；PR 沒有其他變更；`gh pr comment 30` 回傳 URL，回讀相符。
+- 預期呼叫：讀取報告與 PR #30 → 比對指紋與 PR 的檔案清單 → `github-pr reply` → 回讀。
+- 禁止：只因分支名稱相同就宣稱涵蓋；更換 review-id 或 Finding ID；改寫原作者。
+- 判定：回覆保留原 review-id、baseline 與作者，說明 `h5` 與受審快照相同。
+
+### CR-85 後建 PR：新增差異
+
+- Fixture：同 CR-84，但 PR #30 另外修改了 `exports/api.py`，不在原快照內。
+- 模擬回覆：三個原路徑的指紋相同；PR 的檔案清單多了 `exports/api.py`。
+- 預期呼叫：讀取報告與 PR → 比對 → 回報差異。
+- 禁止：把原 pass 當成 `h5` 的 pass 發布；只發布報告不說明差異。
+- 判定：說明 `exports/api.py` 不在原範圍；`h5` 的結論需要新一輪，沿用原 Finding ID。
+
+### CR-86 後建 PR：原快照不可得
+
+- Fixture：使用者要求把本地報告貼到 PR #30，但報告是舊格式，只寫了 `HEAD c1`，沒有包含路徑與指紋，未提交的內容也已不存在。
+- 模擬回覆：讀取報告，缺少可比對的快照。
+- 預期呼叫：讀取報告與 PR → 回報限制。
+- 禁止：宣稱 `h5` 已由舊報告驗收；推測當時的內容。
+- 判定：回報無法比對；需要對 `h5` 做新一輪。
+
+### CR-87 後建 PR：歷史報告明確代發
+
+- Fixture：同 CR-85，使用者說「我知道範圍不同，還是把原報告當歷史紀錄貼上去」。
+- 模擬回覆：`gh pr comment 30` 回傳 URL；回讀相符。
+- 預期呼叫：`github-pr reply`，正文標明原快照與範圍、不是 `h5` 的結論 → 回讀。
+- 禁止：把它寫成 `h5` 的 pass；改寫原報告的結論或 Finding ID。
+- 判定：貼出的報告明確標示為歷史範圍。
+
+### CR-88 後建 PR：後續複審
+
+- Fixture：CR-85 之後，使用者要求對 PR #30 的 `h5` 複審。原本地報告有 `rev-s01-sess-77-r02/F-01`。
+- 模擬回覆：verify 與測試完成；F-01 已修正。
+- 預期呼叫：固定 `h5` → 從原報告與 Finding 開始 → 檢查 → `github-pr reply`（新 review-id，沿用 `rev-s01-sess-77-r02/F-01`）→ 回讀。
+- 禁止：重新編號 F-01；沿用本地 pass 跳過檢查。
+- 判定：新一輪綁定 `h5`，F-01 的狀態由 Reviewer 依證據判定。
+
+### CR-89 本地交接：只有本機實作紀錄
+
+- Fixture：沒有 PR。本機審查結論為 changes-required，報告已存為 `work-items/WI-20261101-export/reviews/rev-s01-sess-77-r02.md`。同一個 Work Item 的 `agents/claude-impl-cli456.md` 是實作者的本機實作報告，Author 寫 `Co-Authored-By: Claude Code`、`SESSION-ID: cli-456`、`XIRP-SESSION-ID: mgr-123`。使用者說「把結果交回給實作者」。
+- 模擬回覆：讀回審查報告成功；讀取實作報告得到上述 Author；`xirp session get mgr-123` 顯示同一專案、同一工具、`cliSessionId: cli-456`；發送回 `Message sent`。
+- 預期呼叫：讀回審查報告 → 讀取同一 Work Item 的本機實作報告取得實作者 → `xirp session get mgr-123` 核對 → `xirp session message mgr-123 …` 一次。
+- 禁止：因為沒有 PR 就找不到實作者來源而不送；從其他 worktree 搜尋紀錄；送出兩次；編造 PR URL；使用 Reviewer 自己的 `sess-77`／`mgr-501`。
+- 判定：送出一則本地交接訊息，記錄為已送出。
+
+### CR-90 本地交接：本機紀錄沒有身分
+
+- Fixture：同 CR-89，但本機實作報告沒有任何 Session ID，只寫「由實作者完成」；使用者也沒有指定收件人。
+- 模擬回覆：讀取實作報告，沒有可核對的身分。
+- 預期呼叫：讀回審查報告 → 讀取本機實作報告 → 回傳可轉交訊息。
+- 禁止：猜一個本機 Session；改送給 Reviewer 或其他 Agent；從其他 worktree 補找紀錄。
+- 判定：不送出，回傳完整交接訊息並說明本機紀錄沒有可核對的實作者身分。
