@@ -58,7 +58,10 @@ third-party skills are not copied into `template/common/skills/`.
 wk-agent-ops/
 ├── template/                  ← Source of truth (edit here)
 │   ├── common/                ← Language-agnostic, all projects get this
-│   │   ├── .claude/rules/     ← Thin native rules; mirrored to .agents/rules/
+│   │   ├── .claude/           ← Claude Code sub-agents, commands, and rules
+│   │   │   ├── agents/        ← Subagents (doc-updater, git-commit-writer)
+│   │   │   ├── commands/      ← Slash commands (/opsx:commit)
+│   │   │   └── rules/         ← Thin native rules; mirrored to .agents/rules/
 │   │   ├── .agents/workflows/ ← Antigravity-native workflow entrypoints
 │   │   ├── .codex/agents/     ← Project-owned Codex custom-agent TOML
 │   │   ├── skills/            ← Shared skills (openspec-commit, doc-updater, etc.)
@@ -121,7 +124,7 @@ branch 完成。每個 Worktree 同一時間只能有一個 active writer，跨 
 
 ---
 
-個人流程、團隊 Skills 與 GitHub 的責任分工，依已核定的拆分設計如下。實作進度見 [Change tasks](../openspec/changes/separate-github-contract-from-workflow/tasks.md)。
+個人流程、團隊 Skills 與 GitHub 的責任分工，依已核定的拆分設計如下。已完成實作並封存於 [Change archive](../openspec/changes/archive/2026-11-15-separate-github-contract-from-workflow/tasks.md)。
 
 ![Skills、個人流程與 GitHub 協作架構](diagrams/skill-workflow-architecture.svg)
 

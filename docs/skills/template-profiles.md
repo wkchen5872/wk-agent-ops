@@ -9,11 +9,14 @@ template/
 ├── common/                       ← always installed
 │   ├── skills/                   → .claude/skills/ and .agents/skills/
 │   ├── .claude/
+│   │   ├── agents/               → Claude Code subagents
 │   │   ├── commands/opsx/        → /opsx:* slash commands
-│   │   └── rules/                → always-on Claude Code rules
-│   ├── .agents/workflows/         → agent workflow definitions
-│   ├── .codex/agents/             → Codex custom-agent TOML
-│   └── .github/instructions/     → GitHub Copilot instructions
+│   │   └── rules/                → always-on rules (mirrored to .agents/rules/)
+│   ├── .agents/workflows/        → agent workflow definitions
+│   ├── .codex/agents/            → Codex custom-agent TOML
+│   ├── AGENTS.md                 → seed root agent protocol entry
+│   ├── docs/                     → managed policies & seed documentation
+│   └── work-items/               → managed Work Item protocol (AGENTS.md)
 ├── python/                       ← opt-in: Python projects
 │   ├── .claude/rules/            → Python-specific Claude rules
 │   └── hooks/
@@ -81,12 +84,15 @@ global or copied installation.
 
 | Source | Destination | Notes |
 |--------|-------------|-------|
-| `common/skills/` | `.claude/skills/` | agent skills |
-| `common/skills/` | `.agents/skills/` | agent skills (duplicate) |
-| `common/.claude/` | `.claude/` | rules, commands |
+| `common/skills/` | `.claude/skills/`, `.agents/skills/` | agent skills |
+| `common/.claude/` | `.claude/` | subagents, rules, commands |
+| `common/.claude/rules/` | `.agents/rules/` | mirrored native rules |
 | `common/.agents/` | `.agents/` | workflows |
 | `common/.codex/agents/` | `.codex/agents/` | project-owned Codex custom agents only |
-| `common/.github/` | `.github/` | Copilot instructions |
+| `common/AGENTS.md` | `AGENTS.md` | seed root protocol entry (only if absent) |
+| `common/docs/` (managed) | `docs/` | managed policies (`agent-protocol.md`, `okf-conventions.md`, etc.) |
+| `common/docs/` (seed) | `docs/` | seed documentation (only if absent) |
+| `common/work-items/AGENTS.md` | `work-items/AGENTS.md` | managed Work Item protocol |
 | `<profile>/.claude/rules/` | `.claude/rules/` | per-profile rules |
 | `<profile>/hooks/` | Git-resolved hooks path | shared git hooks, auto chmod +x |
 | `testland/qa` selected skills | project-local Agent skill paths | one language runner plus deduplicated triage |

@@ -30,7 +30,7 @@ sources:
 
 | 圖稿 | 說明與用途 | 來源與維護位置 |
 | --- | --- | --- |
-| Skills 與 GitHub 協作架構：[SVG](skill-workflow-architecture.svg) | 個人流程按需呼叫自足 Skills；區分 Git 版本、GitHub 協作紀錄、Session 通知及測試題庫 | 本 repo 的 `docs/`；依 `separate-github-contract-from-workflow` 已核定設計，實作進度見該 Change |
+| Skills 與 GitHub 協作架構：[SVG](skill-workflow-architecture.svg) | 個人流程按需呼叫自足 Skills；區分 Git 版本、GitHub 協作紀錄、Session 通知及測試題庫 | 本 repo 的 `docs/`；依 `separate-github-contract-from-workflow` 已核定設計完成實作並封存 |
 | 開發與交付全貌：[SVG](development-lifecycle.svg) | [多 Agent 工作流](../workflow/guide.md)；探索、規劃、checkout、實作、人工發布檢核、Review、交付與獨立 Git 整合 | 本 repo 的 `docs/`；各階段細節由下列文件管理 |
 | 01 開立規格：[SVG](local-development-define.svg) | [本機四階段](../workflow/local-development.md#01-開立規格)；Issue-first（接手既有 Issue）與 Change-first 兩個入口，先分支再建立或沿用 Change，人工確認；既有 Issue 不重開，設計 PR 選用 | 本 repo 的 `docs/`；不新增前兩階段整合 Skill |
 | 02 實作與發布：[SVG](local-development-implement.svg) | [本機四階段](../workflow/local-development.md#02-實作與發布)；發布前人工檢核，可留在本地 Review | 本 repo 的 `docs/` |
