@@ -1,20 +1,25 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1780" viewBox="0 0 1600 1780" role="img" aria-labelledby="title desc">
-<title id="title">OpenSpec × GitHub 交接流程</title><desc id="desc">人工啟動各階段；GitHub 使用可用 gh 或 MCP，Git 管理 SSH／HTTPS，核對目標與操作結果。</desc>
+<title id="title">OpenSpec × GitHub 協作整合（組合示例）</title><desc id="desc">搭配 OpenSpec 流程時的一種組合示例：開立規格有 Issue-first 與 Change-first 兩個入口，各階段由人明確啟動；貼文格式與寫入核對由各 Skill 持有，GitHub 使用可用的 gh 或 MCP。</desc>
 <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="#566879"/></marker></defs>
-<style>text{font-family:Inter,"PingFang TC","Noto Sans CJK TC",sans-serif;fill:#182c40}.title{font-size:35px;font-weight:700}.sub{font-size:21px;fill:#53677b}.heading{font-size:25px;font-weight:650}.body{font-size:22px}.note{font-size:20px;fill:#53677b}.box{fill:white;stroke:#96aabd;stroke-width:2}.blue{fill:#ecf5ff;stroke:#5481bd;stroke-width:2}.gold{fill:#fff6df;stroke:#ae8733;stroke-width:2}.green{fill:#eaf7f0;stroke:#5c9273;stroke-width:2}.line{fill:none;stroke:#566879;stroke-width:2.5;marker-end:url(#arrow)}.dash{fill:none;stroke:#8194a7;stroke-width:2;stroke-dasharray:7 6}</style>
+<style>text{font-family:Inter,"PingFang TC","Noto Sans CJK TC",sans-serif;fill:#182c40}.title{font-size:35px;font-weight:700}.sub{font-size:21px;fill:#53677b}.heading{font-size:25px;font-weight:650}.body{font-size:22px}.note{font-size:20px;fill:#53677b}.box{fill:white;stroke:#96aabd;stroke-width:2}.blue{fill:#ecf5ff;stroke:#5481bd;stroke-width:2}.gold{fill:#fff6df;stroke:#ae8733;stroke-width:2}.green{fill:#eaf7f0;stroke:#5c9273;stroke-width:2}.line{fill:none;stroke:#566879;stroke-width:2.5;marker-end:url(#arrow)}.dash{fill:none;stroke:#8194a7;stroke-width:2;stroke-dasharray:7 6}.plain{fill:none;stroke:#566879;stroke-width:2.5}</style>
 <rect width="1600" height="1780" fill="#f5f8fb"/>
-<text x="80" y="68" class="title">OpenSpec × GitHub 交接流程</text>
-<text x="80" y="108" class="sub">GitHub 用可用 gh 或 MCP；Git 管認證；先核對目標，操作後回讀。</text>
+<text x="80" y="68" class="title">OpenSpec × GitHub 協作整合（組合示例）</text>
+<text x="80" y="108" class="sub">一種組合示例，不是必要流程；格式與寫入核對在各 Skill，GitHub 用 gh 或 MCP。</text>
 <text x="80" y="154" class="note">本機／Agent 操作</text><text x="1050" y="154" class="note">遠端紀錄與責任界線</text>
-<rect x="80" y="176" width="850" height="118" rx="16" class="box"/>
-<text x="104" y="214" class="heading">01　建立 OpenSpec Change</text>
-<text x="104" y="248" class="body">proposal、specs、design、tasks</text>
-<text x="104" y="278" class="body">正式需求與驗收條件由 OpenSpec 管理</text>
-<path d="M505 294 V334" class="line"/>
-<rect x="80" y="334" width="850" height="118" rx="16" class="blue"/>
-<text x="104" y="372" class="heading">02　github-issue create</text>
-<text x="104" y="406" class="body">選來源 → 核對 repo／能力 → 查關聯 → 建 Issue 並回讀</text>
-<text x="104" y="436" class="body">進展與 Checkpoint 以 github-issue update 新增留言</text>
+<rect x="80" y="176" width="410" height="118" rx="16" class="blue"/>
+<text x="104" y="214" class="heading">01　Issue-first</text>
+<text x="104" y="248" class="body">讀既有 Issue 的問題與驗收</text>
+<text x="104" y="278" class="body">建立或沿用 Change，不重開 Issue</text>
+<rect x="520" y="176" width="410" height="118" rx="16" class="box"/>
+<text x="544" y="214" class="heading">01　Change-first</text>
+<text x="544" y="248" class="body">本機建立 OpenSpec Change</text>
+<text x="544" y="278" class="body">要追蹤才 github-issue create</text>
+<path d="M285 294 V314 H725 V294" class="plain"/>
+<path d="M505 314 V334" class="line"/>
+<rect x="80" y="334" width="850" height="118" rx="16" class="gold"/>
+<text x="104" y="372" class="heading">02　確認規格、範圍與關聯</text>
+<text x="104" y="406" class="body">使用者確認範圍與實作授權；Issue 缺驗收資訊時列為未決事項</text>
+<text x="104" y="436" class="body">要記錄關聯時以 github-issue update 新增留言，不改正文</text>
 <path d="M505 452 V492" class="line"/>
 <rect x="80" y="492" width="850" height="118" rx="16" class="blue"/>
 <text x="104" y="530" class="heading">03　github-pr create</text>
@@ -72,7 +77,7 @@
 <text x="1074" y="1512" class="body">指定帳號有明示限制時才核對</text>
 <text x="1074" y="1542" class="body">完整 repo／ref 與操作結果都要核對</text>
 <text x="80" y="1652" class="note">設計 Review／實作 Review 不通過時，返回相應規格修訂或修正流程；不能直接進入下一個通過階段。</text>
-<text x="80" y="1685" class="note">本圖為標準路徑摘要；分開設計 PR 需明確關聯，關聯條件與授權見 github-handoff.md 第 10 節。</text>
+<text x="80" y="1685" class="note">本圖為組合示例；各階段的授權見 openspec-workflow.md，格式與寫入核對見各 Skill。</text>
 <text x="80" y="1720" class="note">圖例：藍色＝遠端紀錄／發布；金色＝審查／交接；綠色＝該階段完成；白色＝本機或交付操作。</text>
 <text x="80" y="1750" class="note">必要驗收未完成不能提前 archive；若已先 merge，後續交付變更須另有授權的 PR 與審查。</text>
 </svg>

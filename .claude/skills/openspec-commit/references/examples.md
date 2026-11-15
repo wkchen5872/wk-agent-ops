@@ -1,8 +1,7 @@
 # openspec-commit 範例
 
-這裡示範 SKILL 的 Stage outcomes 回報與成功交付 Closure 的寫法。PR 留言的格式以 managed
-`docs/github-handoff.md` 第 6 節與第 6.7 節為準，本檔不另定格式。可重播的判定見
-`acceptance-cases.md`。
+這裡示範 SKILL 的 Stage outcomes 回報與成功交付 Closure 的寫法。PR 留言的格式由發布它的
+`github-pr` Skill 提供，本檔不另定格式。
 
 案例中的 repo、編號、SHA、URL 與 Session 全部虛構；共同情境為 Change `add-export`、
 分支 `feature/add-export`、PR #12、Issue #7。

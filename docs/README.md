@@ -56,7 +56,7 @@ docs/
     ├── agent-protocol.md   ← 跨工具 Agent 操作契約（Managed）
     ├── architecture.md     ← 專案模組架構與 Template 分發原則（Seed）
     ├── conventions.md      ← Bash 與腳本編寫慣例（Seed）
-    ├── github-handoff.md   ← GitHub Issue/PR 交接契約（Managed）
+    ├── github-handoff.md   ← GitHub 協作整合：各階段接上 Issue/PR 的時點（Managed）
     ├── okf-conventions.md  ← OKF v0.2 文件與圖稿撰寫規範（Managed）
     ├── openspec-workflow.md← OpenSpec 規格驅動開發流程（Managed）
     └── mutation-testing.md ← 變異測試（Mutation Testing）操作指引（Managed）

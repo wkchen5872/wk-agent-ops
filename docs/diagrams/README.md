@@ -1,7 +1,7 @@
 ---
 type: Reference
 title: 架構與流程圖索引
-description: 現行開發、Review、GitHub 交接及 Worktree 圖稿的閱讀順序、來源與維護位置。
+description: 現行開發、Review、GitHub 協作及 Worktree 圖稿的閱讀順序、來源與維護位置；圖稿只保留 SVG。
 tags: [architecture, workflow, diagrams]
 generated: { by: Codex/GPT-6.1-Sol, at: 2026-11-14T13:48:40+08:00 }
 sources:
@@ -22,21 +22,23 @@ sources:
 # 架構與流程圖索引
 
 先讀 [專案架構](../architecture.md) 了解 template 分發與責任邊界，再看開發全貌。
-需要操作某個階段時，沿下表進入該文件；Issue、PR 與 Review 發布格式的唯一契約是
-[GitHub 交接契約](../github-handoff.md)。
+需要操作某個階段時，沿下表進入該文件。Issue、PR 與 Review 的發布格式由 `github-issue`、
+`github-pr` 與 `change-review` Skill 持有；各階段在哪些時點接上 GitHub 見
+[GitHub 協作整合](../github-handoff.md)。圖稿只保留 SVG，不另存 PNG。
 
 ## 現行圖稿
 
 | 圖稿 | 說明與用途 | 來源與維護位置 |
 | --- | --- | --- |
-| 開發與交付全貌：[SVG](development-lifecycle.svg)／[PNG](development-lifecycle.png) | [多 Agent 工作流](../workflow/guide.md)；探索、規劃、checkout、實作、人工發布檢核、Review、交付與獨立 Git 整合 | 本 repo 的 `docs/`；各階段細節由下列文件管理 |
-| 01 開立規格：[SVG](local-development-define.svg)／[PNG](local-development-define.png) | [本機四階段](../workflow/local-development.md#01-開立規格)；先分支再 Change，人工確認，Issue／設計 PR 選用 | 本 repo 的 `docs/`；不新增前兩階段整合 Skill |
-| 02 實作與發布：[SVG](local-development-implement.svg)／[PNG](local-development-implement.png) | [本機四階段](../workflow/local-development.md#02-實作與發布)；發布前人工檢核，可留在本地 Review | 本 repo 的 `docs/` |
-| 03 Review：[SVG](local-development-review.svg)／[PNG](local-development-review.png) | [本機四階段](../workflow/local-development.md#03-review-與修正交接)；三種結論與修正重入 | 依現行 `change-review`；本地報告、明確交接與後補 PR 的版本核對以該 Skill 為準[^review-source] |
-| 04 封存與交付：[SVG](local-development-finish.svg)／[PNG](local-development-finish.png) | [Commit 工作流](../workflow/commit.md)；本地完成、成功交付、取消／被取代三分支 | 本版本 Skill 已實作並完成本地驗證；真實遠端發布仍待端到端驗收，新 head 要有相符 pass[^delivery-design] |
+| Skills 與 GitHub 協作架構：[SVG](skill-workflow-architecture.svg) | 個人流程按需呼叫自足 Skills；區分 Git 版本、GitHub 協作紀錄、Session 通知及測試題庫 | 本 repo 的 `docs/`；依 `separate-github-contract-from-workflow` 已核定設計，實作進度見該 Change |
+| 開發與交付全貌：[SVG](development-lifecycle.svg) | [多 Agent 工作流](../workflow/guide.md)；探索、規劃、checkout、實作、人工發布檢核、Review、交付與獨立 Git 整合 | 本 repo 的 `docs/`；各階段細節由下列文件管理 |
+| 01 開立規格：[SVG](local-development-define.svg) | [本機四階段](../workflow/local-development.md#01-開立規格)；Issue-first（接手既有 Issue）與 Change-first 兩個入口，先分支再建立或沿用 Change，人工確認；既有 Issue 不重開，設計 PR 選用 | 本 repo 的 `docs/`；不新增前兩階段整合 Skill |
+| 02 實作與發布：[SVG](local-development-implement.svg) | [本機四階段](../workflow/local-development.md#02-實作與發布)；發布前人工檢核，可留在本地 Review | 本 repo 的 `docs/` |
+| 03 Review：[SVG](local-development-review.svg) | [本機四階段](../workflow/local-development.md#03-review-與修正交接)；三種結論與修正重入 | 依現行 `change-review`；本地報告、明確交接與後補 PR 的版本核對以該 Skill 為準[^review-source] |
+| 04 封存與交付：[SVG](local-development-finish.svg) | [Commit 工作流](../workflow/commit.md)；本地完成、成功交付、取消／被取代三分支 | 本版本 Skill 已實作並完成本地驗證；真實遠端發布仍待端到端驗收，新 head 要有相符 pass[^delivery-design] |
 | 一輪 Review 詳細流程：[SVG](change-review-workflow.svg) | 已確認 PR 的三種結論都 reply 並回讀；無 PR、PR 不明或 local-only 只在本地回報；符合資格才核對原實作者並通知 | 原稿為 [review-loop.svg](../../template/common/skills/change-review/references/review-loop.svg)；更新來源後同步本圖，再由 installer 更新 Skill 副本[^review-source] |
-| 團隊 GitHub 交接：[SVG](github-handoff.svg) | [交接契約](../github-handoff.md)；設計批准、版本審查、Closure 回讀、結案再核對及 Issue 獨立結案 | managed；修改 `template/common/docs/diagrams/github-handoff.svg`，再跑 installer |
-| Worktree 解析：[SVG](wt-work-resolution.svg)／[PNG](wt-work-resolution.png) | [wt-work 解析](../workflow/wt-work-flow.md)；明確 path → project path → named → detached，無候選才建立 | 以 runtime／launcher 為準；固定 planning SHA 的人工核對與當前 branch tip 的腳本檢查分開[^runtime-source] |
+| GitHub 協作整合（組合示例）：[SVG](github-handoff.svg) | [GitHub 協作整合](../github-handoff.md)；Issue-first／Change-first 兩個入口、版本審查、Closure 回讀及 Issue 獨立結案 | managed；修改 `template/common/docs/diagrams/github-handoff.svg`，再跑 installer |
+| Worktree 解析：[SVG](wt-work-resolution.svg) | [wt-work 解析](../workflow/wt-work-flow.md)；明確 path → project path → named → detached，無候選才建立 | 以 runtime／launcher 為準；固定 planning SHA 的人工核對與當前 branch tip 的腳本檢查分開[^runtime-source] |
 
 本機四階段及開發全貌是本 repo 的操作文件，不隨 common installer 散布。
 圖稿描述規範與目前檔案；能力的實作、驗收與發布狀態見各文件及對應 Change，不由圖稿存在推定。
@@ -46,8 +48,8 @@ sources:
 
 | 探索圖稿 | 正式承接方式 |
 | --- | --- |
-| `local-workflows/01-define`、`02-implement`、`03-review`、`04-finish` | 由上表四張 `local-development-*` SVG／PNG 與 `local-development.md` 承接；正式文件直接引用這些版本 |
-| `team-collaboration` | 已確認的責任由專案架構與 GitHub 交接契約／主圖承接；舊圖的「格式待收斂」不帶入現況 |
+| `local-workflows/01-define`、`02-implement`、`03-review`、`04-finish` | 由上表四張 `local-development-*` SVG 與 `local-development.md` 承接；正式文件直接引用這些版本 |
+| `team-collaboration` | 已確認的責任由專案架構、各 GitHub Skill 與 GitHub 協作整合圖承接；舊圖的「格式待收斂」不帶入現況 |
 | `personal-workflow-proposal` | 候選順序已由四階段文件取代；保留探索用途，不另建第二套正式流程 |
 | `team-personal-overview` | 共用契約與個人操作的分工由本索引連結的架構、團隊主圖及開發全貌共同說明；不沿用「候選四個封裝」的舊狀態 |
 
@@ -55,11 +57,11 @@ sources:
 
 ## 歷史與其他模組
 
-- [GitHub 交接歷史圖稿](github-change-handoff/README.md) 保留三張探索圖；其中的舊 `publish`、Ready 與待制定規範屬當時設計，不作為現行入口。
+- 舊探索架構圖已由上表的 Skills 與 GitHub 協作架構圖取代；開發順序與審查分支以上表現行流程圖為準。
 - [通知架構](../notify/architecture.md)、[Provider hooks](../hooks/index.md) 與 [Session／Git 概念](../workflow/concepts.md) 管理各自的圖文；本輪開發流程調整不改變其模組責任。
 - 文字目錄樹及簡單狀態示意保留在所屬文件；複雜操作流程提供可直接開啟的 SVG。
 
 [^review-source]: [Change Review 來源](../../template/common/skills/change-review/SKILL.md)，§5–7。
 [^commit-source]: [OpenSpec Commit 來源](../../template/common/skills/openspec-commit/SKILL.md)，本地 archive → docs → commit。
 [^runtime-source]: [runtime.sh](../../scripts/workflow/runtime.sh)，`workflow_check_candidate`、`workflow_resolve_worktree`；[wt-work.sh](../../scripts/workflow/wt-work.sh) 管理建立流程。
-[^delivery-design]: [Commit 交付擴充設計](../../openspec/changes/archive/2026-11-14-extend-openspec-commit-delivery/design.md)，Decisions 1–6；本地驗證見 [`r02`](../verification/openspec-commit/2026-11-14-extend-delivery-r02.md)。
+[^delivery-design]: [Commit 交付擴充設計](../../openspec/changes/archive/2026-11-14-extend-openspec-commit-delivery/design.md)，Decisions 1–6。當時的本地驗證紀錄已不在 repo 中；Review 與驗證紀錄只保存在 Work Item 或 GitHub PR。

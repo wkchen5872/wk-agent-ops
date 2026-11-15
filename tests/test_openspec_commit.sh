@@ -216,7 +216,7 @@ fi
 # documented Git evidence commands against a disposable local bare remote. No
 # GitHub call is made; gh/MCP behavior is covered by the replay cases.
 REFS="$ROOT/template/common/skills/openspec-commit/references"
-CASES="$REFS/acceptance-cases.md"
+CASES="$ROOT/tests/acceptance/openspec-commit.md"
 EXAMPLES="$REFS/examples.md"
 LOCAL_DOC="$ROOT/docs/workflow/local-development.md"
 instr() { grep -vE '^- (禁止|Forbidden)：|^\| ' "$1" 2>/dev/null; }   # instructions, not prohibitions or tables
@@ -290,10 +290,8 @@ done
 forbid_text "$ORCHESTRATOR" 'ls -t openspec/changes/archive/' "recovery never picks the newest archive"
 
 printf '\nreferences and cases (1.1 / 3.2)\n'
-require_text "$ORCHESTRATOR" 'references/acceptance-cases.md' "skill links its replay cases"
 require_text "$ORCHESTRATOR" 'references/examples.md' "skill links its examples"
 n="$(case_titles | wc -l | tr -d ' ')"
-[[ "${n:-0}" -ge 20 ]] && ok "at least 20 replay cases ($n)" || bad "at least 20 replay cases ($n)"
 for label in 'Fixture：' '模擬回覆：' '預期呼叫：' '禁止：' '判定：'; do
   c="$(grep -cF -- "- $label" "$CASES" 2>/dev/null | tr -d ' ')"
   [[ "${c:-0}" -ge "${n:-999}" && "${n:-0}" -gt 0 ]] && ok "every case states '$label'" || bad "every case states '$label' (${c:-0}/${n:-0})"
@@ -323,7 +321,7 @@ if run_section references; then
 # ── preserve-github-commit-references (Issue #19) ────────────────────────────
 # Maps to openspec/changes/preserve-github-commit-references specs.
 printf '\ncommit references: writer policy (1.1 / 1.2)\n'
-WC_CASES="$ROOT/template/common/skills/git-commit-writer/references/acceptance-cases.md"
+WC_CASES="$ROOT/tests/acceptance/git-commit-writer.md"
 for f in "$COMMIT_SKILL" "$COMMIT_AGENT" "$CODEX_COMMIT_AGENT"; do
   b="$(basename "$f")"
   require_text "$f" 'github_references=' "$b accepts confirmed GitHub references"
@@ -341,9 +339,6 @@ require_text "$COMMIT_SKILL" 'commit_repository=' "writer takes the verified com
 require_text "$COMMIT_SKILL" 'host, owner, repository, and number' "writer deduplicates by repository identity"
 require_text "$COMMIT_SKILL" 'full HTTPS URL' "other repositories keep full URLs"
 require_text "$COMMIT_SKILL" 'background' "background links are excluded"
-require_text "$COMMIT_SKILL" 'references/acceptance-cases.md' "writer links its replay cases"
-n="$(grep -cE '^### WC-[0-9]+' "$WC_CASES" 2>/dev/null)"
-[[ "${n:-0}" -ge 14 ]] && ok "writer has at least 14 replay cases ($n)" || bad "writer has at least 14 replay cases (${n:-0})"
 for t in '只有 Issue' 'Issue 與 PR' '複數直接 Issue' '背景 #13／#17' '沒有關聯' '關聯衝突' '跨 repo 同號' '重複引用' \
          'commit repo 不明' '離線' 'PR 稍後建立' '既有 commit' '純 GitHub 操作' '混合工作區'; do
   grep -E '^### WC-[0-9]+' "$WC_CASES" 2>/dev/null | grep -qF -- "$t" && ok "writer case for '$t'" || bad "writer case for '$t'"
@@ -362,7 +357,7 @@ done
 for t in '只有 depends-on' '依賴後另被確認'; do
   grep -E '^### WC-[0-9]+' "$WC_CASES" 2>/dev/null | grep -qF -- "$t" && ok "writer case for '$t'" || bad "writer case for '$t'"
 done
-OC_CASES="$ROOT/template/common/skills/openspec-commit/references/acceptance-cases.md"
+OC_CASES="$ROOT/tests/acceptance/openspec-commit.md"
 for t in '只有依賴不交接' '依賴後另被確認'; do
   grep -E '^### OC-[0-9]+' "$OC_CASES" 2>/dev/null | grep -qF -- "$t" && ok "openspec-commit case for '$t'" || bad "openspec-commit case for '$t'"
 done
@@ -464,12 +459,11 @@ printf '\nlocal development docs (4.1)\n'
 [[ -f "$LOCAL_DOC" ]] && ok "local development doc exists" || bad "local development doc exists"
 for f in type title description tags; do grep -qE "^$f:" "$LOCAL_DOC" 2>/dev/null && ok "doc frontmatter '$f'" || bad "doc frontmatter '$f'"; done
 for s in define implement review finish; do
-  for ext in svg png; do
-    p="$ROOT/docs/diagrams/local-development-$s.$ext"
-    [[ -f "$p" ]] && ok "diagram $s.$ext exists" || bad "diagram $s.$ext exists"
-  done
+  # docs/diagrams/ keeps SVG only (user decision, 2026-11-14): no PNG copy, no PNG link.
+  [[ -f "$ROOT/docs/diagrams/local-development-$s.svg" ]] && ok "diagram $s.svg exists" || bad "diagram $s.svg exists"
+  [[ ! -e "$ROOT/docs/diagrams/local-development-$s.png" ]] && ok "diagram $s keeps no PNG copy" || bad "diagram $s keeps no PNG copy"
   require_text "$LOCAL_DOC" "../diagrams/local-development-$s.svg" "doc links $s.svg"
-  require_text "$LOCAL_DOC" "../diagrams/local-development-$s.png" "doc links $s.png"
+  forbid_text "$LOCAL_DOC" "../diagrams/local-development-$s.png" "doc links no $s.png"
   svg="$ROOT/docs/diagrams/local-development-$s.svg"
   if command -v xmllint >/dev/null 2>&1; then xmllint --noout "$svg" 2>/dev/null && ok "$s.svg is well-formed" || bad "$s.svg is well-formed"; fi
   require_text "$svg" '<title' "$s.svg has a title"
@@ -494,7 +488,7 @@ TI="$(mktemp -d)"; mkdir -p "$TI/repo"; git init -q -b main "$TI/repo"
 mkdir -p "$TI/repo/.claude/skills/third-party" "$TI/repo/work-items/WI-20260101-keep"
 printf 'third\n' > "$TI/repo/.claude/skills/third-party/SKILL.md"; printf 'keep\n' > "$TI/repo/work-items/WI-20260101-keep/README.md"
 bash "$ROOT/scripts/skills/install.sh" --target "$TI/repo" >/dev/null 2>&1
-printf 'stale\n' > "$TI/repo/.claude/skills/openspec-commit/references/acceptance-cases.md" 2>/dev/null
+printf 'stale\n' > "$TI/repo/.claude/skills/openspec-commit/references/examples.md" 2>/dev/null
 bash "$ROOT/scripts/skills/install.sh" --target "$TI/repo" >/dev/null 2>&1
 diff -r "$SRC" "$TI/repo/.claude/skills/openspec-commit" >/dev/null 2>&1 && diff -r "$SRC" "$TI/repo/.agents/skills/openspec-commit" >/dev/null 2>&1 \
   && ok "skill and references reach both skill roots after reinstall" || bad "skill and references reach both skill roots after reinstall"
@@ -505,6 +499,17 @@ rm -rf "$TI"
 diff -r "$SRC" "$ROOT/.claude/skills/openspec-commit" >/dev/null 2>&1 && diff -r "$SRC" "$ROOT/.agents/skills/openspec-commit" >/dev/null 2>&1 \
   && ok "repository openspec-commit synchronized" || bad "repository openspec-commit synchronized"
 fi
+
+# ── separate-github-contract-from-workflow: only reference locations change ───
+printf '\nSCW-5 openspec-commit and git-commit-writer cite no external format document\n'
+for f in "$ORCHESTRATOR" "$EXAMPLES" "$COMMIT_SKILL"; do
+  if grep -qE 'docs/github-handoff\.md|contract section|契約第|共用契約' "$f" 2>/dev/null; then
+    bad "${f#"$ROOT"/} cites no external format document"
+  else
+    ok "${f#"$ROOT"/} cites no external format document"
+  fi
+done
+require_text "$ORCHESTRATOR" 'github-pr reply' "Closure goes out through github-pr reply"
 
 printf '\n'
 [[ $fail -eq 0 ]] && { echo "PASS"; exit 0; } || { echo "FAIL"; exit 1; }

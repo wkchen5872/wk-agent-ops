@@ -54,7 +54,7 @@ Design review SHALL assess requirements, scope, interfaces, dependencies, feasib
 
 #### Scenario: Approval has date-only precision
 - **WHEN** the human approval date is known but its time is not
-- **THEN** the reviewer follows the shared contract and preserves YYYY-MM-DD without fabricating a time or replacing it with recorded_at
+- **THEN** the reviewer follows the approval record format and preserves YYYY-MM-DD without fabricating a time or replacing it with recorded_at
 - **AND** an honestly dated instruction is not rejected for lacking an exact time or a human GitHub account; unknown optional identifiers are omitted
 
 #### Scenario: Approval recorder has access but lacks authorization
@@ -68,10 +68,10 @@ Design review SHALL assess requirements, scope, interfaces, dependencies, feasib
 - **AND** it keeps the technical review verdict distinct from the instruction authorizing implementation
 
 ### Requirement: Integration separates dependency readiness from acceptance
-Integration SHALL require an obtainable version of the shared handoff contract, not a prior final pass from the Skill being introduced. Reviewing the upstream PR MAY serve as a real integration case. The upstream verdict and the Review Skill's own acceptance SHALL remain separate; neither an automatic pass nor an artificial defect is required to exercise the workflow.
+Integration SHALL require an obtainable version of the pull request reply entry the skill publishes through, not a prior final pass from the Skill being introduced. Reviewing the upstream PR MAY serve as a real integration case. The upstream verdict and the Review Skill's own acceptance SHALL remain separate; neither an automatic pass nor an artificial defect is required to exercise the workflow.
 
 #### Scenario: Upstream final review is deferred to the new Skill
-- **WHEN** the upstream contract is delivered and its final review is the selected integration case
+- **WHEN** the upstream reply entry is delivered and its final review is the selected integration case
 - **THEN** the Skill can be implemented and tested without pretending that upstream review has already passed
 - **AND** a report about the upstream target does not certify the Review Skill's own implementation
 
@@ -92,8 +92,8 @@ Every finding SHALL identify a concrete impact, requirement or location, evidenc
 - **THEN** the finding remains unresolved until the reviewer verifies the correction or a supported rejection
 - **AND** the reviewer records the fixing revision and validation evidence when resolving it
 
-### Requirement: Reports use the shared handoff contract
-Review reports SHALL follow the shared schema, native-tool operation checks, optional account restrictions, provenance, and ownership rules. An available configured gh or GitHub MCP SHALL perform PR operations without a custom identity script or blob. Each round SHALL record phase, revision, scope, verdict, checks, limits, findings, Next actions, shared Author and verified publication results. The reviewer MUST NOT overwrite others' records or invoke PR create or publish.
+### Requirement: Reports use the review format and the PR reply entry
+Review reports SHALL follow the review format held by the review skill and SHALL be published through the pull request reply entry, which supplies the reply frame, native-tool operation checks, optional account restrictions, provenance, and ownership rules. An available configured gh or GitHub MCP SHALL perform PR operations without a custom identity script or blob. Each round SHALL record phase, revision, scope, verdict, checks, limits, findings, Next actions, shared Author and verified publication results. The reviewer MUST NOT overwrite others' records or invoke PR create or publish.
 
 #### Scenario: Publishing feedback
 - **WHEN** review feedback is ready and remote publication is authorized
@@ -129,6 +129,11 @@ Review reports SHALL follow the shared schema, native-tool operation checks, opt
 - **WHEN** a tool returns success and a report URL but readback fails or the stored target, review ID, phase, head, or content differs
 - **THEN** publication is recorded as possibly completed but unconfirmed, separately from the technical verdict
 - **AND** the reviewer reconciles state before retrying and does not announce verified remote handoff
+
+#### Scenario: A complete report is written
+- **WHEN** the reviewer writes a full report, with or without a pull request
+- **THEN** the complete report examples it follows are among the review skill's own references
+- **AND** it does not depend on acceptance cases or on a separate format document for the report layout
 
 ### Requirement: Agent verdicts do not impersonate platform approval
 The report SHALL distinguish pass, changes-required, and blocked from GitHub review events and repository merge rules. A remote report SHALL be a github-pr reply conversation comment unless the user separately requests a platform review event the account may submit. Multiple agents sharing one account MUST NOT be described as separate platform approvers.
@@ -364,3 +369,16 @@ A later request to post a local report SHALL verify the selected PR and compare 
 #### Scenario: Comparison evidence is missing
 - **WHEN** the original reviewed content cannot be reconstructed or matched
 - **THEN** the workflow reports the limitation and does not attest current-head acceptance from the old report
+
+### Requirement: Final-version review narrows only with diff evidence
+A review of a head produced after an earlier pass by archive, spec synchronization, or documentation updates SHALL narrow its scope only when the difference from the reviewed head is shown to be limited to moves, spec synchronization, and the matching documentation. Any semantic change in that difference SHALL receive the necessary broader verification. The report SHALL bind to the new head and leave the earlier report attributed to its own head.
+
+#### Scenario: Difference is limited to finalization
+- **WHEN** the difference between the previously reviewed head and the new head contains only archive moves, spec synchronization, and documentation updates
+- **THEN** the reviewer may review the narrowed scope and reports the evidence that the difference is limited to finalization
+- **AND** the earlier pass is not claimed to cover the new head
+
+#### Scenario: Finalization includes a semantic change
+- **WHEN** the same difference also changes the behavior of code or scripts
+- **THEN** the reviewer runs the necessary tests and a full review of that change and lists the checks actually rerun
+- **AND** it neither narrows the scope as archive-only nor reuses the earlier head's test results

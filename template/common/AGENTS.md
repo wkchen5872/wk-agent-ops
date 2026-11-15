@@ -24,7 +24,8 @@ not edit it here. Keep project-specific rules in this file or under `docs/`.
 需要保存跨回合／跨 Session 的臨時協作紀錄時，先讀 `work-items/AGENTS.md`；
 該文件是這套規範的唯一來源。
 
-## GitHub 交接（選用）
+## GitHub 協作（選用）
 
-使用 GitHub Issue／PR 交接 Change 時，先讀 `docs/github-handoff.md`；寫入前的目標與
-操作核對、可選的帳號限制與設計批准的來源都以該文件為準。
+使用 GitHub Issue／PR 時，以已安裝的 `github-issue`、`github-pr`、`change-review` Skill
+操作；貼文格式、寫入前核對與可選的帳號限制都以 Skill 為準。開發流程在哪些時點接上
+GitHub，見 `docs/github-handoff.md`；是否可以開始實作，見 `docs/openspec-workflow.md`。

@@ -45,13 +45,38 @@ schema to create the required artifacts, such as proposal, design, specs, and
 tasks. Do not create provider-native plan or task files as substitutes.
 
 Obtain human review of the design before implementation. An
-explicit user instruction to implement an identified Change, given in the current session or
-through a traceable handoff, authorizes implementation of its current design; no
-separate approval phrase, account confirmation, or PR event is required. Creating
-a Change, a discussion, or a technical review pass alone does not authorize it.
-Existing approval remains valid while scope and decisions remain unchanged.
-Material requirement or design changes, or a withdrawn instruction, need renewed
-direction for the changed decisions.
+explicit user instruction to implement an identified Change authorizes
+implementation of its current design; no separate approval phrase, account confirmation, or PR event is required.
+Judge it by four things: its source, the Change and artifacts it covers, the
+design revision, and the scope of work.
+
+- **Accepted sources:** the current user's explicit instruction in this
+  session; an instruction relayed through an existing collaboration channel as a
+  traceable handoff that names the work and its source (no private original
+  conversation or account proof is needed); or a published approval record — the
+  user's own PR comment or review, or a recorded approval event.
+- **What does not authorize Apply:** Creating a Change, a discussion, or a review on
+  their own; an agent's technical review pass, design or implementation; an
+  agent suggestion, a body that claims approval, or any approval claim with no
+  identifiable user instruction behind it; and an approval that was withdrawn
+  or superseded by a material design change. An API account shows only who
+  posted, never whose intent it was.
+- **Clarify first** when sources conflict, the latest instruction withdraws
+  authorization, acceptance criteria or design decisions changed materially
+  after the approved revision, or the scope cannot be identified. Clarify only
+  the affected part; other authorized work continues. When the user asks to
+  pause, stop Apply until they direct again.
+- Existing approval remains valid while scope and decisions remain unchanged.
+  Material requirement or design changes, or a withdrawn instruction, need
+  renewed direction for the changed decisions, and changed acceptance criteria
+  are made in the OpenSpec artifacts — editing an Issue or pull request does not
+  approve them.
+- Permission to implement does not include permission to publish to GitHub.
+  Recording an approval, or that it was superseded, on a pull request needs the
+  user's separate request.
+- A design or implementation review that does not pass returns to specification
+  revision or repair; it does not advance to the next stage, and an
+  implementer's statement that something is fixed is not a pass.
 
 For behavior that cannot reasonably be tested automatically, record the reason,
 replayable acceptance steps, and expected results before implementation. Add
@@ -70,17 +95,28 @@ When archival is requested or part of the authorized project workflow, use the
 OpenSpec archive process, including required reconciliation of delta specs.
 Commit only within the requested delivery scope and after required checks pass.
 For review-first work, leave changes unarchived and uncommitted and report what
-was verified and what remains. Archival, commit, merge, and deployment are
-separate actions; completing one does not imply completing the others.
+was verified and what remains.
+
+These are separate stages: design review, human design approval,
+implementation review, archival, commit, merge, deployment,
+real-data acceptance, and Issue closure.
+Each keeps its own evidence and needs its own authorization; completing one does
+not imply completing another. A merged design-only pull request does not replace
+the later implementation review and acceptance. When required acceptance waits
+for real data, report delivery and acceptance status separately, and do not
+archive early to close work whose required data acceptance is incomplete. A
+review pass, a merge, or a date arriving is not acceptance.
 
 ## GitHub handoff (optional)
 
 A project may use GitHub Issues and pull requests to hand work between sessions
 or machines. This is optional: no Change requires an Issue or PR. When it is
-used, follow [GitHub 交接契約](github-handoff.md) for association, write-time
-checks, templates, and the optional human design-approval record. OpenSpec remains the
-authority for requirements; an Issue or PR edit alone approves nothing, and each
-stage in section 5 still needs its own evidence and authorization.
+used, [GitHub 協作整合](github-handoff.md) explains where each stage touches
+GitHub and which skill to invoke; the `github-issue`, `github-pr`, and
+`change-review` skills hold the post formats, write-time checks, and approval
+records. OpenSpec remains the authority for requirements; an Issue or PR edit
+alone approves nothing, and each stage in section 5 still needs its own evidence
+and authorization.
 
 ## Integration entrypoints
 

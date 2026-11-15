@@ -154,11 +154,11 @@ wt-done feature123 --base main
 | `.claude/rules/work-items.md` | Work Item 規範的 Provider 原生載入入口 |
 | `.agents/rules/work-items.md` | 同一入口的跨 Provider 鏡像 |
 | `.gitignore` 的 `/work-items/WI-*/` | 讓臨時紀錄不被 `git add -A` 暫存 |
-| `docs/github-handoff.md`、`docs/diagrams/github-handoff.svg` | GitHub 交接契約與流程圖（managed，重跑 installer 會更新） |
+| `docs/github-handoff.md`、`docs/diagrams/github-handoff.svg` | GitHub 協作整合與示例圖：各階段接上 Issue／PR 的時點（managed，重跑 installer 會更新） |
 | `.claude/skills/github-issue/`、`.claude/skills/github-pr/` | Issue／PR 交接入口 skill |
-| `.claude/skills/change-review/`、`.agents/skills/change-review/` | PR 審查、修正交接與複審 skill（含案例、檢查清單與流程圖） |
+| `.claude/skills/change-review/`、`.agents/skills/change-review/` | PR 審查、修正交接與複審 skill（含報告範例、檢查清單與流程圖） |
 | `.agents/skills/github-issue/`、`.agents/skills/github-pr/` | 同兩個入口的跨 Provider 副本 |
-| `.claude/rules/github-handoff.md`、`.agents/rules/github-handoff.md` | 交接契約的 Provider 原生載入入口與鏡像 |
+| `.claude/rules/github-handoff.md`、`.agents/rules/github-handoff.md` | 指向 GitHub 入口 Skill 的 Provider 原生載入入口與鏡像 |
 
 `scripts/skills/install.sh` 管理 `.claude/`、複數 `.agents/`，以及兩個
 project-owned `.codex/agents/` custom agents。它不接管 `.codex/config.toml`、
@@ -194,8 +194,9 @@ create 會做開 PR 需要的檢查、只含本次工作的 commit 與正常 pus
 reply 新增審查、修正、Checkpoint 或 Closure 回覆、close 先發布 Closure 再不 merge 地只關閉該 PR，
 它處理的 Issue 由 `github-issue close` 另行結案。每則內容都以 Handoff 開頭，接著依用途撰寫的
 正文、Next actions，Agent 參與時最後是 Author（工具、已知模型與兩個 Session ID；人類直接發文不加 Author）；
-Work Item 只標為 local-only。兩個入口只負責操作順序；範本、關聯鍵、provenance、人類設計批准與完整流程都在
-managed 的 [`docs/github-handoff.md`](docs/github-handoff.md)。GitHub 操作使用當下
+Work Item 只標為 local-only。兩個入口各自持有範本、關聯鍵、Author 規則與寫入前核對，執行時不需要另讀
+其他文件；managed 的 [`docs/github-handoff.md`](docs/github-handoff.md) 只說明開發流程在哪些時點接上
+GitHub，是否可以開始實作見 [`docs/openspec-workflow.md`](docs/openspec-workflow.md)。GitHub 操作使用當下
 可用且已配置的 `gh` 或 GitHub MCP。只有 `github-pr create` 會 commit 與 push，且不 force、
 不略過 hooks、保留無關的工作區內容；`github-issue` 與 github-pr 的其他操作都不寫 Git，SSH／HTTPS
 認證交給 Git 與本機設定。舊的 `github-pr publish` 已移除：對既有 PR 推送新 commit 是另外的
@@ -205,8 +206,8 @@ Git 請求，之後以 `github-pr update` 說明新版本。Issue、PR 與回覆
 每次寫入前，入口會核對完整的 host／owner／repo、操作與使用者授權（PR 另核對 base／head
 repository 與分支），寫入後回讀結果。預設不限制帳號；只有使用者或可信專案規範明示
 限制時才核對，不符就停止，不代為切換帳號或修改設定，也不輸出任何 credential。這是規範
-與入口的行為，不是 hook，不會攔截手動執行的指令。Claude Code、Codex 與 Antigravity 取得同一份契約：前者
-另有 rule 入口，只讀 `AGENTS.md` 的工具經由 `docs/agent-protocol.md` 到達。
+與入口的行為，不是 hook，不會攔截手動執行的指令。Claude Code、Codex 與 Antigravity 使用同樣的 Skill：前者
+另有 rule 入口，只讀 `AGENTS.md` 的工具經由 `docs/agent-protocol.md` 與整合說明找到 Skill 檔案。
 
 審查與驗收使用 `change-review` Skill：給它 Change 名稱、Issue URL／`#N` 或 PR 即可，PR 不是
 必要條件，目的預設為實作驗收（明確要求時做設計審查）。它解析 Change 與 PR、固定受審版本，

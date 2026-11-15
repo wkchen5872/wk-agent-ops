@@ -33,7 +33,7 @@ sources:
 
 [SVG 原稿](../diagrams/wt-work-resolution.svg)
 
-![wt-work 解析與 branch handoff](../diagrams/wt-work-resolution.png)
+![wt-work 解析與 branch handoff](../diagrams/wt-work-resolution.svg)
 
 `git worktree list --porcelain` 是註冊資訊的唯一來源。解析依序執行，每層命中就驗證並返回，
 不是把所有路徑合併後計數：[^resolution-runtime]

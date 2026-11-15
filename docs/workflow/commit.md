@@ -9,8 +9,8 @@ sources:
     resource: /template/common/skills/openspec-commit/SKILL.md
     title: OpenSpec Commit
   - id: handoff-contract
-    resource: /docs/github-handoff.md
-    title: GitHub 交接契約
+    resource: /template/common/skills/github-pr/SKILL.md
+    title: GitHub PR
   - id: delivery-design
     resource: /openspec/changes/archive/2026-11-14-extend-openspec-commit-delivery/design.md
     title: Commit 交付擴充設計
@@ -185,8 +185,8 @@ PR 或目標不明、或缺少授權時，本地結果照常完成，遠端步�
 封存與文件 commit 會產生新 head，先前的 pass 不涵蓋它。推送被拒、head 移動或最終 Review
 未通過時，停在 Closure 之前，不 force、不自動修正或重跑。各段結果（archive、docs、commit、
 push、PR update、最終 Review、Closure、close）分開回報；merge、部署與 Issue 驗收不由本流程
-宣稱完成。PR 留言的格式見 [GitHub 交接契約](../github-handoff.md)。
-Closure 的發布、回讀及 Issue 的獨立結案規則由該契約管理。[^handoff-contract]
+宣稱完成。PR 留言的格式、Closure 的發布與回讀由 `github-pr` Skill 管理，Issue 的獨立結案由
+`github-issue close` 處理。[^handoff-contract]
 
 ## Provider 邊界
 
@@ -251,7 +251,7 @@ Installer 對 `.codex/` 的管理只限於 project-owned `.codex/agents/`；不�
 本地與遠端交付行為以目前 Skill 為準；archive 保留設計意圖與驗證範圍。下列既有外部入口參考保留供查閱，未在本輪重新核對版本。
 
 [^commit-skill]: [OpenSpec Commit 來源](../../template/common/skills/openspec-commit/SKILL.md)，本地三步、遠端交付與 commit 後恢復。
-[^handoff-contract]: [GitHub 交接契約](../github-handoff.md)，§6.7、§10。
+[^handoff-contract]: [GitHub PR 來源](../../template/common/skills/github-pr/SKILL.md)，Reply layouts 的 Closure 與 Operation: close；各階段觸點見 [GitHub 協作整合](../github-handoff.md)。
 [^delivery-design]: [Commit 交付擴充設計](../../openspec/changes/archive/2026-11-14-extend-openspec-commit-delivery/design.md)。
 
 [1] [OpenSpec supported tools](https://github.com/Fission-AI/OpenSpec/blob/main/docs/supported-tools.md)

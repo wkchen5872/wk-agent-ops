@@ -65,7 +65,7 @@ wk-agent-ops/
 │   │   ├── AGENTS.md          ← Thin pointer to docs/agent-protocol.md (seed, no-overwrite)
 │   │   ├── docs/              ← agent-protocol.md/openspec-workflow.md/okf-conventions.md (managed)
 │   │   │                         architecture/conventions starters (seed)
-│   │   │                         github-handoff.md + diagrams/github-handoff.svg (managed handoff contract)
+│   │   │                         github-handoff.md + diagrams/github-handoff.svg (managed GitHub integration guide)
 │   │   └── work-items/        ← AGENTS.md Work Item convention (managed; no WI-* records)
 │   ├── python/                ← Python-specific: pytest hook, style guide
 │   ├── node/                  ← Node-specific: npm test hook
@@ -121,16 +121,21 @@ branch 完成。每個 Worktree 同一時間只能有一個 active writer，跨 
 
 ---
 
+個人流程、團隊 Skills 與 GitHub 的責任分工，依已核定的拆分設計如下。實作進度見 [Change tasks](../openspec/changes/separate-github-contract-from-workflow/tasks.md)。
+
+![Skills、個人流程與 GitHub 協作架構](diagrams/skill-workflow-architecture.svg)
+
 ## 4. Dependency Rules
 
 - **template/ → install.sh → .claude/ / .agents/ / .codex/agents/ / managed docs / `work-items/AGENTS.md`** — one direction only; no reverse; other `.codex/` content remains external
 - **Managed convention ≠ collaboration records** — the installer refreshes only
   `work-items/AGENTS.md`; it never creates, changes, or removes local `work-items/WI-*/` records
-- **GitHub handoff has one contract** — `docs/github-handoff.md` owns the Issue, PR,
-  review, Checkpoint, and Closure formats (Handoff → content → Next actions → Author) and
-  the write-time checks (full repository target, operation, authorization, readback); the
-  `github-issue`, `github-pr`, and `change-review` skills and the thin rule only reference
-  it. Issue close and PR close each change only their selected target. GitHub calls use an available gh or GitHub MCP. Only `github-pr create`
+- **GitHub entry skills own their formats** — `github-issue` and `github-pr` each hold
+  the Issue or PR formats (Handoff → content → Next actions → Author, with an identical
+  shared frame) and the write-time checks (full repository target, operation,
+  authorization, readback); `github-pr` and `change-review` hold identical review-identity
+  rules. `docs/github-handoff.md` is only the integration guide that says where each stage
+  touches GitHub; the thin rule and the protocol point at the skills. Issue close and PR close each change only their selected target. GitHub calls use an available gh or GitHub MCP. Only `github-pr create`
   commits and pushes — scoped to its own work, without force or hook bypass; every other
   operation leaves Git alone. Git owns commit, push, and authentication; there is no custom
   identity script. No hook enforces this
@@ -156,7 +161,8 @@ branch 完成。每個 Worktree 同一時間只能有一個 active writer，跨 
 | `diff template/common/.codex/agents/... .codex/agents/...` | Confirm Codex custom agents match their templates |
 | `diff template/common/docs/agent-protocol.md docs/agent-protocol.md` | Confirm managed policy matches source |
 | `diff template/common/work-items/AGENTS.md work-items/AGENTS.md` | Confirm the managed Work Item convention matches its source |
-| `bash tests/test_github_handoff.sh` | Contract presence and managed delivery of the GitHub handoff assets |
+| `bash tests/test_github_handoff.sh` | Self-contained GitHub entry skills, the integration guide, and managed delivery of the GitHub assets |
+| `bash tests/test_acceptance_bank.sh` | Skill acceptance cases in `tests/acceptance/` and the installer's retirement of shipped bank copies |
 
 [^delivery-policy]: [OpenSpec Workflow](openspec-workflow.md)，§4–5。
 [^commit-workflow]: [Commit 交付擴充設計](../openspec/changes/archive/2026-11-14-extend-openspec-commit-delivery/design.md)，Decisions 1–4；本版本 Skill 已完成本地驗證；真實遠端發布路徑仍待端到端驗收。

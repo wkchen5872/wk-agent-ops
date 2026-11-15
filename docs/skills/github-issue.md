@@ -10,7 +10,7 @@ timestamp: 2026-11-14T00:00:00+08:00
 
 `github-issue` 是將本機工作（Work Item、OpenSpec Change、分支或當前對話）登錄至 GitHub 的薄封裝工具。它的目的是讓只看 GitHub 的其他協作者或 Agent 能一眼看懂問題背景、驗收標準與下一步進度。
 
-格式與欄位規則嚴格遵循 [GitHub 交接契約](/docs/github-handoff.md)。
+格式、欄位與寫入前核對都由 Skill 本身持有（`SKILL.md` 與 `references/examples.md`），執行時不需要另讀其他文件；各階段在哪些時點接上 GitHub 見 [GitHub 協作整合](/docs/github-handoff.md)。
 
 ---
 
@@ -101,5 +101,5 @@ timestamp: 2026-11-14T00:00:00+08:00
 ## 相關文件
 
 - [GitHub PR 操作指南](/docs/skills/github-pr.md)
-- [GitHub 交接契約](/docs/github-handoff.md)
+- [GitHub 協作整合](/docs/github-handoff.md)
 - [本機開發四階段流程](/docs/workflow/local-development.md)

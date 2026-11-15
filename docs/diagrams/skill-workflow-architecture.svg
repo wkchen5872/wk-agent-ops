@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1320" viewBox="0 0 1600 1320" role="img" aria-labelledby="title desc">
+<title id="title">Skills、個人流程與 GitHub 協作架構</title>
+<desc id="desc">依 separate-github-contract-from-workflow 已核定設計繪製。個人流程按需呼叫自足的 Issue 與 PR Skills；整合文件說明觸點，Skills 持有格式、Author 與核對規則。Git 傳送正式檔案與版本，GitHub 保存協作紀錄，Session 工具另行傳送通知。驗收題庫只在來源 repo 的 tests，不隨 Skills 安裝。</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#49647e"/></marker></defs>
+<style>text{font-family:"Noto Sans CJK TC","PingFang TC","Microsoft JhengHei",sans-serif;fill:#19344c} .h{font-size:27px;font-weight:650}.body{font-size:22px;fill:#425b73}.small{font-size:19px;fill:#536b80}.edge{fill:none;stroke:#49647e;stroke-width:2.5;marker-end:url(#arrow)}.label{font-size:19px;fill:#355b79}</style>
+<rect width="1600" height="1320" fill="#f5f8fc"/>
+<text x="50" y="65" font-size="36" font-weight="700">Skills、個人流程與 GitHub 協作架構</text>
+<text x="50" y="105" class="body">流程決定何時呼叫；Skills 持有格式與操作規則；版本、協作紀錄與通知分別傳遞。</text>
+
+<rect x="35" y="145" width="430" height="585" rx="16" fill="#e9f3f2" stroke="#cbd8e5"/>
+<text x="59" y="190" class="h">個人流程與整合說明</text>
+<rect x="530" y="145" width="490" height="585" rx="16" fill="#edf0ff" stroke="#cbd8e5"/>
+<text x="554" y="190" class="h">團隊協作 Skills</text>
+<rect x="1090" y="145" width="475" height="585" rx="16" fill="#eef3fa" stroke="#cbd8e5"/>
+<text x="1114" y="190" class="h">GitHub 協作紀錄</text>
+<rect x="60" y="220" width="380" height="205" rx="16" fill="#fff" stroke="#cbd8e5"/>
+<text x="84" y="260" class="h">人類或 Agent 按需操作</text>
+<text x="84" y="299" class="body">github-handoff.md 說明觸點</text>
+<text x="84" y="332" class="body">Issue 與 Change 可互為起點</text>
+<text x="84" y="365" class="body">Issue 與 PR 都可選用</text>
+<text x="84" y="398" class="body">不強制採用同一套開發順序</text>
+<rect x="60" y="465" width="380" height="230" rx="16" fill="#fff" stroke="#cbd8e5"/>
+<text x="84" y="505" class="h">個人流程編排</text>
+<text x="84" y="544" class="body">change-review：審查與交接</text>
+<text x="84" y="577" class="body">openspec-commit</text>
+<text x="84" y="610" class="body">封存 → 更新文件 → commit</text>
+<text x="84" y="643" class="body">按需呼叫 Issue／PR Skill</text>
+<text x="84" y="676" class="body">Work Item 留在本機</text>
+<rect x="555" y="220" width="440" height="180" rx="16" fill="#fff" stroke="#cbd8e5"/>
+<text x="579" y="260" class="h">github-issue</text>
+<text x="579" y="299" class="body">建立、追加進度、結案</text>
+<text x="579" y="332" class="body">持有 Issue 格式、Author 與核對</text>
+<text x="579" y="365" class="body">含 Checkpoint、Closure 及相容規則</text>
+<rect x="555" y="465" width="440" height="230" rx="16" fill="#fff" stroke="#cbd8e5"/>
+<text x="579" y="505" class="h">github-pr</text>
+<text x="579" y="544" class="body">建立、更新、回覆、關閉</text>
+<text x="579" y="577" class="body">持有 PR 與回覆格式、Author、核對</text>
+<text x="579" y="610" class="body">發布前確認目標、操作與授權</text>
+<text x="579" y="643" class="body">發布後回讀；不明結果先查核</text>
+<text x="579" y="676" class="body">範例與批准紀錄按條件讀取</text>
+<rect x="1115" y="220" width="425" height="180" rx="16" fill="#fff" stroke="#cbd8e5"/>
+<text x="1139" y="260" class="h">Issue</text>
+<text x="1139" y="299" class="body">問題、目標、驗收資訊與下一步</text>
+<text x="1139" y="332" class="body">進展以留言累積</text>
+<text x="1139" y="365" class="body">接手規劃時沿用既有 Issue</text>
+<rect x="1115" y="465" width="425" height="230" rx="16" fill="#fff" stroke="#cbd8e5"/>
+<text x="1139" y="505" class="h">Pull request 與回覆</text>
+<text x="1139" y="544" class="body">已發布版本的說明與差異</text>
+<text x="1139" y="577" class="body">Review、修正、Checkpoint、Closure</text>
+<text x="1139" y="610" class="body">工具、模型與 Session 供追查</text>
+<text x="1139" y="643" class="body">審查結果綁定受審版本</text>
+<text x="1139" y="676" class="body">留言不會自行喚醒另一位 Agent</text>
+<path d="M440 300H555" class="edge"/>
+<text x="450" y="282" class="label">按需呼叫</text>
+<path d="M440 570H555" class="edge"/>
+<text x="450" y="552" class="label">按需呼叫</text>
+<path d="M995 300H1115" class="edge"/>
+<text x="1009" y="282" class="label">gh／MCP</text>
+<path d="M995 570H1115" class="edge"/>
+<text x="1009" y="552" class="label">gh／MCP</text>
+<text x="60" y="770" class="h">三種傳遞通道，各有自己的完成證據。</text>
+<rect x="35" y="800" width="1530" height="145" rx="16" fill="#fff" stroke="#cbd8e5"/>
+<text x="59" y="840" class="h">Git 傳送正式檔案與版本</text>
+<text x="65" y="888" class="body">本機 checkout：OpenSpec、程式、測試</text>
+<path d="M555 882H770" class="edge"/>
+<text x="575" y="856" class="label">commit／push</text>
+<text x="800" y="888" class="body">遠端 Git 分支</text>
+<path d="M1010 882H1220" class="edge"/>
+<text x="1030" y="856" class="label">fetch 指定版本</text>
+<text x="1240" y="888" class="body">Reviewer checkout</text>
+<rect x="35" y="970" width="960" height="165" rx="16" fill="#fff7e9" stroke="#e6c48a"/>
+<text x="59" y="1010" class="h">Session 工具傳送通知</text>
+<text x="59" y="1049" class="body">Review 報告先保存／回讀，再核對接收者與 Session。</text>
+<text x="59" y="1082" class="body">傳報告位置、受審版本與 Finding ID；送出不等於已讀。</text>
+<text x="59" y="1115" class="body">無 PR 可保存本地報告；本地通知須明確要求。</text>
+<rect x="1020" y="970" width="545" height="165" rx="16" fill="#fff" stroke="#cbd8e5"/>
+<text x="1044" y="1010" class="h">測試資料留在來源 repo</text>
+<text x="1044" y="1049" class="body">tests/acceptance/：題庫與重播方法</text>
+<text x="1044" y="1082" class="body">不隨 Skill 安裝，也不供日常執行載入</text>
+<text x="1044" y="1115" class="body">執行需要的範例留在 Skill references</text>
+<rect x="35" y="1165" width="1530" height="115" rx="16" fill="#eaf0f7" stroke="#cbd8e5"/>
+<text x="60" y="1204" class="small">圖稿依據：separate-github-contract-from-workflow 已核定拆分設計。</text>
+<text x="60" y="1237" class="small">實作與驗證進度見 Change tasks；本圖不代表已部署、已發布或已完成遠端驗收。</text>
+</svg>

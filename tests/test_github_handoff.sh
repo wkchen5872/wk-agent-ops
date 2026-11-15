@@ -8,8 +8,8 @@
 # Maps to openspec/changes/add-github-change-handoff specs.
 #
 # These are contract-presence and installer-behavior checks. They do not replay
-# agent decisions or real GitHub calls; those are recorded under
-# docs/verification/github-handoff/.
+# agent decisions or real GitHub calls; replays use tests/acceptance/ and their
+# results go to the Work Item or the PR, never to docs/.
 set -u
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -22,6 +22,9 @@ WORKFLOW="$COMMON/docs/openspec-workflow.md"
 CONVENTION="$COMMON/work-items/AGENTS.md"
 ISSUE_SKILL="$COMMON/skills/github-issue"
 PR_SKILL="$COMMON/skills/github-pr"
+BANK="$ROOT/tests/acceptance"
+SHARED="$BANK/shared.md"
+APPROVAL="$PR_SKILL/references/approval-records.md"
 LEGACY="scripts/github/check-identity.sh"
 LEGACY_REV="5348897"               # the only revision that shipped the retired script
 MANAGED="docs/github-handoff.md docs/diagrams/github-handoff.svg"
@@ -42,6 +45,8 @@ new_target() {
 run_install() { bash "$ROOT/scripts/skills/install.sh" --target "$1" > "$1/../install.log" 2>&1; }
 log_of() { cat "$1/../install.log" 2>/dev/null; }
 sum1() { shasum "$1" 2>/dev/null | awk '{print $1}'; }
+# The shared Handoff / Next actions / Author block, identical in both entry skills.
+frame_of() { awk '/<!-- shared-frame:start/{f=1} f; /<!-- shared-frame:end/{f=0}' "$1" 2>/dev/null; }
 
 # ── 1.1 Shared contract: target, operation, authorization, readback ──────────
 echo "1.1 shared contract"
@@ -57,29 +62,32 @@ if grep -qiE '\bcodex\b|antigravity' "$DOC" "$RULE" 2>/dev/null; then
 else
   ok "contract and rule name no secondary tool"
 fi
-want "$DOC" '<!-- wk-agent-ops:handoff:start -->' "managed block start marker defined"
-want "$DOC" '<!-- wk-agent-ops:handoff:end -->'   "managed block end marker defined"
-want "$DOC" 'openspec-change:' "exact Change association key defined"
-want "$DOC" 'repository:'      "exact repository association key defined"
-want "$DOC" 'host／owner／repo' "full repository target is the unit of comparison"
-want "$DOC" 'GitHub MCP'        "contract allows a configured GitHub MCP"
-want "$DOC" '讀取權限不等於寫入權限' "read access is not write permission"
-want "$DOC" '不額外建立' "no probe writes to test permission"
-want "$DOC" '回讀' "results are read back before completion"
-want "$DOC" '不換工具重送' "uncertain writes are reconciled before switching tools"
-want "$DOC" 'design-approval'                 "design-approval record defined"
-want "$DOC" 'human-github'                    "human approval source kind defined"
-want "$DOC" 'agent-attested-user-instruction' "attested approval source kind defined"
-want "$DOC" 'superseded'                      "superseded approval state defined"
-want "$DOC" 'changes-required' "review verdict vocabulary defined"
-want "$DOC" 'review-id'        "review identifier defined"
-want "$DOC" 'withheld'         "withheld provenance state defined"
-want "$DOC" 'Refs #'           "issue reference uses a non-closing keyword"
-want "$DOC" 'docs/verification/github-handoff/' "formal evidence location defined"
-cases="$(grep -cE '^### C-[0-9]+' "$DOC" 2>/dev/null | tr -d ' ')"
-[[ "${cases:-0}" -ge 24 ]] && ok "at least 24 shared cases (${cases:-0})" || bad "at least 24 shared cases (${cases:-0})"
+# The rules these assertions anchor moved from the contract to the entry skills
+# and the approval-record reference (separate-github-contract-from-workflow).
+want "$PR_SKILL/SKILL.md" '<!-- wk-agent-ops:handoff:start -->' "legacy managed block start marker stays readable"
+want "$PR_SKILL/SKILL.md" '<!-- wk-agent-ops:handoff:end -->'   "legacy managed block end marker stays readable"
+frame_of "$ISSUE_SKILL/SKILL.md" | grep -qF 'openspec-change:' && ok "exact Change association key defined" || bad "exact Change association key defined"
+want "$ISSUE_SKILL/SKILL.md" 'repository:'      "exact repository association key defined"
+want "$ISSUE_SKILL/SKILL.md" 'host, owner, and repository' "full repository target is the unit of comparison"
+want "$ISSUE_SKILL/SKILL.md" 'GitHub MCP'        "entry skill allows a configured GitHub MCP"
+want "$ISSUE_SKILL/SKILL.md" 'does not
+prove' "read access is not write permission"
+want "$ISSUE_SKILL/SKILL.md" 'Never create a test' "no probe writes to test permission"
+want "$ISSUE_SKILL/SKILL.md" 'Read the Issue back' "results are read back before completion"
+want "$ISSUE_SKILL/SKILL.md" 'do not resend through another tool' "uncertain writes are reconciled before switching tools"
+want "$APPROVAL" 'design-approval'                 "design-approval record defined"
+want "$APPROVAL" 'human-github'                    "human approval source kind defined"
+want "$APPROVAL" 'agent-attested-user-instruction' "attested approval source kind defined"
+want "$APPROVAL" 'superseded'                      "superseded approval state defined"
+want "$PR_SKILL/SKILL.md" 'changes-required' "review verdict vocabulary defined"
+want "$PR_SKILL/SKILL.md" 'review-id'        "review identifier defined"
+frame_of "$ISSUE_SKILL/SKILL.md" | grep -qF 'withheld' && ok "withheld provenance state defined" || bad "withheld provenance state defined"
+frame_of "$ISSUE_SKILL/SKILL.md" | grep -qF 'Refs #' && ok "issue reference uses a non-closing keyword" || bad "issue reference uses a non-closing keyword"
+want "$BANK/README.md" 'github-pr reply' "replay results go to the Work Item or the PR"
+deny "$BANK/README.md" 'docs/verification/' "replay results are not kept under docs/"
+cases="$(grep -cE '^### C-[0-9]+' "$SHARED" 2>/dev/null | tr -d ' ')"
 for label in 'Fixture：' '模擬回覆：' '預期呼叫：' '禁止：' '判定：'; do
-  n="$(grep -cF -- "- $label" "$DOC" 2>/dev/null | tr -d ' ')"
+  n="$(grep -cF -- "- $label" "$SHARED" 2>/dev/null | tr -d ' ')"
   [[ "${n:-0}" -ge "${cases:-999}" && "${cases:-0}" -gt 0 ]] \
     && ok "every shared case states '$label'" || bad "every shared case states '$label' (${n:-0}/${cases:-0})"
 done
@@ -93,7 +101,7 @@ else
   ok "installer no longer lists the script as managed"
 fi
 for f in "$RULE" "$PROTO" "$ISSUE_SKILL/SKILL.md" "$PR_SKILL/SKILL.md" \
-         "$ISSUE_SKILL/references/acceptance-cases.md" "$PR_SKILL/references/acceptance-cases.md" \
+         "$BANK/github-issue.md" "$BANK/github-pr.md" \
          "$COMMON/AGENTS.md" "$ROOT/README.md"; do
   if grep -qE 'check-identity|policy[_-]source|script-blob|GitHub handoff identity' "$f" 2>/dev/null; then
     bad "${f#"$ROOT"/} no longer requires the script or identity policy"
@@ -106,15 +114,15 @@ deny "$DOC" 'policy_source' "contract has no mandatory policy snapshot"
 
 # ── F-01 / 1.4 Secrets never enter output, records or commands ───────────────
 echo "F-01 secrets and credential reconstruction"
-want "$DOC" '不解析 credential helper' "contract forbids reconstructing credentials"
-want "$DOC" 'helper 的設定內容' "contract forbids copying helper contents into records"
+want "$ISSUE_SKILL/SKILL.md" 'do not parse credential helpers' "entry skills forbid reconstructing credentials"
+want "$ISSUE_SKILL/SKILL.md" 'Nothing from' "entry skills keep credential configuration out of records"
 # Prohibition lists may name these actions; instructions and expected calls must not use them.
 CRED_CMD='credential fill|ssh -T|get-regexp .*credential|config .*credential\.'
 instructions() {                   # $1 file: every line except case prohibitions
   grep -vE '^- (禁止|Forbidden)：' "$1" 2>/dev/null
 }
 for f in "$DOC" "$ISSUE_SKILL/SKILL.md" "$PR_SKILL/SKILL.md" \
-         "$ISSUE_SKILL/references/acceptance-cases.md" "$PR_SKILL/references/acceptance-cases.md"; do
+         "$BANK/github-issue.md" "$BANK/github-pr.md"; do
   if instructions "$f" | grep -vE '^\| ' | grep -qE "$CRED_CMD"; then
     bad "${f#"$ROOT"/} instructs no credential-reading or SSH principal command"
   else
@@ -124,20 +132,21 @@ done
 
 # ── 1.3 Optional, explicit account restrictions; independent recorders ───────
 echo "1.3 account restrictions and approval recorders"
-want "$DOC" '預設不限制帳號' "no account restriction by default"
-want "$DOC" '明示限制' "explicit restrictions are checked when present"
-want "$DOC" '不能由 repository 權限推導' "recorder authority is not derived from repo access"
-want "$DOC" 'unavailable' "unknown actors are recorded honestly"
+want "$ISSUE_SKILL/SKILL.md" 'none by default' "no account restriction by default"
+want "$PR_SKILL/SKILL.md" 'names an account for an operation' "explicit restrictions are checked when present"
+want "$APPROVAL" '不能由 repository 權限推導' "recorder authority is not derived from repo access"
+want "$ISSUE_SKILL/SKILL.md" 'unavailable' "unknown actors are recorded honestly"
 
 # ── 1.3 / 1.4 Review report baseline ─────────────────────────────────────────
 echo "1.4 review baseline"
+CR_EXAMPLES="$COMMON/skills/change-review/references/examples.md"
 for heading in '## Scope and Baseline' '## Findings' '## Summary and Limitations'; do
-  want "$DOC" "$heading" "review template has '$heading'"
+  want "$CR_EXAMPLES" "$heading" "review template has '$heading'"
 done
 for field in 'Session-ID：' 'Session-ID source：' 'Session-Alias：' 'Machine-Alias：' \
              'AI-Assisted-By：' 'Git branches：' 'PR base SHA：' 'reviewed head SHA' \
              'Checkout HEAD：' '未提交內容：' '文件快照：' '實際執行的檢查與結果：'; do
-  want "$DOC" "$field" "baseline field '$field'"
+  want "$CR_EXAMPLES" "$field" "baseline field '$field'"
 done
 
 # ── 3.3 Lifecycle manual and diagram ─────────────────────────────────────────
@@ -164,7 +173,11 @@ done < <(grep -oE '\]\([^)#]+\.(md|svg)(#[^)]*)?\)' "$DOC" 2>/dev/null \
 # ── 1.2 Entries: thin rule, protocol, workflow, Work Item boundary ───────────
 echo "1.2 entries and Work Item boundary"
 [[ -f "$RULE" ]] && ok "rule entry exists in the template" || bad "rule entry exists in the template"
-want "$RULE" 'docs/github-handoff.md' "rule points at the single contract"
+want "$RULE" 'docs/github-handoff.md' "rule points at the integration guide for workflow touchpoints"
+want "$RULE" 'github-issue' "rule sends Issue work to the entry skill"
+want "$RULE" 'github-pr' "rule sends PR work to the entry skill"
+deny "$RULE" '先讀取並遵守 `docs/github-handoff.md`' "rule no longer requires reading the guide before every write"
+deny "$RULE" '唯一來源' "rule no longer calls the guide the source of templates"
 if [[ -f "$RULE" ]] && [[ "$(wc -l < "$RULE" | tr -d ' ')" -le 30 ]]; then
   ok "rule entry stays short"; else bad "rule entry stays short"; fi
 if [[ -f "$RULE" && "$(grep -c '^- ' "$RULE" | tr -d ' ')" == 0 ]]; then
@@ -172,8 +185,17 @@ if [[ -f "$RULE" && "$(grep -c '^- ' "$RULE" | tr -d ' ')" == 0 ]]; then
 want "$RULE" '不是 hook' "rule does not present itself as a hook"
 if grep -qE 'openspec-change:|approved_by|Session-ID' "$RULE" 2>/dev/null; then
   bad "rule restates no contract schema"; else ok "rule restates no contract schema"; fi
-want "$PROTO" 'docs/github-handoff.md' "protocol references the contract"
-grep -qE '^\| Version \| 2\.7\.0' "$PROTO" 2>/dev/null \
+want "$PROTO" 'docs/github-handoff.md' "protocol references the integration guide"
+proto_gh() { awk '/closes a GitHub Issue or pull/{f=1} f&&/^## 2\./{exit} f' "$PROTO" 2>/dev/null; }
+proto_gh | grep -qF 'github-issue' && ok "protocol sends Issue and PR work to the entry skills" || bad "protocol sends Issue and PR work to the entry skills"
+proto_gh | grep -qF 'confirm the full repository target, the operation, and its authorization' \
+  && ok "protocol keeps the minimum write check" || bad "protocol keeps the minimum write check"
+proto_gh | grep -qF 'read the result back' && ok "protocol keeps readback" || bad "protocol keeps readback"
+proto_gh | grep -qF 'the shared handoff contract' && bad "protocol no longer calls the guide the shared contract" \
+  || ok "protocol no longer calls the guide the shared contract"
+deny "$COMMON/AGENTS.md" '先讀 `docs/github-handoff.md`' "seed AGENTS no longer requires reading the guide first"
+want "$COMMON/AGENTS.md" 'github-pr' "seed AGENTS points at the entry skills"
+grep -qE '^\| Version \| 2\.8\.0' "$PROTO" 2>/dev/null \
   && ok "protocol version bumped" || bad "protocol version bumped"
 want "$WORKFLOW" 'github-handoff.md' "OpenSpec workflow links the contract"
 want "$WORKFLOW" 'optional' "OpenSpec workflow keeps GitHub handoff optional"
@@ -192,21 +214,15 @@ for skill in "$ISSUE_SKILL" "$PR_SKILL"; do
     && ok "$name frontmatter name matches directory" || bad "$name frontmatter name matches directory"
   grep -qE '^description:' "$skill/SKILL.md" 2>/dev/null \
     && ok "$name has a description" || bad "$name has a description"
-  want "$skill/SKILL.md" 'docs/github-handoff.md' "$name reads the shared contract"
+  deny "$skill/SKILL.md" 'docs/github-handoff.md' "$name does not require the integration guide"
   want "$skill/SKILL.md" 'MCP' "$name allows a configured GitHub MCP"
-  want "$skill/SKILL.md" 'references/acceptance-cases.md' "$name links its replay cases"
-  if grep -qE 'approved_by|## Scope and Baseline|wk-agent-ops:handoff:start' "$skill/SKILL.md" 2>/dev/null; then
-    bad "$name restates no contract schema"
+  # The skill holds its frame and layouts; approval and full-baseline layouts stay in references.
+  if grep -qE '^- approved_by:|## Scope and Baseline' "$skill/SKILL.md" 2>/dev/null; then
+    bad "$name keeps approval and baseline layouts in references"
   else
-    ok "$name restates no contract schema"
+    ok "$name keeps approval and baseline layouts in references"
   fi
-  [[ -f "$skill/references/acceptance-cases.md" ]] \
-    && ok "$name replay cases exist" || bad "$name replay cases exist"
 done
-gi="$(grep -cE '^### GI-[0-9]+' "$ISSUE_SKILL/references/acceptance-cases.md" 2>/dev/null | tr -d ' ')"
-[[ "${gi:-0}" -ge 15 ]] && ok "github-issue has at least 15 cases (${gi:-0})" || bad "github-issue has at least 15 cases (${gi:-0})"
-gp="$(grep -cE '^### GP-[0-9]+' "$PR_SKILL/references/acceptance-cases.md" 2>/dev/null | tr -d ' ')"
-[[ "${gp:-0}" -ge 20 ]] && ok "github-pr has at least 20 cases (${gp:-0})" || bad "github-pr has at least 20 cases (${gp:-0})"
 for op in create update; do
   grep -qE "^## .*\b$op\b" "$ISSUE_SKILL/SKILL.md" 2>/dev/null \
     && ok "github-issue defines $op" || bad "github-issue defines $op"
@@ -223,18 +239,21 @@ for field in headRepository headRepositoryOwner baseRefName isCrossRepository; d
   want "$PR_SKILL/SKILL.md" "$field" "github-pr reads $field for candidates and results"
 done
 want "$PR_SKILL/SKILL.md" '--head <head-owner>:<head-branch>' "github-pr create names the head owner"
-grep -E '^### GP-[0-9]+' "$PR_SKILL/references/acceptance-cases.md" 2>/dev/null | grep -qF 'fork' \
+grep -E '^### GP-[0-9]+' "$BANK/github-pr.md" 2>/dev/null | grep -qF 'fork' \
   && ok "github-pr has a fork replay case" || bad "github-pr has a fork replay case"
 
 # ── simplify-github-issue 1.1: sources, minimal Issue body, Author ───────────
 # Maps to openspec/changes/simplify-github-issue specs/github-issue.
 echo "SGI-1 Issue sources and initial body"
-ISSUE_CASES="$ISSUE_SKILL/references/acceptance-cases.md"
-issue_section() { awk '/^### 6\.1 /{f=1;next} /^### 6\.2 /{f=0} f' "$DOC" 2>/dev/null; }
-fence_headings() {                 # $1 = Nth fenced block in §6.1 → its "## " headings, one per line
-  issue_section | awk -v n="$1" '/^```/{c++; next} c==2*n-1 && /^## /{print}'
+ISSUE_CASES="$BANK/github-issue.md"
+# The Issue layouts live in the github-issue skill (separate-github-contract-from-workflow).
+issue_section() { cat "$ISSUE_SKILL/SKILL.md" 2>/dev/null; }
+fence_with() {                     # $1 file, $2 heading → "## " headings of the markdown layout containing it
+  awk -v want="$2" '/^```markdown/{f=1; buf=""; has=0; next}
+    f && /^```/{f=0; if (has) printf "%s", buf; next}
+    f && /^## /{buf = buf $0 "\n"; if ($0 == want) has = 1}' "$1" 2>/dev/null
 }
-initial="$(fence_headings 1 | tr '\n' '|')"
+initial="$(fence_with "$ISSUE_SKILL/SKILL.md" '## Goal' | tr '\n' '|')"
 [[ "$initial" == '## Handoff|'*'## Goal|'*'## Author|' ]] \
   && ok "initial Issue body starts with Handoff, has Goal, ends with Author" \
   || bad "initial Issue body starts with Handoff, has Goal, ends with Author ($initial)"
@@ -258,7 +277,7 @@ done
 
 # ── simplify-github-issue 2.1: comment-only update, legacy Issues, association ─
 echo "SGI-2 Issue update appends a comment"
-comment="$(fence_headings 2 | tr '\n' '|')"
+comment="$(fence_with "$ISSUE_SKILL/SKILL.md" '## Changes' | tr '\n' '|')"
 # standardize-github-collaboration-records: every post carries Next actions before Author.
 [[ "$comment" == '## Handoff|## Changes|## Next actions|## Author|' ]] \
   && ok "update comment is Handoff → Changes → Next actions → Author" \
@@ -285,16 +304,16 @@ done
 # ── simplify-github-issue 3.1: shared rules separate Issue from PR / Review ──
 echo "SGI-3 shared contract scopes managed-body rules to PR"
 doc_section() { awk -v s="^## $1\\\\." -v e="^## $2\\\\." '$0~s{f=1} $0~e{f=0} f' "$DOC" 2>/dev/null; }
-doc_section 5 6 | grep -qF '已知明確的 Issue／PR URL' \
-  && bad "§5 exact-key lookup no longer covers Issues" || ok "§5 exact-key lookup no longer covers Issues"
-doc_section 7 8 | grep -qF '第 6.1 節' \
-  && ok "§7 provenance names the Issue Author exception" || bad "§7 provenance names the Issue Author exception"
-doc_section 11 12 | grep -qF '第 6.1 節' \
-  && ok "§11 body-update rules exclude Issues" || bad "§11 body-update rules exclude Issues"
-deny "$DOC" 'Issue 的 `Waiting` 區段' "§10 no longer relies on an Issue Waiting block"
-deny "$DOC" '`artifacts` 為 `local-only／待發布`' "Issue create case uses References, not artifacts"
-for f in "$DOC" "$PR_SKILL/SKILL.md" "$PR_SKILL/references/acceptance-cases.md" \
-         "$COMMON/skills/change-review/SKILL.md" "$COMMON/skills/change-review/references/acceptance-cases.md" \
+grep -qF '已知明確的 Issue／PR URL' "$PR_SKILL/SKILL.md" \
+  && bad "PR lookup does not cover Issues" || ok "PR lookup does not cover Issues"
+frame_of "$ISSUE_SKILL/SKILL.md" | grep -qF 'Issue and PR posts record no role' \
+  && ok "frame keeps Issue and PR Authors to the four fields" || bad "frame keeps Issue and PR Authors to the four fields"
+grep -qF 'Issue updates are new comments' "$PR_SKILL/SKILL.md" \
+  && ok "PR body-update rules exclude Issues" || bad "PR body-update rules exclude Issues"
+deny "$ISSUE_SKILL/SKILL.md" '## Waiting' "github-issue relies on no Issue Waiting block"
+deny "$ISSUE_SKILL/SKILL.md" 'artifacts:' "github-issue uses References, not an artifacts field"
+for f in "$DOC" "$PR_SKILL/SKILL.md" "$BANK/github-pr.md" \
+         "$COMMON/skills/change-review/SKILL.md" "$BANK/change-review.md" \
          "$COMMON/skills/change-review/references/checklists.md" "$RULE"; do
   if instructions "$f" | grep -qE 'gh issue edit|Waiting 區段'; then
     bad "${f#"$ROOT"/} asks for no Issue body rewrite"
@@ -316,29 +335,28 @@ grep -E '^### GI-[0-9]+' "$ISSUE_CASES" 2>/dev/null | grep -qF '對話新決策'
 deny "$ISSUE_CASES" '18 項細節任務' "no content case stands on a task count without the tasks"
 deny "$ISSUE_SKILL/SKILL.md" 'stop at the first that applies' "explicit records do not exclude the session discussion"
 want "$ISSUE_SKILL/SKILL.md" 'Always merge the relevant current-session discussion' "github-issue merges session decisions into named sources"
-issue_section | grep -qF '不沿用 Work Item 的紀錄格式' \
-  && ok "§6.1 requires rewriting sources into a task, not the record layout" \
-  || bad "§6.1 requires rewriting sources into a task, not the record layout"
+issue_section | grep -qF "Do not keep the record's layout" \
+  && ok "github-issue rewrites sources into a task, not the record layout" \
+  || bad "github-issue rewrites sources into a task, not the record layout"
 deny "$ISSUE_SKILL/references/examples.md" 'issues/7 合併' "example dependency names a mergeable PR, not an Issue"
 want "$ISSUE_SKILL/references/examples.md" '/pull/' "example dependency links the PR whose merge releases it"
 
 # Review r06 replay: a Change's task plan became Issue Tasks group-for-group.
 want "$ISSUE_SKILL/SKILL.md" "not the plan's groups" "github-issue turns a task plan into checkable outcomes"
-issue_section | grep -qF '不照搬實作計畫的群組' \
-  && ok "§6.1 Tasks are outcomes, not the implementation plan" || bad "§6.1 Tasks are outcomes, not the implementation plan"
+issue_section | grep -qF 'test-by-test list' \
+  && ok "github-issue Tasks are outcomes, not the implementation plan" || bad "github-issue Tasks are outcomes, not the implementation plan"
 
 # Review r06 replay: a missing named source must halt; §3 must allow the C-20 fallback.
 want "$ISSUE_SKILL/SKILL.md" 'stop and ask the user to confirm' "a missing named source halts before any remote call"
-doc_section 3 4 | grep -qF '另一個已配置' \
-  && ok "§3 lets another configured tool cover a missing capability" || bad "§3 lets another configured tool cover a missing capability"
+want "$ISSUE_SKILL/SKILL.md" 'another configured tool has it' "github-issue lets another configured tool cover a missing capability"
 
 # ── simplify-github-pr 1.x: sources, minimal PR frame, no Git writes ─────────
 # Maps to openspec/changes/simplify-github-pr specs/github-pr.
 echo "SGP-1 PR sources, frame and Git boundary"
-PR_CASES="$PR_SKILL/references/acceptance-cases.md"
-pr_section() { awk '/^### 6\.2 /{f=1;next} /^### 6\.3 /{f=0} f' "$DOC" 2>/dev/null; }
-pr_fence() { pr_section | awk -v n="$1" '/^```/{c++; next} c==2*n-1 && /^## /{print}'; }
-body="$(pr_fence 1 | tr '\n' '|')"
+PR_CASES="$BANK/github-pr.md"
+# PR layouts: the markdown layouts held by the github-pr skill.
+pr_section() { awk '/^```markdown/{f=1;next} f&&/^```/{f=0} f' "$PR_SKILL/SKILL.md" 2>/dev/null; }
+body="$(fence_with "$PR_SKILL/SKILL.md" '## Summary' | tr '\n' '|')"
 [[ "$body" == '## Handoff|'*'## Author|' ]] \
   && ok "PR body starts with Handoff and ends with Author" || bad "PR body starts with Handoff and ends with Author ($body)"
 for field in '- branch:' 'Co-Authored-By:' 'AI-Assisted-By:' 'SESSION-ID:'; do
@@ -378,7 +396,8 @@ want "$PR_SKILL/SKILL.md" 'already merged or closed counts as ended' "close trea
 
 # ── simplify-github-pr 2.x: replies and independent approval events ─────────
 echo "SGP-2 PR replies and approval events"
-review="$(pr_fence 2 | tr '\n' '|')"; changes="$(pr_fence 3 | tr '\n' '|')"
+review="$(fence_with "$PR_SKILL/SKILL.md" '## Review' | tr '\n' '|')"
+changes="$(awk '/^Fix reply:/{f=1} f' "$PR_SKILL/SKILL.md" | fence_with /dev/stdin '## Changes' | head -4 | tr '\n' '|')"
 [[ "$review" == '## Handoff|## Review|## Verification|## Next actions|## Author|' ]] \
   && ok "reviewer reply is Handoff → Review → Verification → Next actions → Author" \
   || bad "reviewer reply is Handoff → Review → Verification → Next actions → Author ($review)"
@@ -397,12 +416,12 @@ for t in 'Reviewer 回覆' '實作者回覆' '沒有 finding' '無法完成' '�
   grep -E '^### GP-[0-9]+' "$PR_CASES" 2>/dev/null | grep -qF -- "$t" \
     && ok "github-pr has a case for '$t'" || bad "github-pr has a case for '$t'"
 done
-awk '/^### 6\.3 /{f=1;next} /^### 6\.4 /{f=0} f' "$DOC" | grep -qF -- '- status:' \
+grep -qF -- '- status:' "$APPROVAL" \
   && ok "approval event carries its own status" || bad "approval event carries its own status"
-doc_section 9 10 | grep -qF '沒有正文批准區塊' \
-  && ok "§9 finds approval events without a body block" || bad "§9 finds approval events without a body block"
-doc_section 9 10 | grep -qF 'source_ref' \
-  && ok "§9 still accepts a legacy body source_ref" || bad "§9 still accepts a legacy body source_ref"
+grep -qF '沒有正文批准區塊' "$APPROVAL" \
+  && ok "approval records are found without a body block" || bad "approval records are found without a body block"
+grep -qF 'source_ref' "$APPROVAL" \
+  && ok "approval records still accept a legacy body source_ref" || bad "approval records still accept a legacy body source_ref"
 
 # ── simplify-github-pr 3.x: close and uniform result checks ──────────────────
 echo "SGP-3 close and result checks"
@@ -449,8 +468,8 @@ else
 fi
 grep -qF 'stateReason: NOT_PLANNED' "$ISSUE_CASES" && ok "an Issue case reads back NOT_PLANNED" || bad "an Issue case reads back NOT_PLANNED"
 grep -qF 'stateReason: COMPLETED' "$ISSUE_CASES" && ok "an Issue case keeps COMPLETED for finished work" || bad "an Issue case keeps COMPLETED for finished work"
-doc_section 10 11 | grep -qF 'not planned' && ok "contract §10 ties Issue close reason to evidence" \
-  || bad "contract §10 ties Issue close reason to evidence"
+issue_section | grep -qF 'reason mismatch' && ok "github-issue ties the stored close reason to evidence" \
+  || bad "github-issue ties the stored close reason to evidence"
 
 # ── streamline-github-pr-publication: create publishes; dual session Author ──
 # Maps to openspec/changes/streamline-github-pr-publication specs/github-pr.
@@ -500,48 +519,50 @@ done
 # Maps to openspec/changes/standardize-github-collaboration-records specs.
 # Static presence only; source-to-output replays are recorded separately.
 echo "SCR-1 shared frame: Handoff, Next actions, Author"
-frame_part() { awk '/^## 6\. /{f=1;next} /^### 6\.1 /{f=0} f' "$DOC" 2>/dev/null; }
+frame_part() { frame_of "$ISSUE_SKILL/SKILL.md"; }
 # simplify-github-author-format: the mode and human-account lines are gone (SAF-1).
 for term in '## Next actions' '原報告作者:' \
             'SESSION-ID:' 'XIRP-SESSION-ID:' '（local-only）'; do
-  frame_part | grep -qF -- "$term" && ok "§6 shared frame defines '$term'" || bad "§6 shared frame defines '$term'"
+  frame_part | grep -qF -- "$term" && ok "shared frame defines '$term'" || bad "shared frame defines '$term'"
 done
-frame_part | grep -qF '舊紀錄的 `null`' && ok "§6 keeps legacy null fields readable" || bad "§6 keeps legacy null fields readable"
+frame_part | grep -qF 'Older posts with `null` fields' && ok "frame keeps legacy null fields readable" || bad "frame keeps legacy null fields readable"
 [[ "$initial" == '## Handoff|'*'## Goal|'*'## Next actions|## Author|' ]] \
   && ok "initial Issue body ends with Next actions → Author" || bad "initial Issue body ends with Next actions → Author ($initial)"
 [[ "$body" == '## Handoff|'*'## Next actions|## Author|' ]] \
   && ok "PR body ends with Next actions → Author" || bad "PR body ends with Next actions → Author ($body)"
 n="$(issue_section | grep -c '^XIRP-SESSION-ID:')"; m="$(issue_section | grep -c '^SESSION-ID:')"
-[[ "${n:-0}" -ge 2 && "$n" == "$m" ]] && ok "every §6.1 Issue Author has both Session IDs ($m/$n)" \
-  || bad "every §6.1 Issue Author has both Session IDs ($m/$n)"
+[[ "${n:-0}" -ge 2 && "$n" == "$m" ]] && ok "every github-issue Author layout has both Session IDs ($m/$n)" \
+  || bad "every github-issue Author layout has both Session IDs ($m/$n)"
 issue_section | grep -qF 'Acceptance criteria' && ok "Issue body names Acceptance criteria" || bad "Issue body names Acceptance criteria"
-doc_section 7 8 | grep -qF '（貼文工具與已知模型）' && bad "§7 no longer exempts Issues from Session IDs" \
-  || ok "§7 no longer exempts Issues from Session IDs"
+frame_part | grep -qF '（貼文工具與已知模型）' && bad "frame does not exempt Issues from Session IDs" \
+  || ok "frame does not exempt Issues from Session IDs"
 pr_section | grep -qF 'close 時一起關閉的 Issue' && bad "PR Handoff issue no longer implies closure" \
   || ok "PR Handoff issue no longer implies closure"
 
 echo "SCR-2 Checkpoint and Closure"
-cp_part() { awk '/^### 6\.6 /{f=1;next} /^### 6\.7 /{f=0} f' "$DOC" 2>/dev/null; }
-cl_part() { awk '/^### 6\.7 /{f=1;next} /^## 7\. /{f=0} f' "$DOC" 2>/dev/null; }
-grep -qE '^### 6\.6 Checkpoint' "$DOC" && ok "contract defines Checkpoint (§6.6)" || bad "contract defines Checkpoint (§6.6)"
-grep -qE '^### 6\.7 Closure' "$DOC" && ok "contract defines Closure (§6.7)" || bad "contract defines Closure (§6.7)"
+cp_part() { cat "$ISSUE_SKILL/SKILL.md" 2>/dev/null; }
+cl_part() { cat "$ISSUE_SKILL/SKILL.md" "$PR_SKILL/SKILL.md" 2>/dev/null; }
+[[ -n "$(fence_with "$ISSUE_SKILL/SKILL.md" '## Checkpoint')" ]] && ok "github-issue defines the Checkpoint layout" || bad "github-issue defines the Checkpoint layout"
+[[ -n "$(fence_with "$ISSUE_SKILL/SKILL.md" '## Closure')" ]] && ok "github-issue defines the Closure layout" || bad "github-issue defines the Closure layout"
 for h in '### Current state' '### Open questions' '## Next actions'; do
   cp_part | grep -qF -- "$h" && ok "Checkpoint has '$h'" || bad "Checkpoint has '$h'"
 done
-cp_part | grep -qF '之後的事件' && ok "receivers reconcile events after a Checkpoint" || bad "receivers reconcile events after a Checkpoint"
+cp_part | grep -qF 'checks the events after it' && ok "receivers reconcile events after a Checkpoint" || bad "receivers reconcile events after a Checkpoint"
 for h in '### Outcome' '### Remaining work' '## Next actions'; do
   cl_part | grep -qF -- "$h" && ok "Closure has '$h'" || bad "Closure has '$h'"
 done
-cl_part | grep -qF '先發布並回讀 Closure' && ok "Closure is confirmed before the state change" \
+cl_part | grep -qF 'post the Closure first, confirm it' && ok "Closure is confirmed before the state change" \
   || bad "Closure is confirmed before the state change"
-cl_part | grep -qF '不 merge' && ok "Closure never implies a merge" || bad "Closure never implies a merge"
+cl_part | grep -qF 'without merging' && ok "Closure never implies a merge" || bad "Closure never implies a merge"
 deny "$DOC" '關閉 PR 與直接對應的 Issue' "§10 PR close no longer closes Issues"
 deny "$DOC" '使用者要求時才把 pass 發布到 PR' "§8 remote pass is posted, not only on request"
 deny "$SVG" 'github-pr close 關 PR 與直接 Issue' "diagram no longer closes Issues from PR close"
 want "$SVG" 'github-issue close' "diagram shows the separate Issue close"
-for t in '接手缺本地資料' '摘要過時' '平行摘要衝突' 'close 部分失敗' '重試' 'target 變更' \
+# 'close 部分失敗' and '重試' were C-35, removed as a duplicate of GI-49 (see
+# tests/acceptance/README.md); the github-issue case '摘要成功但 close 失敗' anchors it.
+for t in '接手缺本地資料' '摘要過時' '平行摘要衝突' 'target 變更' \
          '人類直接發布' '代發' '雙 Session' '未知 metadata' 'legacy'; do
-  grep -E '^### C-[0-9]+' "$DOC" | grep -qF -- "$t" && ok "shared case for '$t'" || bad "shared case for '$t'"
+  grep -E '^### C-[0-9]+' "$SHARED" | grep -qF -- "$t" && ok "shared case for '$t'" || bad "shared case for '$t'"
 done
 
 echo "SCR-3 github-issue close, reply and work identity"
@@ -590,20 +611,24 @@ done
 # Maps to openspec/changes/simplify-github-design-approval specs. Static checks
 # only; Apply decisions are replayed separately.
 echo "SDA-1 explicit instruction authorizes Apply; no second identity gate"
-sec43() { awk '/^### 4\.3 /{f=1;next} /^## 5\. /{f=0} f' "$DOC" 2>/dev/null; }
-sec63() { awk '/^### 6\.3 /{f=1;next} /^### 6\.4 /{f=0} f' "$DOC" 2>/dev/null; }
-sec9()  { doc_section 9 10; }
-deny "$DOC" '記錄者由已信任的專案批准規範或' "§4.3 drops the recorder allowlist"
-sec43 | grep -qF '不要求證明 API 帳號就是使用者本人' && ok "§4.3 does not demand API-account identity proof" \
-  || bad "§4.3 does not demand API-account identity proof"
-sec43 | grep -qF '不能由 repository 權限推導' && ok "§4.3 still refuses repo access as authorization" \
-  || bad "§4.3 still refuses repo access as authorization"
-sec9 | grep -qF '而且能從 PR 找到' && bad "§9 no longer requires a PR event before Apply" || ok "§9 no longer requires a PR event before Apply"
-sec9 | grep -qF '已授權的記錄者或人類本人' && bad "§9 drops the recorder-or-human author check" || ok "§9 drops the recorder-or-human author check"
-for t in '明確的使用者指示' 'PR 事件不是 Apply 的必要條件' '只要求建立 Change' '技術 pass' '撤回' 'API 帳號'; do
-  sec9 | grep -qF -- "$t" && ok "§9 covers '$t'" || bad "§9 covers '$t'"
+# Approval records (format, discovery, version check) live in the github-pr reference;
+# whether implementation may start lives in docs/openspec-workflow.md.
+sec43() { cat "$APPROVAL" 2>/dev/null; }
+sec63() { cat "$APPROVAL" 2>/dev/null; }
+sec9()  { cat "$APPROVAL" 2>/dev/null; }
+sec9_auth() { cat "$WORKFLOW" 2>/dev/null; }
+deny "$APPROVAL" '記錄者由已信任的專案批准規範或' "approval records drop the recorder allowlist"
+sec43 | grep -qF '不要求證明 API 帳號就是使用者本人' && ok "approval records do not demand API-account identity proof" \
+  || bad "approval records do not demand API-account identity proof"
+sec43 | grep -qF '不能由 repository 權限推導' && ok "approval records still refuse repo access as authorization" \
+  || bad "approval records still refuse repo access as authorization"
+sec9 | grep -qF '而且能從 PR 找到' && bad "approval records do not require a PR event before Apply" || ok "approval records do not require a PR event before Apply"
+sec9 | grep -qF '已授權的記錄者或人類本人' && bad "approval records drop the recorder-or-human author check" || ok "approval records drop the recorder-or-human author check"
+for t in 'explicit user instruction' 'or PR event is required' 'Creating a Change' 'technical review pass' \
+         'withdrawn' 'API account'; do
+  sec9_auth | grep -qF -- "$t" && ok "OpenSpec workflow covers '$t'" || bad "OpenSpec workflow covers '$t'"
 done
-sec9 | grep -qF '沒有正文批准區塊' && ok "§9 keeps legacy event discovery" || bad "§9 keeps legacy event discovery"
+sec9 | grep -qF '沒有正文批准區塊' && ok "approval records keep legacy event discovery" || bad "approval records keep legacy event discovery"
 
 echo "SDA-2 approval record: optional human identifier, honest metadata"
 sec63 | grep -qF '人類批准者的 GitHub 帳號>' && bad "§6.3 no longer requires the approver's GitHub account" \
@@ -615,15 +640,15 @@ for f in 'approved_scope:' 'artifact_revision:' 'source_kind:' 'source_ref:' 're
 done
 sec63 | grep -qF '實際作者只代表發布帳號' && ok "§6.3 actual author is the publisher, not identity proof" \
   || bad "§6.3 actual author is the publisher, not identity proof"
-deny "$DOC" '明文指定 `octo-dev` 為可以代記人類' "shared case fixture has no recorder allowlist"
+deny "$SHARED" '明文指定 `octo-dev` 為可以代記人類' "shared case fixture has no recorder allowlist"
 for t in '未知人類帳號' 'API 帳號與委託者不同' '沒有 PR 事件但已有明確實作指示' '只要求建立 Change' '來源不明的批准宣稱' '授權撤回'; do
-  grep -E '^### C-[0-9]+' "$DOC" | grep -qF -- "$t" && ok "shared case for '$t'" || bad "shared case for '$t'"
+  grep -E '^### C-[0-9]+' "$SHARED" | grep -qF -- "$t" && ok "shared case for '$t'" || bad "shared case for '$t'"
 done
 want "$WORKFLOW" 'explicit user instruction' "OpenSpec workflow accepts an explicit user instruction"
 deny "$COMMON/AGENTS.md" '批准記錄者授權' "AGENTS seed drops recorder authorization"
 
 echo "SDA-3 entries share the same approval semantics"
-CR_SKILL="$COMMON/skills/change-review/SKILL.md"; CR_CASES="$COMMON/skills/change-review/references/acceptance-cases.md"
+CR_SKILL="$COMMON/skills/change-review/SKILL.md"; CR_CASES="$BANK/change-review.md"
 for f in "$PR_SKILL/SKILL.md" "$CR_SKILL"; do
   if grep -qE 'authorized recorder|contract 4\.3' "$f"; then bad "${f#"$ROOT"/} drops the recorder gate"; else ok "${f#"$ROOT"/} drops the recorder gate"; fi
 done
@@ -653,7 +678,7 @@ for t in 'unpublished-snapshot' "printf '%s\\0'" '另一台機器' '不編造 co
   sec63 | grep -qF -- "$t" && ok "§6.3 covers '$t'" || bad "§6.3 covers '$t'"
 done
 for t in '工作區設計已實質改變' '只有 tasks 勾選' '基線不可得' '本機未提交規劃記到 PR'; do
-  grep -E '^### C-[0-9]+' "$DOC" | grep -qF -- "$t" && ok "shared case for '$t'" || bad "shared case for '$t'"
+  grep -E '^### C-[0-9]+' "$SHARED" | grep -qF -- "$t" && ok "shared case for '$t'" || bad "shared case for '$t'"
 done
 want "$PR_SKILL/SKILL.md" 'unpublished snapshot' "github-pr records a local-only design revision honestly"
 
@@ -703,27 +728,27 @@ rm -rf "$VT"
 # ── simplify-github-author-format (Issue #18) ────────────────────────────────
 # Maps to openspec/changes/simplify-github-author-format specs.
 echo "SAF-1 Author drops mode and human-account lines"
-sec6_all() { awk '/^## 6\. /{f=1} /^## 7\. /{f=0} f' "$DOC" 2>/dev/null; }
+sec6_all() { cat "$ISSUE_SKILL/SKILL.md" "$PR_SKILL/SKILL.md" 2>/dev/null; }
 in_fences() { awk '/^ *```/{f=!f; next} f'; }
 n="$(sec6_all | in_fences | grep -cE '^[[:space:]]*(方式|人類):')"
-[[ "$n" == 0 ]] && ok "no §6 template writes a mode or human-account line" || bad "no §6 template writes a mode or human-account line ($n)"
+[[ "$n" == 0 ]] && ok "no entry layout writes a mode or human-account line" || bad "no entry layout writes a mode or human-account line ($n)"
 if sec6_all | in_fences | grep -qE '^[[:space:]]*(mode|Mode|publisher-human|發布方式|委託者|Human):'; then
   bad "no synonymous replacement label"; else ok "no synonymous replacement label"; fi
 n="$(sec6_all | in_fences | grep -c '^SESSION-ID:')"; m="$(sec6_all | in_fences | grep -c '^XIRP-SESSION-ID:')"
 [[ "${n:-0}" -ge 6 && "$n" == "$m" ]] && ok "Agent templates keep both Session fields ($n/$m)" || bad "Agent templates keep both Session fields ($n/$m)"
-frame_part | grep -qF '沒有 Agent 參與、由人類直接發布的內容不加 Author' && ok "pure human-direct posts omit Author" \
+frame_part | grep -qF 'with no Agent involved, has' && ok "pure human-direct posts omit Author" \
   || bad "pure human-direct posts omit Author"
-frame_part | grep -qF 'Agent 代為整理或發布' && ok "agent-on-behalf posts keep Agent metadata" || bad "agent-on-behalf posts keep Agent metadata"
-frame_part | grep -qF '舊紀錄的 `方式`' && ok "legacy mode/human lines stay readable" || bad "legacy mode/human lines stay readable"
+frame_part | grep -qF 'Content an Agent composes or posts' && ok "agent-on-behalf posts keep Agent metadata" || bad "agent-on-behalf posts keep Agent metadata"
+frame_part | grep -qF 'Older Authors stay readable' && ok "legacy mode/human lines stay readable" || bad "legacy mode/human lines stay readable"
 sec63 | grep -qF 'approved_by' && ok "approval event keeps approved_by (Issue #17 untouched)" || bad "approval event keeps approved_by (Issue #17 untouched)"
 for t in 'Agent 代人類發布' '新格式代發' '舊格式後追加新內容'; do
-  grep -E '^### C-[0-9]+' "$DOC" | grep -qF -- "$t" && ok "shared case for '$t'" || bad "shared case for '$t'"
+  grep -E '^### C-[0-9]+' "$SHARED" | grep -qF -- "$t" && ok "shared case for '$t'" || bad "shared case for '$t'"
 done
 
 # codex-author-r01/F-01: prose rules and inline expectations, not only template fences.
-doc_section 7 8 | grep -qE '方式|人類' && bad "§7 Provenance names no mode/human Author line" || ok "§7 Provenance names no mode/human Author line"
-deny "$DOC" 'Handoff、Goal、Next actions、Author 必須出現' "§6.1 does not require Author unconditionally"
-issue_section | grep -qF 'Agent 參與時最後是 Author' && ok "§6.1 requires Author only when an Agent posts" || bad "§6.1 requires Author only when an Agent posts"
+awk '/^## recorded_by/{f=1} f' "$APPROVAL" | grep -qE '方式|人類' && bad "provenance table names no mode/human Author line" || ok "provenance table names no mode/human Author line"
+deny "$ISSUE_SKILL/SKILL.md" 'Goal, Next actions, and Author are always' "github-issue does not require Author unconditionally"
+issue_section | grep -qF 'is left out of a human-direct post' && ok "github-issue requires Author only when an Agent posts" || bad "github-issue requires Author only when an Agent posts"
 inline_old() { grep -hE '^- (判定|預期呼叫|產出[^：]*)：' "$@" 2>/dev/null | grep -E '`(方式|人類): '; }
 if inline_old "$DOC" "$ISSUE_SKILL"/references/*.md "$PR_SKILL"/references/*.md \
      "$COMMON"/skills/change-review/references/*.md "$COMMON"/skills/openspec-commit/references/*.md >/dev/null; then
@@ -743,7 +768,7 @@ done
 want "$CRS" 'older `方式: Agent 協助代發`' "change-review still reads the legacy relay marker"
 want "$CRS" 'identified by `原報告作者`' "change-review identifies relays by the original-author line"
 for f in "$ISSUE_SKILL/references/examples.md" "$ISSUE_CASES" "$PR_SKILL/references/examples.md" "$PR_CASES" \
-         "$COMMON/skills/change-review/references/acceptance-cases.md" "$COMMON/skills/openspec-commit/references/examples.md"; do
+         "$BANK/change-review.md" "$COMMON/skills/openspec-commit/references/examples.md"; do
   n="$(grep -cE '^[[:space:]]*(方式|人類): ' "$f")"
   [[ "$n" == 0 ]] && ok "${f#"$ROOT"/} writes no mode/human Author line" || bad "${f#"$ROOT"/} writes no mode/human Author line ($n)"
 done
@@ -832,10 +857,17 @@ fi
 # A tool that reads only AGENTS.md reaches the contract through managed files.
 if has "$T/AGENTS.md" 'docs/agent-protocol.md' && has "$T/docs/agent-protocol.md" 'docs/github-handoff.md' \
   && [[ -f "$T/docs/github-handoff.md" ]]; then
-  ok "AGENTS.md → protocol → contract chain is reachable"
+  ok "AGENTS.md → protocol → integration guide chain is reachable"
 else
-  bad "AGENTS.md → protocol → contract chain is reachable"
+  bad "AGENTS.md → protocol → integration guide chain is reachable"
 fi
+for s in github-issue github-pr change-review openspec-commit; do
+  if has "$T/docs/github-handoff.md" ".agents/skills/$s/SKILL.md" && [[ -f "$T/.agents/skills/$s/SKILL.md" ]]; then
+    ok "integration guide → .agents/skills/$s/SKILL.md is reachable"
+  else
+    bad "integration guide → .agents/skills/$s/SKILL.md is reachable"
+  fi
+done
 
 # ── 4.2 This repository's installed copies match their sources ───────────────
 echo "4.2 repository installation"
@@ -856,6 +888,145 @@ if cmp -s "$RULE" "$ROOT/.claude/rules/github-handoff.md" && cmp -s "$RULE" "$RO
 else
   bad "repository rule synchronized"
 fi
+
+# ── separate-github-contract-from-workflow: entry skills hold their own rules ──
+# Maps to openspec/changes/separate-github-contract-from-workflow
+# specs/github-issue, specs/github-pr and specs/github-change-handoff.
+self_sufficient() {               # $1 = skill dir, $2 = name
+  local s="$1" n="$2" f
+  for f in "$s/SKILL.md" "$s"/references/*.md; do
+    [[ -f "$f" ]] || continue
+    if grep -qE 'docs/github-handoff\.md|contract section [0-9]|契約第 ?[0-9]|共用契約' "$f"; then
+      bad "${f#"$ROOT"/} depends on no external format document"
+    else
+      ok "${f#"$ROOT"/} depends on no external format document"
+    fi
+  done
+  [[ -n "$(frame_of "$s/SKILL.md")" ]] && ok "$n holds the shared frame" || bad "$n holds the shared frame"
+  for term in '## Handoff' '## Next actions' '## Author' 'Co-Authored-By:' 'AI-Assisted-By:' 'SESSION-ID:' \
+              'XIRP-SESSION-ID:' '（local-only）' '`null` in its own field' 'no Author section' \
+              'SESSION-ID: <id> (xirp)' '原報告作者' 'Refs #N'; do
+    frame_of "$s/SKILL.md" | grep -qF -- "$term" && ok "$n frame states '$term'" || bad "$n frame states '$term'"
+  done
+  for term in 'Fix the full target' 'authoriz' 'Account restriction' 'credential' 'before any retry' \
+              '## Checkpoint' '## Closure' 'read back'; do
+    grep -qiF -- "$term" "$s/SKILL.md" && ok "$n states '$term'" || bad "$n states '$term'"
+  done
+}
+echo "SCW-3 github-issue holds its own format and write checks"
+self_sufficient "$ISSUE_SKILL" github-issue
+for term in '## Goal' '## Acceptance criteria' '## Changes' 'source hint' 'stateReason'; do
+  want "$ISSUE_SKILL/SKILL.md" "$term" "github-issue states '$term'"
+done
+
+echo "SCW-4 github-pr holds its own format and write checks"
+self_sufficient "$PR_SKILL" github-pr
+for term in '## Summary' '## Review' 'reviewed-head:' 'review-id:' '### <review-id>/F-01' \
+            'headRepositoryOwner' 'byte-identical' '--json body' 'without merging'; do
+  want "$PR_SKILL/SKILL.md" "$term" "github-pr states '$term'"
+done
+[[ -f "$PR_SKILL/references/approval-records.md" ]] && ok "github-pr ships references/approval-records.md" \
+  || bad "github-pr ships references/approval-records.md"
+grep -F 'references/approval-records.md' "$PR_SKILL/SKILL.md" 2>/dev/null | grep -qiE '\bread\b.*\b(when|before|if)\b' \
+  && ok "github-pr states when to read approval-records.md" || bad "github-pr states when to read approval-records.md"
+want "$PR_SKILL/SKILL.md" 'docs/openspec-workflow.md' "github-pr leaves the Apply decision to the OpenSpec workflow"
+if [[ -n "$(frame_of "$ISSUE_SKILL/SKILL.md")" ]] && diff <(frame_of "$ISSUE_SKILL/SKILL.md") <(frame_of "$PR_SKILL/SKILL.md") >/dev/null; then
+  ok "github-issue and github-pr hold an identical shared frame"
+else
+  bad "github-issue and github-pr hold an identical shared frame"
+fi
+
+echo "SCW-6 the OpenSpec workflow owns Apply authorization and stage separation"
+sec3() { awk '/^## 3\. /{f=1;next} /^## 4\. /{f=0} f' "$WORKFLOW" 2>/dev/null; }
+sec5() { awk '/^## 5\. /{f=1;next} /^## /{f=0} f' "$WORKFLOW" 2>/dev/null; }
+for t in 'traceable handoff' 'published approval record' 'does not authorize' 'agent suggestion' \
+         'Clarify' 'pause' 'does not include permission to publish' 'returns to'; do
+  sec3 | grep -qF -- "$t" && ok "workflow §3 covers '$t'" || bad "workflow §3 covers '$t'"
+done
+for t in 'design review' 'implementation review' 'real-data acceptance' 'Issue closure' \
+         'design-only pull request' 'archive early'; do
+  sec5 | grep -qF -- "$t" && ok "workflow §5 covers '$t'" || bad "workflow §5 covers '$t'"
+done
+deny "$WORKFLOW" 'git diff --quiet' "workflow carries no version-comparison commands"
+
+echo "SCW-7 the integration guide describes touchpoints, not post formats"
+if grep -qE '^## [0-9]+\. ' "$DOC"; then bad "integration guide drops the numbered contract sections"; else ok "integration guide drops the numbered contract sections"; fi
+deny "$DOC" 'Co-Authored-By: <' "integration guide holds no Author layout"
+deny "$DOC" '## Acceptance criteria' "integration guide holds no Issue layout"
+deny "$DOC" '- reviewed-head:' "integration guide holds no review layout"
+deny "$DOC" '### C-' "integration guide holds no acceptance cases"
+for t in 'Issue-first' 'Change-first' '.claude/skills/github-issue/SKILL.md' '.agents/skills/github-pr/SKILL.md' \
+         '](openspec-workflow.md)' '01 開立規格' '02 實作與發布' '03 Review 與修正交接' '04 封存與交付' \
+         'github-issue' 'github-pr' 'change-review' 'openspec-commit'; do
+  want "$DOC" "$t" "integration guide covers '$t'"
+done
+# Every section of the old contract has a named receiver (design D2).
+CRS_MD="$COMMON/skills/change-review/SKILL.md"; OCS_MD="$COMMON/skills/openspec-commit/SKILL.md"
+while IFS='|' read -r sec file term; do
+  [[ -z "$sec" ]] && continue
+  grep -qF -- "$term" "$ROOT/$file" 2>/dev/null && ok "receiver for $sec: $file" || bad "receiver for $sec: $file ('$term')"
+done <<'MAP'
+§2 prerequisites|template/common/skills/github-issue/SKILL.md|Local `git` reads the remote
+§3 write checks|template/common/skills/github-pr/SKILL.md|**Write checks.**
+§4.1 credentials|template/common/skills/github-pr/SKILL.md|never treat the `gh` login as
+§4.2 account restriction|template/common/skills/github-issue/SKILL.md|**Account restriction**
+§4.3 authorization|template/common/docs/openspec-workflow.md|API account shows only who
+§5 Issue association|template/common/skills/github-issue/SKILL.md|source hint
+§5 PR association|template/common/skills/github-pr/SKILL.md|headRepositoryOwner.login
+§6 shared frame|template/common/skills/github-pr/SKILL.md|<!-- shared-frame:start
+§6.1 Issue layouts|template/common/skills/github-issue/SKILL.md|## Acceptance criteria
+§6.2 PR layouts|template/common/skills/github-pr/SKILL.md|- reviewed-head:
+§6.3 approval event|template/common/skills/github-pr/references/approval-records.md|<!-- wk-agent-ops:design-approval -->
+§6.4 review baseline|template/common/skills/change-review/references/examples.md|## Scope and Baseline
+§6.5 transferable message|template/common/skills/change-review/SKILL.md|Delivery:
+§6.6 Checkpoint|template/common/skills/github-issue/SKILL.md|### Current state
+§6.7 Closure|template/common/skills/github-pr/SKILL.md|### Remaining work
+§7 provenance|template/common/skills/github-pr/references/approval-records.md|`Machine-Alias`
+§8 review identity|template/common/skills/change-review/SKILL.md|<!-- review-identity:start
+§9 authorization|template/common/docs/openspec-workflow.md|traceable handoff
+§9 record check|template/common/skills/github-pr/references/approval-records.md|git ls-files --others
+§10 stage separation|template/common/docs/openspec-workflow.md|real-data acceptance
+§10 final review scope|template/common/skills/change-review/SKILL.md|**Final-version review.**
+§10 merged PR follow-up|template/common/skills/openspec-commit/SKILL.md|follow-up PR
+§11 description update|template/common/skills/github-pr/SKILL.md|byte-identical
+§12 replay method|tests/acceptance/README.md|## 重播方式
+§13 removed publish|template/common/skills/github-pr/SKILL.md|`publish` operation is removed
+appendix A|tests/acceptance/shared.md|### C-01
+MAP
+
+echo "SCW-10 define has Issue-first and Change-first entries"
+LOCAL_DEV="$ROOT/docs/workflow/local-development.md"; DEFINE_SVG="$ROOT/docs/diagrams/local-development-define.svg"
+define_part() { awk '/^## 01 開立規格/{f=1;next} f&&/^## /{exit} f' "$LOCAL_DEV" 2>/dev/null; }
+for t in 'Issue-first' 'Change-first' 'github-issue update' '不另開'; do
+  define_part | grep -qF -- "$t" && ok "local-development 01 covers '$t'" || bad "local-development 01 covers '$t'"
+done
+grep -F 'local-development-define.svg' "$ROOT/docs/diagrams/README.md" | grep -qF 'Issue-first' \
+  && ok "diagram index describes both define entries" || bad "diagram index describes both define entries"
+for t in 'Issue-first' 'Change-first'; do
+  want "$DEFINE_SVG" "$t" "define diagram shows the '$t' start"
+  grep -E '^### C-[0-9]+' "$SHARED" | grep -qF -- "$t" && ok "shared case for '$t'" || bad "shared case for '$t'"
+done
+
+# codex-implementation-r01/F-03: a dirty create holds its own commit-reference rules.
+echo "SCW-11 github-pr create holds its own Refs rules"
+pr_commit_step() { awk '/^4\. \*\*Commit, only if/{f=1} f&&/^5\. \*\*Push/{exit} f' "$PR_SKILL/SKILL.md" 2>/dev/null; }
+pr_commit_step | grep -qF 'git-commit-writer "GitHub references" rules' \
+  && bad "the commit step does not defer its Refs rules to git-commit-writer" || ok "the commit step does not defer its Refs rules to git-commit-writer"
+for t in 'same host is `#N`' 'full HTTPS URL' 'Deduplicate by host, owner, repository, and number' 'ascending order' \
+         'lexical order' 'background' 'depends-on' 'omitted and reported' 'never `Closes`' 'never amend'; do
+  pr_commit_step | grep -qF -- "$t" && ok "github-pr commit step states '$t'" || bad "github-pr commit step states '$t'"
+done
+# GP-92 replay: the commit step must also state the trailer order and attribution format.
+pr_commit_step | grep -qF 'End the message with one `Refs:` line' \
+  && bad "Refs is not placed after the attribution trailers" || ok "Refs is not placed after the attribution trailers"
+for t in 'first trailer' 'Co-Authored-By: Claude Code <noreply@anthropic.com>' 'Co-Authored-By: Codex <noreply@openai.com>' \
+         'without an email' 'omit the whole `AI-Assisted-By` line'; do
+  pr_commit_step | grep -qF -- "$t" && ok "github-pr commit step states '$t'" || bad "github-pr commit step states '$t'"
+done
+frame_of "$PR_SKILL/SKILL.md" | grep -qF 'Commit trailers follow `git-commit-writer`' \
+  && bad "the shared frame does not send commit trailers to another skill" || ok "the shared frame does not send commit trailers to another skill"
+grep -E '^### GP-[0-9]+' "$PR_CASES" | grep -qF 'dirty create' && ok "github-pr case for a dirty create with references" \
+  || bad "github-pr case for a dirty create with references"
 
 echo
 [[ $fail -eq 0 ]] && { echo "PASS"; exit 0; } || { echo "FAIL"; exit 1; }

@@ -30,11 +30,11 @@ means, where it goes — and hands the work to the tools that own it: checking t
 `openspec-verify-change`, quality review skills, and the project's tests;
 posting to `github-pr reply`; delivery to the local session tool.
 
-The reviewer reply template (section 6.2), finding identity (section 8),
-write-time checks, and the design-approval rules live in
-`docs/github-handoff.md`. **Read sections 3–10 of that contract first** and take
-templates and fields from it. [The review round](references/review-loop.svg)
-shows the whole flow.
+Reports use the review identity rules in Step 4 and the review reply layout of
+`github-pr`, which also performs the write checks when a report is posted.
+Whether implementation may start is decided by `docs/openspec-workflow.md`, not
+by this skill.
+Open [the review round](references/review-loop.svg) when you need the whole flow at a glance.
 
 ## Inputs
 
@@ -115,7 +115,7 @@ checked and what changed, and the moved content is not declared passed. A
 check that may have read the content while it changed does not count: re-run it
 on a fixed snapshot, or report the affected part as `blocked`.
 
-**Skill source.** If this skill or the contract you are following is
+**Skill source.** If this skill or the `github-pr` skill it posts through is
 uncommitted, record the files with a fingerprint and keep that apart from the
 reviewed content. A dirty skill checkout never vouches for another head.
 
@@ -151,13 +151,15 @@ is missing.
 with every requirement and scenario. For an explicit design review, keep the
 verifier's grading as it is and explain which items — open implementation
 tasks, missing code — are outside a design verdict; a design `pass` is neither
-human approval nor permission to Apply. The checklist in
-[references/checklists.md](references/checklists.md) lists only what the
+human approval nor permission to Apply.
+Read [references/checklists.md](references/checklists.md) before deciding the result: it lists only what the
 invoked skills do not cover.
 
-Approval is judged by the contract (section 9): an explicit user instruction
-covering the Change and its design revision — given directly or through a
-traceable handoff, with or without a published event — authorizes Apply. A
+Whether implementation is authorized is judged by `docs/openspec-workflow.md`: an
+explicit user instruction covering the Change and its design revision — given
+directly or through a traceable handoff, with or without a published event —
+authorizes Apply. A published approval record is read and compared as
+`github-pr`'s `references/approval-records.md` describes. A
 date-only `approved_at` is an accepted precision, and an unknown human
 identifier is simply omitted. A technical `pass`, repository access, or a
 self-declared recorder never authorizes Apply, and no recorder qualification is
@@ -175,23 +177,59 @@ implementer's per-finding replies.
 - `blocked` — a required check or piece of evidence cannot be obtained, or the
   same dispute returns with no new evidence.
 
-Style and out-of-scope ideas are non-blocking suggestions. Findings are named
-`<origin-review-id>/F-NN` with a review-id `<reviewer-session-alias>-rNN`
-assigned before publication; a finding keeps its ID in later rounds. A fix the
-implementer claims stays Accepted until you verify the fixing revision and the
-affected behavior; only that evidence makes it Resolved.
+Style and out-of-scope ideas are non-blocking suggestions.
 
-Write the report as the reviewer reply of contract section 6.2, inside the
-shared frame of section 6: Handoff (the PR and branch, or the Change for a local
+<!-- review-identity:start — keep identical in github-pr and change-review -->
+**Review identity and finding states**
+
+- The verdict (`result`) is `pass`, `changes-required`, or `blocked`. The phase
+  is `design` or `implementation`; a review not marked 「設計審查」 is an
+  implementation review. Neither is a GitHub event type.
+- `review-id` is assigned before posting, as `<reviewer-session-alias>-rNN`, and
+  is unique within the PR. It is not a native Session ID and is never derived
+  from a report URL that does not exist yet; the URL is added after posting.
+- A finding is `<origin-review-id>/F-NN`. Later rounds keep the original ID and
+  never renumber it.
+- Finding states: `Open` — not yet confirmed; `Accepted` — the problem is real
+  and not yet fixed; `Rejected` — evidence shows it does not hold; `Resolved` —
+  the reviewer has verified the fix or handling. An implementer's "fixed" is
+  not Resolved.
+- The review itself, its posting, and any notification are recorded
+  separately. A `blocked` result is posted too when authorized; an unknown
+  account, version, or tool, or a failed send, is stated as a limit.
+<!-- review-identity:end -->
+
+A fix the implementer claims stays Accepted until you verify the fixing revision
+and the affected behavior; only that evidence makes it Resolved. An Accepted
+required finding that is not yet handled is linked to the corresponding OpenSpec task
+or the project's formal risk record, with the PR evidence link; a detailed PR
+report never replaces the formal to-do or marks the work done. Optional
+suggestions need no task.
+
+**Final-version review.** When a new head follows an earlier pass only because
+of archive, spec synchronization, or documentation updates, compare it with the
+reviewed head first (`git diff --stat -M <reviewed-head> <new-head>`). Narrow the
+review only when that difference is shown to be limited to archive moves, spec synchronization,
+and the matching documentation, and report that evidence. Any semantic change in it — code
+or script behavior — gets the necessary tests and a full review of that change,
+listing the checks actually rerun. The earlier pass stays bound to its own head
+and never covers the new one.
+
+Write the report as the review reply of `github-pr` (its "Reply layouts"),
+inside its shared Handoff / Next actions / Author frame: Handoff (the PR and branch, or the Change for a local
 review), Review with the reviewed version (PR head, or local `HEAD` plus
 included paths), purpose, Review-ID, and verdict, then each finding under its
 stable ID as an actionable item a reader without the local records understands
 (impact, location or evidence, how to tell it is fixed); Verification with the
 checks actually run, their results, and what was not executed; Next actions
 saying who acts next and on what condition; Author last. No findings means no
-filler items. Author follows contract section 6 for this reviewer session,
+filler items. Author follows `github-pr`'s shared frame for this reviewer session,
 including `SESSION-ID` and `XIRP-SESSION-ID`; never write an alias as either
 ID, and never copy the implementer's IDs into the reviewer's Author.
+
+Read [references/examples.md](references/examples.md) before writing a full report when you have not written that kind in this session:
+it holds one complete report each for no PR, `changes-required` with its
+repair notification, `blocked` with a transferable message, and `pass`.
 
 Before any post, read the PR head again. If it moved, keep the report bound to
 the reviewed head, mark it **stale**, and say the new head needs its own round.
@@ -232,7 +270,7 @@ PR adds beyond them. A matching name or branch proves nothing.
 - **Same content** — post through `github-pr reply` and read it back, keeping
   the original review-id and findings, with `reviewed-head` set to the PR head
   and the original baseline and snapshot digest stated as what was actually
-  reviewed. Author is the posting session (contract section 6); when a session
+  reviewed. Author is the posting session (`github-pr`'s shared frame); when a session
   other than the original reviewer posts, it uses the relayed form with
   `原報告作者` pointing at the saved report.
 - **Different content** — name the difference. A verdict for the current head
@@ -295,6 +333,21 @@ sent to the implementer as a repair request.
    say why it was not sent. Repository notifiers such as Telegram
    or waiting prompts are not session channels.
 
+After a report is posted, return a transferable message by default; posting a
+report does not mean the other session has been told:
+
+```text
+PR: <URL>
+Report: <報告 URL>
+Reviewed head: <SHA>
+Findings: <Finding ID 清單｜none>
+Next: <下一步與負責方>
+Delivery: <已透過 <工具> 送達 <Session>｜未送達，需由使用者轉交>
+```
+
+`Delivery` says delivered only through a session-directed tool confirmed to
+work; otherwise it stays undelivered for the user to pass on.
+
 **Local handoff (no PR).** Without an explicit request, a no-PR review notifies no one: the report
 is returned and saved. When the user explicitly asks to hand the local findings
 to an implementer, send one message only if the report is saved and readable
@@ -320,15 +373,3 @@ and a repeated dispute with nothing new is `blocked` for human decision. A
 replayed or simulated round is never reported as a real review, post, or
 notification.
 
-## Replay cases
-
-[references/acceptance-cases.md](references/acceptance-cases.md) holds the
-replayable cases: entry by Change, Issue, `#N`, or PR; no PR and unknown PR;
-ambiguity; versions and moving heads; mandatory verify and optional skills;
-design review; required tests; full reports for no PR, a failed PR that can be
-notified, a blocked PR that cannot, and a posted pass; pass with an unknown PR,
-a failed pass publication, and a head that moves before a pass is posted;
-publication readback and failures; implementer identity and local sessions;
-local-only; the start announcement; local snapshots, saved reports and moved
-content; explicit local handoff; later publication of a local report; and
-re-review.

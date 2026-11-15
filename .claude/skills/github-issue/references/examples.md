@@ -1,8 +1,7 @@
 # github-issue 範例
 
-欄位、外框與缺值規則以 `docs/github-handoff.md` 第 6 節（共同外框）、第 6.1 節（Issue）、
-第 6.6 節（Checkpoint）與第 6.7 節（Closure）為準；這裡只示範同一件工作從建立到結案的
-連續寫法，不另定格式。可重播的判定見 `acceptance-cases.md`。
+欄位、外框與缺值規則在本 Skill 的 `SKILL.md`；這裡只示範同一件工作從建立到結案的
+連續寫法，不另定格式。
 
 以下人名、repo、編號、版本、Session、測試與驗收結果全部為虛構。共同情境為 Issue #42「新增
 訂單 CSV 匯出」、PR #57、Change `add-order-export`。`a1b2c3d` 是設計草案，`d4e5f6a` 是修正
@@ -235,3 +234,48 @@ XIRP-SESSION-ID: null
 這段不是貼文，而是 `github-issue close` 的操作回報。
 
 已回讀 Closure 留言後，狀態操作遭拒。操作回報寫「摘要已發布，Issue 仍為 OPEN，關閉失敗」，附已確認的留言 URL。重試先查目前 state、reason 與摘要是否仍適用，再執行缺少且仍獲授權的操作。摘要中原本的「準備關閉」不改寫為成功。
+
+## 代發他人的進度報告
+
+Codex Session 把實作者 @mei 寫好的進度報告貼到 #42。第一行標明原作者與已核對的來源，下面的
+欄位仍是這次發布的 Session。
+
+```markdown
+## Handoff
+
+- issue: https://github.com/acme/widgets/issues/42
+- openspec-change: add-order-export
+
+## Changes
+
+匯出上限改為單次 5,000 筆，超過時回傳明確訊息；上限測試通過。
+
+## Next actions
+
+Reviewer 對 `d4e5f6a` 檢查上限訊息與權限。
+
+## Author
+
+原報告作者: @mei，來源為 https://github.com/acme/widgets/pull/57#issuecomment-880（工具 Claude Code，模型 Claude Opus 5.5；未提供 Session ID）
+Co-Authored-By: Codex
+AI-Assisted-By: gpt-6.1-sol
+SESSION-ID: example-relay-session
+XIRP-SESSION-ID: example-xirp-relay
+```
+
+之後要請原作者修正時，對象是 @mei 與上面的來源，不是代發的 Codex Session；無法核對 @mei
+的 Session 時，回傳可轉交訊息。
+
+## 舊格式 Issue 追加留言
+
+#7 是舊格式的 Issue，正文的 Author 還有舊的方式行與人類行。追加進度時照常新增一則留言，正文與
+舊 Author 都不改寫，也不把舊正文中的人類帳號當成本輪身分。新留言只寫四個欄位：
+
+```markdown
+## Author
+
+Co-Authored-By: Claude Code
+AI-Assisted-By: Claude Opus 5.5
+SESSION-ID: sess-7781
+XIRP-SESSION-ID: xirp-42
+```

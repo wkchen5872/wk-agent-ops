@@ -205,6 +205,73 @@ elif [[ -L "$TARGET/$LEGACY_ID_SCRIPT" ]]; then
   echo "⚠️  left $LEGACY_ID_SCRIPT in place: it is a symlink. The GitHub handoff no longer uses it."
 fi
 
+# Retire the acceptance-case banks that used to ship inside five skills; they now
+# live in the wk-agent-ops repository's tests/acceptance/. Only a byte-identical
+# copy of a version this installer shipped is removed; a modified or unknown file,
+# or a symlink, may hold local work, so it is left in place and reported. The blob
+# list is every version of these files in Git history (2 + 9 + 5 + 1 + 10).
+RETIRED_CASE_SKILLS="openspec-commit github-pr github-issue git-commit-writer change-review"
+RETIRED_CASE_BLOBS=(
+  09550fa9e2d4e71ec31f831c5e43b003b69323c6
+  0fcbc927171e640d78793f530fb6c0b3e23f0bac
+  149b06563d173c56456ea9001a77391406d90f2d
+  1881d7c0244dee8f88ac4ff659d1cc41ef906a5a
+  1f2205f27dffbebb14c5bdfec4c1e54b098f0da7
+  1fdb0d07fa5122969a6ca331308451e7e5bb4cbe
+  2d0da52e0550e88de9c3c9ae70be9c82435ad728
+  2d37ae9f3246a98b0b7fc98bc90396b110c07d36
+  3b62629fd8f50021da7bbcbe1bdc5f4a14376a0a
+  4bdda84e14fe78cb34e091427275c48c5b4da8d5
+  527a84b97e1dbd392221db2f3ab94e1685974fd2
+  666de00a99bfd8f1c37bd0a1907b9826a5b1e029
+  68f8f8b3fc09a1ad129c797787e17e440bb672a9
+  69f590f39cc12a3927d54b7b689b9eb9ac60f25c
+  7283fb6085ca9240c5e1491d3a1137c8963c0918
+  748b2a0865c17dec27d4e202350d6b524166e8e0
+  893e863b4c9abf3fcd085a8e1db390b4d6d4cb65
+  a5f38584ca99d0d9afae91873ed0925e9c57eeec
+  bcb842a12819ae076da2c1835dc93585af497a16
+  d20139d817986d8d0de59caacfc02aef99de7dfb
+  dca23f423e92bacc40ceeac2fff72cf9595a6a24
+  de3007fd5e9edbe208fe7d4b29ac3cc16762126b
+  eab279350c1ff7bf3bafb6af0c60d341407c20e5
+  eee1a9951525b3ed148ee4d4552cfc23145ad66e
+  f548757e3f71c6063eee5d96deeffb67992c3006
+  f855d73124d6b8ecb02c1036ef7e0ba6f1af2c62
+  fa1f156b11d90e4a2b4b16766dfbf213eaa3345c
+)
+# Every path component below the target root is checked, not only the file: a
+# symlinked .claude, skills root, skill, or references directory could point the
+# removal at files outside the project.
+for case_root in .claude/skills .agents/skills; do
+  for case_skill in $RETIRED_CASE_SKILLS; do
+    case_rel="$case_root/$case_skill/references/acceptance-cases.md"
+    case_file="$TARGET/$case_rel"
+    case_link=""
+    case_walk="$TARGET"
+    for case_part in ${case_rel//\// }; do
+      case_walk="$case_walk/$case_part"
+      if [[ -L "$case_walk" ]]; then case_link="${case_walk#"$TARGET"/}"; break; fi
+    done
+    if [[ -n "$case_link" ]]; then
+      if [[ -e "$case_file" || -L "$case_file" ]]; then
+        echo "⚠️  left $case_rel in place: $case_link is a symlink."
+        echo "    Acceptance cases now live in the wk-agent-ops repository's tests/acceptance/."
+      fi
+    elif [[ -f "$case_file" ]]; then
+      case_blob="$(git hash-object --no-filters -- "$case_file" 2>/dev/null || true)"
+      if [[ -n "$case_blob" && " ${RETIRED_CASE_BLOBS[*]} " == *" $case_blob "* ]]; then
+        rm -f "$case_file"
+        rmdir "$TARGET/$case_root/$case_skill/references" 2>/dev/null || true
+        echo "ℹ️  removed retired $case_rel (unmodified managed copy)"
+      else
+        echo "⚠️  left $case_rel in place: it differs from every shipped version."
+        echo "    Acceptance cases now live in the wk-agent-ops repository's tests/acceptance/; delete it yourself if it is not needed."
+      fi
+    fi
+  done
+done
+
 # Remove the retired entropy audit from existing installations.
 rm -rf "$TARGET/.claude/skills/entropy-check" \
        "$TARGET/.agents/skills/entropy-check"

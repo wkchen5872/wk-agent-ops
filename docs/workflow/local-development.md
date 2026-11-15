@@ -13,7 +13,7 @@ sources:
     title: OpenSpec Commit
   - id: github-contract
     resource: /docs/github-handoff.md
-    title: GitHub 交接契約
+    title: GitHub 協作整合
   - id: delivery-design
     resource: /openspec/changes/archive/2026-11-14-extend-openspec-commit-delivery/design.md
     title: Commit 交付擴充設計
@@ -22,7 +22,7 @@ sources:
 # 本機開發四階段流程
 
 這是本 repo 採用的本機標準開發流程。將日常開發工作收斂為清晰的四個階段：開立規格、實作與發布、Review 與修正交接、封存與交付。
-GitHub Issue／PR 的格式、寫入前核對與結案規則一律以 [GitHub 交接契約](../github-handoff.md) 為準。
+GitHub Issue／PR 的格式、寫入前核對與結案規則在 `github-issue`、`github-pr` Skill 內；各階段在哪些時點接上 GitHub，見 [GitHub 協作整合](../github-handoff.md)。
 
 ## 四階段總覽
 
@@ -46,26 +46,33 @@ GitHub Issue／PR 的格式、寫入前核對與結案規則一律以 [GitHub �
 | **03 Review 與修正交接** | 驗收功能品質，產出結論 | `change-review`, `github-pr reply` | 審查結論（pass / changes-required / blocked） |
 | **04 封存與交付** | 封存規格、同步文件、提交並交付 | `openspec-commit` | 封存目錄、同步文件、Conventional Commit、交付 PR（選用） |
 
-每張圖均提供 SVG 原稿與 1600 px 寬的手機 PNG 預覽。
+每張圖只保留 SVG 原稿。
 
 ## 01 開立規格
 
 [SVG 原稿](../diagrams/local-development-define.svg)
 
-![01 開立規格](../diagrams/local-development-define.png)
+![01 開立規格](../diagrams/local-development-define.svg)
+
+開立規格有兩個入口，規劃確認後都交給實作：
+
+| 項目 | Issue-first | Change-first |
+| --- | --- | --- |
+| 起點 | 同仁或自己已開了 Issue | 需求或 Bug 已能在本機描述；需要多輪討論時，可在本機使用 Work Item |
+| 主路徑 | 讀取 Issue 的問題、影響、驗收資訊與未決事項 → 確認 repo、既有分支與工作區 → 準備工作分支 → 建立或沿用對應的 Change（proposal 引用該 Issue） → 人工確認規格與後續動作 | 確認 repo、既有分支與工作區 → 準備工作分支 → `openspec-ff-change` → 人工確認規格與後續動作 |
+| GitHub 觸點 | 使用者要求記下關聯時，以 `github-issue update` 在該 Issue 新增留言寫明 Change 與 branch | 需要追蹤時以 `github-issue create` 建立；已有同一件工作的 Issue 就沿用 |
+| 不做的事 | 不另開新 Issue，不改寫他人的 Issue 正文；Issue 缺少驗收資訊時，在規劃中列為未決事項，不自行補上 | 不為了補欄位而建立 Issue |
 
 | 項目 | 內容 |
 | --- | --- |
-| 前提 | 需求或 Bug 已經可以描述；需要多輪討論時，可在本機使用 Work Item |
-| 主路徑 | 確認 repo、既有分支與工作區 → 準備工作分支 → `openspec-ff-change` → 人工確認規格與後續動作 |
-| 選用 | 需要追蹤時以 `github-issue create` 建立 Issue（已有同一工作就沿用）；團隊要求遠端設計批准時，先發布設計 Draft PR，實作時沿用 |
-| 交接產物 | Change、branch、已確認範圍與實作授權；Issue 不是必要產物 |
+| 選用 | 團隊要求遠端設計批准時，先發布設計 Draft PR，實作時沿用 |
+| 交接產物 | Change、branch、已確認範圍與實作授權；有 Issue 時加上 Issue URL，Issue 不是必要產物 |
 
 ## 02 實作與發布
 
 [SVG 原稿](../diagrams/local-development-implement.svg)
 
-![02 實作與發布](../diagrams/local-development-implement.png)
+![02 實作與發布](../diagrams/local-development-implement.svg)
 
 | 項目 | 內容 |
 | --- | --- |
@@ -79,7 +86,7 @@ GitHub Issue／PR 的格式、寫入前核對與結案規則一律以 [GitHub �
 
 [SVG 原稿](../diagrams/local-development-review.svg)
 
-![03 Review 與修正交接](../diagrams/local-development-review.png)
+![03 Review 與修正交接](../diagrams/local-development-review.svg)
 
 | 項目 | 內容 |
 | --- | --- |
@@ -93,7 +100,7 @@ GitHub Issue／PR 的格式、寫入前核對與結案規則一律以 [GitHub �
 
 [SVG 原稿](../diagrams/local-development-finish.svg)
 
-![04 封存與交付](../diagrams/local-development-finish.png)
+![04 封存與交付](../diagrams/local-development-finish.svg)
 
 由 [`openspec-commit`](commit.md) 執行。
 
@@ -113,7 +120,7 @@ GitHub Issue／PR 的格式、寫入前核對與結案規則一律以 [GitHub �
 
 **Issue**：依原範圍驗收後，以 `github-issue close` 另行結案，不跟著 PR 一起關閉。
 
-依交接契約，PR 正文使用 `Refs #N` 表示關聯，不使用 `Closes`／`Fixes`，以保留 Issue 的獨立結案流程。[^github-contract]
+依 `github-pr` 的共用外框，PR 正文使用 `Refs #N` 表示關聯，不使用 `Closes`／`Fixes`，以保留 Issue 的獨立結案流程。[^github-contract]
 
 **中斷接續**：依 archive 路徑、Git history、remote head 與 PR 留言判斷已完成的部分，只補缺少且已授權的步驟，不重複 commit，也不重貼已確認的摘要。細節見 [OpenSpec Commit Workflow](commit.md)。
 
@@ -131,5 +138,5 @@ GitHub Issue／PR 的格式、寫入前核對與結案規則一律以 [GitHub �
 
 [^review-skill]: [Change Review 來源](../../template/common/skills/change-review/SKILL.md)。
 [^commit-skill]: [OpenSpec Commit 來源](../../template/common/skills/openspec-commit/SKILL.md)。
-[^github-contract]: [GitHub 交接契約](../github-handoff.md)，§5–6、§10。
+[^github-contract]: [GitHub 協作整合](../github-handoff.md)；貼文格式與關聯規則在 `github-issue`、`github-pr` Skill。
 [^delivery-design]: [Commit 交付擴充設計](../../openspec/changes/archive/2026-11-14-extend-openspec-commit-delivery/design.md)；實作與本地驗證狀態以對應 archive 與驗證紀錄為準。

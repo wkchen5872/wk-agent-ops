@@ -92,8 +92,6 @@ Format one line, `Refs: #19, #20`:
   rewrite, or create an empty commit to add or update a reference — a PR
   created later appears only in a future commit that is needed anyway.
 
-Replayable cases are in [references/acceptance-cases.md](references/acceptance-cases.md).
-
 ---
 
 ## Step 1 — Validate optional OpenSpec input

@@ -64,8 +64,8 @@ template/common/
 ├── AGENTS.md             ← 跨工具 managed protocol 入口（seed，只在不存在時複製）
 ├── docs/
 │   ├── agent-protocol.md ← 跨工具共用規範（managed）
-│   ├── github-handoff.md ← GitHub 交接契約（managed）
-│   └── diagrams/github-handoff.svg ← 交接流程圖（managed）
+│   ├── github-handoff.md ← GitHub 協作整合：各階段接上 Issue／PR 的時點（managed）
+│   └── diagrams/github-handoff.svg ← 協作整合示例圖（managed）
 ├── work-items/
 │   └── AGENTS.md         ← Work Item 協作紀錄規範（managed）
 ├── skills/
@@ -126,6 +126,7 @@ bash scripts/skills/install.sh --target <project-path>
 - Mirror `.claude/rules/` → `.agents/rules/`
 - 更新 managed `docs/agent-protocol.md`
 - 更新 managed `docs/github-handoff.md` 與其流程圖；移除未修改的舊版 `scripts/github/check-identity.sh`
+- 移除五個 Skill 未修改的舊 `references/acceptance-cases.md` 副本（題庫已移到 `tests/acceptance/`）；改過的副本與 symlink 保留並回報
 
 ### 4. 本地測試（可選）
 
@@ -160,7 +161,7 @@ git commit -m "chore(agents): add/update <agent-name>"
 | Rules | `template/common/.claude/rules/` | `.claude/rules/`、`.agents/rules/` | 單一 template source |
 | Commands | `template/common/.claude/commands/` | `.claude/commands/` | CC 專用 |
 | Work Item 規範 | `template/common/work-items/AGENTS.md` | `work-items/AGENTS.md` | managed；重跑 installer 會覆寫 |
-| GitHub 交接契約 | `template/common/docs/github-handoff.md`、`docs/diagrams/github-handoff.svg` | `docs/` 同路徑 | managed；兩個檔案一起更新 |
+| GitHub 協作整合 | `template/common/docs/github-handoff.md`、`docs/diagrams/github-handoff.svg` | `docs/` 同路徑 | managed；兩個檔案一起更新 |
 
 **重要：** 修改後務必確認三個位置內容一致。使用 `diff` 或 `git diff` 檢查：
 
@@ -251,14 +252,17 @@ Checkpoint 或 Closure 回覆（也用來代記人類的設計批准），close 
 `XIRP-SESSION-ID`，不再寫「方式／人類」行；人類直接發文不加 Author，代發另列原報告作者。Work Item 只是 local-only 的
 來源線索，不同本地 ID 不構成衝突、相同本地 ID 也不證明是同一件工作。
 
-- 範本（共同外框、Checkpoint、Closure）、關聯鍵、provenance、Review 格式與流程只存在於
-  managed `docs/github-handoff.md`；兩個 Skill 與 `change-review` 都只引用，不各存一份。
-  各 Skill 的 `references/examples.md` 示範同一件工作的完整生命週期。
+- 每個入口 Skill 自足：`github-issue`、`github-pr` 各自持有範本、共同外框（兩份逐位元相同，
+  測試會比對）、關聯鍵、Checkpoint、Closure 與寫入前核對；`github-pr` 另有
+  `references/approval-records.md` 管批准紀錄；審查識別規則在 `github-pr` 與 `change-review`
+  各一份相同的區塊。各 Skill 的 `references/examples.md` 示範同一件工作的完整生命週期。
+- managed `docs/github-handoff.md` 只是整合說明：開發流程的各階段在哪些時點接上 GitHub、呼叫
+  哪個 Skill；執行 Skill 不需要先讀它。是否可以開始實作由 `docs/openspec-workflow.md` 決定。
 - 每次寫入前核對完整 host／owner／repo、操作與授權，寫入後回讀；GitHub 操作使用可用的
   `gh` 或 GitHub MCP，commit／push 用本機 Git，認證交給本機工具。預設不限制帳號，
   明示限制才核對。舊的 `check-identity.sh` 已移除，installer 只刪未修改的舊副本。
-- 這是規範與入口行為，不是 hook。可重播案例在各 Skill 的
-  `references/acceptance-cases.md`，正式驗證紀錄在 `docs/verification/github-handoff/`。
+- 這是規範與入口行為，不是 hook。可重播的驗收案例在本 repo 的 `tests/acceptance/`，不隨
+  Skill 安裝；重播與驗證的結果只寫在 Work Item 或 GitHub PR，不在 `docs/` 建立驗證文件。
 
 ### testland/qa mutation runner + survivor triage
 
@@ -383,8 +387,10 @@ not edit it here. Keep project-specific rules in this file or under `docs/`.
 - `scripts/skills/install.sh` — 安裝腳本
 - `template/common/work-items/AGENTS.md` — Work Item 協作紀錄規範（managed；唯一來源）
 - `tests/test_work_items.sh` — Work Item 投遞、忽略規則與啟用鏈的行為測試
-- `docs/github-handoff.md` — GitHub 交接契約（managed；來源在 `template/common/docs/`）
-- `tests/test_github_handoff.sh` — 交接契約、入口與 managed 安裝的測試
+- `docs/github-handoff.md` — GitHub 協作整合（managed；來源在 `template/common/docs/`）
+- `tests/test_github_handoff.sh` — 自足的 GitHub 入口、整合說明與 managed 安裝的測試
+- `tests/acceptance/` — Skill 的可重播驗收題庫（不隨安裝散布）
+- `tests/test_acceptance_bank.sh` — 題庫結構與舊題庫副本退役的測試
 - `docs/architecture.md` — 專案架構與模組邊界
 - `docs/conventions.md` — Bash 腳本規範
 - `docs/workflow/guide.md` — PM/RD 協作完整指南

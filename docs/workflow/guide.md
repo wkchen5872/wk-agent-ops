@@ -208,7 +208,7 @@ gate。它也不執行 OpenSpec verify 或 archive；呼叫者須先確認交付
 
 [SVG 原稿](../diagrams/development-lifecycle.svg)
 
-![開發與交付概覽](../diagrams/development-lifecycle.png)
+![開發與交付概覽](../diagrams/development-lifecycle.svg)
 
 圖中的發布、審查、交付與合併各有停止點。Worktree 解析細節以
 [wt-work 圖](wt-work-flow.md) 為準；目前 runtime 檢查的是 feature branch 的當前 tip，

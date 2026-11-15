@@ -32,9 +32,9 @@ does not duplicate their logic.
 **Input:** An optional active change name. If omitted, resolve it from the
 current OpenSpec and Git state. Never guess when multiple candidates exist.
 
-GitHub formats, write-time checks, and readback rules come from the managed
-`docs/github-handoff.md` (sections 3, 5, 6, 6.7 and 10); remote steps use the
-`github-pr` and `change-review` skills rather than restating them.
+GitHub formats, write-time checks, and readback rules come from the
+`github-pr` and `change-review` skills that the remote steps invoke; this skill
+does not restate them.
 
 ---
 
@@ -436,7 +436,7 @@ as for the other capabilities.
    review, stops the handoff: report it and the next step, with no automatic
    fix, re-review, or polling.
 4. **Ready-to-merge Closure.** Read the PR head again. With review evidence
-   bound to that current head, invoke `github-pr reply` with a Closure (contract section 6.7):
+   bound to that current head, invoke `github-pr reply` with a Closure (its Closure layout):
    Outcome "ready for an authorized merge" at that head, Delivered,
    Verification with the review link, Remaining work, Next actions pointing at
    the merge owner, and the posting Author. Read it back. The Closure states that
@@ -532,8 +532,6 @@ workflow.
 
 ## References
 
-- [references/acceptance-cases.md](references/acceptance-cases.md) — replayable
-  cases for local completion, delivery intent, handoff, abandonment, partial
-  failures, and recovery.
-- [references/examples.md](references/examples.md) — worked stage reports from
-  the same sources.
+- Read [references/examples.md](references/examples.md) when writing the stage report or a ready-to-merge
+  Closure for the first time in a session: it shows worked stage reports and a
+  Closure from the same sources.

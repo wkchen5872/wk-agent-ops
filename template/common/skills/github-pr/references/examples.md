@@ -1,9 +1,7 @@
 # github-pr 範例
 
-欄位、外框與缺值規則以 `docs/github-handoff.md` 第 6 節（共同外框）、第 6.2 節（PR）、
-第 6.6 節（Checkpoint）與第 6.7 節（Closure）為準；這裡只示範同一件工作從建立、Review、修正、
-複審、交接到結案的連續寫法，不另定格式。可重播的判定見 `acceptance-cases.md`，change-review
-發布的 Review 回覆使用同一套寫法。
+欄位、外框與缺值規則在本 Skill 的 `SKILL.md`；這裡只示範同一件工作從建立、Review、修正、
+複審、交接到結案的連續寫法，不另定格式。change-review 發布的 Review 回覆使用同一套寫法。
 
 人名、repo、編號、版本、Session 與執行結果全部為虛構。共同情境為 PR #57「新增訂單 CSV 匯出」、
 Issue #42、Change `add-order-export`。實作初版為 `b2c3d4e`，修正後為 `d4e5f6a`。F-01 的原始 ID

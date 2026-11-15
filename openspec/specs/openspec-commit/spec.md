@@ -272,6 +272,11 @@ Authorized successful PR delivery SHALL confirm the intended head repository and
 - **THEN** the workflow reports the confirmed commit and the publication or version limit
 - **AND** it does not force push, describe unpushed content as published or attest readiness for a different head
 
+#### Scenario: Original PR is already merged
+- **WHEN** completion creates new commits after the original PR was merged
+- **THEN** the workflow reports the PR's actual state and that the new commits need a separately authorized follow-up PR, or reports them as pending handoff
+- **AND** pushing to the old branch is not reported as a completed review or merge, and the merged PR is not reopened
+
 ### Requirement: Abandoned PR closure delegates the existing close capability
 For explicitly authorized cancellation or replacement, the workflow SHALL delegate github-pr close for the confirmed selected PR and evidenced reason. That capability SHALL own Closure publication, readback and state mutation without a duplicate preliminary summary. Successful handoff MUST NOT use close. Closing SHALL NOT require or fabricate a successful implementation review, nor implicitly publish abandoned local work or close Issues.
 

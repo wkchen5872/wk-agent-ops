@@ -17,7 +17,7 @@ generated: { by: codex/GPT-6, at: 2026-11-11T12:07:41+08:00 }
 
 | Field   | Value                                                     |
 | ------- | --------------------------------------------------------- |
-| Version | 2.7.0                                                     |
+| Version | 2.8.0                                                     |
 | Scope   | Operational framework for all AI agent tasks in this repo |
 
 ---
@@ -36,13 +36,16 @@ generated: { by: codex/GPT-6, at: 2026-11-11T12:07:41+08:00 }
 - **When the task needs cross-session temporary collaboration records:**
   `work-items/AGENTS.md` — the Work Item convention, and the single source of its
   rules. (Not needed otherwise; records are local and disposable.)
-- **When the task creates or updates a GitHub Issue or pull request, publishes a
-  review report, or commits or pushes for such a handoff:**
-  `docs/github-handoff.md` — the shared handoff contract. Before each write,
+- **When the task creates, updates, replies to, or closes a GitHub Issue or pull
+  request, or publishes a review report:** use the installed `github-issue`,
+  `github-pr`, or `change-review` skill; each holds its own post formats,
+  write-time checks, and readback. Whatever the tool, before each write
   confirm the full repository target, the operation, and its authorization with
-  the available gh or GitHub MCP, then read the result back; Git handles commit,
-  push, and its own authentication. This is policy, not a hook. (Not needed when
-  the project does not use this optional workflow.)
+  the available gh or GitHub MCP, and read the result back afterward; Git
+  handles commit, push, and its own authentication. When coordinating a Change
+  with Issues or pull requests, `docs/github-handoff.md` explains where each
+  stage touches GitHub and where the skills are installed. This is policy, not a
+  hook. (Not needed when the project does not use this optional workflow.)
 
 ## 2. Hard Prohibitions (apply to every task, no exceptions)
 

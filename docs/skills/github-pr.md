@@ -10,7 +10,7 @@ timestamp: 2026-11-14T00:00:00+08:00
 
 `github-pr` 是管理 GitHub Pull Request 生命週期的薄封裝工具。它負責建立 Draft PR、更新 PR 說明內容、發布 Review 審查與修復回覆，以及在不 merge 的情況下正常關閉 PR。
 
-所有 PR 格式、欄位與標籤嚴格遵循 [GitHub 交接契約](/docs/github-handoff.md)。
+PR 正文、各類回覆、批准紀錄的格式與寫入前核對都由 Skill 本身持有（`SKILL.md`、`references/examples.md`、`references/approval-records.md`），執行時不需要另讀其他文件；各階段在哪些時點接上 GitHub 見 [GitHub 協作整合](/docs/github-handoff.md)。
 
 ---
 
@@ -70,7 +70,7 @@ timestamp: 2026-11-14T00:00:00+08:00
    更新 PR #21 的說明，補充第三點驗收條件
    ```
 2. **工具執行動作**：
-   - 更新 PR 正文（Description），保持格式符合交接契約。
+   - 更新 PR 正文（Description），保持 Skill 規定的格式。
 
 ### 步驟 3：回覆 Review 審查或回報修正 (`reply`)
 
@@ -111,5 +111,5 @@ timestamp: 2026-11-14T00:00:00+08:00
 
 - [GitHub Issue 操作指南](/docs/skills/github-issue.md)
 - [Change Review 審查指南](/docs/skills/change-review.md)
-- [GitHub 交接契約](/docs/github-handoff.md)
+- [GitHub 協作整合](/docs/github-handoff.md)
 - [本機開發四階段流程](/docs/workflow/local-development.md)

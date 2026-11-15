@@ -1,22 +1,21 @@
 #!/usr/bin/env bash
 # Verifies the change-review capability: the cross-tool Skill exists with its
-# phase and version entry, references the shared handoff contract instead of
-# restating its schema, never takes the PR create/update/close or commit/push paths,
-# ships its replay cases, checklists and diagram, and reaches Claude Code and the
-# .agents mirror through the existing installer.
+# phase and version entry, never takes the PR create/update/close or commit/push
+# paths, ships its report examples, checklists and diagram, and reaches Claude Code
+# and the .agents mirror through the existing installer.
 # Maps to openspec/changes/add-change-review-skill specs.
 #
 # Contract presence and installer behavior only. Agent decisions are replayed
-# from references/acceptance-cases.md and recorded under
-# docs/verification/change-review/.
+# from tests/acceptance/change-review.md; results go to the Work Item or the PR.
 set -u
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 COMMON="$ROOT/template/common"
 SKILL_DIR="$COMMON/skills/change-review"
 SKILL="$SKILL_DIR/SKILL.md"
-CASES="$SKILL_DIR/references/acceptance-cases.md"
+CASES="$ROOT/tests/acceptance/change-review.md"
 CHECKS="$SKILL_DIR/references/checklists.md"
+EXAMPLES="$SKILL_DIR/references/examples.md"
 SVG="$SKILL_DIR/references/review-loop.svg"
 CONTRACT="$COMMON/docs/github-handoff.md"
 fail=0
@@ -45,9 +44,9 @@ done
 want "$SKILL" 'Change' "Skill requires a selected Change when several are linked"
 want "$SKILL" 'Skill source' "Skill records its own source separately from the reviewed head"
 
-# ── 1.2 / 1.3 Shared contract is referenced, not restated ────────────────────
-echo "1.2-1.3 shared contract"
-want "$SKILL" 'docs/github-handoff.md' "Skill reads the shared contract"
+# ── 1.2 / 1.3 The integration guide is not a prerequisite; templates stay out ──
+echo "1.2-1.3 integration guide"
+deny "$SKILL" 'docs/github-handoff.md' "Skill does not require the integration guide"
 for section in '## Scope and Baseline' '## Findings' '## Summary and Limitations' 'approved_by:'; do
   deny "$SKILL" "$section" "Skill does not restate contract template text '$section'"
 done
@@ -59,7 +58,7 @@ want "$SKILL" 'MCP' "Skill allows a configured GitHub MCP"
 # simplify-github-pr: reports go out as a github-pr reply bound to the reviewed head.
 want "$SKILL" 'github-pr reply' "default report form is a github-pr reply"
 deny "$SKILL" 'Scope and Baseline first' "remote report no longer requires the full baseline table"
-want "$CASES" 'github-pr reply' "cases publish through github-pr reply"
+want "$EXAMPLES" 'github-pr reply' "report examples publish through github-pr reply"
 for v in pass changes-required blocked; do want "$SKILL" "$v" "Skill keeps the '$v' verdict"; done
 if grep -vE '^- (禁止|Forbidden)：' "$SKILL" "$CHECKS" 2>/dev/null | grep -qE 'github-pr (create|update|close|publish)|Reviews 索引'; then
   bad "Reviewer path invokes no PR create, update, close or review index"
@@ -85,8 +84,8 @@ want "$SKILL" 'create／update／close' "Skill states the create/update/close bo
 echo "dual session Author"
 want "$SKILL" 'XIRP-SESSION-ID' "Skill writes and reads the Xirp session field"
 want "$SKILL" 'lookup hint' "a Xirp ID is only a local lookup hint"
-want "$CASES" 'XIRP-SESSION-ID' "cases cover dual-field Author"
-want "$CASES" '(xirp)' "cases keep legacy single-field Author readable"
+want "$EXAMPLES" 'XIRP-SESSION-ID' "report examples use the dual-field Author"
+want "$SKILL" '(xirp)' "Skill keeps legacy single-field Author readable"
 
 # ── simplify-change-review: Change/Issue entry, mandatory verify, reply, notify ─
 # Maps to openspec/changes/simplify-change-review specs/change-review.
@@ -108,9 +107,8 @@ want "$SKILL" 'returned directly' "pass and no-PR results are returned directly"
 want "$SKILL" 'implementation Author' "notification targets the implementation Author"
 want "$SKILL" 'transferable message' "unreachable implementers get a transferable message"
 want "$SKILL" 'local-only' "explicit local-only requests are respected"
-for label in '產出報告：'; do
-  c="$(grep -cF -- "- $label" "$CASES" 2>/dev/null | tr -d ' ')"
-  [[ "${c:-0}" -ge 4 ]] && ok "at least 4 full report cases (${c:-0})" || bad "at least 4 full report cases (${c:-0})"
+for title in '無 PR 的本地報告' 'PR changes-required 回覆與修正通知' 'PR blocked 回覆與可轉交訊息' 'PR pass 回覆'; do
+  grep -qx -- "## $title" "$EXAMPLES" && ok "report example '$title'" || bad "report example '$title'"
 done
 for t in 'Change 名稱入口' 'Issue URL 入口' '#N 入口' '直接 PR 入口' 'PR 查找不明' 'repo 不明' '多個 Change' \
          'Issue 無 Change' 'Work Item 缺少' 'verify 缺少' '選用技能缺少' 'PR-only' '設計審查未勾 tasks' \
@@ -135,8 +133,8 @@ for t in 'PR pass 發布' 'pass 發布失敗' 'PR unknown 的 pass' 'pass 後 he
   grep -E '^### CR-[0-9]+' "$CASES" 2>/dev/null | grep -qF -- "$t" \
     && ok "change-review has a case for '$t'" || bad "change-review has a case for '$t'"
 done
-want "$CASES" '## Next actions' "full report cases show Next actions"
-want "$CASES" 'Co-Authored-By: Claude Code' "full report cases use the shared Author"
+want "$EXAMPLES" '## Next actions' "full report examples show Next actions"
+want "$EXAMPLES" 'Co-Authored-By: Claude Code' "full report examples use the shared Author"
 # simplify-github-author-format: relay detection works with and without the old mode marker.
 for t in '新格式代發只核對到代發者' '舊代發標記仍可讀'; do
   grep -E '^### CR-[0-9]+' "$CASES" | grep -qF -- "$t" && ok "case for '$t'" || bad "case for '$t'"
@@ -225,12 +223,9 @@ want "$SKILL" '管理 Session ID' "management session ID is distinguished from t
 want "$SKILL" '一輪' "one invocation performs one round"
 want "$SKILL" 'references/review-loop.svg' "Skill links its diagram"
 
-# ── Replay cases ─────────────────────────────────────────────────────────────
+# ── Replay cases (tests/acceptance/change-review.md) ─────────────────────────
 echo "replay cases"
-[[ -f "$CASES" ]] && ok "replay cases exist" || bad "replay cases exist"
-want "$SKILL" 'references/acceptance-cases.md' "Skill links its replay cases"
 n="$(grep -cE '^### CR-[0-9]+' "$CASES" 2>/dev/null | tr -d ' ')"
-[[ "${n:-0}" -ge 40 ]] && ok "at least 40 cases (${n:-0})" || bad "at least 40 cases (${n:-0})"
 for label in 'Fixture：' '模擬回覆：' '預期呼叫：' '禁止：' '判定：'; do
   c="$(grep -cF -- "- $label" "$CASES" 2>/dev/null | tr -d ' ')"
   [[ "${c:-0}" -ge "${n:-999}" && "${n:-0}" -gt 0 ]] \
@@ -262,14 +257,14 @@ if diff -r "$SKILL_DIR" "$T/.claude/skills/change-review" >/dev/null 2>&1 \
 else
   bad "Skill, cases, checklists and diagram reach both skill directories"
 fi
-printf 'stale\n' > "$T/.claude/skills/change-review/references/acceptance-cases.md"
+printf 'stale\n' > "$T/.claude/skills/change-review/references/examples.md"
 printf '<svg/>\n' > "$T/.agents/skills/change-review/references/review-loop.svg"
 run_install "$T"
-if cmp -s "$CASES" "$T/.claude/skills/change-review/references/acceptance-cases.md" \
+if cmp -s "$EXAMPLES" "$T/.claude/skills/change-review/references/examples.md" \
   && cmp -s "$SVG" "$T/.agents/skills/change-review/references/review-loop.svg"; then
-  ok "second install refreshes cases and diagram"
+  ok "second install refreshes examples and diagram"
 else
-  bad "second install refreshes cases and diagram"
+  bad "second install refreshes examples and diagram"
 fi
 [[ "$(cat "$T/.claude/skills/third-party/SKILL.md" 2>/dev/null)" == third ]] \
   && ok "unrelated skills are untouched" || bad "unrelated skills are untouched"
@@ -283,6 +278,29 @@ if diff -r "$SKILL_DIR" "$ROOT/.claude/skills/change-review" >/dev/null 2>&1 \
 else
   bad "repository change-review synchronized"
 fi
+
+# ── separate-github-contract-from-workflow: the review skill holds its rules ──
+echo "SCW-5 change-review holds review identity and its own report rules"
+rid_of() { awk '/<!-- review-identity:start/{f=1} f; /<!-- review-identity:end/{f=0}' "$1" 2>/dev/null; }
+PR_SKILL_MD="$COMMON/skills/github-pr/SKILL.md"
+if [[ -n "$(rid_of "$SKILL")" ]] && diff <(rid_of "$SKILL") <(rid_of "$PR_SKILL_MD") >/dev/null; then
+  ok "change-review and github-pr hold an identical review-identity block"
+else
+  bad "change-review and github-pr hold an identical review-identity block"
+fi
+for f in "$SKILL" "$CHECKS" "$EXAMPLES"; do
+  if grep -qE 'docs/github-handoff\.md|contract section|the contract|契約第|共用契約' "$f" 2>/dev/null; then
+    bad "${f#"$ROOT"/} cites no external format document"
+  else
+    ok "${f#"$ROOT"/} cites no external format document"
+  fi
+done
+want "$SKILL" 'docs/openspec-workflow.md' "approval is judged by the OpenSpec workflow"
+want "$SKILL" 'OpenSpec task' "an Accepted finding links to its formal task"
+want "$SKILL" 'transferable message' "an unreached implementer gets a transferable message"
+want "$SKILL" 'limited to archive moves, spec synchronization' "a final-version review narrows only on diff evidence"
+want "$SKILL" 'semantic change' "a semantic change in finalization broadens the review"
+want "$EXAMPLES" '## Scope and Baseline' "examples hold the full review baseline"
 
 echo
 [[ $fail -eq 0 ]] && { echo "PASS"; exit 0; } || { echo "FAIL"; exit 1; }
