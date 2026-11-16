@@ -370,11 +370,9 @@ action still waiting for its own authorization. For `delivery=abandon`, the
 heading reads "Change archived as cancelled", never "Feature committed", and no
 stage is described as a finished implementation.
 
-Next step for the documented worktree flow:
-
-```text
-wt-done <feature-name>
-```
+Merge and Worktree or branch cleanup are not part of this skill. The known
+cleanup owner performs them with their chosen Git or Session/Worktree tool,
+under separate authorization.
 
 ---
 

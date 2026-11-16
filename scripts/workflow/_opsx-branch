@@ -1,0 +1,7 @@
+#compdef opsx-branch
+
+local -a features
+features=("${(@f)$(git for-each-ref --format='%(refname:short)' refs/heads/feature/ 2>/dev/null \
+  | sed 's#^feature/##')}")
+features=(${(u)features:#})
+_arguments "1:change ID:(${(j: :)${(q)features[@]}})"

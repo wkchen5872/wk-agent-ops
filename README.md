@@ -29,9 +29,11 @@ bash scripts/workflow/install.sh
 source ~/.zshrc
 ```
 
-安裝後可在任何 repo 使用 `opsx-branch`、`wt-work`、`wt-done`、`wt-resume` 與
-`pm-start`。正式規劃先執行 `opsx-branch <change-id>`，再建立 OpenSpec artifacts；
-PostToolUse branch hook 僅作相容性 fallback。
+安裝後可在任何 repo 使用 `opsx-branch`。正式規劃先執行 `opsx-branch <change-id>`，
+再建立 OpenSpec artifacts；PostToolUse branch hook 僅作相容性 fallback。Session 與
+Worktree 管理交由使用者選用的工具（例如 Xirp、Herdr 或原生 Git／Provider 指令）；
+舊的 `wt-work`、`wt-resume`、`wt-done`、`pm-start` 已退役，重跑安裝程式會安全移除
+未修改的舊副本（詳見 [scripts/workflow/README.md](scripts/workflow/README.md)）。
 
 ### 安裝 Agent 擴充套件（到目標專案）
 
@@ -75,21 +77,18 @@ Code、Codex、Antigravity 安裝一個對應 mutation runner 與
 ```
 PM Agent（planning branch）          RD Agent（可選 Worktree）
 ────────────────────────────────    ──────────────────────────
-opsx-branch <change-id>              wt-work <change-id> --agent <provider>
-/opsx:ff  → 建立規格                  └─ 解析或建立 Project-managed Worktree
-                                      └─ 啟動新的 Provider apply session
+opsx-branch <change-id>              以自選工具開啟 Session／Worktree
+/opsx:ff  → 建立規格                  （Xirp、Herdr 或原生 Git／Provider）
    proposal → specs                /opsx:apply <feature>
    design → tasks                    └─ 依規格實作
                                    /opsx:commit
                                      └─ archive + docs + commit
-                                   wt-done <feature>
-                                     └─ merge → main
-                                   wt-resume <feature>  ← 事後回顧
+                                   merge 與 cleanup 由 owner 以自選工具處理
 ```
 
 詳細說明：[docs/workflow/guide.md](docs/workflow/guide.md)
 
-- [正式圖稿索引](docs/diagrams/README.md) 列出開發與交付全貌、本機四階段、Review、GitHub 交接及 Worktree 解析；發布前人工檢核與 Review 停止點以該索引連結的現行流程為準。
+- [正式圖稿索引](docs/diagrams/README.md) 列出開發與交付全貌、本機四階段、Review 與 GitHub 交接；發布前人工檢核與 Review 停止點以該索引連結的現行流程為準。
 
 ---
 
@@ -97,36 +96,7 @@ opsx-branch <change-id>              wt-work <change-id> --agent <provider>
 
 | 指令 | 說明 |
 |---|---|
-| `opsx-branch <change-id>` | 在建立 artifacts 前建立或切換 planning branch |
-| `wt-work <change-id>` | 安全解析 registered Worktree；無候選時從 reviewed branch 建立 Project-managed Worktree，並啟動 apply session |
-| `wt-done <change-id>` | Local-only merge；只清理 `.worktrees/<change-id>` |
-| `wt-resume <change-id>` | 在 verified Worktree 恢復所選 Provider，不注入 apply intent |
-| `pm-start [--agent <provider>]` | 從 repo root 啟動 PM planning session |
-
-支援四個 Provider；Antigravity 同時接受 `antigravity` 與官方 CLI 名稱 `agy`：
-
-```bash
-wt-work feature123 --agent claude    # 預設
-wt-work feature123 --agent codex
-wt-work feature123 --agent antigravity
-wt-work feature123 --agent agy
-wt-work feature123 --agent copilot
-```
-
-支援指定 session（`--session` / `-s`）：
-
-```bash
-wt-work feature123 --session a469f20a-a791-4c6f-af7a-5a0e599527f4
-wt-resume feature123 --session "RD: feature123"
-wt-work feature123 --agent codex --path /registered/worktree/path
-```
-
-支援指定 base branch（預設 `main`）：
-
-```bash
-wt-work feature123 --base main
-wt-done feature123 --base main
-```
+| `opsx-branch <change-id>` | 在建立 artifacts 前建立或切換 planning branch；分支已被其他 Worktree checkout 時停止 |
 
 ---
 
@@ -278,7 +248,7 @@ wk-agent-ops/
 │   ├── notify/                 ← 通知系統共用庫與 Telegram 實作
 │   ├── skills/
 │   │   └── install.sh          ← 安裝擴充套件到目標專案
-│   └── workflow/               ← wt-* / pm-start 等流程管理腳本
+│   └── workflow/               ← opsx-branch 與 branch hook
 ├── tests/                      ← installer 與規範的行為測試
 ├── docs/
 │   ├── workflow/               ← 多 Agent 協作與 Commit 流程說明
@@ -343,6 +313,6 @@ mkdir -p template/<profile>/hooks
 
 - [OpenSpec CLI](https://github.com/Fission-AI/OpenSpec)：`npm install -g @fission-ai/openspec`
 - Node.js / npm（語言 profile 透過 `npx` 安裝 testland/qa skills）
-- Claude Code CLI（`wt-work` 預設 Provider；亦支援 Codex、Antigravity、Copilot）
+- Claude Code CLI（主要 Provider；亦支援 Codex、Antigravity、Copilot）
 - bash 4+、rsync、git 2.5+（worktree 支援）
 - [GitHub CLI](https://cli.github.com/) `gh` 或已配置的 GitHub MCP（僅 GitHub 交接入口需要，擇一即可）

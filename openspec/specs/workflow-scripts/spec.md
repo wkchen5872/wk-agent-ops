@@ -2,52 +2,51 @@
 
 ## Purpose
 
-Specifications for the branch-first and Worktree workflow helpers (`opsx-branch`, `wt-work`, `wt-done`, `wt-resume`, `pm-start`) and their shared runtime, installation, completion, and documentation requirements.
+Specifications for the branch-first workflow helper (`opsx-branch`) and its installation, completion, retirement safety, and documentation requirements.
 
 ---
 
 ## Requirements
 
 ### Requirement: workflow install.sh deploys hook as part of standard setup
-`scripts/workflow/install.sh` SHALL install `wt-work`, `wt-done`, `wt-resume`, `pm-start`, `opsx-branch`, and shell completion. It SHALL deploy the idempotent openspec-branch-creator hook as a compatibility fallback for Claude Code, Codex, and GitHub Copilot CLI while identifying the Agent-mediated `opsx-branch` transition as the branch-first contract for all supported Providers.
+`scripts/workflow/install.sh` SHALL deploy only `opsx-branch`, its zsh completion, and the existing branch compatibility hook. It SHALL retain the Agent-mediated branch-first contract for Claude Code, Codex, Antigravity, and GitHub Copilot CLI without adding a Session manager dependency.
 
 #### Scenario: Running install.sh installs workflow entrypoints and fallback hooks
-- **WHEN** `bash scripts/workflow/install.sh` is executed
-- **THEN** all five workflow commands and shell completion are installed
-- **AND** compatible fallback hooks are registered without duplication
-- **AND** the output identifies `opsx-branch` as the pre-action transition
+- **WHEN** workflow installation runs in a clean supported environment
+- **THEN** opsx-branch and its completion are installed with the existing compatible fallback hooks
+- **AND** wt-work, wt-resume, wt-done, pm-start, and wk-workflow-runtime are not installed
 
 #### Scenario: Provider has no supported fallback hook
-- **WHEN** a supported Provider such as Antigravity has no suitable narrow PostToolUse integration
-- **THEN** installation leaves that hook unregistered
-- **AND** the Agent-mediated branch-first contract remains available
+- **WHEN** a supported Provider has no suitable narrow PostToolUse integration
+- **THEN** installation leaves that hook unregistered and retains the Agent-mediated branch guard
 
-### Requirement: wt-work-flow.md documents the branch resolution flow
-`docs/workflow/wt-work-flow.md` SHALL document the implemented resolution flow, including explicit `--path`, Git registry auto-discovery, Project-managed creation, cross-machine hand-off, Provider adapters, and ambiguous-candidate failure.
+#### Scenario: Repeated installation
+- **WHEN** installation runs twice
+- **THEN** retained commands, completion, hook registrations, and shell initialization remain idempotent
 
-#### Scenario: Documentation exposes implemented behavior
-- **WHEN** `docs/workflow/wt-work-flow.md` is read
-- **THEN** it contains Mermaid flows for Worktree resolution and branch hand-off
-- **AND** it does not retain obsolete fallback or automatic-resume behavior
+### Requirement: Upgrade safely retires recognized legacy installations
+The installer SHALL remove only recognized unmodified regular-file copies of retired commands, runtime, and completion at its known installation paths. It SHALL preserve and report modified, unknown, or symlink entries, leave unrelated files and workflow data untouched, and retain shared PATH and fpath configuration.
 
-### Requirement: wt-done documentation notes local-only scope
-The workflow documentation SHALL include an explicit note that `wt-done` handles only local branch merges and does not support team workflows (remote push, PR creation, code review).
+#### Scenario: Recognized old installation
+- **WHEN** a known installation path contains an unmodified copy matching the shipped legacy reference
+- **THEN** the installer removes that legacy copy and reports the removal
+- **AND** existing branches, worktrees, Sessions, settings, and credentials remain untouched
 
-#### Scenario: Local-only note is present in docs
-- **WHEN** `docs/workflow/guide.md` or the wt-done section of the README is read
-- **THEN** a visible warning or note states that wt-done is local-only and team/remote workflows are a future TODO
+#### Scenario: Customized or linked entry
+- **WHEN** a legacy path contains modified or unknown content or a symlink including a dangling symlink
+- **THEN** the installer preserves the entry and its target and reports manual cleanup is needed
 
-### Requirement: Workflow cleanup respects Worktree ownership
-Workflow commands SHALL distinguish Project-managed Worktrees from Provider-native Worktrees. `wt-done` SHALL remove only `.worktrees/<change-id>` created by the project workflow and SHALL NOT remove an attached Provider-native path.
+#### Scenario: Absent legacy installation
+- **WHEN** legacy installation entries are absent
+- **THEN** installation succeeds without requiring legacy commands or altering unrelated entries
 
-#### Scenario: Complete a Project-managed Worktree
-- **WHEN** `wt-done <change-id>` successfully merges `feature/<change-id>` and the registered project path is `.worktrees/<change-id>`
-- **THEN** it removes that Worktree, prunes Git metadata, and deletes the merged feature branch
+### Requirement: Current documentation describes the retained workflow boundary
+Current documentation and installed Skill instructions SHALL describe branch preparation separately from user-selected Session and Worktree management. They SHALL remove runnable retired-command guidance and broken references while preserving general handoff, single-writer, review identity, and cleanup ownership rules. Historical archives and Work Item records SHALL remain unchanged.
 
-#### Scenario: Provider-native Worktree remains provider-owned
-- **WHEN** a Provider-native Worktree was attached during implementation
-- **THEN** `wt-done` does not infer or remove its path
-- **AND** cleanup remains the responsibility of the Provider or user that created it
+#### Scenario: Reader follows current guidance
+- **WHEN** a reader follows current installation or development guidance
+- **THEN** no step requires a retired command
+- **AND** retained branch-first instructions and document links resolve
 
 ### Requirement: Agent-mediated branch preparation guards OpenSpec planning actions
 After a change ID is accepted or derived, the Agent SHALL run `opsx-branch <change-id>` before continuing an OpenSpec new, fast-forward, or continue action. The Agent SHALL continue the requested OpenSpec action only when branch preparation exits 0.

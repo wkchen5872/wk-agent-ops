@@ -5,12 +5,9 @@ description: 從需求探索、OpenSpec 規劃到循序或平行實作的協作�
 tags: [workflow, openspec, git, worktree, agents]
 generated: { by: codex/GPT-6, at: 2026-11-14T12:41:58+08:00 }
 sources:
-  - id: workflow-runtime
-    resource: /scripts/workflow/runtime.sh
-    title: Worktree resolution runtime
-  - id: wt-done
-    resource: /scripts/workflow/wt-done.sh
-    title: Local merge and cleanup
+  - id: workflow-scripts
+    resource: /scripts/workflow/README.md
+    title: Workflow 腳本手冊
   - id: delivery-policy
     resource: /docs/openspec-workflow.md
     title: OpenSpec Workflow
@@ -45,12 +42,11 @@ Worktree。
 
 | 入口 | 適用情境 | 流程 |
 |---|---|---|
-| 直接規劃 | 已清楚知道要做什麼 | `pm-start` → Provider 原生 Plan Mode |
+| 直接規劃 | 已清楚知道要做什麼 | 在 repository root 開啟 Provider 原生 Plan Mode |
 | 探索後規劃 | 問題或範圍尚未釐清 | 一般 Session → 讀取專案、來回討論 → Plan Mode 及／或 `$openspec-explore` |
 
-`pm-start` 是可選的 session launcher，只負責在 repository root 啟動或恢復
-PM session，並在 Provider 支援時進入原生 Plan Mode。它不應自動建立 change、
-branch 或 worktree。
+PM session 可用 Provider 本身或使用者選用的 Session 管理工具（例如 Xirp、Herdr）
+啟動；啟動 session 不應自動建立 change、branch 或 worktree。
 
 Plan Mode 與 `$openspec-explore` 也不是二選一：前者是 Provider 的執行／權限
 模式，後者是「只探索、不實作」的跨 Provider 思考姿態。
@@ -142,8 +138,8 @@ Antigravity 不安裝廣泛 shell hook。Codex 若已有從 Claude 遷移的相�
 | 模式 | 適用情境 | Provisioner / cleanup owner | 啟動方式 |
 |---|---|---|---|
 | Branch-only | 同一個 Session 依序規劃與實作 | 無 | 留在 `feature/<change-id>` 執行 apply |
-| Project-managed Worktree | `wt-work` 的預設；需要平行 RD 或跨 Provider failover | `wt-work` / `wt-done` | `wt-work <change-id> --agent <provider>` |
-| Provider-native Worktree | 已由 Provider 建立隔離 checkout | 建立它的 Provider | `wt-work <change-id> --agent <provider> --path <path>`；省略 `--path` 時安全搜尋 |
+| Project-managed Worktree | 需要平行 RD 或跨 Provider failover | 建立它的管理工具或使用者 | 以自選工具（Xirp、Herdr 或 `git worktree add`）建立後，在該 path 啟動 Provider |
+| Provider-native Worktree | 已由 Provider 建立隔離 checkout | 建立它的 Provider | 在既有 path 啟動 Provider，不再建立第二個 checkout |
 
 > [!WARNING]
 > 每個 Worktree 同一時間只能有一個 active writer。Provisioner／cleanup owner
@@ -178,11 +174,9 @@ OpenSpec artifacts、Git diff、測試結果與未完成 task。
 狀態決定。跨機器或 Provider-managed Worktree 可能被清理時，才必須先保存可攜
 的 commit／patch。
 
-`wt-work <change-id> --agent <provider>` 在未指定 `--session` 時一定啟動新的
-Provider session；只有明確 `--session` 才 resume 並帶入 apply intent。`wt-resume`
-只恢復同一 Provider 的 session，不帶入 apply intent，session history 不會跨
-Provider 轉移。若改在另一台機器接手，先 commit／push named branch，再建立新的
-Worktree。
+Session 的啟動與恢復由 Provider 或使用者選用的 Session 管理工具負責；session
+history 不會跨 Provider 轉移。若改在另一台機器接手，先 commit／push named branch，
+再建立新的 Worktree。
 
 原生預設位置、path discovery 與接手命令見
 [Provider-native Worktree Reference](/docs/workflow/provider-worktrees.md)。
@@ -193,16 +187,14 @@ Worktree。
 `openspec-commit` 預設完成本地 archive → docs → commit。PR 交付、merge 與清理各依其授權，
 詳見 [Commit 工作流](commit.md) 與 [本機開發四階段流程](local-development.md)。[^delivery-policy]
 
-- `wt-work` 建立的 `.worktrees/<change-id>` 使用 `wt-done <change-id>` 合併並
-  清理。
-- Branch-only 模式可在沒有其他 checkout 持有該 branch 時使用 `wt-done` 作為
-  本地 merge helper，或手動完成 merge 與 branch cleanup。
-- Attach 的 Provider-native Worktree 保留原 cleanup owner；第一版不移交給
-  `wt-done`，也不從目錄名稱猜測並刪除。
+- Merge 與 Worktree／branch cleanup 由已知 cleanup owner 以其選用的工具（Git 或
+  Session／Worktree 管理工具）另行授權執行；本 repo 不提供專用 merge／cleanup 指令。
+- Branch-only 模式可在沒有其他 checkout 持有該 branch 時手動完成 merge 與 branch
+  cleanup。
+- Attach 的 Provider-native Worktree 保留原 cleanup owner，不從目錄名稱猜測並刪除。
 
-`wt-done` 目前是 local-only：不包含 push、PR、遠端 branch 刪除或 code review
-gate。它也不執行 OpenSpec verify 或 archive；呼叫者須先確認交付條件，不能把下方順序
-當成腳本已強制實施的驗收 gate。[^wt-done]
+Merge 與 cleanup 不是 OpenSpec verify、archive 或 code review gate；呼叫者須先確認
+交付條件。
 
 ## 開發與交付概覽
 
@@ -210,13 +202,10 @@ gate。它也不執行 OpenSpec verify 或 archive；呼叫者須先確認交付
 
 ![開發與交付概覽](../diagrams/development-lifecycle.svg)
 
-圖中的發布、審查、交付與合併各有停止點。Worktree 解析細節以
-[wt-work 圖](wt-work-flow.md) 為準；目前 runtime 檢查的是 feature branch 的當前 tip，
-固定的 `planning_commit` 仍由交接者與接手者另行核對。[^workflow-runtime]
+圖中的發布、審查、交付與合併各有停止點。固定的 `planning_commit` 由交接者與
+接手者另行核對。
 
-底層概念見 [OpenSpec、Git 與 Session 邊界](/docs/workflow/concepts.md)，
-`wt-work` 的現行 branch resolution 見
-[wt-work Worktree and Branch Resolution Flow](/docs/workflow/wt-work-flow.md)。
+底層概念見 [OpenSpec、Git 與 Session 邊界](/docs/workflow/concepts.md)。
 
 ## 目標 Provider 矩陣
 
@@ -238,28 +227,20 @@ Worktree core 應保持 Provider-neutral；Provider adapter 只負責在指定 c
 
 本次重構採用以下邊界：
 
-1. `wt-work` 預設建立 Project-managed Worktree；Provider-native 是 attach-only
-   的外部入口。
-2. `--path` 明確指定時優先使用；省略時依序檢查 project path、named-branch、detached
-   候選，命中即驗證並返回。同一候選層有多個 path 就停止，完全沒有候選才建立
-   Project-managed Worktree，不保存額外 mapping registry。[^workflow-runtime]
-3. 同機 failover 允許 verified dirty Worktree；停止原 active writer 後即可接手，
+1. 本 repo 只提供 branch 準備（`opsx-branch`）；Session 與 Worktree 的建立、
+   恢復與清理交由使用者選用的工具，Provider-native Worktree 是 attach-only 的外部入口。
+2. 同機 failover 允許 verified dirty Worktree；停止原 active writer 後即可接手，
    checkpoint commit 是情境式選項，不是 gate。
-4. Cleanup ownership 不因 attach 或 Provider 切換而移交；`wt-done` 只清理
-   Project-managed Worktree。
-5. Project-managed Worktree 保留 `.env`，並只複製所選 LLM Provider 已知且存在的
-   local settings；不自動建立 Codex `.worktreeinclude`，也不隱式安裝 dependencies。
+3. Cleanup ownership 不因 attach 或 Provider 切換而移交；只有已知 owner 執行
+   cleanup。
 
 ## 相關文件
 
 - [OpenSpec、Git 與 Session 邊界](/docs/workflow/concepts.md)
-- [wt-work Worktree and Branch Resolution Flow](/docs/workflow/wt-work-flow.md)
 - [Provider-native Worktree Reference](/docs/workflow/provider-worktrees.md)
 - [OpenSpec Commit Workflow](/docs/workflow/commit.md)
 - [本機開發四階段流程](/docs/workflow/local-development.md)
 - [Workflow 腳本手冊](/scripts/workflow/README.md)
 - [正式圖稿索引](../diagrams/README.md)
 
-[^workflow-runtime]: [runtime.sh](../../scripts/workflow/runtime.sh)，`workflow_check_candidate`、`workflow_resolve_worktree`。
-[^wt-done]: [wt-done.sh](../../scripts/workflow/wt-done.sh)，checkout、merge 與 cleanup 路徑。
 [^delivery-policy]: [OpenSpec Workflow](../openspec-workflow.md)，§5。

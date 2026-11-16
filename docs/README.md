@@ -25,7 +25,6 @@ docs/
 │   ├── commit.md           ← OpenSpec Commit 協調流程與遠端交付
 │   ├── concepts.md         ← OpenSpec、Git 與 Session 責任邊界
 │   ├── guide.md            ← PM/RD 多 Agent 協作全貌指南
-│   ├── wt-work-flow.md     ← Worktree 與分支解析流程
 │   └── provider-worktrees.md← 各 AI 工具原生 Worktree 行為比較
 │
 ├── 📂 skills/              ← 擴充工具與自動化技能手冊

@@ -18,7 +18,7 @@ sources:
 
 # OpenSpec Commit Workflow
 
-`openspec-commit` 是 `/opsx:apply` 之後、`wt-done` 之前的薄協調層。它不重做
+`openspec-commit` 是 `/opsx:apply` 之後、Git 整合（merge）與 cleanup 之前的薄協調層。它不重做
 archive、文件判斷或 commit 邏輯，只依序呼叫三個能力：
 
 1. `openspec-archive-change`

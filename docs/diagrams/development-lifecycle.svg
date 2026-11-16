@@ -45,12 +45,12 @@
   <text x="620" y="1230" class="note">另行授權</text>
   <rect x="220" y="1255" width="760" height="120" rx="18" fill="#fff" stroke="#b4c6d8" stroke-width="2"/>
   <text x="248" y="1295" class="h">Git 整合、Issue 驗收與清理</text>
-  <text x="248" y="1333" class="p">遠端 merge 另行處理；wt-done 只做本地 merge／project cleanup</text>
+  <text x="248" y="1333" class="p">merge 與 cleanup 另行授權，由 owner 以自選 Git／管理工具處理</text>
   <text x="248" y="1361" class="note">Provider Worktree 仍由原 owner 清理；Issue 依原範圍獨立結案。</text>
   <rect x="70" y="1430" width="1060" height="145" rx="18" fill="#eaf0f7"/>
   <text x="96" y="1468" class="h">閱讀與執行邊界</text>
   <text x="96" y="1505" class="note">圖例：實線為主路徑；虛線為修正回路或另行授權的步驟。顏色僅輔助。</text>
-  <text x="96" y="1536" class="note">人工／Agent 規範不等同腳本已強制檢查；wt-done 不執行 Review、verify 或 archive。</text>
+  <text x="96" y="1536" class="note">人工／Agent 規範不等同腳本已強制檢查；merge／cleanup 不執行 Review、verify 或 archive。</text>
   <text x="96" y="1566" class="note">遠端交付是已確認的擴充設計，須搭配對應 Skill 實作版本。</text>
-  <text x="70" y="1610" class="note">來源與細節：docs/workflow/guide.md、local-development.md、commit.md、wt-work-flow.md。</text>
+  <text x="70" y="1610" class="note">來源與細節：docs/workflow/guide.md、local-development.md、commit.md、concepts.md。</text>
 </svg>

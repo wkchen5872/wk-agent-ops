@@ -35,7 +35,7 @@ start → plan/explore → resume → stop
 
 ## 兩種 PM 入口，一個 change-id 轉換
 
-需求清楚時，可以用 `pm-start` 直接進入 Plan Mode；需求不清楚時，可以從一般
+需求清楚時，可以直接進入 Provider 原生 Plan Mode；需求不清楚時，可以從一般
 Session 先讀取專案、討論，再選擇 Plan Mode 或 `$openspec-explore`。兩條路最後
 都停在同一個 Scope Ready 關卡。
 
@@ -45,7 +45,7 @@ direct-plan ───────────────┐
 discovery-first ──────────┘
 ```
 
-`pm-start` 與 `$openspec-explore` 都是可選入口。Scope Ready 不要求使用者事先
+Provider Plan Mode 與 `$openspec-explore` 都是可選入口。Scope Ready 不要求使用者事先
 命名；它只要求需求已明確到足以讓 OpenSpec skill 接受既有名稱或推導唯一的
 kebab-case change ID。這個最終 ID 再成為 OpenSpec change、Git branch 與後續
 Worktree 的共同關聯鍵。
@@ -138,7 +138,7 @@ Worktree 解決的是同時 checkout 多個 branch 的問題。若只有一個 S
 
 | PM 入口 | Branch-only 實作 | 平行 RD 實作 |
 |---|---|---|
-| `pm-start` direct-plan | 支援 | 支援 |
+| direct-plan（Provider Plan Mode） | 支援 | 支援 |
 | discovery-first | 支援 | 支援 |
 
 因此「如何開始釐清需求」與「是否平行實作」是兩個獨立選項，不需要四套工作流。
@@ -155,16 +155,16 @@ main → feature/change-id → ff → apply → verify → commit → merge
 ### Project-managed Worktree
 
 ```text
-primary checkout                       .worktrees/change-id
+primary checkout                       <worktree path>
 feature/change-id planning commit      feature/change-id
           │                                  │
-          └─ wt-work switches primary ───────┘
-             away and attaches branch        apply / verify / commit
+          └─ primary switches away; ─────────┘
+             user-selected tool attaches     apply / verify / commit
 ```
 
-適合 PM 留在主 checkout 繼續規劃，RD Agent 在另一個實體目錄實作。完成後由
-`wt-done` 合併並清理。因為 path 與 branch 由 project 控制，這是 `wt-work` 的
-預設模式。
+適合 PM 留在主 checkout 繼續規劃，RD Agent 在另一個實體目錄實作。Worktree 由
+使用者選用的工具（例如 Xirp、Herdr 或 `git worktree add`）建立；完成後由同一個
+cleanup owner 合併並清理。本 repo 不提供專用 launcher 或 cleanup 指令。
 
 ### Provider-native Worktree
 
@@ -180,12 +180,12 @@ active_writer               ∈ {none, claude, codex, antigravity, copilot}
 ```
 
 - Branch-only 的 provisioner 與 cleanup owner 都是 `none`。
-- `project` 表示 `wt-work` 建立，預設由 `wt-done` 清理。
+- `project` 表示由使用者選用的管理工具或 `git worktree add` 建立，預設由建立者清理。
 - `provider` 表示 Provider-native Worktree，預設由建立它的 Provider 清理。
-- `wt-work` attach 外部 Worktree 時只成為 launcher，不會自動成為 cleanup owner。
+- 以其他工具 attach 外部 Worktree 時只成為 launcher，不會自動成為 cleanup owner。
 
 同一個 Worktree 同一時間只能有一個 active writer。這項限制避免檔案與 Git
-index 競爭；cleanup 也只能由已知 owner 執行，避免原 Provider 與 `wt-done`
+index 競爭；cleanup 也只能由已知 owner 執行，避免原 Provider 與其他管理工具
 重複移除同一 Worktree。
 
 ## 跨 Provider Failover
@@ -230,7 +230,6 @@ Session ID 是 Provider adapter 的資料，不應成為 Git 或 OpenSpec lifecy
 ## 相關文件
 
 - [PM/RD 多 Agent 協作工作流](/docs/workflow/guide.md)
-- [wt-work Worktree and Branch Resolution Flow](/docs/workflow/wt-work-flow.md)
 - [Provider-native Worktree Reference](/docs/workflow/provider-worktrees.md)
 - [OpenSpec Commit Workflow](/docs/workflow/commit.md)
 

@@ -77,7 +77,7 @@ wk-agent-ops/
 │
 ├── scripts/
 │   ├── skills/install.sh      ← Propagates template/ to .claude/ and target projects
-│   ├── workflow/              ← wt-work, wt-done, wt-resume, pm-start (global CLI tools)
+│   ├── workflow/              ← opsx-branch (global CLI) and its zsh completion
 │   │   └── openspec-branch-creator/  ← PostToolUse hook: auto-creates feature branches
 │   └── notify/telegram/       ← Telegram notification hook setup
 │
@@ -147,8 +147,8 @@ branch 完成。每個 Worktree 同一時間只能有一個 active writer，跨 
   one runner per profile and one deduplicated `mutant-survival-triage`; no
   third-party mutation SKILL.md is vendored in the template
 - **Hook scripts call into notify lib** — `scripts/notify/lib/` contains shared config and registry functions; hooks source these, they do not duplicate logic
-- **Workflow core remains provider-neutral** — Claude、Codex、Antigravity 與 Copilot
-  的 cwd、session、prompt 差異只存在於 adapters；Gemini CLI 不再是支援目標
+- **Workflow core remains provider-neutral** — `opsx-branch` 與 branch guard 不依
+  Provider；Session 與 Worktree 管理交由使用者選用的工具；Gemini CLI 不再是支援目標
 
 ---
 

@@ -1,7 +1,7 @@
 ---
 type: Reference
 title: 架構與流程圖索引
-description: 現行開發、Review、GitHub 協作及 Worktree 圖稿的閱讀順序、來源與維護位置；圖稿只保留 SVG。
+description: 現行開發、Review 與 GitHub 協作圖稿的閱讀順序、來源與維護位置；圖稿只保留 SVG。
 tags: [architecture, workflow, diagrams]
 generated: { by: Codex/GPT-6.1-Sol, at: 2026-11-14T13:48:40+08:00 }
 sources:
@@ -11,9 +11,6 @@ sources:
   - id: commit-source
     resource: /template/common/skills/openspec-commit/SKILL.md
     title: OpenSpec Commit
-  - id: runtime-source
-    resource: /scripts/workflow/runtime.sh
-    title: Worktree runtime
   - id: delivery-design
     resource: /openspec/changes/archive/2026-11-14-extend-openspec-commit-delivery/design.md
     title: Commit 交付擴充設計
@@ -38,7 +35,6 @@ sources:
 | 04 封存與交付：[SVG](local-development-finish.svg) | [Commit 工作流](../workflow/commit.md)；本地完成、成功交付、取消／被取代三分支 | 本版本 Skill 已實作並完成本地驗證；真實遠端發布仍待端到端驗收，新 head 要有相符 pass[^delivery-design] |
 | 一輪 Review 詳細流程：[SVG](change-review-workflow.svg) | 已確認 PR 的三種結論都 reply 並回讀；無 PR、PR 不明或 local-only 只在本地回報；符合資格才核對原實作者並通知 | 原稿為 [review-loop.svg](../../template/common/skills/change-review/references/review-loop.svg)；更新來源後同步本圖，再由 installer 更新 Skill 副本[^review-source] |
 | GitHub 協作整合（組合示例）：[SVG](github-handoff.svg) | [GitHub 協作整合](../github-handoff.md)；Issue-first／Change-first 兩個入口、版本審查、Closure 回讀及 Issue 獨立結案 | managed；修改 `template/common/docs/diagrams/github-handoff.svg`，再跑 installer |
-| Worktree 解析：[SVG](wt-work-resolution.svg) | [wt-work 解析](../workflow/wt-work-flow.md)；明確 path → project path → named → detached，無候選才建立 | 以 runtime／launcher 為準；固定 planning SHA 的人工核對與當前 branch tip 的腳本檢查分開[^runtime-source] |
 
 本機四階段及開發全貌是本 repo 的操作文件，不隨 common installer 散布。
 圖稿描述規範與目前檔案；能力的實作、驗收與發布狀態見各文件及對應 Change，不由圖稿存在推定。
@@ -63,5 +59,4 @@ sources:
 
 [^review-source]: [Change Review 來源](../../template/common/skills/change-review/SKILL.md)，§5–7。
 [^commit-source]: [OpenSpec Commit 來源](../../template/common/skills/openspec-commit/SKILL.md)，本地 archive → docs → commit。
-[^runtime-source]: [runtime.sh](../../scripts/workflow/runtime.sh)，`workflow_check_candidate`、`workflow_resolve_worktree`；[wt-work.sh](../../scripts/workflow/wt-work.sh) 管理建立流程。
 [^delivery-design]: [Commit 交付擴充設計](../../openspec/changes/archive/2026-11-14-extend-openspec-commit-delivery/design.md)，Decisions 1–6。當時的本地驗證紀錄已不在 repo 中；Review 與驗證紀錄只保存在 Work Item 或 GitHub PR。

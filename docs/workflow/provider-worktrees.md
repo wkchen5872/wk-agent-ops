@@ -5,9 +5,9 @@ description: Claude、Codex 與 Antigravity 的原生 Worktree 位置、checkout
 tags: [workflow, git, worktree, claude, codex, antigravity]
 generated: { by: codex/GPT-6, at: 2026-11-14T12:41:58+08:00 }
 sources:
-  - id: worktree-runtime
-    resource: /scripts/workflow/runtime.sh
-    title: Worktree resolution runtime
+  - id: workflow-concepts
+    resource: /docs/workflow/concepts.md
+    title: OpenSpec、Git 與 Session 邊界
 ---
 
 # Provider-native Worktree Reference
@@ -26,7 +26,6 @@ Worktree registry 的權威來源。
 | Codex（ChatGPT desktop app） | 是 | `$CODEX_HOME/worktrees`（通常為 `~/.codex/worktrees`） | 預設 detached HEAD；Worktree root 可在 settings 修改 |
 | Antigravity CLI (`agy`) | 否 | — | Conversation 以啟動時的 cwd 為 scope |
 | Antigravity 2.0 | 是 | 官方未承諾固定 root | New Worktree Mode 建立隔離 checkout |
-| wk-agent-ops `wt-work` | 是 | `<repo>/.worktrees/<change-id>` | 使用 `feature/<change-id>`；目前由 `wt-done` 清理 |
 
 「Provider 支援 Worktree」不代表該 Provider 的所有 surface 都會建立 Worktree。
 Codex 與 Antigravity 的桌面介面可原生建立，但其 CLI 適合進入已解析的目錄；
@@ -41,7 +40,6 @@ Claude Code CLI 則同時支援原生建立與使用既有目錄。
 | Claude Code CLI | `worktree.baseRef=fresh`（預設）從 `origin/<default-branch>` 建立；設為 `head` 才包含目前本地 HEAD |
 | Codex（ChatGPT desktop app） | 從建立對話時選定 branch 的 HEAD 開始，並套用當時選取的本地變更；初始為 detached HEAD |
 | Antigravity 2.0 | 官方文件未說明如何選擇 starting ref |
-| `wt-work` | 直接 attach `feature/<change-id>`，因此繼承該 branch 的 planning commit |
 
 PM → RD hand-off 應攜帶精確 `planning_commit`，並在 apply 前驗證 resolved
 Worktree 的 HEAD 包含該 commit。不能只確認 change 目錄名稱存在，否則可能讀到
@@ -51,10 +49,8 @@ Worktree 的 HEAD 包含該 commit。不能只確認 change 目錄名稱存在�
 git -C <worktree-path> merge-base --is-ancestor <planning-commit> HEAD
 ```
 
-這是交接者／接手者對固定 SHA 的核對要求。現行 `wt-work` runtime 檢查的是本地
-`feature/<change-id>` **當前 tip** 可達 resolved HEAD，沒有接收固定 `planning_commit`
-參數；不可把兩者當成同一項自動 gate。實作與分層解析見
-[wt-work 解析流程](wt-work-flow.md)。[^worktree-runtime]
+這是交接者／接手者對固定 SHA 的核對要求；不論 Worktree 由哪個工具建立，都由
+交接雙方自行執行此檢查。
 
 ## 不要靠目錄命名猜測
 
@@ -128,7 +124,7 @@ provisioner / cleanup_owner = project | provider
 active_writer               = none | claude | codex | antigravity | copilot
 ```
 
-- `wt-work` attach 既有 Provider Worktree 時，不會因此自動取得 cleanup ownership。
+- 以其他工具 attach 既有 Provider Worktree 時，不會因此自動取得 cleanup ownership。
 - Provider-native Worktree 被其他 Provider 使用期間，不應 archive 原 session 或
   觸發自動清理。
 - Codex-managed Worktree 預設 detached HEAD 且可能隨 chat archive 或 retention
@@ -136,53 +132,43 @@ active_writer               = none | claude | codex | antigravity | copilot
   Worktree。
 - Cleanup 只能由已知 owner 執行；不可從目錄名稱猜測後直接刪除。
 
-## 對 `wt-work` 的含意
+## 跨 Provider 接手的含意
 
-跨 Provider failover 是需求時，Project-managed Worktree 是較穩定的預設：
+跨 Provider failover 是需求時，由使用者選用的工具（例如 Xirp、Herdr 或
+`git worktree add`）建立的 Project-managed Worktree 是較穩定的預設：
 
 ```text
-wt-work 建立 .worktrees/<change-id>
+自選工具建立 Worktree
     ↓
-任何 Provider adapter 都在相同 path 啟動
+任何 Provider 都在相同 path 啟動
     ↓
 Provider 切換不改變 Git checkout
 ```
 
-`wt-work` 可以 attach 已存在的 Provider-native Worktree。明確 `--path` 優先；
-未提供時從 `git worktree list --porcelain` 搜尋唯一且可驗證的候選。候選不唯一就
-停止並要求 `--path`，不保存額外 mapping。Attach 保留原 cleanup owner，且不得
-建立第二個 Worktree。
-
-跨 Provider 切換使用新的 `wt-work` 啟動；`wt-resume` 只恢復同一 Provider 的
-session，不能用來搬移對話歷史。
+接手既有 Provider-native Worktree 時，以明確 path 或 `git worktree list --porcelain`
+中唯一且可驗證的候選為準；候選不唯一就停止並確認。Attach 保留原 cleanup owner，
+且不得建立第二個 Worktree。Session 恢復只適用於同一 Provider，不能用來搬移對話歷史。
 
 ## Local Setup 與 Ignore Policy
 
-Project-managed Worktree 採以下最小 policy：
+Project-managed Worktree 的 local setup（例如 `.env` 或 Provider local settings）
+由建立它的工具或使用者處理；本 repo 不再提供設定複製。`.worktrees/` 保持在
+`.gitignore`，不複製 global config 或 legacy `.gemini/settings.json`，也不自動安裝
+dependencies。
 
-- `.worktrees/` 保持在 `.gitignore`。
-- Core 複製現有 `.env`。
-- Claude 只額外複製 `.claude/settings.local.json`；Codex 只額外複製
-  `.codex/config.toml`；Antigravity 與 Copilot 不複製額外 repo-local file。
-- 不複製其他 Provider、global config 或 legacy `.gemini/settings.json`。
-- 不自動安裝 dependencies。
-
-Codex `.worktreeinclude` 只適用於 Codex-managed Worktree，不由 `wt-work` 或
-installer 自動建立。Provider-native Worktree 的其他 local setup 仍由建立它的
+Codex `.worktreeinclude` 只適用於 Codex-managed Worktree，不由 installer 自動建立。Provider-native Worktree 的其他 local setup 仍由建立它的
 Provider 負責。
 
 ## 相關文件
 
 - [PM/RD 多 Agent 協作工作流](/docs/workflow/guide.md)
 - [OpenSpec、Git 與 Session 邊界](/docs/workflow/concepts.md)
-- [wt-work Worktree and Branch Resolution Flow](/docs/workflow/wt-work-flow.md)
 
 ## 本輪實作依據與既有產品參考
 
 本輪只核對 repository 的解析與交接行為；下列既有 Provider 產品資料未重新查證，
 不將目錄位置或產品版本視為本輪的驗收結果。
 
-[^worktree-runtime]: [runtime.sh](../../scripts/workflow/runtime.sh)，`workflow_check_candidate`、`workflow_resolve_worktree`。
 
 [1] [Claude Code CLI reference — `--worktree`](https://code.claude.com/docs/en/cli-usage)
 
