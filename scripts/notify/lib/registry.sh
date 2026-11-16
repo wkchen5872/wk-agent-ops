@@ -176,25 +176,33 @@ register_hook_codex() {
         any((.hooks? // [])[]?; .command? == cmd)
       );
 
+    # Fill only absent, null or whitespace-only names; keep custom names.
+    def name_if_blank(cmd; name):
+      if .command? == cmd and (.statusMessage == null or (.statusMessage | type == "string" and test("^\\s*$")))
+      then .statusMessage = name else . end;
+    def fill_name(arr; cmd; name):
+      arr | map(name_if_blank(cmd; name)
+        | if (.hooks? | type) == "array" then .hooks |= map(name_if_blank(cmd; name)) else . end);
+
     .hooks = (.hooks // {}) |
     .hooks.Stop = (
-      if has_command(.hooks.Stop; $stop_cmd) then .hooks.Stop
-      else ((.hooks.Stop // []) + [{"hooks":[{"type":"command","command":$stop_cmd,"timeout":5}]}])
+      if has_command(.hooks.Stop; $stop_cmd) then fill_name(.hooks.Stop; $stop_cmd; "Telegram 完成通知")
+      else ((.hooks.Stop // []) + [{"hooks":[{"type":"command","command":$stop_cmd,"timeout":5,"statusMessage":"Telegram 完成通知"}]}])
       end
     ) |
     .hooks.PreToolUse = (
-      if has_command(.hooks.PreToolUse; $question_cmd) then .hooks.PreToolUse
-      else ((.hooks.PreToolUse // []) + [{"matcher":"^(request_user_input|request_user_input_async)$","hooks":[{"type":"command","command":$question_cmd,"timeout":5}]}])
+      if has_command(.hooks.PreToolUse; $question_cmd) then fill_name(.hooks.PreToolUse; $question_cmd; "Telegram 同步問題等待檢查")
+      else ((.hooks.PreToolUse // []) + [{"matcher":"^(request_user_input|request_user_input_async)$","hooks":[{"type":"command","command":$question_cmd,"timeout":5,"statusMessage":"Telegram 同步問題等待檢查"}]}])
       end
     ) |
     .hooks.PostToolUse = (
-      if has_command(.hooks.PostToolUse; $async_question_cmd) then .hooks.PostToolUse
-      else ((.hooks.PostToolUse // []) + [{"matcher":"^request_user_input_async$","hooks":[{"type":"command","command":$async_question_cmd,"timeout":5}]}])
+      if has_command(.hooks.PostToolUse; $async_question_cmd) then fill_name(.hooks.PostToolUse; $async_question_cmd; "Telegram 非同步問題通知")
+      else ((.hooks.PostToolUse // []) + [{"matcher":"^request_user_input_async$","hooks":[{"type":"command","command":$async_question_cmd,"timeout":5,"statusMessage":"Telegram 非同步問題通知"}]}])
       end
     ) |
     .hooks.PermissionRequest = (
-      if has_command(.hooks.PermissionRequest; $permission_cmd) then .hooks.PermissionRequest
-      else ((.hooks.PermissionRequest // []) + [{"hooks":[{"type":"command","command":$permission_cmd,"timeout":5}]}])
+      if has_command(.hooks.PermissionRequest; $permission_cmd) then fill_name(.hooks.PermissionRequest; $permission_cmd; "Telegram 操作確認與等待檢查")
+      else ((.hooks.PermissionRequest // []) + [{"hooks":[{"type":"command","command":$permission_cmd,"timeout":5,"statusMessage":"Telegram 操作確認與等待檢查"}]}])
       end
     )
     '

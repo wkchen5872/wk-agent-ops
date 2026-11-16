@@ -67,9 +67,25 @@ Codex command hooks pass through three independent states:
 2. **Trusted** — each command definition shows `Trust: Trusted` in `/hooks`.
 3. **Enabled** — each `Hook 1` checkbox shows `[x]`, not `[ ]`.
 
-Open `/hooks` after registration and verify all four owned definitions. A trusted hook with an
-unchecked `[ ] Hook 1` is still disabled and does not run. Changes made in the
+Open a new Codex session after registration, then verify all four owned definitions in `/hooks`.
+A trusted hook with an unchecked `[ ] Hook 1` is still disabled and does not run. Changes made in the
 `/hooks` panel are saved automatically.
+
+Each owned handler carries a `statusMessage`, which `/hooks` shows as its name:
+
+| Event | Default name |
+|-------|--------------|
+| `Stop` | `Telegram 完成通知` |
+| `PermissionRequest` | `Telegram 操作確認與等待檢查` |
+| question `PreToolUse` | `Telegram 同步問題等待檢查` |
+| async-question `PostToolUse` | `Telegram 非同步問題通知` |
+
+Install and repeated registration fill a missing, null, empty or whitespace-only
+name in place and keep a non-blank custom name. `update.sh fix-hooks` removes and
+recreates the owned handlers, so it resets custom names to these defaults; other
+hooks stay intact. A new or changed name changes the hook definition: after
+either path, open a new session and trust and enable the changed hooks again in
+`/hooks`. The installer never changes Codex trust or enable state.
 
 `bash scripts/notify/telegram/update.sh status` verifies only that the owned
 commands are configured. It cannot inspect Codex's trust or enabled state.
