@@ -45,8 +45,10 @@ command -v xirp >/dev/null 2>&1 || die "xirp is required to open sessions"
 main="$(ho_main_worktree)" || die "not inside a Git repository"
 roles="$main/.agent-handoff/roles.yaml"
 [[ -f "$roles" ]] || die "role templates not found: $roles (run the wk-agent-ops installer, or copy roles.example.yaml there)"
-[[ -d "$main/openspec/changes/$change" ]] || die "no active OpenSpec change '$change' in $main/openspec/changes"
 git -C "$main" show-ref --verify --quiet "refs/heads/feature/$change" || die "branch feature/$change does not exist (run opsx-branch $change first)"
+# The implementer works on the branch, so the change must be there (planning is usually committed on it).
+git -C "$main" cat-file -e "feature/$change:openspec/changes/$change" 2>/dev/null \
+  || die "no active OpenSpec change '$change' on feature/$change (commit its artifacts on that branch first)"
 
 # Work on a scratch copy so overrides never touch roles.yaml.
 scratch="$(mktemp)"; trap 'rm -f "$scratch"' EXIT

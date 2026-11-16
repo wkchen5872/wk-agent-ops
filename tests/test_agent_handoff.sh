@@ -476,6 +476,24 @@ if run_section start; then
   out="$(start_in "$P" no-branch 2>&1)"; rc=$?
   [[ "$rc" != 0 && "$(created)" == 0 ]] && grep -q 'feature/no-branch' <<<"$out" && ok "missing feature branch stops" || bad "missing feature branch stops"
 
+  # Planning committed only on the feature branch (the usual flow): start finds it there.
+  PB="$tmp/start-branch-only"; new_repo "$PB"; git -C "$PB" switch -q -c feature/add-export
+  mkdir -p "$PB/openspec/changes/add-export"; printf 'p\n' > "$PB/openspec/changes/add-export/proposal.md"
+  git -C "$PB" add openspec; git -C "$PB" commit -qm plan; git -C "$PB" switch -q main
+  mkdir -p "$PB/.agent-handoff"; cp "$SKILL/roles.example.yaml" "$PB/.agent-handoff/roles.yaml"; use_project "$PB"; fresh_state s1b
+  out="$(start_in "$PB" add-export 2>&1)"; rc=$?
+  [[ "$rc" == 0 && -d "$PB-add-export/openspec/changes/add-export" && "$(created)" == 1 ]] \
+    && ok "a change committed only on its feature branch can be started" || { bad "a change committed only on its feature branch can be started"; printf '       %s\n' "$out"; }
+  # Change present in the main worktree but missing from the branch: refused.
+  PM="$tmp/start-main-only"; new_repo "$PM"; git -C "$PM" branch feature/add-export
+  mkdir -p "$PM/openspec/changes/add-export"; printf 'p\n' > "$PM/openspec/changes/add-export/proposal.md"
+  git -C "$PM" add openspec; git -C "$PM" commit -qm change-on-main
+  mkdir -p "$PM/.agent-handoff"; cp "$SKILL/roles.example.yaml" "$PM/.agent-handoff/roles.yaml"; use_project "$PM"; fresh_state s1c
+  out="$(start_in "$PM" add-export 2>&1)"; rc=$?
+  [[ "$rc" != 0 && "$(created)" == 0 && ! -d "$PM-add-export" ]] && grep -q 'feature/add-export' <<<"$out" \
+    && ok "a change missing from its feature branch is refused" || { bad "a change missing from its feature branch is refused"; printf '       %s\n' "$out"; }
+  use_project "$P"; fresh_state s1
+
   out="$(start_in "$P" add-export 2>&1)"; rc=$?
   loop="$WT/.agent-handoff/add-export/loop.yaml"
   if [[ "$rc" == 0 && -d "$WT" && "$(git -C "$WT" branch --show-current)" == "feature/add-export" && "$(git -C "$P" branch --show-current)" == "main" ]]; then

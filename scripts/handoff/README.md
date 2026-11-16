@@ -57,7 +57,8 @@ Claude Code calls skills as `/skill`, Codex as `$skill`. Session names default t
 
 ### `handoff-start <change-id>`
 
-Checks that the OpenSpec change and `feature/<change-id>` exist, prepares the implementer's
+Checks that `feature/<change-id>` exists and holds the OpenSpec change (planning is usually
+committed on that branch), prepares the implementer's
 worktree, opens only the implementer session, and writes
 `.agent-handoff/<change-id>/loop.yaml` there. The reviewer is opened by the hook when the
 implementer first hands over.
