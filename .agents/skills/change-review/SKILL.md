@@ -19,7 +19,7 @@ license: MIT
 compatibility: "Requires git, the openspec-verify-change skill, and either GitHub CLI (gh) or a GitHub MCP when a PR is involved. Optional: openspec CLI, ponytail-review, code-review, a local session tool such as xirp."
 metadata:
   author: wkchen
-  version: "3.1"
+  version: "3.2"
 ---
 
 # Change Review
@@ -59,6 +59,45 @@ index in the PR description. It does not create an Issue, PR, or Work Item to
 make a review possible, overwrite anyone else's report, upload a transcript or a
 Work Item, start a second writer, or poll. GitHub calls go through `gh` or a
 configured GitHub MCP, and their authentication stays theirs.
+
+## Inside a handoff loop
+
+A Change has an active handoff loop when `.agent-handoff/<change-id>/loop.yaml` exists in a
+worktree of the repository (see the `agent-handoff` skill). Inside a loop these rules replace
+the matching parts of the steps below; without a loop, nothing below changes.
+
+- **Implementation-round review.** Bind the round to the `head` of the
+  newest implement record. Records are written where each role works: when the
+  review runs in its own worktree, read the implement records in the
+  implementer worktree named by `implementer.worktree` in `loop.yaml`; the head
+  in the reviewer's prompt names the same commit. Before checking, confirm that this worktree's `HEAD` equals that commit and that
+  it has no uncommitted non-ignored changes; otherwise the result is `blocked`, with both
+  commits or the dirty paths as evidence. A clean worktree at that commit is the fixed
+  version: no file snapshot is needed.
+- **Final-version review.** When `openspec-commit` calls this skill during PR delivery, it
+  passes the delivered head. Review that head, do not apply the implement-record pin, and
+  return the verdict and evidence to the caller: a final-version review does not write a handoff record.
+- **End of an implementation round.** After the report is saved and, with a confirmed PR,
+  after its publication state is known, record the result with the `agent-handoff` skill
+  (`handoff-write --role review`, the verdict, the reviewed `head`, and the saved local
+  report path). Do not discover, verify, or message the implementer: the handoff hook routes
+  the record, so Step 6 is skipped.
+- **Publication not confirmed.** If posting the report was denied, timed out, or did not
+  read back, write `status: blocked`, keep the technical verdict, and state the publication
+  state in the note. Do not resend blindly, try another tool after a denial, or turn the
+  failure into a local handoff.
+- **Local-only and notification exclusions.** Starting a loop does not override this
+  round's instructions. A local-only review, or one where the user excluded notification,
+  saves the report locally and writes `status: blocked` with the reason in the note.
+  Local-only together with a request to hand the result over is a conflict: report it and
+  write `status: blocked` until the user resolves it. Only an explicit instruction to
+  skip GitHub but hand the result to the implementer writes `status: done` with the local
+  report path.
+- **Delegated PR reply.** With a confirmed PR, the reply may be delegated to the
+  `github-pr-agent` within this round. Pass the full repository and PR target, the report
+  path, the Review-ID, the reviewed version, and your own tool, model, native session ID,
+  and Xirp session ID; the posted Author stays yours. The readback rules of Step 5 apply
+  unchanged.
 
 ## Step 1 — Resolve the target
 
@@ -287,6 +326,8 @@ when the account may; an Agent verdict is not a platform approval. Older COMMENT
 reviews remain readable history.
 
 ## Step 6 — Hand off to the implementer
+
+Inside a handoff loop this step is skipped; see "Inside a handoff loop".
 
 With a PR: only after a confirmed `changes-required` or `blocked` reply,
 unless the user excluded notification, and only when the result asks the

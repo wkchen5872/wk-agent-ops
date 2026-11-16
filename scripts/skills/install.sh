@@ -432,6 +432,37 @@ if [[ -n "$WI_TRACKED" ]]; then
   echo "    The Git index was not modified. Untrack them yourself if that is intended."
 fi
 
+# --- Agent handoff records: versioned ignore rule, effect check, role template seed ---
+HO_RULE='/.agent-handoff/'
+if ! { [[ -f "$TARGET/.gitignore" ]] && grep -qE '^/?\.agent-handoff/?(\*\*)?$' "$TARGET/.gitignore"; }; then
+  if [[ -f "$TARGET/.gitignore" && -n "$(tail -c 1 "$TARGET/.gitignore")" ]]; then
+    printf '\n' >> "$TARGET/.gitignore"
+  fi
+  printf '\n# Local agent handoff records and role templates\n%s\n' "$HO_RULE" >> "$TARGET/.gitignore"
+  echo ">f+++++++ .gitignore (agent handoff rule)"
+fi
+for ho_path in .agent-handoff/roles.yaml .agent-handoff/probe-change/01-implement.yaml; do
+  if ! git -C "$TARGET" check-ignore -q --no-index -- "$ho_path" 2>/dev/null; then
+    HO_M="$(git -C "$TARGET" check-ignore -v -n --no-index -- "$ho_path" 2>/dev/null | awk -F'\t' 'NR==1{print $1}')"
+    echo "⚠️  Agent handoff path is not ignored: $ho_path"
+    echo "      matched by: ${HO_M:-no rule}. Existing rules were left unchanged."
+  fi
+done
+HO_TRACKED="$(git -C "$TARGET" ls-files -- '.agent-handoff' 2>/dev/null || true)"
+if [[ -n "$HO_TRACKED" ]]; then
+  echo "⚠️  Agent handoff files are already tracked in Git; the Git index was not modified:"
+  printf '      %s\n' $HO_TRACKED
+fi
+# Role templates live in the main worktree, also when installing into a linked worktree.
+HO_COMMON="$(git -C "$TARGET" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
+HO_MAIN="$TARGET"
+if [[ -n "$HO_COMMON" && "$(basename "$HO_COMMON")" == ".git" ]]; then HO_MAIN="$(dirname "$HO_COMMON")"; fi
+if [[ -f "$COMMON/skills/agent-handoff/roles.example.yaml" && ! -e "$HO_MAIN/.agent-handoff/roles.yaml" ]]; then
+  mkdir -p "$HO_MAIN/.agent-handoff"
+  cp "$COMMON/skills/agent-handoff/roles.example.yaml" "$HO_MAIN/.agent-handoff/roles.yaml"
+  echo ">f+++++++ .agent-handoff/roles.yaml (example role templates; edit freely, not tracked)"
+fi
+
 # --- Activation entry reachability ---
 # A tool that reads only AGENTS.md discovers project instructions from the project
 # root down to its launch directory, loading at most one file per directory, with an

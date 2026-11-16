@@ -193,6 +193,9 @@ history 不會跨 Provider 轉移。若改在另一台機器接手，先 commit�
   cleanup。
 - Attach 的 Provider-native Worktree 保留原 cleanup owner，不從目錄名稱猜測並刪除。
 
+使用交接迴圈時，實作、Review 與收尾的 Session 由 `handoff-start`、Stop hook 與 `handoff-finish` 依角色範本開啟，
+交接只靠本機 commit 與交件單；merge 與 cleanup 仍不在迴圈內。見 [交接迴圈說明](../../scripts/handoff/README.md)。
+
 Merge 與 cleanup 不是 OpenSpec verify、archive 或 code review gate；呼叫者須先確認
 交付條件。
 

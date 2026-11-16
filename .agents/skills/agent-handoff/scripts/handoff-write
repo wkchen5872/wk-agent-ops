@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+# Write one agent-handoff record: .agent-handoff/<change>/<NN>-<role>.yaml in this worktree.
+# Usage: handoff-write --change <id> --role implement|review|finish --status done|blocked
+#                      --head <commit> [--verdict pass|changes-required|blocked] [--report <path>] [--note <text>]
+set -u
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=kv.sh
+source "$here/kv.sh"
+
+die() { printf 'handoff-write: %s\n' "$1" >&2; exit 1; }
+
+change="" role="" status="" head="" verdict="" report="" note=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --change) change="${2:-}"; shift 2 ;;
+    --role) role="${2:-}"; shift 2 ;;
+    --status) status="${2:-}"; shift 2 ;;
+    --head) head="${2:-}"; shift 2 ;;
+    --verdict) verdict="${2:-}"; shift 2 ;;
+    --report) report="${2:-}"; shift 2 ;;
+    --note) note="${2:-}"; shift 2 ;;
+    -h|--help) sed -n '2,4p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) die "unknown argument: $1" ;;
+  esac
+done
+
+[[ "$change" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]] || die "change must be a kebab-case id, got '$change'"
+case "$role" in implement|review|finish) ;; *) die "role must be implement, review or finish" ;; esac
+case "$status" in done|blocked) ;; *) die "status must be done or blocked" ;; esac
+[[ -n "$head" ]] || die "--head is required"
+
+root="$(git rev-parse --show-toplevel 2>/dev/null)" || die "not inside a Git worktree"
+sha="$(git -C "$root" rev-parse --verify --quiet "${head}^{commit}")" || die "head '$head' is not a commit in this repository"
+
+if [[ "$role" == "review" ]]; then
+  case "$verdict" in pass|changes-required|blocked) ;; *) die "review verdict must be pass, changes-required or blocked" ;; esac
+  [[ -n "$report" ]] || die "a review record needs --report"
+  if [[ "$report" == /* ]]; then
+    [[ "$report" == "$root/"* ]] || die "report must be inside this worktree"
+    report="${report#"$root"/}"
+  fi
+  [[ -f "$root/$report" ]] || die "report '$report' does not exist in this worktree"
+else
+  [[ -z "$verdict" ]] || die "only review records carry a verdict"
+fi
+
+dir="$root/.agent-handoff/$change"
+mkdir -p "$dir" || die "cannot create $dir"
+
+# Directories to scan for numbering and rounds: this one plus the worktrees in loop.yaml.
+dirs=("$dir")
+if [[ -f "$dir/loop.yaml" ]]; then
+  for k in implementer.worktree reviewer.worktree finish.worktree; do
+    wt="$(kv_get "$dir/loop.yaml" "$k" 2>/dev/null)" || continue
+    [[ -n "$wt" && -d "$wt/.agent-handoff/$change" ]] || continue
+    cand="$(cd "$wt/.agent-handoff/$change" && pwd -P)"
+    dup=0
+    for d in "${dirs[@]}"; do [[ "$(cd "$d" && pwd -P)" == "$cand" ]] && dup=1; done
+    (( dup )) || dirs+=("$cand")
+  done
+fi
+max=0 implements=0
+for d in "${dirs[@]}"; do
+  for f in "$d"/[0-9][0-9]-*.yaml; do
+    [[ -e "$f" ]] || continue
+    b="$(basename "$f")"
+    [[ "$b" =~ ^([0-9]{2})-(implement|review|finish)\.yaml$ ]] || continue
+    n=$((10#${BASH_REMATCH[1]}))
+    (( n > max )) && max=$n
+    [[ "${BASH_REMATCH[2]}" == "implement" ]] && implements=$((implements + 1))
+  done
+done
+[[ "$role" == "implement" ]] && implements=$((implements + 1))
+(( implements < 1 )) && implements=1
+seq="$(printf '%02d' $((max + 1)))"
+target="$dir/$seq-$role.yaml"
+[[ -e "$target" ]] && die "record $target already exists"
+
+z="$(date +%z)"
+at="$(date +%Y-%m-%dT%H:%M:%S)${z:0:3}:${z:3:2}"
+note="${note//$'\n'/ }"
+
+tmp="$(mktemp "$dir/.write.XXXXXX")" || die "cannot create a temporary file"
+{
+  printf 'change: %s\n' "$change"
+  printf 'round: %s\n' "$implements"
+  printf 'role: %s\n' "$role"
+  printf 'status: %s\n' "$status"
+  [[ "$role" == "review" ]] && printf 'verdict: %s\n' "$verdict"
+  printf 'head: %s\n' "$sha"
+  [[ "$role" == "review" ]] && printf 'report: %s\n' "$report"
+  printf 'note: %s\n' "$note"
+  printf 'at: %s\n' "$at"
+} > "$tmp" || { rm -f "$tmp"; die "cannot write the record"; }
+mv -n "$tmp" "$target"
+if [[ -e "$tmp" ]]; then rm -f "$tmp"; die "record $target appeared while writing"; fi
+printf '%s\n' "$target"

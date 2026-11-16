@@ -97,6 +97,9 @@ opsx-branch <change-id>              以自選工具開啟 Session／Worktree
 | 指令 | 說明 |
 |---|---|
 | `opsx-branch <change-id>` | 在建立 artifacts 前建立或切換 planning branch；分支已被其他 Worktree checkout 時停止 |
+| `handoff-start <change-id>` | 開啟實作 → Review → 收尾的交接迴圈：準備實作者 worktree、開實作者 Session、寫 `loop.yaml`（選用；`bash scripts/handoff/install.sh` 安裝） |
+| `handoff-finish <change-id>` | 最新交件單是目前乾淨 head 的 pass 時開收尾 Session（選用） |
+| `handoff-cleanup <change-id> [--abandon] [--yes]` | 收尾完成（或以 `--abandon` 放棄）後封存交件單與報告，刪除迴圈的 Session 與 worktree，保留分支（選用） |
 
 ---
 
@@ -128,6 +131,10 @@ opsx-branch <change-id>              以自選工具開啟 Session／Worktree
 | `.claude/skills/github-issue/`、`.claude/skills/github-pr/` | Issue／PR 交接入口 skill |
 | `.claude/skills/change-review/`、`.agents/skills/change-review/` | PR 審查、修正交接與複審 skill（含報告範例、檢查清單與流程圖） |
 | `.agents/skills/github-issue/`、`.agents/skills/github-pr/` | 同兩個入口的跨 Provider 副本 |
+| `.claude/skills/agent-handoff/`、`.agents/skills/agent-handoff/` | 交接單 Skill 與 `handoff-write` 腳本（交接迴圈用） |
+| `.claude/agents/github-pr-agent.md`、`.claude/agents/github-issue-agent.md` | 代呼叫端執行一次 PR／Issue 操作的專用 Agent（Claude Sonnet），Author 沿用呼叫端身分 |
+| `.codex/agents/github-pr-agent.toml`、`.codex/agents/github-issue-agent.toml` | 同兩個 Agent 的 Codex 版本（`gpt-5.6-terra`、medium） |
+| `.gitignore` 的 `/.agent-handoff/`、主 worktree 的 `.agent-handoff/roles.yaml` | 交件單不進 Git；角色範本只在缺少時建立，不覆寫 |
 | `.claude/rules/github-handoff.md`、`.agents/rules/github-handoff.md` | 指向 GitHub 入口 Skill 的 Provider 原生載入入口與鏡像 |
 
 `scripts/skills/install.sh` 管理 `.claude/`、複數 `.agents/`，以及兩個
@@ -196,6 +203,25 @@ commit／push，也不走 PR 的 create／update／close。
 | Antigravity | 從 `.agents/skills/change-review/` 載入，或以自然語言要求 |
 
 `openspec-verify-change` 是必要驗證；`ponytail-review` 等品質審查是可選加強，未安裝時使用 Skill 內建基線。
+
+### 交接迴圈（選用）
+
+實作、Review、收尾的 Agent 透過交件單互相交接，不需要你轉貼訊息。每個 Agent 結束一輪時以
+`agent-handoff` Skill 的 `handoff-write` 寫入 `.agent-handoff/<change-id>/NN-<role>.yaml`；Agent 停下時，
+Claude Code 與 Codex 的 Stop hook 讀最新的交件單，經 Xirp 通知下一個 Agent，或經既有 Telegram 通知你。
+hook 不用模型、不輪詢、不寫 GitHub。
+
+- `handoff-start <change-id>` 只開實作者；實作者第一次交件時，hook 依範本開審查者。
+- 審查與收尾的 worktree 可設 `shared`（預設，與實作者共用）或 `new`（另開），兩種並行可用。
+- 審查 pass 後預設通知你執行 `handoff-finish`；`finish.trigger: auto` 時由 hook 直接開收尾。
+- 收尾完成後以 `handoff-cleanup` 一次刪除迴圈的 Session 與 worktree；交件單與報告先搬到主 worktree 的 `.agent-handoff/archive/`，分支保留到合併。
+- 收尾受阻（例如 push 被拒）時，修正原因後再執行 `handoff-finish` 即可重試；放棄的迴圈用 `handoff-cleanup --abandon`。
+- 交件單作者欄位由 `handoff-author` 產生，Agent 範本以 `{author}` 附上，不由模型自行抄寫 ID。Codex 角色可設 `profile`；`delivery: pr` 的 Codex 收尾角色用 `handoff-net`（網路可用），其設定檔 `~/.codex/handoff-net.config.toml` 由 `scripts/handoff/install.sh` 缺少時建立。
+- 每輪退回由 hook 把報告路徑轉給實作者；達 `max_rounds`（預設 3）時停下找你。
+- `change-review` 在迴圈中改寫交件單，不自行通知實作者；`openspec-commit` 依 `finish.delivery` 交付，PR 交付時最終版 Review 審交付後的 head。
+
+安裝、角色範本、指令選項與排錯見 [scripts/handoff/README.md](scripts/handoff/README.md)；
+流程圖見 [交接流程](docs/diagrams/agent-handoff-loop.svg) 與 [啟動流程](docs/diagrams/agent-handoff-start.svg)。
 
 ### Python Profile
 

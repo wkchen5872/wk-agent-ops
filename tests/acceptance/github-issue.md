@@ -679,3 +679,11 @@ close 先以 `gh issue comment` 發布 Closure 並讀回，再 `gh issue close`�
 - 預期呼叫：核對 → `gh issue view 7 --json body,url,comments` → `gh issue comment 7 --body-file …` → 讀回 c20。
 - 禁止：共同禁止；改寫 #7 的正文或舊 Author；在 c20 輸出 `方式` 或 `人類` 行；以舊正文的 `人類: @mei` 當成本輪身分。
 - 判定：c20 的 Author 只有 `Co-Authored-By: Claude Code`、`AI-Assisted-By: Claude Opus 5.5`、`SESSION-ID: sess-7781`、`XIRP-SESSION-ID: xirp-42`；#7 正文不變。
+
+### GI-52 委派 github-issue-agent 時沿用呼叫者身分
+
+- Fixture：Claude Code 實作 Session 委派 `github-issue-agent` 在 `github.com/acme/app` Issue #7 新增 Checkpoint，但沒有傳入 Xirp Session ID 與模型。
+- 模擬回覆：無。
+- 預期呼叫：回報缺少的身分欄位並回傳 failed。
+- 禁止：以 agent 自己的模型或 Session 補上 Author；發布留言。
+- 判定：沒有任何寫入，回報缺少的欄位。

@@ -1,0 +1,42 @@
+# Role templates for handoff-start / handoff-finish (agent-handoff loop).
+# Copied to <main worktree>/.agent-handoff/roles.yaml only when that file is missing;
+# it is ignored by Git, so edit it freely for this repository.
+#
+# Format: "key: value" lines, at most two levels (role -> field). Values are one line.
+# Every role must set harness, model, effort, name and prompt.
+# Placeholders: {change} {head} {round} {report} {delivery} {handoff_write} {author}
+# {author} becomes one sentence telling the agent to append the output of
+# scripts/handoff-author (tool and template model; Session IDs copied from the environment).
+# Skill syntax differs by tool: Claude Code uses /skill, Codex uses $skill.
+
+max_rounds: 3
+
+implement:
+  harness: claude
+  model: opus
+  effort: high
+  name: "claude - impl - {change}"
+  prompt: "/openspec-apply-change {change}。這是第 {round} 輪；若有審查報告，先讀 {report}。測試通過後本機 commit（第一輪 feat({change}): <摘要>，修正輪 fix({change}): address <review-id>），不要 push。最後執行 {handoff_write} --change {change} --role implement --status done --head HEAD；無法完成時改用 --status blocked 並以 --note 說明。{author}"
+
+review:
+  worktree: shared
+  harness: codex
+  model: gpt-6.1-sol
+  effort: high
+  name: "codex - review - {change}"
+  prompt: "$change-review {change}：這是交接迴圈第 {round} 輪的實作審查，受審版本為 commit {head}。依 agent-handoff Skill，結束時以 {handoff_write} --change {change} --role review 記錄結果；不要自行通知實作者。{author}"
+
+# finish.delivery: pr pushes and writes to GitHub. Codex's default sandbox has no network,
+# so give a Codex finish role the profile created by scripts/handoff/install.sh:
+#   profile: handoff-net
+# (~/.codex/handoff-net.config.toml: workspace-write sandbox with network access).
+# SSH pushes still need Codex's approval to leave the sandbox; HTTPS remotes work inside it.
+finish:
+  worktree: shared
+  trigger: ask
+  delivery: local
+  harness: codex
+  model: gpt-5.6-terra
+  effort: medium
+  name: "codex - finish - {change}"
+  prompt: "$openspec-commit {change}。交付方式：{delivery}（local 只做本地封存、文件與 commit；pr 已授權 push、github-pr update、以交付後的 head 做最終版 Review，通過才發 ready-to-merge Closure）。完成或中斷時依 agent-handoff Skill 以 {handoff_write} --change {change} --role finish 記錄結果。{author}"

@@ -34,6 +34,17 @@ shared Handoff / Next actions / Author frame, and the layouts for the
 description, review and fix replies, Checkpoints, and Closures. Take layouts
 from here rather than from memory; the references below show them filled in.
 
+## Dedicated agent
+
+A session may delegate one operation to the `github-pr-agent` (Claude Code
+`.claude/agents/`, Codex `.codex/agents/`). The agent follows this skill
+unchanged and posts with the caller's identity: the caller passes the
+operation, the full repository and PR target, the content or report path, and
+its own tool, model, native session ID, and Xirp session ID. The Author is the
+caller's, never the agent's own model or session; without that identity the
+agent posts nothing. The caller keeps the authorization and gets back
+`confirmed`, `unconfirmed`, or `failed` with the URL or reason.
+
 ## What each operation may change
 
 | Operation | Needs | Side effect when authorized |

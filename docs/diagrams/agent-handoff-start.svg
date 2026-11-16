@@ -1,0 +1,150 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="1760" viewBox="0 0 1400 1760" role="img" aria-labelledby="title desc">
+<title id="title">啟動一個交接迴圈：誰開什麼</title>
+<desc id="desc">上方是三份角色範本：implement 由使用者的指令觸發，review 與 finish 由 Stop hook 觸發；每份範本定義工具、模型、effort、Session 名稱與 prompt，prompt 最後都要求執行 handoff-write 寫交件單。下方四欄：使用者下 handoff-start 指令；啟動腳本確認 Change 與分支、準備實作者 worktree、用核心加 implement 範本開實作者 Session 並送出 prompt、寫 loop.yaml；實作者第一次停下時，Stop hook 用核心加 review 範本開審查 Session（review 的 worktree 預設 shared，設為 new 時先開停在交件單 head 的審查 worktree），或沿用指定的 Session；之後每輪只通知切到新 head 或退回修正；pass 後通知使用者執行 handoff-finish，或在 trigger 為 auto 時由 hook 用 finish 範本開收尾 Session。腳本遇到分支問題時停下說明，hook 遇到卡住或超過三輪時透過 Telegram 找使用者。</desc>
+<defs>
+<marker id="arrow" markerUnits="userSpaceOnUse" markerWidth="14" markerHeight="14" refX="12" refY="7" orient="auto"><path d="M0 0 L14 7 L0 14 Z" fill="#647a94"/></marker>
+<marker id="arrow-red" markerUnits="userSpaceOnUse" markerWidth="14" markerHeight="14" refX="12" refY="7" orient="auto"><path d="M0 0 L14 7 L0 14 Z" fill="#b42318"/></marker>
+<marker id="arrow-green" markerUnits="userSpaceOnUse" markerWidth="14" markerHeight="14" refX="12" refY="7" orient="auto"><path d="M0 0 L14 7 L0 14 Z" fill="#1f7a4d"/></marker>
+<marker id="arrow-create" markerUnits="userSpaceOnUse" markerWidth="14" markerHeight="14" refX="12" refY="7" orient="auto"><path d="M0 0 L14 7 L0 14 Z" fill="#3f8a5c"/></marker>
+</defs>
+<rect width="1400" height="1760" fill="#f5f7fb"/>
+<g font-family="PingFang TC, Noto Sans CJK TC, sans-serif">
+<text x="40" y="70" font-size="34" fill="#19344c" font-weight="700" text-anchor="start">啟動一個交接迴圈：誰開什麼</text>
+<text x="40" y="108" font-size="19" fill="#42556d" font-weight="400" text-anchor="start">你下啟動指令；審查由 hook 依範本自動開，收尾預設等你執行 handoff-finish</text>
+<rect x="1202" y="40" width="158" height="42" rx="21" fill="#fde8d7"/>
+<text x="1281" y="68" font-size="19" fill="#9a3412" font-weight="600" text-anchor="middle">已實作 · 待演練</text>
+<rect x="40" y="140" width="426" height="196" rx="14" fill="#ffffff" stroke="#b4c6d8" stroke-width="2"/>
+<text x="58" y="174" font-size="20" fill="#19344c" font-weight="700" text-anchor="start">implement 範本</text>
+<text x="58" y="198" font-size="14" fill="#5f7186" font-weight="600" text-anchor="start">觸發：你的 handoff-start 指令</text>
+<text x="58" y="230" font-size="15" fill="#19344c" font-weight="400" text-anchor="start" font-family="SF Mono, Menlo, monospace" xml:space="preserve">claude · opus · high</text>
+<text x="58" y="258" font-size="15" fill="#42556d" font-weight="400" text-anchor="start">名稱：claude - impl - {change}</text>
+<rect x="54" y="272" width="398" height="30" rx="6" fill="#f3f6fa"/>
+<text x="64" y="293" font-size="14" fill="#19344c" font-weight="400" text-anchor="start" font-family="SF Mono, Menlo, monospace" xml:space="preserve">/openspec-apply-change {change}</text>
+<text x="58" y="324" font-size="15" fill="#42556d" font-weight="400" text-anchor="start">最後：handoff-write --role implement</text>
+<rect x="487" y="140" width="426" height="196" rx="14" fill="#ffffff" stroke="#b4c6d8" stroke-width="2"/>
+<text x="505" y="174" font-size="20" fill="#19344c" font-weight="700" text-anchor="start">review 範本</text>
+<text x="505" y="198" font-size="14" fill="#5f7186" font-weight="600" text-anchor="start">觸發：hook（實作者交件）</text>
+<text x="505" y="230" font-size="15" fill="#19344c" font-weight="400" text-anchor="start" font-family="SF Mono, Menlo, monospace" xml:space="preserve">codex · gpt-6.1-sol · high</text>
+<text x="505" y="258" font-size="15" fill="#42556d" font-weight="400" text-anchor="start">名稱：codex - review - {change}</text>
+<rect x="501" y="272" width="398" height="30" rx="6" fill="#f3f6fa"/>
+<text x="511" y="293" font-size="14" fill="#19344c" font-weight="400" text-anchor="start" font-family="SF Mono, Menlo, monospace" xml:space="preserve">$change-review {change}（審查 {head}）</text>
+<text x="505" y="324" font-size="15" fill="#42556d" font-weight="400" text-anchor="start">最後：handoff-write --role review</text>
+<rect x="934" y="140" width="426" height="196" rx="14" fill="#ffffff" stroke="#b4c6d8" stroke-width="2"/>
+<text x="952" y="174" font-size="20" fill="#19344c" font-weight="700" text-anchor="start">finish 範本</text>
+<text x="952" y="198" font-size="14" fill="#5f7186" font-weight="600" text-anchor="start">觸發：handoff-finish 或 hook（auto）</text>
+<text x="952" y="230" font-size="15" fill="#19344c" font-weight="400" text-anchor="start" font-family="SF Mono, Menlo, monospace" xml:space="preserve">codex · gpt-5.6-terra · medium</text>
+<text x="952" y="258" font-size="15" fill="#42556d" font-weight="400" text-anchor="start">名稱：codex - finish - {change}</text>
+<rect x="948" y="272" width="398" height="30" rx="6" fill="#f3f6fa"/>
+<text x="958" y="293" font-size="14" fill="#19344c" font-weight="400" text-anchor="start" font-family="SF Mono, Menlo, monospace" xml:space="preserve">$openspec-commit {change}</text>
+<text x="952" y="324" font-size="15" fill="#42556d" font-weight="400" text-anchor="start">最後：handoff-write --role finish</text>
+<rect x="40" y="352" width="1320" height="112" rx="14" fill="#ffffff" stroke="#b4c6d8" stroke-width="2"/>
+<text x="58" y="386" font-size="19" fill="#19344c" font-weight="650" text-anchor="start">啟動指令</text>
+<text x="58" y="418" font-size="14" fill="#19344c" font-weight="400" text-anchor="start" font-family="SF Mono, Menlo, monospace" xml:space="preserve">handoff-start add-export</text>
+<text x="330" y="418" font-size="14" fill="#5f7186" font-weight="400" text-anchor="start">全用預設</text>
+<text x="58" y="444" font-size="14" fill="#19344c" font-weight="400" text-anchor="start" font-family="SF Mono, Menlo, monospace" xml:space="preserve">  --worktree new</text>
+<text x="330" y="444" font-size="14" fill="#5f7186" font-weight="400" text-anchor="start">預設：實作者另開 worktree</text>
+<text x="700" y="418" font-size="14" fill="#19344c" font-weight="400" text-anchor="start" font-family="SF Mono, Menlo, monospace" xml:space="preserve">  --impl claude:fable:xhigh</text>
+<text x="1010" y="418" font-size="14" fill="#5f7186" font-weight="400" text-anchor="start">覆寫 implement 範本的模型與 effort</text>
+<text x="700" y="444" font-size="14" fill="#19344c" font-weight="400" text-anchor="start" font-family="SF Mono, Menlo, monospace" xml:space="preserve">  --reviewer-session &lt;xirp-id&gt;</text>
+<text x="1010" y="444" font-size="14" fill="#5f7186" font-weight="400" text-anchor="start">沿用已開好的審查 Session</text>
+<rect x="40" y="490" width="250" height="1030" rx="18" fill="#eef1f6"/>
+<rect x="40" y="490" width="250" height="50" rx="18" fill="#19344c"/>
+<text x="58" y="522" font-size="18" fill="#ffffff" font-weight="700" text-anchor="start">你</text>
+<rect x="310" y="490" width="360" height="1030" rx="18" fill="#eef1f6"/>
+<rect x="310" y="490" width="360" height="50" rx="18" fill="#4a4f66"/>
+<text x="328" y="522" font-size="18" fill="#ffffff" font-weight="700" text-anchor="start">啟動腳本 handoff-start</text>
+<rect x="690" y="490" width="360" height="1030" rx="18" fill="#eef1f6"/>
+<rect x="690" y="490" width="360" height="50" rx="18" fill="#4a4f66"/>
+<text x="708" y="522" font-size="18" fill="#ffffff" font-weight="700" text-anchor="start">Stop hook · Agent 停下時自動執行</text>
+<rect x="1070" y="490" width="290" height="1030" rx="18" fill="#eef1f6"/>
+<rect x="1070" y="490" width="290" height="50" rx="18" fill="#2f6b4a"/>
+<text x="1088" y="522" font-size="18" fill="#ffffff" font-weight="700" text-anchor="start">產生的 worktree 與 Session</text>
+<rect x="54" y="560" width="222" height="82" rx="14" fill="#ffffff" stroke="#b4c6d8" stroke-width="2"/>
+<text x="72" y="594" font-size="19" fill="#19344c" font-weight="650" text-anchor="start">下啟動指令</text>
+<text x="72" y="622" font-size="15" fill="#42556d" font-weight="400" text-anchor="start">handoff-start add-export</text>
+<rect x="54" y="666" width="222" height="82" rx="14" fill="#fff1ee" stroke="#b42318" stroke-width="2" stroke-dasharray="8 5"/>
+<text x="72" y="700" font-size="19" fill="#19344c" font-weight="650" text-anchor="start">腳本停下時處理</text>
+<text x="72" y="728" font-size="15" fill="#42556d" font-weight="400" text-anchor="start">分支不存在或被佔用</text>
+<rect x="54" y="1302" width="222" height="82" rx="14" fill="#fff1ee" stroke="#b42318" stroke-width="2" stroke-dasharray="8 5"/>
+<text x="72" y="1336" font-size="19" fill="#19344c" font-weight="650" text-anchor="start">例外才找你</text>
+<text x="72" y="1364" font-size="15" fill="#42556d" font-weight="400" text-anchor="start">卡住、超過 3 輪、格式錯</text>
+<rect x="54" y="1408" width="222" height="82" rx="14" fill="#fffaf0" stroke="#d2a14a" stroke-width="2" stroke-dasharray="8 5"/>
+<text x="72" y="1442" font-size="19" fill="#19344c" font-weight="650" text-anchor="start">執行 handoff-finish</text>
+<text x="72" y="1470" font-size="15" fill="#42556d" font-weight="400" text-anchor="start">trigger 為 ask（預設）時</text>
+<rect x="324" y="560" width="332" height="82" rx="14" fill="#ffffff" stroke="#b4c6d8" stroke-width="2"/>
+<text x="342" y="594" font-size="19" fill="#19344c" font-weight="650" text-anchor="start">① 確認 Change 與分支</text>
+<text x="342" y="622" font-size="15" fill="#42556d" font-weight="400" text-anchor="start">不存在就停下，不自己建規格</text>
+<rect x="324" y="666" width="332" height="82" rx="14" fill="#ffffff" stroke="#b4c6d8" stroke-width="2"/>
+<text x="342" y="700" font-size="19" fill="#19344c" font-weight="650" text-anchor="start">② 準備實作者 worktree</text>
+<text x="342" y="728" font-size="15" fill="#42556d" font-weight="400" text-anchor="start">new（預設）另開；here 用目前目錄</text>
+<rect x="324" y="772" width="332" height="82" rx="14" fill="#ffffff" stroke="#b4c6d8" stroke-width="2"/>
+<text x="342" y="806" font-size="19" fill="#19344c" font-weight="650" text-anchor="start">③ 開實作者 Session</text>
+<text x="342" y="834" font-size="15" fill="#42556d" font-weight="400" text-anchor="start">核心＋implement 範本，送出 prompt</text>
+<rect x="324" y="878" width="332" height="82" rx="14" fill="#ffffff" stroke="#b4c6d8" stroke-width="2"/>
+<text x="342" y="912" font-size="19" fill="#19344c" font-weight="650" text-anchor="start">④ 寫 loop.yaml</text>
+<text x="342" y="940" font-size="15" fill="#42556d" font-weight="400" text-anchor="start">記下 Session、worktree、輪數上限</text>
+<rect x="704" y="984" width="332" height="82" rx="14" fill="#ffffff" stroke="#b4c6d8" stroke-width="2"/>
+<text x="722" y="1018" font-size="19" fill="#19344c" font-weight="650" text-anchor="start">⑤ 實作者第一次停下</text>
+<text x="722" y="1046" font-size="15" fill="#42556d" font-weight="400" text-anchor="start">讀交件單：implement、done</text>
+<rect x="704" y="1090" width="332" height="82" rx="14" fill="#ffffff" stroke="#b4c6d8" stroke-width="2"/>
+<text x="722" y="1124" font-size="19" fill="#19344c" font-weight="650" text-anchor="start">⑥ 審查 worktree</text>
+<text x="722" y="1152" font-size="15" fill="#42556d" font-weight="400" text-anchor="start">shared（預設）共用 A；new 另開 B</text>
+<rect x="704" y="1196" width="332" height="82" rx="14" fill="#ffffff" stroke="#b4c6d8" stroke-width="2"/>
+<text x="722" y="1230" font-size="19" fill="#19344c" font-weight="650" text-anchor="start">⑦ 開審查 Session</text>
+<text x="722" y="1258" font-size="15" fill="#42556d" font-weight="400" text-anchor="start">核心＋review 範本；或沿用指定 Session</text>
+<rect x="704" y="1302" width="332" height="82" rx="14" fill="#ffffff" stroke="#b4c6d8" stroke-width="2"/>
+<text x="722" y="1336" font-size="19" fill="#19344c" font-weight="650" text-anchor="start">⑧ 之後每一輪</text>
+<text x="722" y="1364" font-size="15" fill="#42556d" font-weight="400" text-anchor="start">通知審新 head，或退回修正</text>
+<rect x="704" y="1408" width="332" height="82" rx="14" fill="#ffffff" stroke="#b4c6d8" stroke-width="2"/>
+<text x="722" y="1442" font-size="19" fill="#19344c" font-weight="650" text-anchor="start">⑨ pass → 收尾</text>
+<text x="722" y="1470" font-size="15" fill="#42556d" font-weight="400" text-anchor="start">ask 通知你；auto 直接開收尾</text>
+<rect x="1084" y="666" width="262" height="82" rx="14" fill="#eef6f0" stroke="#7fb08f" stroke-width="2"/>
+<text x="1102" y="700" font-size="17" fill="#19344c" font-weight="650" text-anchor="start">worktree A</text>
+<text x="1102" y="728" font-size="15" fill="#42556d" font-weight="400" text-anchor="start">在 feature branch 上</text>
+<rect x="1084" y="772" width="262" height="82" rx="14" fill="#eef6f0" stroke="#7fb08f" stroke-width="2"/>
+<text x="1102" y="806" font-size="17" fill="#19344c" font-weight="650" text-anchor="start">claude - impl - add-export</text>
+<text x="1102" y="834" font-size="15" fill="#42556d" font-weight="400" text-anchor="start">Opus · high（預設）</text>
+<rect x="1084" y="1090" width="262" height="82" rx="14" fill="#eef6f0" stroke="#7fb08f" stroke-width="2"/>
+<text x="1102" y="1124" font-size="17" fill="#19344c" font-weight="650" text-anchor="start">worktree A 或 B</text>
+<text x="1102" y="1152" font-size="15" fill="#42556d" font-weight="400" text-anchor="start">new 時 B 停在 head</text>
+<rect x="1084" y="1196" width="262" height="82" rx="14" fill="#eef6f0" stroke="#7fb08f" stroke-width="2"/>
+<text x="1102" y="1230" font-size="17" fill="#19344c" font-weight="650" text-anchor="start">codex - review - add-export</text>
+<text x="1102" y="1258" font-size="15" fill="#42556d" font-weight="400" text-anchor="start">Sol · high（預設）</text>
+<rect x="1084" y="1408" width="262" height="82" rx="14" fill="#eef6f0" stroke="#7fb08f" stroke-width="2"/>
+<text x="1102" y="1442" font-size="17" fill="#19344c" font-weight="650" text-anchor="start">codex - finish - add-export</text>
+<text x="1102" y="1470" font-size="15" fill="#42556d" font-weight="400" text-anchor="start">Terra · A，或 new 另開</text>
+<path d="M 276 601.0 H 316" fill="none" stroke="#647a94" stroke-width="2.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M 490.0 644 V 658" fill="none" stroke="#647a94" stroke-width="2.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M 490.0 750 V 764" fill="none" stroke="#647a94" stroke-width="2.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M 490.0 856 V 870" fill="none" stroke="#647a94" stroke-width="2.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M 324 707.0 H 284" fill="none" stroke="#b42318" stroke-width="2.5" stroke-linejoin="round" stroke-dasharray="7 5" marker-end="url(#arrow-red)"/>
+<path d="M 656 707.0 H 1076" fill="none" stroke="#3f8a5c" stroke-width="2.5" stroke-linejoin="round" stroke-dasharray="7 5" marker-end="url(#arrow-create)"/>
+<path d="M 656 813.0 H 1076" fill="none" stroke="#3f8a5c" stroke-width="2.5" stroke-linejoin="round" stroke-dasharray="7 5" marker-end="url(#arrow-create)"/>
+<path d="M 490.0 962 V 1025.0 H 696" fill="none" stroke="#647a94" stroke-width="2.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="502.0" y="994" font-size="15" fill="#5f7186" font-weight="600" text-anchor="start">實作者工作中…</text>
+<text x="502.0" y="1014" font-size="15" fill="#5f7186" font-weight="600" text-anchor="start">停下時觸發 hook</text>
+<path d="M 870.0 1068 V 1082" fill="none" stroke="#647a94" stroke-width="2.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M 870.0 1174 V 1188" fill="none" stroke="#647a94" stroke-width="2.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M 870.0 1280 V 1294" fill="none" stroke="#647a94" stroke-width="2.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M 870.0 1386 V 1400" fill="none" stroke="#647a94" stroke-width="2.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M 1036 1131.0 H 1076" fill="none" stroke="#3f8a5c" stroke-width="2.5" stroke-linejoin="round" stroke-dasharray="7 5" marker-end="url(#arrow-create)"/>
+<path d="M 1036 1237.0 H 1076" fill="none" stroke="#3f8a5c" stroke-width="2.5" stroke-linejoin="round" stroke-dasharray="7 5" marker-end="url(#arrow-create)"/>
+<path d="M 1036 1449.0 H 1076" fill="none" stroke="#3f8a5c" stroke-width="2.5" stroke-linejoin="round" stroke-dasharray="7 5" marker-end="url(#arrow-create)"/>
+<path d="M 704 1343.0 H 284" fill="none" stroke="#b42318" stroke-width="2.5" stroke-linejoin="round" stroke-dasharray="7 5" marker-end="url(#arrow-red)"/>
+<rect x="364.0" y="1328.0" width="200" height="30" rx="15.0" fill="#ffffff" stroke="#b42318" stroke-width="1.5"/>
+<text x="464" y="1348.25" font-size="15" fill="#b42318" font-weight="700" text-anchor="middle">Telegram 通知</text>
+<path d="M 704 1449.0 H 284" fill="none" stroke="#647a94" stroke-width="2.5" stroke-linejoin="round" stroke-dasharray="7 5" marker-end="url(#arrow)"/>
+<path d="M 40 1556 H 86" fill="none" stroke="#647a94" stroke-width="2.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="98" y="1562" font-size="16" fill="#42556d" font-weight="400" text-anchor="start">順序</text>
+<path d="M 170 1556 H 216" fill="none" stroke="#3f8a5c" stroke-width="2.5" stroke-linejoin="round" stroke-dasharray="7 5" marker-end="url(#arrow-create)"/>
+<text x="228" y="1562" font-size="16" fill="#42556d" font-weight="400" text-anchor="start">建立 worktree 或 Session</text>
+<path d="M 450 1556 H 496" fill="none" stroke="#b42318" stroke-width="2.5" stroke-linejoin="round" stroke-dasharray="7 5" marker-end="url(#arrow-red)"/>
+<text x="508" y="1562" font-size="16" fill="#42556d" font-weight="400" text-anchor="start">例外，找你</text>
+<rect x="630" y="1545" width="34" height="22" rx="5" fill="#fffaf0" stroke="#d2a14a" stroke-width="2" stroke-dasharray="6 4"/>
+<text x="674" y="1562" font-size="16" fill="#42556d" font-weight="400" text-anchor="start">視決定而定</text>
+<text x="40" y="1602" font-size="16" fill="#42556d" font-weight="400" text-anchor="start">• 角色範本在主 worktree 的 .agent-handoff/roles.yaml，不進 Git；覆寫參數只寫進本次的 loop.yaml。</text>
+<text x="40" y="1630" font-size="16" fill="#42556d" font-weight="400" text-anchor="start">• ③、⑦、⑨ 由同一個核心依範本開 Session；prompt 依工具寫成 /skill（Claude Code）或 $skill（Codex）。</text>
+<text x="40" y="1658" font-size="16" fill="#42556d" font-weight="400" text-anchor="start">• 審查者不在啟動時開：開 Session 一定要給第一個任務，而那時還沒有東西可審。</text>
+<text x="40" y="1686" font-size="16" fill="#42556d" font-weight="400" text-anchor="start">• 同一個分支不能同時被兩個 worktree 使用：收尾 new 時 A 先分離在同一 commit。</text>
+<text x="40" y="1730" font-size="15" fill="#5f7186" font-weight="400" text-anchor="start">handoff-start、handoff-write、hook 與 handoff-finish 已實作並通過自動測試；真實多 Agent 演練待完成。用法見 scripts/handoff/README.md。</text>
+</g></svg>

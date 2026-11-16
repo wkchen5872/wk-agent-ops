@@ -10,3 +10,6 @@ graphify-out/cache/
 
 # Local, disposable Work Item records
 /work-items/WI-*/
+
+# Local agent handoff records and role templates
+/.agent-handoff/

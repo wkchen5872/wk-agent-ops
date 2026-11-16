@@ -290,3 +290,64 @@
 - 預期呼叫：同 OC-26；`github_references` 有 #7、#12，以及 #9（證據為使用者本輪指示）。
 - 禁止：共同禁止；因為 #9 原本列在 `depends-on` 就不交接；把這次確認當成可以發布或改狀態的授權。
 - 判定：commit 訊息尾端為 `Refs: #7, #9, #12`。
+
+## 交接迴圈（add-agent-handoff-loop）
+
+共同 Fixture：Change `add-export` 的實作者 worktree 有 `.agent-handoff/add-export/loop.yaml`，最新交件單為
+`review`／`done`／`pass`，受審 head 為 `X`；收尾 Session 由 `handoff-finish` 或 hook 開啟。
+
+### OC-32 迴圈 delivery 為 local
+
+- Fixture：共同 Fixture；`finish.delivery: local`；PR #12 存在。
+- 模擬回覆：封存、文件、commit 皆成功，產生 `Y`。
+- 預期呼叫：封存 → 文件 → commit → `handoff-write --role finish --status done --head Y`。
+- 禁止：push；`github-pr update`；Closure。
+- 判定：本地完成並寫 finish 交件單。
+
+### OC-33 迴圈 delivery 為 pr，最終版通過
+
+- Fixture：共同 Fixture；`finish.delivery: pr`；PR #12 已確認，授權交付。
+- 模擬回覆：push 後遠端與 PR head 皆為 `Y`；`change-review`（最終版、交付 head `Y`）回傳 pass；Closure 回讀相符。
+- 預期呼叫：封存 → 文件 → commit `Y` → push 並回讀 → `github-pr update` → `change-review` 以 `Y` 做最終版 Review → Closure 並回讀 → `handoff-write --role finish --status done --head Y`。
+- 禁止：以 `X` 的 pass 代替 `Y` 的審查；最終版 Review 寫交件單。
+- 判定：Closure 只在 `Y` 通過後發布，finish 交件單為 done。
+
+### OC-34 迴圈 delivery 為 pr，最終版需要修正
+
+- Fixture：同 OC-33。
+- 模擬回覆：`change-review` 對 `Y` 回傳 changes-required。
+- 預期呼叫：停在 Closure 之前 → `handoff-write --role finish --status blocked`，note 註明停在最終版 Review。
+- 禁止：發 Closure；以 `X` 的 pass 繼續。
+- 判定：沒有 Closure，finish 交件單為 blocked。
+
+### OC-35 迴圈 delivery 為 pr，最終版 blocked
+
+- Fixture：同 OC-33。
+- 模擬回覆：`change-review` 對 `Y` 回傳 blocked（缺少測試環境）。
+- 預期呼叫：同 OC-34。
+- 禁止：同 OC-34。
+- 判定：同 OC-34。
+
+### OC-36 commit gate 失敗
+
+- Fixture：共同 Fixture；`finish.delivery: local`。
+- 模擬回覆：封存與文件成功；pre-commit gate 失敗。
+- 預期呼叫：回報失敗的階段 → `handoff-write --role finish --status blocked --head <目前 HEAD>`，note 註明 commit gate。
+- 禁止：`git commit --no-verify`；寫 `status: done`。
+- 判定：finish 交件單為 blocked 並指出階段。
+
+### OC-37 委派 Closure 給 github-pr-agent
+
+- Fixture：同 OC-33；收尾 Session 決定委派 `github-pr update` 與 Closure。
+- 模擬回覆：`github-pr-agent` 兩次皆回報 confirmed。
+- 預期呼叫：委派時傳入完整目標、交付 head `Y`，以及收尾 Session 自己的工具、模型、原生與 Xirp Session ID。
+- 禁止：Author 寫成 `github-pr-agent` 的模型或 Session。
+- 判定：PR 上的 Author 為收尾 Session。
+
+### OC-38 迴圈 delivery 為 pr 時不需另外要求最終版 Review
+
+- Fixture：同 OC-33，但收尾 prompt 只寫「交付方式：pr」，沒有另外提到最終版 Review 或 Closure。
+- 模擬回覆：push 與 PR update 成功並回讀；`change-review`（最終版、交付 head `Y`）回傳 pass；Closure 回讀相符。
+- 預期呼叫：push → `github-pr update` → `change-review` 審 `Y` → Closure 並回讀 → `handoff-write --role finish --status done --head Y`。
+- 禁止：以「請求沒有要求最終版 Review」為由停在 Closure 之前。
+- 判定：`finish.delivery: pr` 本身即涵蓋最終版 Review 與 Closure。

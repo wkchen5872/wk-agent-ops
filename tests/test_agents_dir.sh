@@ -175,5 +175,37 @@ cmp -s "$CODEX_COMMIT_AGENT" "$ROOT/.codex/agents/git-commit-writer-agent.toml" 
 cmp -s "$CODEX_DOC_AGENT" "$ROOT/.codex/agents/doc-updater-agent.toml" \
   && ok "repository Codex doc agent synchronized" || bad "repository Codex doc agent synchronized"
 
+# GitHub copy agents (add-agent-handoff-loop): Claude uses Sonnet, Codex uses Terra/medium,
+# both keep the caller's identity, and installed copies match their templates.
+GH_T="$(mktemp -d)"; ( cd "$GH_T" && git init -q )
+bash "$ROOT/scripts/skills/install.sh" --target "$GH_T" >/dev/null 2>&1
+for agent in github-pr-agent github-issue-agent; do
+  claude="$ROOT/template/common/.claude/agents/$agent.md"
+  codex="$ROOT/template/common/.codex/agents/$agent.toml"
+  if [[ -f "$claude" ]] && grep -q "^name: $agent\$" "$claude" && grep -q '^model: sonnet$' "$claude" && grep -q '^description:' "$claude"; then
+    ok "Claude $agent uses Sonnet"
+  else
+    bad "Claude $agent uses Sonnet"
+  fi
+  if [[ -f "$codex" ]] && grep -q "^name = \"$agent\"\$" "$codex" \
+    && grep -q '^model = "gpt-5.6-terra"$' "$codex" && grep -q '^model_reasoning_effort = "medium"$' "$codex" \
+    && grep -q '^description = ' "$codex" && grep -q '^developer_instructions = ' "$codex"; then
+    ok "Codex $agent uses Terra with medium effort"
+  else
+    bad "Codex $agent uses Terra with medium effort"
+  fi
+  for f in "$claude" "$codex"; do
+    grep -q 'assisting_model' "$f" 2>/dev/null && grep -qi 'caller' "$f" 2>/dev/null \
+      && ok "$(basename "$f") requires the caller's identity" || bad "$(basename "$f") requires the caller's identity"
+    grep -q 'author_file' "$f" 2>/dev/null && grep -qi 'verbatim' "$f" 2>/dev/null \
+      && ok "$(basename "$f") appends a caller's author_file verbatim" || bad "$(basename "$f") appends a caller's author_file verbatim"
+  done
+  cmp -s "$claude" "$GH_T/.claude/agents/$agent.md" && ok "installer copies Claude $agent" || bad "installer copies Claude $agent"
+  cmp -s "$codex" "$GH_T/.codex/agents/$agent.toml" && ok "installer copies Codex $agent" || bad "installer copies Codex $agent"
+  cmp -s "$claude" "$ROOT/.claude/agents/$agent.md" && ok "repository Claude $agent synchronized" || bad "repository Claude $agent synchronized"
+  cmp -s "$codex" "$ROOT/.codex/agents/$agent.toml" && ok "repository Codex $agent synchronized" || bad "repository Codex $agent synchronized"
+done
+rm -rf "$GH_T"
+
 echo
 [[ $fail -eq 0 ]] && { echo "PASS"; exit 0; } || { echo "FAIL"; exit 1; }

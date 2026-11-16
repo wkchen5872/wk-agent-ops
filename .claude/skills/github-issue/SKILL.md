@@ -36,6 +36,17 @@ update comments, Checkpoints, and Closures. Take layouts from here rather than
 from memory; [references/examples.md](references/examples.md) shows them filled
 in.
 
+## Dedicated agent
+
+A session may delegate one operation to the `github-issue-agent` (Claude Code
+`.claude/agents/`, Codex `.codex/agents/`). The agent follows this skill
+unchanged and posts with the caller's identity: the caller passes the
+operation, the full repository and Issue target, the content or report path, and
+its own tool, model, native session ID, and Xirp session ID. The Author is the
+caller's, never the agent's own model or session; without that identity the
+agent posts nothing. The caller keeps the authorization and gets back
+`confirmed`, `unconfirmed`, or `failed` with the URL or reason.
+
 ## What this skill may change
 
 | Operation | Needs | Side effect when authorized |

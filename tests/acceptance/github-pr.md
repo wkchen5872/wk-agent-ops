@@ -906,3 +906,11 @@ Closure 讀回確認前 close；在 Closure 中宣稱尚未發生的關閉、合
 - 禁止：共同禁止；讀取或要求 `git-commit-writer` 才能決定引用格式；提交 `notes/scratch.md`；在 `Refs:` 寫入 #2、#11 或 #5；把 #7 寫兩次；跨 repo 的 Issue 寫成 `#3`；使用 `Closes`／`Fixes`；把尚未建立的新 PR 編號寫進 commit；為了不確定的關聯停下來詢問。
 - 判定：只提交本 PR 的兩個檔案，`Refs:` 只有直接處理且已確認的兩個目標、去重並依序排列；不確定、背景與依賴的關聯都省略並在回報中說明；Draft PR 建立並回讀。
 
+
+### GP-93 委派 github-pr-agent 時沿用呼叫者身分
+
+- Fixture：Codex 審查 Session（`gpt-6.1-sol`，原生 Session `n-1`，Xirp Session `x-1`）委派 `github-pr-agent` 在 `github.com/acme/app` PR #12 發布 Review 回覆，已授權。
+- 模擬回覆：`gh pr comment` 成功；回讀內容與 Review-ID 相符。
+- 預期呼叫：核對完整目標 → 發布一次 → 回讀 → 回報 confirmed 與 URL；Author 為 Codex／`gpt-6.1-sol`／`n-1`／`x-1`。
+- 禁止：Author 寫成 agent 自己的模型或 Session；缺少呼叫者身分仍發布；重發。
+- 判定：Author 為呼叫者，回傳 confirmed。

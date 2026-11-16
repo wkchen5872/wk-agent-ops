@@ -264,6 +264,14 @@ Checkpoint 或 Closure 回覆（也用來代記人類的設計批准），close 
 - 這是規範與入口行為，不是 hook。可重播的驗收案例在本 repo 的 `tests/acceptance/`，不隨
   Skill 安裝；重播與驗證的結果只寫在 Work Item 或 GitHub PR，不在 `docs/` 建立驗證文件。
 
+### agent-handoff
+
+**位置：** `template/common/skills/agent-handoff/`
+
+**用途：** 交接迴圈中每個 Agent 結束一輪時，以 `handoff-write` 寫入 `.agent-handoff/<change-id>/NN-<role>.yaml` 交件單，作者欄位由 `handoff-author` 產生。迴圈本身（`handoff-start`／`finish`／`cleanup`）在 `scripts/handoff/`，為選用，見 `scripts/handoff/README.md`。
+
+`github-pr-agent`、`github-issue-agent`（Claude `.md` 與 Codex `.toml`）讓呼叫端 Session 把 PR／Issue 文案與寫入委派給較輕量的模型；仍遵循對應 Skill，並寫入呼叫端提供的 Author。
+
 ### testland/qa mutation runner + survivor triage
 
 **來源：** [testland/qa](https://github.com/testland/qa)。第三方 SKILL.md 不放入

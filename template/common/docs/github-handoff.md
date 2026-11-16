@@ -68,6 +68,9 @@ Issue 時再加上 Issue URL。
 | 沒有 PR、查找不明或 local-only | `change-review` 回傳並保存本地報告，不寫 GitHub | Change 或本機版本 | 本地報告與內容指紋 |
 | 修正之後 | 實作者 push 後以 `github-pr reply` 逐項回覆，再由 Reviewer 對新 head 複審 | 修正 commit 與驗證結果 | 修正回覆 URL |
 
+使用交接迴圈（`agent-handoff` Skill 的交件單）時，Review 結束改寫 review 交件單，由 Stop hook 交接；
+發布未確認時交件單為 blocked，不轉為本地交接。PR 回覆可委派 `github-pr-agent`，Author 仍是審查者。
+
 ### 04 封存與交付
 
 | 交付意圖 | 操作 |
@@ -76,6 +79,9 @@ Issue 時再加上 Issue URL。
 | 成功交付（獲授權） | push → `github-pr update` → 對最終 head 審查（`change-review`）→ `github-pr reply` 發布準備合併的 Closure；merge 另依授權 |
 | 取消或被取代（獲授權） | `github-pr close`：先發布並回讀 Closure，再只關閉該 PR，不合併 |
 | Issue 結案 | `github-issue close`：依原範圍驗收後另行處理，不跟著 PR 一起關閉 |
+
+使用交接迴圈時，`openspec-commit` 依 `finish.delivery` 決定是否走成功交付；最終版 Review 審交付後的 head，
+迴圈中較早的 pass 不能代替。`github-pr update` 與 Closure 可委派 `github-pr-agent`，Author 仍是收尾 Session。
 
 ## 不在本文件
 

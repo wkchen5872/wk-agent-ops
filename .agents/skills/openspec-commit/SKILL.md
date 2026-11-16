@@ -87,6 +87,29 @@ close_reason=<cancelled|superseded by <PR>, only for abandon>
 Resolve available attribution at Step 5. Model precision or absence must not
 block archive, documentation handling, or commit.
 
+## Inside a handoff loop
+
+When `.agent-handoff/<change-id>/loop.yaml` exists for the Change (see the `agent-handoff`
+skill), the run was started by the loop's finish session and these rules apply on top of the
+steps below:
+
+- **Delivery intent comes from the loop.** `finish.delivery: local` is local completion;
+  `finish.delivery: pr` is the request for a Successful PR handoff, and also requests the final-version review
+  and the ready-to-merge Closure of 7a, so 7a does not stop for lack of a review request. Remote
+  steps keep their authorization, readback, and final-head rules.
+- **The final-version review is bound to the delivered head.** In 7a step 3, call
+  `change-review` as a final-version review and pass it the delivered head; it reviews that
+  head and writes no handoff record. The loop review that passed the earlier implement head
+  MUST NOT stand in for it. A result other than `pass` stops before the Closure.
+- **End with a finish record.** When the final stage outcome is known, record it with the
+  `agent-handoff` skill: `handoff-write --role finish --status done` when the requested delivery
+  completed, or `--status blocked` with the stopping stage (for example the commit gate or
+  the final-version review) in the note. `--head` is the resulting local commit, or the
+  current `HEAD` when no commit was made.
+- **Delegated PR writes.** `github-pr update` and the Closure reply may be delegated to the
+  `github-pr-agent`, passing the full target, the delivered head, and this session's own
+  tool, model, native session ID, and Xirp session ID; the Author stays this session's.
+
 ---
 
 ## Provider action routing

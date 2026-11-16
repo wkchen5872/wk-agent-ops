@@ -1028,5 +1028,14 @@ frame_of "$PR_SKILL/SKILL.md" | grep -qF 'Commit trailers follow `git-commit-wri
 grep -E '^### GP-[0-9]+' "$PR_CASES" | grep -qF 'dirty create' && ok "github-pr case for a dirty create with references" \
   || bad "github-pr case for a dirty create with references"
 
+# ── add-agent-handoff-loop: dedicated agents act for a caller ───────────────
+echo "dedicated agents"
+want "$PR_SKILL/SKILL.md" 'github-pr-agent' "github-pr names its dedicated agent"
+want "$ISSUE_SKILL/SKILL.md" 'github-issue-agent' "github-issue names its dedicated agent"
+want "$PR_SKILL/SKILL.md" "caller's identity" "github-pr keeps the caller's identity when delegated"
+want "$ISSUE_SKILL/SKILL.md" "caller's identity" "github-issue keeps the caller's identity when delegated"
+grep -q '^### GP-93 ' "$PR_CASES" && ok "acceptance case GP-93 exists" || bad "acceptance case GP-93 exists"
+grep -q '^### GI-52 ' "$ISSUE_CASES" && ok "acceptance case GI-52 exists" || bad "acceptance case GI-52 exists"
+
 echo
 [[ $fail -eq 0 ]] && { echo "PASS"; exit 0; } || { echo "FAIL"; exit 1; }

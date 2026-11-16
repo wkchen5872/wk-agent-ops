@@ -511,5 +511,19 @@ for f in "$ORCHESTRATOR" "$EXAMPLES" "$COMMIT_SKILL"; do
 done
 require_text "$ORCHESTRATOR" 'github-pr reply' "Closure goes out through github-pr reply"
 
+# ── add-agent-handoff-loop: completion inside a handoff loop ────────────────
+printf '\nhandoff loop\n'
+for pair in 'finish.delivery|loop delivery follows finish.delivery' \
+            'delivered head|the final-version review is bound to the delivered head' \
+            'MUST NOT stand in|an earlier loop pass never replaces the final-version review' \
+            '--role finish|completion ends with a finish record' \
+            'github-pr-agent|PR update and Closure may be delegated to github-pr-agent' \
+            'also requests the final-version review|loop PR delivery itself requests the final-version review and the Closure'; do
+  grep -Fq -- "${pair%%|*}" "$ORCHESTRATOR" && ok "${pair#*|}" || bad "${pair#*|}"
+done
+for id in OC-32 OC-33 OC-34 OC-35 OC-36 OC-37; do
+  grep -q "^### $id " "$OC_CASES" && ok "acceptance case $id exists" || bad "acceptance case $id exists"
+done
+
 printf '\n'
 [[ $fail -eq 0 ]] && { echo "PASS"; exit 0; } || { echo "FAIL"; exit 1; }

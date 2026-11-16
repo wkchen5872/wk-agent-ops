@@ -96,6 +96,12 @@ GitHub Issue／PR 的格式、寫入前核對與結案規則在 `github-issue`�
 | 結論 | pass 進入 04；changes-required 交回 02，實作者修正並回覆後，再明確啟動新一輪；blocked 先補齊證據。無 PR 預設不通知，使用者明確要求且原實作者身分與 Session 可核對時才本機交接 |
 | 邊界 | 舊 pass 不涵蓋新 head；後補 PR 前須核對其 head 與本地快照，差異未驗證不得當成當前 PR 的 pass；Review 不修改產品，也不 merge |
 
+**交接迴圈（選用）**：以 `handoff-start` 啟動時，02 與 03 之間的交接由交件單與 Stop hook 完成：實作者 commit 後寫
+implement 交件單，hook 開或通知審查者；審查者以交件單的 head 固定版本，結束時寫 review 交件單，不自行通知實作者；
+changes-required 由 hook 把報告路徑轉給實作者，達輪數上限或 blocked 時通知你。流程見
+[交接流程](../diagrams/agent-handoff-loop.svg) 與 [啟動流程](../diagrams/agent-handoff-start.svg)，操作見
+[交接迴圈說明](../../scripts/handoff/README.md)。
+
 ## 04 封存與交付
 
 [SVG 原稿](../diagrams/local-development-finish.svg)
@@ -121,6 +127,9 @@ GitHub Issue／PR 的格式、寫入前核對與結案規則在 `github-issue`�
 **Issue**：依原範圍驗收後，以 `github-issue close` 另行結案，不跟著 PR 一起關閉。
 
 依 `github-pr` 的共用外框，PR 正文使用 `Refs #N` 表示關聯，不使用 `Closes`／`Fixes`，以保留 Issue 的獨立結案流程。[^github-contract]
+
+**交接迴圈中的收尾**：pass 後預設通知你執行 `handoff-finish`，它確認 pass 對應實作者 worktree 目前乾淨的 HEAD 才開收尾 Session；
+`openspec-commit` 依 `finish.delivery` 決定本地完成或 PR 交付，PR 交付時以交付後的 head 做最終版 Review，結束時寫 finish 交件單。
 
 **中斷接續**：依 archive 路徑、Git history、remote head 與 PR 留言判斷已完成的部分，只補缺少且已授權的步驟，不重複 commit，也不重貼已確認的摘要。細節見 [OpenSpec Commit Workflow](commit.md)。
 

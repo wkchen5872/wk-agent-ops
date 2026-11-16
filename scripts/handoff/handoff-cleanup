@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+# Clean up a finished handoff loop: archive its records, delete its sessions and worktrees.
+# Usage: handoff-cleanup <change-id> [--abandon] [--yes]
+#   --yes       act; without it the command only lists what it would remove
+#   --abandon   clean up a loop that will not finish (no finish/done record needed)
+# Requirements: the newest record is finish/done (unless --abandon) and every loop worktree is clean.
+# Records and review reports move to <main worktree>/.agent-handoff/archive/<change-id>/.
+# The main worktree and the feature branch are never removed; merging stays separate.
+set -u
+
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "$here/lib/handoff.sh" ]]; then lib="$here/lib/handoff.sh"
+else lib="$HOME/.config/wk-workflow/handoff/lib/handoff.sh"; fi
+# shellcheck source=lib/handoff.sh
+source "$lib" || { echo "handoff-cleanup: cannot load $lib" >&2; exit 1; }
+
+die() { printf 'handoff-cleanup: %s\n' "$1" >&2; exit 1; }
+change="" yes=0 abandon=0
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help) sed -n '2,8p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --yes) yes=1; shift ;;
+    --abandon) abandon=1; shift ;;
+    -*) die "unknown option: $1" ;;
+    *) [[ -z "$change" ]] || die "only one change id is allowed"; change="$1"; shift ;;
+  esac
+done
+[[ "$change" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]] || die "usage: handoff-cleanup <change-id> [--abandon] [--yes]"
+
+dir="$(ho_find_loop_dir "$change")" || die "no loop for '$change' in this repository's worktrees"
+main="$(cd "$(ho_main_worktree "$dir")" && pwd -P)" || die "cannot find the main worktree"
+
+rec="$(ho_newest_in_loop "$dir")" || rec=""
+if (( ! abandon )); then
+  [[ -n "$rec" ]] || die "the loop has no records yet (use --abandon to drop it)"
+  if [[ "$(kv_get "$rec" role)" != finish || "$(kv_get "$rec" status)" != done ]]; then
+    die "the loop is not finished: the newest record is $(basename "$rec") (status $(kv_get "$rec" status)); run handoff-finish first, or use --abandon to drop it"
+  fi
+fi
+
+# Worktrees and sessions named by any copy of loop.yaml.
+dirs=() wts=() sessions=()
+while IFS= read -r d; do
+  dirs+=("$d")
+  wt="$(cd "$d/../.." && pwd -P)"
+  case " ${wts[*]-} " in *" $wt "*) ;; *) wts+=("$wt") ;; esac
+  for k in implementer.session reviewer.session finish.session; do
+    s="$(kv_get "$d/loop.yaml" "$k" 2>/dev/null)" || continue
+    [[ -n "$s" ]] || continue
+    case " ${sessions[*]-} " in *" $s "*) ;; *) sessions+=("$s") ;; esac
+  done
+done < <(ho_loop_dirs "$dir")
+
+for wt in "${wts[@]}"; do
+  ho_clean "$wt" || die "$wt has uncommitted changes; commit or clean them first"
+done
+
+if (( abandon )); then printf 'Cleanup for %s (abandon: newest record %s)\n' "$change" "$(basename "${rec:-none}")"
+else printf 'Cleanup for %s\n' "$change"; fi
+printf '  sessions to delete:\n'; for s in "${sessions[@]-}"; do [[ -n "$s" ]] && printf '    %s\n' "$s"; done
+printf '  worktrees to remove:\n'
+for wt in "${wts[@]}"; do [[ "$wt" == "$main" ]] && printf '    %s (main worktree: kept)\n' "$wt" || printf '    %s\n' "$wt"; done
+printf '  records archived to: %s/.agent-handoff/archive/%s/\n' "$main" "$change"
+printf '  kept: branch feature/%s\n' "$change"
+if (( ! yes )); then printf '\nNothing changed. Run again with --yes to clean up.\n'; exit 0; fi
+
+# 1. Archive records and the review reports they reference.
+arc="$main/.agent-handoff/archive/$change"
+for d in "${dirs[@]}"; do
+  wt="$(cd "$d/../.." && pwd -P)"; to="$arc/$(basename "$wt")"
+  mkdir -p "$to" && cp -R "$d/." "$to/" || die "could not archive $d; nothing was removed"
+  for f in "$d"/[0-9][0-9]-review.yaml; do
+    [[ -e "$f" ]] || continue
+    r="$(kv_get "$f" report 2>/dev/null)" || continue
+    [[ -n "$r" && -f "$wt/$r" ]] || continue
+    mkdir -p "$to/$(dirname "$r")" && cp "$wt/$r" "$to/$r" || die "could not archive $wt/$r; nothing was removed"
+  done
+done
+printf 'Archived records in %s\n' "$arc"
+
+# 2. Delete the sessions (the worktrees are removed below, once each).
+if command -v xirp >/dev/null 2>&1; then
+  for s in "${sessions[@]-}"; do
+    [[ -n "$s" ]] || continue
+    if xirp session delete "$s" --yes >/dev/null 2>&1; then printf 'Deleted session %s\n' "$s"
+    else printf 'Session %s was not deleted (already gone?)\n' "$s"; fi
+  done
+else
+  printf 'xirp not found: sessions were not deleted\n'
+fi
+
+# 3. Remove the loop worktrees; the main worktree keeps its files, minus the moved records.
+rc=0
+for wt in "${wts[@]}"; do
+  if [[ "$wt" == "$main" ]]; then rm -rf "$main/.agent-handoff/$change"; continue; fi
+  if git -C "$main" worktree remove "$wt"; then printf 'Removed worktree %s\n' "$wt"
+  else printf 'Could not remove worktree %s\n' "$wt" >&2; rc=1; fi
+done
+printf 'Branch feature/%s is kept; merge and delete it separately.\n' "$change"
+exit $rc

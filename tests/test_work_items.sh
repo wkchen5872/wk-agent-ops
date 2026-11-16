@@ -35,6 +35,12 @@ run_install() {                    # $1 = target; stdout+stderr -> $1/../install
   bash "$ROOT/scripts/skills/install.sh" --target "$1" > "$1/../install.log" 2>&1
 }
 sum1() { shasum "$1" 2>/dev/null | awk '{print $1}'; }
+# The installer also appends the agent-handoff ignore block (add-agent-handoff-loop).
+# Work Item checks compare the file with only that block removed, so they still catch
+# any change to the user's own lines.
+wi_view() { awk '$0=="# Local agent handoff records and role templates"||$0=="/.agent-handoff/"{next} {print}' "$1" 2>/dev/null | awk '{l[NR]=$0} END{n=NR; while(n>0 && l[n]=="") n--; for(i=1;i<=n;i++) print l[i]}'; }
+wi_lines() { wi_view "$1" | wc -l | tr -d ' '; }
+wi_sum() { wi_view "$1" | shasum | awk '{print $1}'; }
 
 # ── 1.1 Convention source is managed and tool-neutral ────────────────────────
 echo "1.1 convention source"
@@ -127,10 +133,10 @@ run_install "$T"
   && ok "exactly one rule line after two runs" || bad "exactly one rule line after two runs"
 
 T2="$(new_target)"; printf 'work-items/WI-*/\n' > "$T2/.gitignore"
-L2_BEFORE="$(wc -l < "$T2/.gitignore" | tr -d ' ')"
+L2_BEFORE="$(wi_lines "$T2/.gitignore")"
 run_install "$T2"; run_install "$T2"
 if [[ "$(count_rule "$T2/.gitignore")" == 0 \
-  && "$(wc -l < "$T2/.gitignore" | tr -d ' ')" == "$L2_BEFORE" ]]; then
+  && "$(wi_lines "$T2/.gitignore")" == "$L2_BEFORE" ]]; then
   ok "existing versioned equivalent rule is not duplicated"
 else
   bad "existing versioned equivalent rule is not duplicated"
@@ -359,7 +365,7 @@ echo "2.6 real record paths and equivalent rules"
 T="$(new_target)"
 printf '/work-items/WI-*/\n!/work-items/WI-20260101-exempt/\n' > "$T/.gitignore"
 mkdir -p "$T/work-items/WI-20260101-exempt"; printf 'r\n' > "$T/work-items/WI-20260101-exempt/README.md"
-GI_BEFORE="$(sum1 "$T/.gitignore")"
+GI_BEFORE="$(wi_sum "$T/.gitignore")"
 run_install "$T"
 if log_of "$T" | grep -q 'WI-20260101-exempt'; then
   ok "per-record exception reported with the concrete path"; else bad "per-record exception reported with the concrete path"; fi
@@ -367,7 +373,7 @@ if log_of "$T" | grep -q 'protection is NOT in effect'; then
   ok "per-record exception does not claim protection"; else bad "per-record exception does not claim protection"; fi
 if log_of "$T" | grep -qE 'matched by: \.gitignore:[0-9]+'; then
   ok "report names the rule source and line"; else bad "report names the rule source and line"; fi
-[[ "$(sum1 "$T/.gitignore")" == "$GI_BEFORE" ]] \
+[[ "$(wi_sum "$T/.gitignore")" == "$GI_BEFORE" ]] \
   && ok "user exception is not rewritten" || bad "user exception is not rewritten"
 git -C "$T" add -A >/dev/null 2>&1
 if git -C "$T" diff --cached --name-only | grep -q 'WI-20260101-exempt'; then
@@ -391,7 +397,7 @@ mkdir -p "$T/work-items/WI-20260101-files/agents"
 printf 'r\n' > "$T/work-items/WI-20260101-files/README.md"
 printf 'c\n' > "$T/work-items/WI-20260101-files/context.md"
 printf 'n\n' > "$T/work-items/WI-20260101-files/agents/note.md"
-GI_BEFORE="$(sum1 "$T/.gitignore")"
+GI_BEFORE="$(wi_sum "$T/.gitignore")"
 run_install "$T"
 if log_of "$T" | grep -q 'context.md'; then
   ok "per-file exception reported (top-level file)"; else bad "per-file exception reported (top-level file)"; fi
@@ -401,15 +407,15 @@ if log_of "$T" | grep -q 'protection is NOT in effect'; then
   ok "per-file exception does not claim protection"; else bad "per-file exception does not claim protection"; fi
 if log_of "$T" | grep -qE 'matched by: \.gitignore:[0-9]+:!/work-items/WI-20260101-files/context\.md'; then
   ok "report names the file-specific rule that wins"; else bad "report names the file-specific rule that wins"; fi
-[[ "$(sum1 "$T/.gitignore")" == "$GI_BEFORE" ]] \
+[[ "$(wi_sum "$T/.gitignore")" == "$GI_BEFORE" ]] \
   && ok "per-file exception is not rewritten" || bad "per-file exception is not rewritten"
 
 # (b) a subtree-equivalent versioned rule must not trigger a second rule
 T="$(new_target)"; printf '/work-items/WI-*/**\n' > "$T/.gitignore"
-L_BEFORE="$(wc -l < "$T/.gitignore" | tr -d ' ')"
+L_BEFORE="$(wi_lines "$T/.gitignore")"
 run_install "$T"; run_install "$T"
 if [[ "$(count_rule "$T/.gitignore")" == 0 \
-  && "$(wc -l < "$T/.gitignore" | tr -d ' ')" == "$L_BEFORE" ]]; then
+  && "$(wi_lines "$T/.gitignore")" == "$L_BEFORE" ]]; then
   ok "subtree-equivalent versioned rule is not duplicated"
 else
   bad "subtree-equivalent versioned rule is not duplicated"

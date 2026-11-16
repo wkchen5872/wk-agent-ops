@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# Open the finish session for a loop whose newest record is a current passing review.
+# Usage: handoff-finish <change-id>
+# Requirements: the newest record of the loop is review/done/pass, its head equals the
+# implementer worktree's HEAD, that worktree is clean, and no finish record exists.
+# After a blocked finish, it retries instead: the finish worktree must be clean and build on
+# the passing review; the existing finish session resumes, or a new one opens.
+# With finish worktree "new", the implementer worktree is detached at the same commit
+# and a new worktree takes over feature/<change-id>; nothing is deleted.
+set -u
+
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "$here/lib/handoff.sh" ]]; then lib="$here/lib/handoff.sh"
+else lib="$HOME/.config/wk-workflow/handoff/lib/handoff.sh"; fi
+# shellcheck source=lib/handoff.sh
+source "$lib" || { echo "handoff-finish: cannot load $lib" >&2; exit 1; }
+
+case "${1:-}" in
+  -h|--help) sed -n '2,9p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+  "") sed -n '3p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2; exit 1 ;;
+esac
+change="$1"
+[[ "$change" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]] || { echo "handoff-finish: change must be a kebab-case id" >&2; exit 1; }
+command -v xirp >/dev/null 2>&1 || { echo "handoff-finish: xirp is required to open sessions" >&2; exit 1; }
+
+dir="$(ho_find_loop_dir "$change")" || { echo "handoff-finish: no loop for '$change' in this repository's worktrees" >&2; exit 1; }
+rec="$(ho_newest_in_loop "$dir")"
+if [[ -n "$rec" && "$(kv_get "$rec" role)" == finish && "$(kv_get "$rec" status)" == blocked ]]; then
+  if ! id="$(ho_finish_retry "$dir" 2>&1)"; then printf 'handoff-finish: cannot retry: %s\n' "$id" >&2; exit 1; fi
+  printf 'Finish retried for %s: %s\n' "$change" "$id"
+  exit 0
+fi
+if ! id="$(ho_finish_open "$dir" 2>&1)"; then
+  printf 'handoff-finish: %s\n' "${id#cannot finish: }" >&2
+  exit 1
+fi
+printf 'Finish session opened for %s: %s\n' "$change" "$id"

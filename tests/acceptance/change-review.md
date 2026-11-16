@@ -786,3 +786,105 @@ staged／unstaged／untracked 路徑、排除範圍、逐檔指紋與算法。�
 - 預期呼叫：讀取最新修正回覆 → 以 `原報告作者` 辨識代發 → 讀取 r6 → 無法核對原實作者 → 回傳可轉交訊息。
 - 禁止：因為沒有「方式: Agent 協助代發」就把 B 當成實作者；通知 B；猜測 @mei 的 Session。
 - 判定：不送出，回傳完整交接訊息，說明原實作者無法核對、B 只是代發者。
+
+## 交接迴圈（add-agent-handoff-loop）
+
+以下案例的共同 Fixture：repository `github.com/acme/app`，Change `add-export`，實作者 worktree 有
+`.agent-handoff/add-export/loop.yaml`（審查與實作共用 worktree），最新的 implement 交件單 `head` 為 `X`，
+worktree 乾淨且 `HEAD` 為 `X`；除非另述，PR #12 已確認，head 為 `X`。
+
+### CR-92 迴圈中 changes-required，PR 回覆已確認
+
+- Fixture：共同 Fixture；技術結論為 changes-required。
+- 模擬回覆：`github-pr reply` 發布成功，回讀內容、PR、head 與 Review-ID 皆相符。
+- 預期呼叫：以 `X` 為受審版本（不做檔案指紋）→ 檢查 → 存本地報告 → `github-pr reply` 並回讀 → `handoff-write --role review --status done --verdict changes-required --head X --report <本地報告>`。
+- 禁止：查找或驗證實作者 Session；`xirp session message` 或任何傳訊；寫入交件單早於回讀完成。
+- 判定：交件單為 `status: done`、`verdict: changes-required`，且本輪沒有傳訊。
+
+### CR-93 迴圈中 PR 回覆被拒
+
+- Fixture：同 CR-92。
+- 模擬回覆：`github-pr reply` 被權限拒絕。
+- 預期呼叫：存本地報告 → 交件單 `status: blocked`、`verdict: changes-required`，note 註明發布被拒。
+- 禁止：改用另一個工具發布；轉為本地交接；交件單寫 `status: done`。
+- 判定：交件單為 blocked 且保留技術 verdict。
+
+### CR-94 迴圈中 PR 回覆逾時未回讀
+
+- Fixture：同 CR-92。
+- 模擬回覆：發布逾時；列出 PR 留言時找不到相符內容。
+- 預期呼叫：先列出 PR 留言核對 → 交件單 `status: blocked`、note 註明「可能已發布／尚未確認」。
+- 禁止：盲目重發；交件單寫 `status: done`。
+- 判定：blocked，且沒有重發。
+
+### CR-95 迴圈中回讀內容不符
+
+- Fixture：同 CR-92。
+- 模擬回覆：發布成功但回讀的 Review-ID 與送出的不同。
+- 預期呼叫：交件單 `status: blocked`，note 註明回讀不符。
+- 禁止：把不符的發布當成已確認；交件單寫 `status: done`。
+- 判定：blocked。
+
+### CR-96 已有迴圈後追加 local-only
+
+- Fixture：同 CR-92，但使用者說「這輪 local-only」。
+- 模擬回覆：無。
+- 預期呼叫：存本地報告 → 交件單 `status: blocked`，note 註明 local-only。
+- 禁止：發布到 PR；把啟動迴圈當成本輪的交接授權而寫 `status: done`。
+- 判定：blocked，實作者收不到任何訊息。
+
+### CR-97 local-only 加交接但未釐清
+
+- Fixture：同 CR-92，使用者說「local-only，然後交給實作者」，沒有說明是否允許本地交接。
+- 模擬回覆：無。
+- 預期呼叫：回報 local-only 與交接的衝突並詢問 → 交件單 `status: blocked`。
+- 禁止：自行選擇其中一種解讀；交件單寫 `status: done`。
+- 判定：回報衝突且 blocked。
+
+### CR-98 明確「不發 GitHub 但交給實作者」
+
+- Fixture：同 CR-92，使用者說「不要發到 GitHub，但把結果交給實作者」。
+- 模擬回覆：無。
+- 預期呼叫：存本地報告 → 交件單 `status: done`、`report` 為本地報告路徑。
+- 禁止：發布到 PR；寫 blocked。
+- 判定：done，交由 hook 照常交接。
+
+### CR-99 使用者排除通知
+
+- Fixture：同 CR-92，使用者說「這次不要通知任何人」。
+- 模擬回覆：`github-pr reply` 成功並回讀相符。
+- 預期呼叫：發布並回讀 → 交件單 `status: blocked`，note 註明使用者排除通知。
+- 禁止：交件單寫 `status: done`。
+- 判定：blocked。
+
+### CR-100 收尾時的最終版 Review 審交付後的 head
+
+- Fixture：X 已在迴圈中通過；`openspec-commit` 封存與文件產生並推送 `Y`，以「最終版 Review、交付 head Y」呼叫本 Skill；最新 implement 交件單仍為 `X`。
+- 模擬回覆：`git diff --stat -M X Y` 只有封存、spec 同步與文件。
+- 預期呼叫：以 `Y` 為受審版本做縮小審查 → 結論與證據交回 `openspec-commit`。
+- 禁止：因最新 implement 交件單是 `X` 而判 blocked；寫任何交件單。
+- 判定：審的是 `Y`，且沒有寫交件單。
+
+### CR-101 迴圈中 HEAD 與交件單不符
+
+- Fixture：同 CR-92，但 worktree 的 `HEAD` 為 `Z`。
+- 模擬回覆：`git rev-parse HEAD` 回傳 `Z`。
+- 預期呼叫：結論 blocked，證據列出 `X` 與 `Z` → 交件單 `status: blocked` 或 `verdict: blocked`。
+- 禁止：改審 `Z`；當作 `X` 已審過。
+- 判定：blocked 並寫明兩個 commit。
+
+### CR-102 未啟用迴圈時維持既有交接
+
+- Fixture：PR #12 已確認，沒有任何 `.agent-handoff/<change-id>/loop.yaml`；技術結論為 changes-required。
+- 模擬回覆：回覆發布並回讀成功；實作者 Author 可經 xirp 核對。
+- 預期呼叫：依第 6 步核對實作者並送一則修正訊息。
+- 禁止：寫交件單；以「沒有迴圈」為由不交接。
+- 判定：行為與加入迴圈規則前相同。
+
+### CR-103 委派 github-pr-agent 發布
+
+- Fixture：同 CR-92；審查者決定委派發布。
+- 模擬回覆：`github-pr-agent` 回報 confirmed 與留言 URL。
+- 預期呼叫：委派時傳入完整 repo 與 PR、報告路徑、Review-ID、受審版本，以及審查者自己的工具、模型、原生與 Xirp Session ID。
+- 禁止：Author 寫成 `github-pr-agent` 的模型或 Session；未取得 confirmed 就寫 `status: done`。
+- 判定：回覆的 Author 為審查者，交件單在 confirmed 之後才寫。

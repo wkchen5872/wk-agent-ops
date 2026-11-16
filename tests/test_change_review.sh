@@ -302,5 +302,20 @@ want "$SKILL" 'limited to archive moves, spec synchronization' "a final-version 
 want "$SKILL" 'semantic change' "a semantic change in finalization broadens the review"
 want "$EXAMPLES" '## Scope and Baseline' "examples hold the full review baseline"
 
+# ── add-agent-handoff-loop: reviews inside a handoff loop ───────────────────
+echo "handoff loop"
+want "$SKILL" '.agent-handoff/<change-id>/loop.yaml' "a handoff loop is recognized by its loop.yaml"
+want "$SKILL" 'newest implement record' "an implementation-round review is pinned to the newest implement record"
+want "$SKILL" 'implementer.worktree' "a separate review worktree finds the implement record in the implementer worktree named by loop.yaml"
+want "$SKILL" 'does not write a handoff record' "the final-version review writes no handoff record"
+want "$SKILL" 'handoff-write' "a loop review ends with a handoff record"
+want "$SKILL" 'keep the technical verdict' "unconfirmed publication writes status: blocked and keeps the verdict"
+want "$SKILL" 'skip GitHub but hand the result to the implementer' "only an explicit local handoff instruction routes a local-only review"
+want "$SKILL" 'the handoff hook routes' "an active loop leaves implementer notification to the hook"
+want "$SKILL" 'github-pr-agent' "the PR reply may be delegated to github-pr-agent"
+for id in CR-92 CR-93 CR-94 CR-95 CR-96 CR-97 CR-98 CR-99 CR-100 CR-101 CR-102 CR-103; do
+  grep -q "^### $id " "$CASES" && ok "acceptance case $id exists" || bad "acceptance case $id exists"
+done
+
 echo
 [[ $fail -eq 0 ]] && { echo "PASS"; exit 0; } || { echo "FAIL"; exit 1; }

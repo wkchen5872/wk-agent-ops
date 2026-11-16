@@ -1,0 +1,140 @@
+#!/usr/bin/env bash
+# Stop hook for the agent handoff loop (Claude Code and Codex).
+# Reads the newest unprocessed handoff record in the stopping agent's worktree and
+# routes it: notify the next agent through Xirp, or notify the user. Never writes to
+# GitHub, never pushes, never blocks the agent: the work runs in the background and
+# every failure ends with exit 0.
+#   handoff-route              hook entry point (reads the hook payload on stdin)
+#   handoff-route --foreground route synchronously (tests and manual runs)
+set -u
+
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "$here/lib/handoff.sh" ]]; then lib="$here/lib/handoff.sh"
+else lib="$HOME/.config/wk-workflow/handoff/lib/handoff.sh"; fi
+
+payload=""
+if [[ ! -t 0 ]]; then payload="$(cat 2>/dev/null || true)"; fi
+cwd="$(jq -r '.cwd // empty' <<<"$payload" 2>/dev/null || true)"
+cwd="${cwd:-${CLAUDE_PROJECT_DIR:-$PWD}}"
+
+route() {
+  # shellcheck source=lib/handoff.sh
+  source "$lib" || return 0
+  command -v xirp >/dev/null 2>&1 || return 0
+  local root dir
+  root="$(ho_toplevel "$cwd")" || return 0
+  for dir in "$root"/.agent-handoff/*/; do
+    dir="${dir%/}"
+    [[ -f "$dir/loop.yaml" ]] || continue
+    route_dir "$dir" "$root" || true
+  done
+}
+
+route_dir() {
+  local dir="$1" root="$2" rec base change role status verdict head round report loop max action=""
+  loop="$dir/loop.yaml"
+  rec="$(ho_newest_in "$dir")" || return 0
+  base="$(basename "$rec")"
+  grep -qxF "$base" "$dir/.routed" 2>/dev/null && return 0
+
+  change="$(kv_get "$loop" change)"; role="$(kv_get "$rec" role)"; status="$(kv_get "$rec" status)"
+  verdict="$(kv_get "$rec" verdict 2>/dev/null || true)"; head="$(kv_get "$rec" head)"
+  round="$(kv_get "$rec" round)"; report="$(kv_get "$rec" report 2>/dev/null || true)"
+  max="$(kv_get "$loop" max_rounds 2>/dev/null || echo 3)"
+
+  if [[ "$(ho_head "$root")" != "$head" ]]; then
+    action="user:unclean-head"
+    ho_notify_user "$root" "[$change] ${base}：worktree 的 HEAD $(ho_head "$root") 與交件單的 head $head 不同，未交接。"
+  elif ! ho_clean "$root"; then
+    action="user:unclean-worktree"
+    ho_notify_user "$root" "[$change] ${base}：$root 有未提交的變更，未交接。"
+  elif [[ "$role" == finish ]]; then
+    action="user:finish-$status"
+    if [[ "$status" == blocked ]]; then
+      ho_notify_user "$root" "[$change] 收尾停下（${base}）：$(kv_get "$rec" note 2>/dev/null)。處理後執行：handoff-finish $change"
+    else
+      ho_notify_user "$root" "[$change] 收尾結束：status ${status}（${base}）。"
+    fi
+  elif [[ "$status" == blocked || "$verdict" == blocked ]]; then
+    action="user:blocked"
+    ho_notify_user "$root" "[$change] $base 為 blocked，需要你處理：$(kv_get "$rec" note 2>/dev/null)"
+  elif [[ "$role" == implement ]]; then
+    action="$(to_reviewer "$dir" "$root" "$change" "$head" "$round")"
+  elif [[ "$verdict" == changes-required ]]; then
+    if (( round >= max )); then
+      action="user:round-limit"
+      ho_notify_user "$root" "[$change] 已達 $max 輪上限，第 $round 輪審查仍為 changes-required；不再自動退回。"
+    else
+      action="$(to_implementer "$dir" "$root" "$change" "$head" "$round" "$report")"
+    fi
+  elif [[ "$verdict" == pass ]]; then
+    if [[ "$(kv_get "$loop" finish.trigger 2>/dev/null || echo ask)" == auto ]]; then
+      if id="$(ho_finish_open "$(kv_get "$loop" implementer.worktree)/.agent-handoff/$change" 2>&1)"; then
+        action="finish:opened:$id"
+      else
+        action="user:finish-refused"
+        ho_notify_user "$root" "[$change] 審查通過，但無法自動收尾：$id"
+      fi
+    else
+      action="user:pass-ask"
+      ho_notify_user "$root" "[$change] 第 $round 輪審查通過（commit ${head}）。確認後執行：handoff-finish $change"
+    fi
+  else
+    action="user:unknown-record"
+    ho_notify_user "$root" "[$change] 無法判讀交件單 ${base}。"
+  fi
+
+  ho_log "$dir" "$base action=$action session=${CHIRP_SESSION_ID:-unknown} model=$(ho_xirp_model "${CHIRP_SESSION_ID:-}")"
+  printf '%s\n' "$base" >> "$dir/.routed"
+}
+
+to_reviewer() {
+  local dir="$1" root="$2" change="$3" head="$4" round="$5" loop="$1/loop.yaml" sess wt mode id
+  sess="$(kv_get "$loop" reviewer.session 2>/dev/null || true)"
+  wt="$(kv_get "$loop" reviewer.worktree 2>/dev/null || true)"
+  mode="$(kv_get "$loop" review_template.worktree 2>/dev/null || echo shared)"
+  if [[ -z "$sess" ]]; then
+    if [[ "$mode" == new ]]; then
+      wt="${root}-review"
+      git -C "$root" worktree add -q --detach "$wt" "$head" 2>/dev/null || { ho_notify_user "$root" "[$change] 無法建立審查 worktree ${wt}。"; echo "user:review-worktree-failed"; return; }
+      kv_set "$loop" reviewer.worktree "$wt"
+      mkdir -p "$wt/.agent-handoff/$change" && cp "$loop" "$wt/.agent-handoff/$change/loop.yaml"
+    else
+      wt="$root"; kv_set "$loop" reviewer.worktree "$wt"
+    fi
+    if id="$(ho_open_role "$dir" review_template "$wt" "$head" "$round" "" 2>/dev/null)"; then
+      ho_loop_set "$dir" reviewer.session "$id"
+      echo "reviewer:opened:$id"
+    else
+      ho_notify_user "$root" "[$change] 無法開啟審查 Session。"
+      echo "user:reviewer-open-failed"
+    fi
+    return
+  fi
+  [[ -n "$wt" ]] || wt="$root"
+  if [[ "$wt" != "$root" ]]; then
+    if ! ho_clean "$wt"; then
+      ho_notify_user "$root" "[$change] 審查 worktree $wt 有未提交的變更，未移到新的 commit。"
+      echo "user:review-worktree-unclean"; return
+    fi
+    git -C "$wt" checkout -q --detach "$head" 2>/dev/null || { ho_notify_user "$root" "[$change] 無法把審查 worktree 移到 ${head}。"; echo "user:review-move-failed"; return; }
+  fi
+  ho_xirp_message "$sess" "[agent-handoff] $change 第 $round 輪：請以 change-review 審查 commit ${head}（worktree ${wt}）。完成後依 agent-handoff Skill 寫 review 交件單。"
+  echo "reviewer:messaged:$sess"
+}
+
+to_implementer() {
+  local dir="$1" root="$2" change="$3" head="$4" round="$5" report="$6" loop="$1/loop.yaml" sess abs
+  sess="$(kv_get "$loop" implementer.session)"
+  abs="$root/$report"
+  ho_xirp_message "$sess" "[agent-handoff] $change 第 $round 輪審查結果為 changes-required。受審 commit：${head}。報告：${abs}。請依報告修正，測試通過後本機 commit，再寫 implement 交件單。"
+  echo "implementer:messaged:$sess"
+}
+
+if [[ "${1:-}" == "--foreground" ]]; then
+  route
+else
+  ( route ) </dev/null >/dev/null 2>&1 &
+  disown 2>/dev/null || true
+fi
+exit 0
