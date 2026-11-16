@@ -25,6 +25,43 @@ fallback hook 會註冊到 Claude Code、Codex 與 GitHub Copilot CLI；Antigrav
 rm -f ~/.zcompdump* && autoload -Uz compinit && compinit
 ```
 
+### Codex 顯示名稱與排查
+
+只更新 branch hook 時，從本 repo 根目錄執行：
+
+```bash
+bash scripts/workflow/openspec-branch-creator/install.sh
+```
+
+此指令必須在 Git repo 內執行；除了 Claude Code 與 Codex 註冊，也會覆寫目前 repo
+的 `.github/hooks/openspec-branch-creator.json`（Copilot CLI hook）。
+
+- Codex handler 的 `statusMessage` 是 `/hooks` 顯示名稱，預設為
+  `OpenSpec 規劃分支檢查`；Claude Code 與 Copilot 的註冊格式不變。
+- 既有 handler 的名稱為缺少、null、空字串或純空白時原地補上預設值；非空白的
+  自訂名稱、matcher、timeout 與同群組其他 handler 保留。重跑不新增項目。
+- 名稱寫入會改變 hook 定義：重新開啟 Codex session，在 `/hooks` 核對名稱並重新
+  信任、啟用。安裝程式不修改 trust 或啟用狀態。
+
+在暫存 HOME 重播註冊、補名與重跑。重播會把 gitignored 的 Copilot hook 檔改寫成暫存
+路徑，因此先備份、最後還原：
+
+```bash
+copilot=.github/hooks/openspec-branch-creator.json
+[[ -f "$copilot" ]] && cp "$copilot" "$copilot.bak"
+tmp_home="$(mktemp -d)"; mkdir -p "$tmp_home/.codex"
+HOME="$tmp_home" bash scripts/workflow/openspec-branch-creator/install.sh
+jq '.hooks.PostToolUse[].hooks[] | {command, statusMessage}' "$tmp_home/.codex/hooks.json"
+jq '.hooks.PostToolUse[].hooks[].statusMessage = "  "' "$tmp_home/.codex/hooks.json" > "$tmp_home/h" \
+  && mv "$tmp_home/h" "$tmp_home/.codex/hooks.json"
+HOME="$tmp_home" bash scripts/workflow/openspec-branch-creator/install.sh   # 補回預設名稱
+jq -S . "$tmp_home/.codex/hooks.json" > "$tmp_home/first.json"
+HOME="$tmp_home" bash scripts/workflow/openspec-branch-creator/install.sh   # 重跑
+jq -S . "$tmp_home/.codex/hooks.json" | diff "$tmp_home/first.json" - && echo unchanged
+if [[ -f "$copilot.bak" ]]; then mv "$copilot.bak" "$copilot"; else rm -f "$copilot"; fi
+rm -rf "$tmp_home"
+```
+
 ## 指令
 
 ### `opsx-branch <change-id>`

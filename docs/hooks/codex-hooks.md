@@ -3,7 +3,7 @@ type: Reference
 title: Codex Hook Integration
 description: Codex hook registration, runtime enablement, and wk-agent-ops event mappings.
 tags: [hooks, codex, workflow, notifications]
-timestamp: 2026-10-15T00:00:00+08:00
+timestamp: 2026-11-16T00:00:00+08:00
 ---
 
 # Codex Hook Integration
@@ -38,6 +38,48 @@ Handoff loop routing hook 在輪次結束時判定交接狀態。若 roles 設�
 Telegram 的 `PermissionRequest` handler 有兩條獨立分支：依共用開關發送既有操作提醒，以及依 Codex 新開關按需檢查 daemon。同步問題的 PreToolUse 啟動檢查；非同步問題略過檢查，改由 PostToolUse 確認 `accepted=true` 後發送「Waiting for Your Response」。這表示題目已送出，Codex 仍可繼續工作。所有 handler 回傳 neutral 結果，不會批准、拒絕或回答。
 
 按需檢查器不使用 LaunchAgent；同 session 共用程序，輪次結束退出。兩個新項目預設關閉，用 `update.sh types` 選擇。授權與同步問題僅涵蓋既有本機 daemon 的 session；非同步題目通知不依賴 daemon。一般文字問句不偵測。
+
+## 顯示名稱
+
+`/hooks` 以 handler 的 `statusMessage` 作為名稱，未填時顯示 `Unnamed hook`。
+本專案註冊的六個 handler 使用以下預設名稱：
+
+| 功能 | 事件 | 預設 `statusMessage` | 安裝或修復入口（從本 repo 根目錄執行） |
+|---|---|---|---|
+| Telegram 完成 | `Stop` | `Telegram 完成通知` | `bash scripts/notify/telegram/install.sh`、`update.sh fix-hooks` |
+| Telegram 操作確認與檢查 | `PermissionRequest` | `Telegram 操作確認與等待檢查` | 同上 |
+| Telegram 同步問題檢查 | `PreToolUse` | `Telegram 同步問題等待檢查` | 同上 |
+| Telegram 非同步問題 | `PostToolUse` | `Telegram 非同步問題通知` | 同上 |
+| OpenSpec 分支相容 hook | `PostToolUse` | `OpenSpec 規劃分支檢查` | `bash scripts/workflow/openspec-branch-creator/install.sh` |
+| Agent 交接 | `Stop` | `Agent 交接派送` | `bash scripts/handoff/install.sh` |
+
+`statusMessage` 與 `type`、`command` 放在同一個 handler 物件，而不是 matcher group：
+
+```json
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$HOME/.config/wk-workflow/handoff/handoff-route\"",
+            "timeout": 10,
+            "statusMessage": "Agent 交接派送"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+- 一般安裝與重跑：只在相同事件、相同 command 的本工具 handler 名稱缺少、為 null、
+  空字串或純空白時補上預設值；非空白的自訂名稱、其他欄位與第三方 hooks 保留，不新增重複項目。
+- `update.sh fix-hooks`：先移除再重建 Telegram handler，因此自訂名稱會重設為預設值；其他 hooks 保留。
+- 只有 Codex handler 寫入此欄位；Claude Code、Antigravity 與 Copilot 的註冊格式不變。
+- 新增或改變名稱會改變 hook 定義。重新開啟 Codex session，在 `/hooks` 核對名稱、重新信任並確認勾選；
+  安裝程式不修改 trust 或啟用狀態。
 
 ## 檢查與修復
 

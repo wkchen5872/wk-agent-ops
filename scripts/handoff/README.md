@@ -18,8 +18,13 @@ bash scripts/skills/install.sh --target /path/to/repo        # once per reposito
 The first command installs `handoff-start`, `handoff-finish` and `handoff-cleanup` in `~/.local/bin`, installs
 `handoff-route` in `~/.config/wk-workflow/handoff/`, and registers it as a Stop hook for
 Claude Code (`~/.claude/settings.json`) and Codex (`~/.codex/hooks.json`). Then open a new
-Codex session and trust the hook in `/hooks` once. Hooks load when a session starts, so
-sessions opened earlier do not route.
+Codex session and, in `/hooks`, find the Stop hook named `Agent 交接派送`, trust it and make
+sure it is enabled. Hooks load when a session starts, so sessions opened earlier do not route.
+
+The Codex name is the handler's `statusMessage`. Rerunning the installer fills it on an
+existing handoff hook whose name is missing or blank and keeps a custom name; other hooks and
+fields are untouched. Adding the name changes the hook definition, so Codex asks you to review
+and trust it again in a new session. The installer never changes Codex trust or enable state.
 
 The first command also creates `~/.codex/handoff-net.config.toml` when it is missing: a Codex
 profile with the workspace-write sandbox plus network access, used only by roles that name it.

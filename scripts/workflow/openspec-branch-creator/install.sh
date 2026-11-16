@@ -31,7 +31,7 @@ HOOK_CMD="bash \"$HOOK_DST\""
 _register_settings_hook "$HOME/.claude/settings.json" "PostToolUse" "Bash" "$HOOK_CMD"
 
 # Codex uses the same settings shape but requires interactive trust review.
-_register_settings_hook "$HOME/.codex/hooks.json" "PostToolUse" "Bash" "$HOOK_CMD"
+_register_settings_hook "$HOME/.codex/hooks.json" "PostToolUse" "Bash" "$HOOK_CMD" "OpenSpec 規劃分支檢查"
 
 # GitHub Copilot CLI.
 _write_copilot_hook ".github/hooks/openspec-branch-creator.json" "$HOOK_DST"

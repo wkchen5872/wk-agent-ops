@@ -514,6 +514,11 @@ assert_equal \
   "bash \"${FAKE_HOOK}\" antigravity-statusline \"Antigravity CLI\"" \
   "$(jq -r '.statusLine.command // empty' "${REGISTRY_HOME}/.gemini/antigravity-cli/settings.json")"
 
+assert_equal \
+  "REG-GLOBAL-01: Codex naming does not reach Claude or Antigravity handlers" \
+  "0 0" \
+  "$(jq '[.. | objects | select(has("statusMessage"))] | length' "${REGISTRY_HOME}/.claude/settings.json") $(jq '[.. | objects | select(has("statusMessage"))] | length' "${REGISTRY_HOME}/.gemini/config/hooks.json")"
+
 GLOBAL_STATUS_OUTPUT="$(HOME="${REGISTRY_HOME}" bash -c 'source "$1"; show_hook_status "$2"' _ "${REGISTRY}" "${FAKE_HOOK}" 2>&1 || true)"
 if ! printf '%s\n' "${GLOBAL_STATUS_OUTPUT}" | grep -q "Gemini CLI"; then
   echo "  ✓ PASS: REG-GLOBAL-01: active status excludes Gemini CLI"
@@ -583,6 +588,61 @@ HOME="${REGISTRY_HOME}" bash -c 'source "$1"; unregister_hook_codex "$2"' _ "${R
 assert_equal "REG-CODEX-01: owned hooks removed" "0" "$(jq '[.. | objects | .command? // empty | select(contains("'"${FAKE_HOOK}"'"))] | length' "${REGISTRY_HOME}/.codex/hooks.json")"
 assert_equal "REG-CODEX-01: unrelated hook survives unregister" "other-stop" "$(jq -r '.hooks.Stop[0].hooks[0].command' "${REGISTRY_HOME}/.codex/hooks.json")"
 
+# [REG-CODEX-NAME] Owned Codex handlers carry display names; existing ones are filled in place.
+NAME_HOME="${TEST_TMP_ROOT}/codex-name-home"
+NAME_HOOK="${NAME_HOME}/.config/ai-notify/hooks/telegram-notify.sh"
+NAME_FILE="${NAME_HOME}/.codex/hooks.json"
+mkdir -p "$(dirname "${NAME_HOOK}")" "${NAME_HOME}/.codex"
+touch "${NAME_HOOK}"
+NAME_STOP="bash \"${NAME_HOOK}\" codex-stop \"Codex\""
+NAME_PERMISSION="bash \"${NAME_HOOK}\" codex-permission \"Codex\""
+NAME_QUESTION="bash \"${NAME_HOOK}\" codex-question \"Codex\""
+NAME_ASYNC="bash \"${NAME_HOOK}\" codex-async-question \"Codex\""
+name_of() { jq -r --arg cmd "$2" "[.hooks.$1[]?.hooks[]? | select(.command == \$cmd) | .statusMessage] | join(\"|\")" "${NAME_FILE}"; }
+count_of() { jq --arg cmd "$2" "[.hooks.$1[]?.hooks[]? | select(.command == \$cmd)] | length" "${NAME_FILE}"; }
+without_names() { jq -S 'walk(if type == "object" then del(.statusMessage) else . end)' "$1"; }
+register_codex_names() { HOME="${NAME_HOME}" bash -c 'source "$1"; register_hook_codex "$2"' _ "${REGISTRY}" "${NAME_HOOK}" >/dev/null 2>&1 || true; }
+
+printf '%s\n' '{}' > "${NAME_FILE}"
+register_codex_names
+assert_equal "REG-CODEX-NAME: new Stop is named" "Telegram 完成通知" "$(name_of Stop "${NAME_STOP}")"
+assert_equal "REG-CODEX-NAME: new PermissionRequest is named" "Telegram 操作確認與等待檢查" "$(name_of PermissionRequest "${NAME_PERMISSION}")"
+assert_equal "REG-CODEX-NAME: new question PreToolUse is named" "Telegram 同步問題等待檢查" "$(name_of PreToolUse "${NAME_QUESTION}")"
+assert_equal "REG-CODEX-NAME: new async PostToolUse is named" "Telegram 非同步問題通知" "$(name_of PostToolUse "${NAME_ASYNC}")"
+
+# absent (Stop, shared group with a third-party handler), null, empty and whitespace-only names.
+jq -n --arg stop "${NAME_STOP}" --arg perm "${NAME_PERMISSION}" --arg q "${NAME_QUESTION}" --arg aq "${NAME_ASYNC}" '{
+  unrelated: {keep: true},
+  hooks: {
+    Stop: [{hooks: [
+      {type: "command", command: "other-stop", statusMessage: "第三方"},
+      {type: "command", command: $stop, timeout: 5, extra: "keep"}
+    ], extra_group: "keep"}],
+    PermissionRequest: [{hooks: [{type: "command", command: $perm, timeout: 5, statusMessage: null}]}],
+    PreToolUse: [{matcher: "^(request_user_input|request_user_input_async)$", hooks: [{type: "command", command: $q, timeout: 5, statusMessage: ""}]}],
+    PostToolUse: [{matcher: "^request_user_input_async$", hooks: [{type: "command", command: $aq, timeout: 5, statusMessage: "   "}]}]
+  }
+}' > "${NAME_FILE}"
+cp "${NAME_FILE}" "${NAME_HOME}/before.json"
+register_codex_names
+assert_equal "REG-CODEX-NAME: absent Stop name is filled" "Telegram 完成通知" "$(name_of Stop "${NAME_STOP}")"
+assert_equal "REG-CODEX-NAME: null PermissionRequest name is filled" "Telegram 操作確認與等待檢查" "$(name_of PermissionRequest "${NAME_PERMISSION}")"
+assert_equal "REG-CODEX-NAME: empty PreToolUse name is filled" "Telegram 同步問題等待檢查" "$(name_of PreToolUse "${NAME_QUESTION}")"
+assert_equal "REG-CODEX-NAME: whitespace PostToolUse name is filled" "Telegram 非同步問題通知" "$(name_of PostToolUse "${NAME_ASYNC}")"
+assert_equal "REG-CODEX-NAME: each owned handler stays single" "1 1 1 1" \
+  "$(count_of Stop "${NAME_STOP}") $(count_of PermissionRequest "${NAME_PERMISSION}") $(count_of PreToolUse "${NAME_QUESTION}") $(count_of PostToolUse "${NAME_ASYNC}")"
+assert_equal "REG-CODEX-NAME: third-party name in the same group is kept" "第三方" "$(name_of Stop other-stop)"
+assert_equal "REG-CODEX-NAME: only statusMessage changed" "$(without_names "${NAME_HOME}/before.json")" "$(without_names "${NAME_FILE}")"
+jq -S . "${NAME_FILE}" > "${NAME_HOME}/first.json"
+register_codex_names
+assert_equal "REG-CODEX-NAME: rerun leaves JSON unchanged" "$(cat "${NAME_HOME}/first.json")" "$(jq -S . "${NAME_FILE}")"
+
+jq -n --arg stop "${NAME_STOP}" '{hooks: {Stop: [{hooks: [{type: "command", command: $stop, timeout: 5, statusMessage: "我的完成提醒"}]}]}}' > "${NAME_FILE}"
+register_codex_names
+register_codex_names
+assert_equal "REG-CODEX-NAME: custom name survives repeated registration" "我的完成提醒" "$(name_of Stop "${NAME_STOP}")"
+assert_equal "REG-CODEX-NAME: custom-named handler is not duplicated" "1" "$(count_of Stop "${NAME_STOP}")"
+
 # [REG-AGY-01] Named Stop hook is idempotent and ownership-scoped.
 printf '%s\n' '{"other-hook":{"Stop":[{"type":"command","command":"other-stop"}]}}' > "${REGISTRY_HOME}/.gemini/config/hooks.json"
 HOME="${REGISTRY_HOME}" bash -c 'source "$1"; register_hook_antigravity "$2"; register_hook_antigravity "$2"' _ "${REGISTRY}" "${FAKE_HOOK}" >/dev/null 2>&1 || true
@@ -623,6 +683,7 @@ COPILOT_SESSION_COUNT="$(jq --arg prefix "bash \"${FAKE_HOOK}\" sessionEnd" '[.h
 COPILOT_PROMPT_COUNT="$(jq --arg prefix "bash \"${FAKE_HOOK}\" userPromptSubmitted" '[.hooks.userPromptSubmitted[]? | select(.type == "command" and (.bash | startswith($prefix)))] | length' "${COPILOT_REPO}/.github/hooks/hooks.json")"
 assert_equal "REG-COPILOT-01: sessionEnd registered once" "1" "${COPILOT_SESSION_COUNT}"
 assert_equal "REG-COPILOT-01: userPromptSubmitted registered once" "1" "${COPILOT_PROMPT_COUNT}"
+assert_equal "REG-COPILOT-01: Copilot handlers get no Codex name field" "0" "$(jq '[.. | objects | select(has("statusMessage"))] | length' "${COPILOT_REPO}/.github/hooks/hooks.json")"
 
 bash -c 'cd "$1"; source "$2"; unregister_hook_copilot "$3"' _ "${COPILOT_REPO}" "${REGISTRY}" "${FAKE_HOOK}" >/dev/null 2>&1 || true
 assert_equal "REG-COPILOT-01: owned sessionEnd removed" "0" "$(jq '.hooks.sessionEnd // [] | length' "${COPILOT_REPO}/.github/hooks/hooks.json")"
@@ -697,6 +758,25 @@ assert_equal \
   "LIFE-UPDATE-02: fix-hooks retries automatic approval observation" \
   "bash \"${FIX_HOOK}\" antigravity-statusline \"Antigravity CLI\"" \
   "$(jq -r '.statusLine.command // empty' "${FIX_HOME}/.gemini/antigravity-cli/settings.json")"
+
+# [LIFE-UPDATE-03] fix-hooks rebuilds owned Codex handlers with default names.
+FIXN_HOME="${TEST_TMP_ROOT}/fix-names-home"
+FIXN_HOOK="${FIXN_HOME}/.config/ai-notify/hooks/telegram-notify.sh"
+FIXN_FILE="${FIXN_HOME}/.codex/hooks.json"
+mkdir -p "$(dirname "${FIXN_HOOK}")" "${FIXN_HOME}/.codex"
+touch "${FIXN_HOOK}"
+printf '%s\n' '[hooks.state]' 'trusted = "keep"' > "${FIXN_HOME}/.codex/config.toml"
+jq -n --arg stop "bash \"${FIXN_HOOK}\" codex-stop \"Codex\"" '{keep: 1, hooks: {Stop: [{hooks: [
+  {type: "command", command: "other-stop", statusMessage: "第三方"},
+  {type: "command", command: $stop, timeout: 5, statusMessage: "我的完成提醒"}
+]}]}}' > "${FIXN_FILE}"
+bash -c 'cd "$1"; HOME="$2" bash "$3" fix-hooks' _ "${FIX_REPO}" "${FIXN_HOME}" "${UPDATE_SCRIPT}" >/dev/null 2>&1 || true
+assert_equal \
+  "LIFE-UPDATE-03: fix-hooks restores the four default Codex names" \
+  "Telegram 完成通知|Telegram 操作確認與等待檢查|Telegram 同步問題等待檢查|Telegram 非同步問題通知" \
+  "$(jq -r --arg p "bash \"${FIXN_HOOK}\" codex-" '[.hooks.Stop, .hooks.PermissionRequest, .hooks.PreToolUse, .hooks.PostToolUse | [.[]?.hooks[]? | select(.command | startswith($p)) | .statusMessage] | join(",")] | join("|")' "${FIXN_FILE}")"
+assert_equal "LIFE-UPDATE-03: fix-hooks keeps third-party Codex hooks" "第三方 1" "$(jq -r '"\([.. | objects | select(.command? == "other-stop") | .statusMessage] | join(",")) \(.keep)"' "${FIXN_FILE}")"
+assert_equal "LIFE-UPDATE-03: fix-hooks leaves Codex trust state alone" "$(printf '%s\n' '[hooks.state]' 'trusted = "keep"')" "$(cat "${FIXN_HOME}/.codex/config.toml")"
 
 # [LIFE-CONFIG-01] Install and update persist only canonical level values.
 FAKE_BIN="${TEST_TMP_ROOT}/fake-bin"

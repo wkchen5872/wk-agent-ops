@@ -42,13 +42,14 @@ TOML
 fi
 
 _register_settings_hook "$HOME/.claude/settings.json" "Stop" "" "$HOOK_CMD"
-_register_settings_hook "$HOME/.codex/hooks.json" "Stop" "" "$HOOK_CMD"
+_register_settings_hook "$HOME/.codex/hooks.json" "Stop" "" "$HOOK_CMD" "Agent 交接派送"
 
 cat <<'MSG'
 
 Next steps:
-  • Codex: open a new Codex session and trust the new Stop hook in /hooks (one time).
-    This installer does not change Codex trust state.
+  • Codex: open a new Codex session, find the Stop hook "Agent 交接派送" in /hooks, and
+    trust and enable it again whenever it is new or its definition changed (for example, a
+    name was added). This installer does not change Codex trust or enable state.
   • Hooks load when a session starts: sessions opened before this install do not route.
   • Each repository needs the wk-agent-ops project installer (scripts/skills/install.sh)
     for the agent-handoff skill, the /.agent-handoff/ ignore rule and roles.yaml.

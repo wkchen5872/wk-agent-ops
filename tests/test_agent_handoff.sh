@@ -693,6 +693,36 @@ if run_section hookinstall; then
   [[ "$(cat "$HH/.codex/config.toml")" == "keep = true" ]] && grep -qi 'trust' <<<"$out" && ok "tells the user to trust the Codex hook and leaves Codex trust state alone" || bad "tells the user to trust the Codex hook and leaves Codex trust state alone"
   (cd "$tmp" && HOME="$HH" "$HH/.local/bin/handoff-start" --help >/dev/null 2>&1) && ok "installed handoff-start runs with the installed library" || bad "installed handoff-start runs with the installed library"
 
+  hname="Agent 交接派送"
+  hname_of() { jq -r --arg cmd "$2" '[.hooks.Stop[]?.hooks[]? | select(.command == $cmd) | .statusMessage] | join("|")' "$1"; }
+  hcmd="bash \"$HH/.config/wk-workflow/handoff/handoff-route\""
+  [[ "$(hname_of "$HH/.codex/hooks.json" "$hcmd")" == "$hname" && "$(jq '[.. | objects | select(has("statusMessage"))] | length' "$HH/.claude/settings.json")" == 0 ]] \
+    && ok "names the new Codex Stop hook and leaves the Claude Code hook format alone" || bad "names the new Codex Stop hook and leaves the Claude Code hook format alone"
+  NH="$tmp/name-home"; ncmd="bash \"$NH/.config/wk-workflow/handoff/handoff-route\""; nfail=""
+  for blank in absent null '""' '"   "'; do
+    rm -rf "$NH"; mkdir -p "$NH/.codex"
+    jq -n --arg cmd "$ncmd" --arg blank "$blank" \
+      '{hooks:{Stop:[{matcher:"",hooks:[{type:"command",command:$cmd,timeout:10} + (if $blank == "absent" then {} else {statusMessage:($blank|fromjson)} end)]}]}}' > "$NH/.codex/hooks.json"
+    HOME="$NH" bash "$ROOT/scripts/handoff/install.sh" >/dev/null 2>&1
+    [[ "$(hname_of "$NH/.codex/hooks.json" "$ncmd")" == "$hname" && "$(jq '[.hooks.Stop[]?.hooks[]?] | length' "$NH/.codex/hooks.json")" == 1 ]] || nfail="$nfail $blank"
+  done
+  [[ -z "$nfail" ]] && ok "fills absent, null, empty and whitespace handoff names in place" || bad "fills absent, null, empty and whitespace handoff names in place (failed:$nfail)"
+  rm -rf "$NH"; mkdir -p "$NH/.codex"; printf 'keep = true\n' > "$NH/.codex/config.toml"
+  jq -n --arg cmd "$ncmd" '{top:"keep",hooks:{Stop:[{matcher:"",note:"keep",hooks:[{type:"command",command:"other-stop",statusMessage:"第三方"},{type:"command",command:$cmd,timeout:10,statusMessage:"我的交接"}]}]}}' > "$NH/.codex/hooks.json"
+  nbefore="$(jq -S . "$NH/.codex/hooks.json")"
+  HOME="$NH" bash "$ROOT/scripts/handoff/install.sh" >/dev/null 2>&1; nfirst="$(jq -S . "$NH/.codex/hooks.json")"
+  HOME="$NH" bash "$ROOT/scripts/handoff/install.sh" >/dev/null 2>&1
+  [[ "$nbefore" == "$nfirst" && "$nfirst" == "$(jq -S . "$NH/.codex/hooks.json")" && "$(cat "$NH/.codex/config.toml")" == "keep = true" ]] \
+    && ok "keeps a custom handoff name and a third-party Stop hook unchanged across two runs without touching trust" \
+    || bad "keeps a custom handoff name and a third-party Stop hook unchanged across two runs without touching trust"
+  rm -rf "$NH"; mkdir -p "$NH/.codex"
+  jq -n --arg cmd "$ncmd" '{hooks:{Stop:[{matcher:"",note:"keep",hooks:[{type:"command",command:"other-stop"},{type:"command",command:$cmd,timeout:10,extra:"keep"}]}]}}' > "$NH/.codex/hooks.json"
+  nbefore="$(jq -S . "$NH/.codex/hooks.json")"
+  HOME="$NH" bash "$ROOT/scripts/handoff/install.sh" >/dev/null 2>&1
+  [[ "$(hname_of "$NH/.codex/hooks.json" "$ncmd")" == "$hname" && "$(hname_of "$NH/.codex/hooks.json" other-stop)" == "" \
+    && "$(jq -S 'walk(if type == "object" then del(.statusMessage) else . end)' "$NH/.codex/hooks.json")" == "$nbefore" ]] \
+    && ok "naming an existing handoff hook changes only its statusMessage" || bad "naming an existing handoff hook changes only its statusMessage"
+
   readme="$ROOT/scripts/handoff/README.md"
   missing=""
   for opt in $( { "$START" --help; "$FINISH" --help; "$ROOT/scripts/handoff/handoff-cleanup" --help; } 2>/dev/null | grep -oE -- '--[a-z][a-z-]+' | sort -u); do

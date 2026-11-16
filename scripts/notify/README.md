@@ -113,6 +113,13 @@ Codex registration only writes `~/.codex/hooks.json`. Users must also open
 `/hooks`, trust all four owned definitions, and enable their checkboxes before the
 commands run. Registry status cannot verify those Codex-managed runtime states.
 
+Each owned Codex handler gets a default `statusMessage` (its `/hooks` name; see
+[Telegram setup](../../docs/notify/telegram.md#codex-requires-configuration-trust-and-enablement)).
+Ordinary registration only fills missing or blank names and keeps custom ones;
+`update.sh fix-hooks` recreates the handlers and resets them to the defaults.
+After either, open a new Codex session and trust and enable the changed hooks
+in `/hooks`.
+
 Host event mappings belong in the existing deployed hook and registry. Do not
 create a second destination directory merely to support another CLI.
 

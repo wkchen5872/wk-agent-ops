@@ -210,6 +210,72 @@ if run_section installer; then
     bad "installer preserves one migrated Codex registration"
   fi
 
+  branch_name="OpenSpec 規劃分支檢查"
+  name_of() { jq -r --arg cmd "$2" '[.hooks.PostToolUse[]?.hooks[]? | select(.command == $cmd) | .statusMessage] | join("|")' "$1"; }
+  without_names() { jq -S 'walk(if type == "object" then del(.statusMessage) else . end)' "$1"; }
+  run_branch_install() { (cd "$install_repo" && HOME="$1" bash scripts/workflow/openspec-branch-creator/install.sh) >/dev/null 2>&1 || true; }
+
+  if [[ "$(name_of "$fake_home/.codex/hooks.json" "$hook_cmd")" == "$branch_name" \
+    && "$(jq '[.. | objects | select(has("statusMessage"))] | length' "$fake_home/.claude/settings.json")" == 0 \
+    && "$(jq '[.. | objects | select(has("statusMessage"))] | length' "$install_repo/.github/hooks/openspec-branch-creator.json")" == 0 ]]; then
+    ok "new Codex branch hook is named; Claude and Copilot formats are unchanged"
+  else
+    bad "new Codex branch hook is named; Claude and Copilot formats are unchanged"
+  fi
+
+  migrated_with_name="$(jq --arg cmd "$migrated_cmd" '.hooks.PostToolUse[0].hooks[0] | select(.command == $cmd) | .statusMessage // empty' -r "$migrated_home/.codex/hooks.json")"
+  if [[ "$migrated_with_name" == "$branch_name" && "$(jq '.hooks.PostToolUse[0].hooks[0].timeout' "$migrated_home/.codex/hooks.json")" == 10 ]]; then
+    ok "migrated Codex branch entry gets its name in place"
+  else
+    bad "migrated Codex branch entry gets its name in place"
+  fi
+
+  blank_failures=""
+  for blank in null '""' '"   "'; do
+    blank_home="$tmp/blank-home"
+    rm -rf "$blank_home"; mkdir -p "$blank_home/.codex"
+    blank_cmd="bash \"$blank_home/.config/wk-workflow/hooks/openspec-branch-creator.sh\""
+    jq -n --arg cmd "$blank_cmd" --argjson name "$blank" \
+      '{hooks:{PostToolUse:[{matcher:"Bash",hooks:[{type:"command",command:$cmd,timeout:10,statusMessage:$name}]}]}}' \
+      > "$blank_home/.codex/hooks.json"
+    run_branch_install "$blank_home"
+    [[ "$(name_of "$blank_home/.codex/hooks.json" "$blank_cmd")" == "$branch_name" ]] || blank_failures="$blank_failures $blank"
+  done
+  [[ -z "$blank_failures" ]] && ok "null, empty, and whitespace branch names are filled" \
+    || bad "null, empty, and whitespace branch names are filled (failed:$blank_failures)"
+
+  custom_home="$tmp/custom-name-home"
+  mkdir -p "$custom_home/.codex"
+  custom_cmd="bash \"$custom_home/.config/wk-workflow/hooks/openspec-branch-creator.sh\""
+  jq -n --arg cmd "$custom_cmd" --arg keep "$unrelated_hook" \
+    '{model:"keep",hooks:{PostToolUse:[{matcher:"Bash",note:"keep",hooks:[{type:"command",command:$keep,statusMessage:"第三方"},{type:"command",command:$cmd,timeout:10,statusMessage:"我的分支檢查"}]}]}}' \
+    > "$custom_home/.codex/hooks.json"
+  cp "$custom_home/.codex/hooks.json" "$tmp/custom-before.json"
+  run_branch_install "$custom_home"
+  jq -S . "$custom_home/.codex/hooks.json" > "$tmp/custom-first.json"
+  run_branch_install "$custom_home"
+  if [[ "$(jq -S . "$custom_home/.codex/hooks.json")" == "$(cat "$tmp/custom-first.json")" \
+    && "$(jq -S . "$tmp/custom-before.json")" == "$(cat "$tmp/custom-first.json")" ]]; then
+    ok "custom branch name and same-group third-party handler survive two installs unchanged"
+  else
+    bad "custom branch name and same-group third-party handler survive two installs unchanged"
+  fi
+
+  shared_home="$tmp/shared-group-home"
+  mkdir -p "$shared_home/.codex"
+  shared_cmd="bash \"$shared_home/.config/wk-workflow/hooks/openspec-branch-creator.sh\""
+  jq -n --arg cmd "$shared_cmd" --arg keep "$unrelated_hook" \
+    '{hooks:{PostToolUse:[{matcher:"Bash",note:"keep",hooks:[{type:"command",command:$keep},{type:"command",command:$cmd,timeout:10,extra:"keep"}]}]}}' \
+    > "$shared_home/.codex/hooks.json"
+  run_branch_install "$shared_home"
+  if [[ "$(name_of "$shared_home/.codex/hooks.json" "$shared_cmd")" == "$branch_name" \
+    && "$(name_of "$shared_home/.codex/hooks.json" "$unrelated_hook")" == "" \
+    && "$(without_names "$shared_home/.codex/hooks.json")" == "$(jq -n -S --arg cmd "$shared_cmd" --arg keep "$unrelated_hook" '{hooks:{PostToolUse:[{matcher:"Bash",note:"keep",hooks:[{type:"command",command:$keep},{type:"command",command:$cmd,timeout:10,extra:"keep"}]}]}}')" ]]; then
+    ok "filling a branch name changes only that handler's statusMessage"
+  else
+    bad "filling a branch name changes only that handler's statusMessage"
+  fi
+
   mkdir -p "$fake_home/.codex"
   if [[ ! -f "$fake_home/.codex/hooks.json" ]]; then
     jq -n --arg cmd "$hook_cmd" '{hooks:{PostToolUse:[{matcher:"Bash",hooks:[{type:"command",command:$cmd,timeout:10}]}]}}' \
