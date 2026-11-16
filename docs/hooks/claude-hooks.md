@@ -21,17 +21,19 @@ timestamp: 2026-08-01T00:00:00+08:00
 | 功能 | 事件 | Matcher | Script |
 |---|---|---|---|
 | OpenSpec branch compatibility | `PostToolUse` | `Bash` | `~/.config/wk-workflow/hooks/openspec-branch-creator.sh` |
+| Handoff loop routing | `Stop` | 無 | `~/.config/wk-workflow/handoff/handoff-route` |
 | Telegram completion | `Stop` | 無 | `~/.config/ai-notify/hooks/telegram-notify.sh` |
 | Telegram attention | `Notification` | 無 | `~/.config/ai-notify/hooks/telegram-notify.sh` |
 
 OpenSpec hook 是 fail-soft 相容層；正式 branch-first contract 仍是 Agent 在建立或
-繼續 change 前執行 `opsx-branch <change-id>`。Telegram hook 也是背景通知，不會
+繼續 change 前執行 `opsx-branch <change-id>`。Handoff hook 負責在交接輪次結束時進行路由判斷與下一輪分派。Telegram hook 是背景通知，不會
 回傳批准或阻擋決策。
 
 ## 安裝與檢查
 
 ```bash
 bash scripts/workflow/install.sh
+bash scripts/handoff/install.sh
 bash scripts/notify/telegram/install.sh
 ```
 
@@ -44,5 +46,7 @@ bash scripts/notify/telegram/update.sh fix-hooks
 ## 相關文件
 
 - [Provider hook 總覽](/docs/hooks/index.md)
+- [Agent Handoff 手冊](/docs/skills/agent-handoff.md)
 - [Telegram Notify](/docs/notify/telegram.md)
 - [Workflow scripts](/scripts/workflow/README.md)
+- [Handoff scripts](/scripts/handoff/README.md)

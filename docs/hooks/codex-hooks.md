@@ -23,6 +23,7 @@ configured；每個 hook 還必須在 Codex `/hooks` 面板中：
 | 功能 | 事件 | Matcher | Script |
 |---|---|---|---|
 | OpenSpec branch compatibility | `PostToolUse` | `Bash` | `~/.config/wk-workflow/hooks/openspec-branch-creator.sh` |
+| Handoff loop routing | `Stop` | 無 | `~/.config/wk-workflow/handoff/handoff-route` |
 | Telegram completion | `Stop` | 無 | `~/.config/ai-notify/hooks/telegram-notify.sh` |
 | Telegram approval request + opt-in inspection | `PermissionRequest` | 無 | `~/.config/ai-notify/hooks/telegram-notify.sh` |
 | Structured-question inspection | `PreToolUse` | `^(request_user_input|request_user_input_async)$` | `~/.config/ai-notify/hooks/telegram-notify.sh` |
@@ -31,6 +32,8 @@ configured；每個 hook 還必須在 Codex `/hooks` 面板中：
 OpenSpec compatibility hook 會正規化 Codex payload、忽略失敗的 tool execution，並
 把 Git 操作交給 `opsx-branch`。它是安全網；Agent-mediated branch guard 才是
 `new`、`ff`、`continue` 的正式成功條件。
+
+Handoff loop routing hook 在輪次結束時判定交接狀態。若 roles 設定為遠端 PR 交付，`scripts/handoff/install.sh` 會額外提供 `~/.codex/handoff-net.config.toml` 網路沙盒 profile，讓收尾角色在必要時獲取對外網路權限進行 git push 與 PR 建立。
 
 Telegram 的 `PermissionRequest` handler 有兩條獨立分支：依共用開關發送既有操作提醒，以及依 Codex 新開關按需檢查 daemon。同步問題的 PreToolUse 啟動檢查；非同步問題略過檢查，改由 PostToolUse 確認 `accepted=true` 後發送「Waiting for Your Response」。這表示題目已送出，Codex 仍可繼續工作。所有 handler 回傳 neutral 結果，不會批准、拒絕或回答。
 
@@ -49,7 +52,9 @@ bash scripts/notify/telegram/update.sh fix-hooks
 ## 相關文件
 
 - [Provider hook 總覽](/docs/hooks/index.md)
+- [Agent Handoff 手冊](/docs/skills/agent-handoff.md)
 - [Telegram Notify](/docs/notify/telegram.md)
 - [Workflow scripts](/scripts/workflow/README.md)
+- [Handoff scripts](/scripts/handoff/README.md)
 - [Codex hooks 官方文件](https://learn.chatgpt.com/docs/hooks)
 - [Codex App Server](https://learn.chatgpt.com/docs/app-server)

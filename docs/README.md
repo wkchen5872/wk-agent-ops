@@ -28,6 +28,7 @@ docs/
 │   └── provider-worktrees.md← 各 AI 工具原生 Worktree 行為比較
 │
 ├── 📂 skills/              ← 擴充工具與自動化技能手冊
+│   ├── agent-handoff.md    ← 多 Agent 自動化實作、審查與收尾交接迴圈
 │   ├── github-issue.md     ← 建立、更新與關閉 GitHub Issue
 │   ├── github-pr.md        ← 開立 Draft PR、更新說明、回覆審查與結案
 │   ├── change-review.md    ← 發起代碼審查、三種結論判定與報告產出
@@ -83,6 +84,7 @@ docs/
 - 需要在 GitHub 開立或回覆 Issue？閱讀 [GitHub Issue 操作指南](skills/github-issue.md)。
 - 需要發布 Draft PR 或回覆 Review？閱讀 [GitHub PR 操作指南](skills/github-pr.md)。
 - 準備收尾並交付？閱讀 [OpenSpec Commit 操作指南](skills/openspec-commit.md)。
+- 想要多 Agent 自動交接迴圈？閱讀 [Agent Handoff 操作手冊](skills/agent-handoff.md)。
 
 ---
 

@@ -5,12 +5,12 @@ runtime 啟用步驟，不複製各 CLI 的完整 hook API。
 
 ## 支援矩陣
 
-| Provider | OpenSpec branch fallback | Telegram completion | Telegram attention | 設定範圍 |
-|---|---|---|---|---|
-| [Claude Code](/docs/hooks/claude-hooks.md) | `PostToolUse` | `Stop` | `Notification` | user-level |
-| [Codex](/docs/hooks/codex-hooks.md) | `PostToolUse` | `Stop` | `PermissionRequest`；同步問題 `PreToolUse` 檢查；非同步問題 `PostToolUse` 通知 | user-level；另需 trust + enable |
-| [Antigravity](/docs/hooks/antigravity-hooks.md) | 無；使用 Agent guard | named `Stop` | `statusLine` observer | user-level |
-| [GitHub Copilot CLI](/docs/hooks/copilot-hooks.md) | `postToolUse` | `sessionEnd`（opt-in） | `userPromptSubmitted`（opt-in） | repository-local |
+| Provider | OpenSpec branch fallback | Telegram completion | Telegram attention | Handoff loop routing | 設定範圍 |
+|---|---|---|---|---|---|
+| [Claude Code](/docs/hooks/claude-hooks.md) | `PostToolUse` | `Stop` | `Notification` | `Stop` | user-level |
+| [Codex](/docs/hooks/codex-hooks.md) | `PostToolUse` | `Stop` | `PermissionRequest`；同步問題 `PreToolUse` 檢查；非同步問題 `PostToolUse` 通知 | `Stop` | user-level；另需 trust + enable |
+| [Antigravity](/docs/hooks/antigravity-hooks.md) | 無；使用 Agent guard | named `Stop` | `statusLine` observer | 無 | user-level |
+| [GitHub Copilot CLI](/docs/hooks/copilot-hooks.md) | `postToolUse` | `sessionEnd`（opt-in） | `userPromptSubmitted`（opt-in） | 無 | repository-local |
 
 ## Hook families
 
@@ -19,6 +19,11 @@ runtime 啟用步驟，不複製各 CLI 的完整 hook API。
 `scripts/workflow/install.sh` 部署 OpenSpec branch fallback。
 Branch fallback 只處理直接 CLI／legacy `openspec new change` 路徑；正式流程由
 Agent-mediated `opsx-branch` guard 保證 branch-first。
+
+### Handoff loop routing
+
+`scripts/handoff/install.sh` 部署多 Agent 交接迴圈的 `Stop` hook（`handoff-route`）。
+當支援的 Provider session 結束時，由 `handoff-route` 讀取 `.agent-handoff/` 紀錄並判定是否遞交至下一個角色（如實作轉審查、審查轉收尾）。完整流程見 [Agent Handoff](/docs/skills/agent-handoff.md)。
 
 ### Notifications
 

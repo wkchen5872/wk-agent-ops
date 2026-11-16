@@ -34,8 +34,9 @@ sources:
 | 03 Review：[SVG](local-development-review.svg) | [本機四階段](../workflow/local-development.md#03-review-與修正交接)；三種結論與修正重入 | 依現行 `change-review`；本地報告、明確交接與後補 PR 的版本核對以該 Skill 為準[^review-source] |
 | 04 封存與交付：[SVG](local-development-finish.svg) | [Commit 工作流](../workflow/commit.md)；本地完成、成功交付、取消／被取代三分支 | 本版本 Skill 已實作並完成本地驗證；真實遠端發布仍待端到端驗收，新 head 要有相符 pass[^delivery-design] |
 | 一輪 Review 詳細流程：[SVG](change-review-workflow.svg) | 已確認 PR 的三種結論都 reply 並回讀；無 PR、PR 不明或 local-only 只在本地回報；符合資格才核對原實作者並通知 | 原稿為 [review-loop.svg](../../template/common/skills/change-review/references/review-loop.svg)；更新來源後同步本圖，再由 installer 更新 Skill 副本[^review-source] |
-| 交接迴圈：[SVG](agent-handoff-loop.svg) | [交接迴圈說明](../../scripts/handoff/README.md)；實作者、Stop hook、審查者三欄與收尾；審查 worktree shared／new、pass 後 ask／auto | 本 repo 的 `docs/`；依 `add-agent-handoff-loop` 實作，真實多 Agent 演練待完成 |
-| 啟動交接迴圈：[SVG](agent-handoff-start.svg) | 三份角色範本、`handoff-start` 選項，以及誰在何時開哪個 worktree 與 Session | 本 repo 的 `docs/`；同上 |
+| 交接迴圈：[SVG](agent-handoff-loop.svg) | [交接迴圈手冊](../skills/agent-handoff.md)；實作者、Stop hook、審查者三欄與收尾；審查 worktree shared／new、pass 後 ask／auto | 本 repo 的 `docs/`；依 `add-agent-handoff-loop` 實作，真實多 Agent 演練待完成 |
+| 啟動交接迴圈：[SVG](agent-handoff-start.svg) | [啟動交接](../skills/agent-handoff.md#1-handoff-start-change-id-options)；三份角色範本、`handoff-start` 選項，以及誰在何時開哪個 worktree 與 Session | 本 repo 的 `docs/`；同上 |
+| 收尾與清理：[SVG](agent-handoff-cleanup.svg) | [交接迴圈收尾](../skills/agent-handoff.md#3-handoff-cleanup-change-id---abandon---yes)；三道安全防護、歷史證據歸檔、Session 與臨時 worktree 清理、保留 feature 分支 | 本 repo 的 `docs/`；依 `scripts/handoff/handoff-cleanup` 實作 |
 | GitHub 協作整合（組合示例）：[SVG](github-handoff.svg) | [GitHub 協作整合](../github-handoff.md)；Issue-first／Change-first 兩個入口、版本審查、Closure 回讀及 Issue 獨立結案 | managed；修改 `template/common/docs/diagrams/github-handoff.svg`，再跑 installer |
 
 本機四階段及開發全貌是本 repo 的操作文件，不隨 common installer 散布。

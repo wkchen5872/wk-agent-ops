@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="1200" viewBox="0 0 1400 1200" role="img" aria-labelledby="title desc">
+<title id="title">交接迴圈收尾與清理：安全歸檔與資源回收</title>
+<desc id="desc">展示 handoff-cleanup 指令的執行邏輯與安全防護：分為正常完成（finish/done）與中途放棄（--abandon）兩種入口；必須通過所有 worktree clean 檢查；執行歸檔交件單與審查報告至主 worktree 的 .agent-handoff/archive/，刪除 Xirp sessions 與臨時 worktrees，並嚴格保留主 worktree 與 feature 分支。</desc>
+<defs>
+<marker id="arrow" markerUnits="userSpaceOnUse" markerWidth="14" markerHeight="14" refX="12" refY="7" orient="auto"><path d="M0 0 L14 7 L0 14 Z" fill="#647a94"/></marker>
+<marker id="arrow-green" markerUnits="userSpaceOnUse" markerWidth="14" markerHeight="14" refX="12" refY="7" orient="auto"><path d="M0 0 L14 7 L0 14 Z" fill="#1f7a4d"/></marker>
+<marker id="arrow-red" markerUnits="userSpaceOnUse" markerWidth="14" markerHeight="14" refX="12" refY="7" orient="auto"><path d="M0 0 L14 7 L0 14 Z" fill="#b42318"/></marker>
+</defs>
+<rect width="1400" height="1200" fill="#f5f7fb"/>
+<g font-family="PingFang TC, Noto Sans CJK TC, sans-serif">
+<text x="40" y="65" font-size="32" fill="#19344c" font-weight="700" text-anchor="start">交接迴圈收尾與清理：安全歸檔與資源回收</text>
+<text x="40" y="100" font-size="18" fill="#42556d" font-weight="400" text-anchor="start">handoff-cleanup 嚴格防護未提交代碼，封存審查歷史證據，並釋放 Session 與 Worktree</text>
+<rect x="1202" y="38" width="158" height="40" rx="20" fill="#e2f5ea"/>
+<text x="1281" y="64" font-size="18" fill="#1f7a4d" font-weight="600" text-anchor="middle">已實作 · 安全防護</text>
+
+<!-- 頂部：觸發指令與選項 -->
+<rect x="40" y="130" width="1320" height="130" rx="14" fill="#ffffff" stroke="#b4c6d8" stroke-width="2"/>
+<text x="60" y="165" font-size="20" fill="#19344c" font-weight="700" text-anchor="start">執行指令與選項</text>
+<rect x="60" y="180" width="400" height="60" rx="8" fill="#f3f6fa"/>
+<text x="75" y="205" font-size="15" fill="#19344c" font-weight="600" font-family="SF Mono, Menlo, monospace">handoff-cleanup &lt;change-id&gt;</text>
+<text x="75" y="228" font-size="13" fill="#5f7186">預設乾跑（Dry Run）：僅列出將清理之項目，不更動狀態</text>
+
+<rect x="480" y="180" width="410" height="60" rx="8" fill="#eef7f2" stroke="#3f8a5c" stroke-width="1.5"/>
+<text x="495" y="205" font-size="15" fill="#1f7a4d" font-weight="600" font-family="SF Mono, Menlo, monospace">handoff-cleanup &lt;change-id&gt; --yes</text>
+<text x="495" y="228" font-size="13" fill="#2d6a4f">正式執行清理：通過防護檢查後執行封存與資源刪除</text>
+
+<rect x="910" y="180" width="430" height="60" rx="8" fill="#fffaf0" stroke="#d2a14a" stroke-width="1.5"/>
+<text x="925" y="205" font-size="15" fill="#9a3412" font-weight="600" font-family="SF Mono, Menlo, monospace">handoff-cleanup &lt;change-id&gt; --abandon</text>
+<text x="925" y="228" font-size="13" fill="#78350f">放棄迴圈：不需 finish/done 紀錄即可執行清理與封存</text>
+
+<!-- 中間左側：安全驗證門檻 -->
+<rect x="40" y="280" width="450" height="540" rx="14" fill="#ffffff" stroke="#b4c6d8" stroke-width="2"/>
+<rect x="40" y="280" width="450" height="60" rx="14" fill="#19344c"/>
+<text x="60" y="318" font-size="20" fill="#ffffff" font-weight="700" text-anchor="start">三道安全防護檢查 (Safety Gates)</text>
+
+<!-- 門檻 1 -->
+<rect x="60" y="360" width="410" height="120" rx="10" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
+<text x="75" y="390" font-size="17" fill="#19344c" font-weight="700">門檻 1：收尾紀錄判定</text>
+<text x="75" y="418" font-size="14" fill="#42556d">• 正常流程：最新紀錄必須為 finish / done</text>
+<text x="75" y="440" font-size="14" fill="#42556d">• 放棄流程（--abandon）：允許未完成紀錄</text>
+<text x="75" y="462" font-size="13" fill="#b42318">❌ 未完成且未帶 --abandon 則立即終止並報警</text>
+
+<!-- 門檻 2 -->
+<rect x="60" y="500" width="410" height="140" rx="10" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
+<text x="75" y="530" font-size="17" fill="#19344c" font-weight="700">門檻 2：工作區乾淨檢查 (Cleanliness)</text>
+<text x="75" y="558" font-size="14" fill="#42556d">• 掃描所有涉及之 worktrees（impl / review / finish）</text>
+<text x="75" y="580" font-size="14" fill="#42556d">• 檢查 staged、unstaged 與 untracked 檔案</text>
+<text x="75" y="602" font-size="13" fill="#b42318">❌ 任一 worktree 有未提交代碼即中斷，拒絕刪除</text>
+<text x="75" y="624" font-size="12" fill="#5f7186">保護原則：絕不遺失開發者尚未 commit 的成果</text>
+
+<!-- 門檻 3 -->
+<rect x="60" y="660" width="410" height="130" rx="10" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
+<text x="75" y="690" font-size="17" fill="#19344c" font-weight="700">門檻 3：主工作區保護 (Main Worktree)</text>
+<text x="75" y="718" font-size="14" fill="#42556d">• 自動識別 Git Common Dir 主工作區</text>
+<text x="75" y="740" font-size="14" fill="#42556d">• 主工作區永遠保留，不執行 worktree remove</text>
+<text x="75" y="762" font-size="13" fill="#1f7a4d">✓ 僅清除主工作區內的暫時性 .agent-handoff 檔案</text>
+
+<!-- 箭頭由左向右 -->
+<path d="M 500 550 H 530" fill="none" stroke="#1f7a4d" stroke-width="4" marker-end="url(#arrow-green)"/>
+
+<!-- 中間右側：清理執行四部曲 -->
+<rect x="540" y="280" width="820" height="540" rx="14" fill="#ffffff" stroke="#b4c6d8" stroke-width="2"/>
+<rect x="540" y="280" width="820" height="60" rx="14" fill="#2d6a4f"/>
+<text x="560" y="318" font-size="20" fill="#ffffff" font-weight="700" text-anchor="start">確認清理後的四部曲 (Execution with --yes)</text>
+
+<!-- 步驟 1 -->
+<rect x="560" y="360" width="780" height="96" rx="10" fill="#f0fdf4" stroke="#86efac" stroke-width="1.5"/>
+<text x="580" y="390" font-size="17" fill="#19344c" font-weight="700">步驟 ①：歷史紀錄歸檔 (Evidence Archival)</text>
+<text x="580" y="416" font-size="14" fill="#42556d">• 將各 worktree 的 .agent-handoff/ 完整複製至主工作區 .agent-handoff/archive/&lt;change&gt;/&lt;worktree&gt;/</text>
+<text x="580" y="438" font-size="14" fill="#1f7a4d">• 連同交件單引用的 Review Reports 一併封存，保留完整審查軌跡與歷史證據（受 .gitignore 保護）</text>
+
+<!-- 步驟 2 -->
+<rect x="560" y="470" width="780" height="96" rx="10" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
+<text x="580" y="500" font-size="17" fill="#19344c" font-weight="700">步驟 ②：刪除 Xirp Sessions</text>
+<text x="580" y="526" font-size="14" fill="#42556d">• 解析 loop.yaml 中記錄的 implementer、reviewer 與 finish Session ID</text>
+<text x="580" y="548" font-size="14" fill="#42556d">• 呼叫 xirp session delete &lt;session-id&gt; --yes 關閉並釋放背景 Agent 程序</text>
+
+<!-- 步驟 3 -->
+<rect x="560" y="580" width="780" height="96" rx="10" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
+<text x="580" y="610" font-size="17" fill="#19344c" font-weight="700">步驟 ③：移除臨時 Worktrees</text>
+<text x="580" y="636" font-size="14" fill="#42556d">• 針對非主工作區的臨時目錄執行 git worktree remove &lt;path&gt;（不使用 --force）</text>
+<text x="580" y="658" font-size="14" fill="#42556d">• 清理 Git worktree 註冊資訊，保持本機目錄整潔</text>
+
+<!-- 步驟 4 -->
+<rect x="560" y="690" width="780" height="106" rx="10" fill="#fffaf0" stroke="#fde68a" stroke-width="1.5"/>
+<text x="580" y="720" font-size="17" fill="#9a3412" font-weight="700">步驟 ④：保留分支與職責邊界 (Branch Retention)</text>
+<text x="580" y="746" font-size="14" fill="#19344c" font-weight="600">• 嚴格保留 Git 分支：feature/&lt;change-id&gt; 完好無損，已提交之 commit 不受任何影響</text>
+<text x="580" y="770" font-size="13" fill="#78350f">⚠️ 核心邊界：handoff-cleanup 不負責 merge，亦不刪除遠端/本地分支。合併與刪除分支由負責人獨立執行。</text>
+
+<!-- 底部：設計原則與防護清單 -->
+<rect x="40" y="840" width="1320" height="320" rx="14" fill="#ffffff" stroke="#b4c6d8" stroke-width="2"/>
+<text x="60" y="878" font-size="20" fill="#19344c" font-weight="700" text-anchor="start">交接迴圈收尾的核心設計原則</text>
+
+<text x="60" y="915" font-size="15" fill="#42556d" font-weight="400">• <tspan font-weight="700" fill="#19344c">無損歸檔優先：</tspan>交件單與審查報告在刪除 worktree 前必先存入主 repo 歸檔區，事後隨時可回溯每輪審查結果與 commit 快照。</text>
+<text x="60" y="945" font-size="15" fill="#42556d" font-weight="400">• <tspan font-weight="700" fill="#19344c">寧可報錯不冒險刪除：</tspan>任何 worktree 只要有未暫存修改（dirty state），腳本立即報錯退出，絕不強制重設（reset）或丟棄檔案。</text>
+<text x="60" y="975" font-size="15" fill="#42556d" font-weight="400">• <tspan font-weight="700" fill="#19344c">Git 生命週期與 Agent 迴圈解耦：</tspan>迴圈只管 Agent 之間的協作自動化。分支合併（merge）、PR 審查決策、遠端刪除分支等均保留在標準 Git 流程中。</text>
+<text x="60" y="1005" font-size="15" fill="#42556d" font-weight="400">• <tspan font-weight="700" fill="#19344c">乾跑驗證（Safe Dry Run）：</tspan>不帶 --yes 參數時僅作為唯讀查詢，詳細列出受影響的 Session 清單與路徑，方便人工檢核。</text>
+<text x="60" y="1035" font-size="15" fill="#42556d" font-weight="400">• <tspan font-weight="700" fill="#19344c">非破壞性放棄（Abandon）：</tspan>帶 --abandon 時即便未達最終 pass / finish，也能安全打包中斷的探索工作，並完整釋放背景資源。</text>
+
+<line x1="60" y1="1065" x2="1340" y2="1065" stroke="#e2e8f0" stroke-width="1"/>
+<text x="60" y="1100" font-size="14" fill="#64748b" font-family="SF Mono, Menlo, monospace">相關指令：handoff-start &lt;change&gt;  |  handoff-finish &lt;change&gt;  |  handoff-cleanup &lt;change&gt; [--abandon] [--yes]</text>
+<text x="60" y="1125" font-size="14" fill="#64748b">詳細操作與角色配置請參閱 docs/skills/agent-handoff.md 與 scripts/handoff/README.md</text>
+</g>
+</svg>
