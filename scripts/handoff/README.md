@@ -5,6 +5,12 @@ messages. Each agent ends its round by writing a handoff record with the `agent-
 skill; when the agent stops, a Stop hook reads that record and messages the next agent
 through Xirp, or notifies you through the existing Telegram notifier.
 
+Scope: one person's machine. Handoff records and the hook exist only locally, so the loop never
+spans people: it commits locally and does not push, open a PR, or post reviews by default. Work
+that another person implements or reviews goes through the GitHub PR instead (`github-pr`,
+`change-review`), which is where the team boundary is. See
+[本機開發四階段流程](../../docs/workflow/local-development.md) for how the two fit together.
+
 Requirements: `git`, `jq`, and the `xirp` CLI for opening and messaging sessions.
 Without Xirp the hook does nothing and the manual workflow is unchanged.
 

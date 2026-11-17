@@ -68,7 +68,10 @@ Issue 時再加上 Issue URL。
 | 沒有 PR、查找不明或 local-only | `change-review` 回傳並保存本地報告，不寫 GitHub | Change 或本機版本 | 本地報告與內容指紋 |
 | 修正之後 | 實作者 push 後以 `github-pr reply` 逐項回覆，再由 Reviewer 對新 head 複審 | 修正 commit 與驗證結果 | 修正回覆 URL |
 
-使用交接迴圈（`agent-handoff` Skill 的交件單）時，Review 結束改寫 review 交件單，由 Stop hook 交接；
+交接迴圈（`agent-handoff` Skill 的交件單）只在單一機器上的個人流程中運作；跨人的實作與審核以 PR 為交接媒介，
+不延伸交件單。迴圈預設不 push、不開 PR，交給團隊時才以 `github-pr create` 開 PR。
+
+使用交接迴圈時，Review 結束改寫 review 交件單，由 Stop hook 交接；
 發布未確認時交件單為 blocked，不轉為本地交接。PR 回覆可委派 `github-pr-agent`，Author 仍是審查者。
 
 ### 04 封存與交付

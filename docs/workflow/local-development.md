@@ -102,6 +102,21 @@ changes-required 由 hook 把報告路徑轉給實作者，達輪數上限或 bl
 [交接流程](../diagrams/agent-handoff-loop.svg) 與 [啟動流程](../diagrams/agent-handoff-start.svg)，操作見
 [交接迴圈說明](../../scripts/handoff/README.md)。
 
+**交接迴圈與 PR 的分界**：交件單迴圈是個人電腦上的內部流程，PR 是團隊協作的流程，兩者不混用。
+
+| | 交件單迴圈 | GitHub Issue／PR |
+| --- | --- | --- |
+| 範圍 | 一台電腦上，你的幾個 Agent | 人與人之間 |
+| 媒介 | 本機 commit、`.agent-handoff/` 交件單、Stop hook | push、PR、留言 |
+| 誰看得到 | 只有你 | 團隊 |
+| 用途 | 免去轉貼訊息、加快本機的實作與 Review | 留下別人看得懂的紀錄，做正式審核 |
+
+- 交件單不跨人：別人讀不到你的 `.agent-handoff/`，你的 hook 也通知不到他。跨人交接一律走 PR，
+  使用 `github-pr`、`change-review` 的 Handoff、Review 回覆、修正回覆、Checkpoint 與 Closure。
+- 你實作、別人審：先用迴圈在本機跑到內部 Review 通過，再開 PR 交給對方；對方以 `change-review` 在 PR 上回覆，你再修正。
+- 別人實作、你審：直接以 `change-review` 審 PR 並發布結論，不需要交件單。
+- 因此迴圈預設不 push、不開 PR，審查結論也只存本地；PR 是交給團隊的時點，不是迴圈的一部分。
+
 ## 04 封存與交付
 
 [SVG 原稿](../diagrams/local-development-finish.svg)
