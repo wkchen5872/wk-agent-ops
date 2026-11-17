@@ -518,10 +518,11 @@ for pair in 'finish.delivery|loop delivery follows finish.delivery' \
             'MUST NOT stand in|an earlier loop pass never replaces the final-version review' \
             '--role finish|completion ends with a finish record' \
             'github-pr-agent|PR update and Closure may be delegated to github-pr-agent' \
-            'also requests the final-version review|loop PR delivery itself requests the final-version review and the Closure'; do
+            'also requests the final-version review|loop PR delivery itself requests the final-version review and the Closure' \
+            'Spec sync defaults to sync|a loop answers the archive spec-sync choice with sync without asking'; do
   grep -Fq -- "${pair%%|*}" "$ORCHESTRATOR" && ok "${pair#*|}" || bad "${pair#*|}"
 done
-for id in OC-32 OC-33 OC-34 OC-35 OC-36 OC-37; do
+for id in OC-32 OC-33 OC-34 OC-35 OC-36 OC-37 OC-39; do
   grep -q "^### $id " "$OC_CASES" && ok "acceptance case $id exists" || bad "acceptance case $id exists"
 done
 

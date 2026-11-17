@@ -291,7 +291,7 @@ ho_finish_retry() {
   id="$(kv_get "$loop" finish.session 2>/dev/null)"
   if [[ -n "$id" ]] && ho_xirp_exists "$id"; then
     msg="[$change] 重試收尾。上次停在：${note}。使用者已處理並要求重試：依 openspec-commit 的中斷恢復規則，從停下的階段接續，不重複已完成的步驟。"
-    msg+="$(ho_delivery_text "$(kv_get "$loop" finish.delivery 2>/dev/null || echo local)")；"
+    msg+="封存時若有待同步的 delta spec，直接同步主規格後封存，不需詢問。$(ho_delivery_text "$(kv_get "$loop" finish.delivery 2>/dev/null || echo local)")；"
     msg+="結束時以 $HANDOFF_WRITE_REL --change $change --role finish 寫新的交件單，不要改舊的交件單。"
     ho_xirp_message "$id" "$msg" || { echo "could not message finish session $id"; return 1; }
   else

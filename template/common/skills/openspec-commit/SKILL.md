@@ -97,6 +97,10 @@ steps below:
   `finish.delivery: pr` is the request for a Successful PR handoff, and also requests the final-version review
   and the ready-to-merge Closure of 7a, so 7a does not stop for lack of a review request. Remote
   steps keep their authorization, readback, and final-head rules.
+- **Spec sync defaults to sync.** When `openspec-archive-change` offers the spec-sync choice
+  and no capability is sync-blocked, choose "Sync now" without asking: starting the finish
+  role covers it. A sync-blocked capability or a failed sync stops with `status: blocked` and
+  the reason in the note.
 - **The final-version review is bound to the delivered head.** In 7a step 3, call
   `change-review` as a final-version review and pass it the delivered head; it reviews that
   head and writes no handoff record. The loop review that passed the earlier implement head

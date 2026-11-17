@@ -233,6 +233,8 @@ if run_section install; then
     && ok "the example explains the Codex network profile for PR delivery" || bad "the example explains the Codex network profile for PR delivery"
   grep -q '^  prompt: .*最終版 Review' "$SKILL/roles.example.yaml" && grep -q '^  prompt: .*Closure' "$SKILL/roles.example.yaml" \
     && ok "the example finish prompt says PR delivery covers the final-version review and the Closure" || bad "the example finish prompt says PR delivery covers the final-version review and the Closure"
+  grep -q '^  prompt: "\$openspec-commit.*直接同步主規格' "$SKILL/roles.example.yaml" \
+    && ok "the example finish prompt says to sync main specs without asking" || bad "the example finish prompt says to sync main specs without asking"
   rp="$(grep '^  prompt: "\$change-review' "$SKILL/roles.example.yaml")"
   grep -q '由 handoff hook 通知' <<<"$rp" && grep -q '不是排除通知' <<<"$rp" \
     && ok "the example review prompt says the hook notifies the implementer and this is not a notification exclusion" || bad "the example review prompt says the hook notifies the implementer and this is not a notification exclusion"
@@ -640,6 +642,7 @@ if run_section finish; then
   finish_in "$R6" add-export >/dev/null 2>&1
   msgs | grep 'fin-9' | grep -q '最終版 Review' && msgs | grep 'fin-9' | grep -q 'Closure' \
     && ok "a PR delivery retry states that it covers the final-version review and the Closure" || bad "a PR delivery retry states that it covers the final-version review and the Closure"
+  msgs | grep 'fin-9' | grep -q '直接同步主規格' && ok "a retry message says to sync main specs without asking" || bad "a retry message says to sync main specs without asking"
   R3="$tmp/fin-retry-dirty"; retry_loop "$R3" fin-9; use_project "$R3"; fresh_state f13; printf 'x\n' > "$R3/dirty.txt"
   refuse "a blocked finish is not retried with uncommitted changes" "$R3" "uncommitted"
   R4="$tmp/fin-retry-done"; retry_loop "$R4" fin-9; use_project "$R4"; fresh_state f14; hw "$R4" --role finish --status done --head HEAD

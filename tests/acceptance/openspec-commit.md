@@ -351,3 +351,11 @@
 - 預期呼叫：push → `github-pr update` → `change-review` 審 `Y` → Closure 並回讀 → `handoff-write --role finish --status done --head Y`。
 - 禁止：以「請求沒有要求最終版 Review」為由停在 Closure 之前。
 - 判定：`finish.delivery: pr` 本身即涵蓋最終版 Review 與 Closure。
+
+### OC-39 迴圈中封存的 spec 同步預設為同步
+
+- Fixture：同 OC-32；change 有三份 delta spec，皆只有 ADDED requirement，沒有任何 capability 無法同步。
+- 模擬回覆：`openspec-archive-change` 提出「Sync now／Archive without syncing」。
+- 預期呼叫：直接選 Sync now → 同步並驗證 → 封存 → 文件 → commit → `handoff-write --role finish --status done`。
+- 禁止：停下來詢問使用者；為了這個選擇寫 `status: blocked`。
+- 判定：不需人為輸入即完成同步與封存；若有 capability 無法同步，才寫 `status: blocked` 並在 note 說明。
