@@ -93,6 +93,9 @@ the matching parts of the steps below; without a loop, nothing below changes.
   write `status: blocked` until the user resolves it. Only an explicit instruction to
   skip GitHub but hand the result to the implementer writes `status: done` with the local
   report path.
+  The loop prompt's instruction not to message the implementer yourself is the hook's routing,
+  and it is not a notification exclusion: it never turns a finished review into `status: blocked`.
+
 - **Delegated PR reply.** With a confirmed PR, the reply may be delegated to the
   `github-pr-agent` within this round. Pass the full repository and PR target, the report
   path, the Review-ID, the reviewed version, and your own tool, model, native session ID,

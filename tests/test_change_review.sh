@@ -312,6 +312,8 @@ want "$SKILL" 'handoff-write' "a loop review ends with a handoff record"
 want "$SKILL" 'keep the technical verdict' "unconfirmed publication writes status: blocked and keeps the verdict"
 want "$SKILL" 'skip GitHub but hand the result to the implementer' "only an explicit local handoff instruction routes a local-only review"
 want "$SKILL" 'the handoff hook routes' "an active loop leaves implementer notification to the hook"
+want "$SKILL" 'is not a notification exclusion' "a loop prompt telling the reviewer not to message the implementer is not a notification exclusion"
+grep -q '^### CR-104 ' "$CASES" && ok "acceptance case CR-104 exists" || bad "acceptance case CR-104 exists"
 want "$SKILL" 'github-pr-agent' "the PR reply may be delegated to github-pr-agent"
 for id in CR-92 CR-93 CR-94 CR-95 CR-96 CR-97 CR-98 CR-99 CR-100 CR-101 CR-102 CR-103; do
   grep -q "^### $id " "$CASES" && ok "acceptance case $id exists" || bad "acceptance case $id exists"

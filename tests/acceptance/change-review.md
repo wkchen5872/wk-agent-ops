@@ -888,3 +888,11 @@ worktree 乾淨且 `HEAD` 為 `X`；除非另述，PR #12 已確認，head 為 `
 - 預期呼叫：委派時傳入完整 repo 與 PR、報告路徑、Review-ID、受審版本，以及審查者自己的工具、模型、原生與 Xirp Session ID。
 - 禁止：Author 寫成 `github-pr-agent` 的模型或 Session；未取得 confirmed 就寫 `status: done`。
 - 判定：回覆的 Author 為審查者，交件單在 confirmed 之後才寫。
+
+### CR-104 迴圈 prompt 的「不要自己傳訊」不是排除通知
+
+- Fixture：同 CR-92，沒有 PR；審查 prompt 寫「實作者由 handoff hook 通知，你不需要也不要自己傳訊」（舊版寫成「不要自行通知實作者」）；使用者沒有說 local-only，也沒有說不要通知。技術結論為 changes-required。
+- 模擬回覆：無。
+- 預期呼叫：存本地報告 → `handoff-write --role review --status done --verdict changes-required --head X --report <本地報告>`。
+- 禁止：把 prompt 的那句話當成使用者排除通知而寫 `status: blocked`；自己傳訊給實作者。
+- 判定：交件單為 `status: done`，交由 hook 轉給實作者。

@@ -233,6 +233,9 @@ if run_section install; then
     && ok "the example explains the Codex network profile for PR delivery" || bad "the example explains the Codex network profile for PR delivery"
   grep -q '^  prompt: .*最終版 Review' "$SKILL/roles.example.yaml" && grep -q '^  prompt: .*Closure' "$SKILL/roles.example.yaml" \
     && ok "the example finish prompt says PR delivery covers the final-version review and the Closure" || bad "the example finish prompt says PR delivery covers the final-version review and the Closure"
+  rp="$(grep '^  prompt: "\$change-review' "$SKILL/roles.example.yaml")"
+  grep -q '由 handoff hook 通知' <<<"$rp" && grep -q '不是排除通知' <<<"$rp" \
+    && ok "the example review prompt says the hook notifies the implementer and this is not a notification exclusion" || bad "the example review prompt says the hook notifies the implementer and this is not a notification exclusion"
 fi
 
 # ---------------------------------------------------------------- test doubles for xirp, gh and notify

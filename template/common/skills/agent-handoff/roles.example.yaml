@@ -24,7 +24,7 @@ review:
   model: gpt-6.1-sol
   effort: high
   name: "codex - review - {change}"
-  prompt: "$change-review {change}：這是交接迴圈第 {round} 輪的實作審查，受審版本為 commit {head}。依 agent-handoff Skill，結束時以 {handoff_write} --change {change} --role review 記錄結果；不要自行通知實作者。{author}"
+  prompt: "$change-review {change}：這是交接迴圈第 {round} 輪的實作審查，受審版本為 commit {head}。依 agent-handoff Skill，結束時以 {handoff_write} --change {change} --role review 記錄結果。實作者由 handoff hook 通知，你不需要也不要自己傳訊；這不是排除通知，結論照常以 --status done 記錄。{author}"
 
 # finish.delivery: pr pushes and writes to GitHub. Codex's default sandbox has no network,
 # so give a Codex finish role the profile created by scripts/handoff/install.sh:
