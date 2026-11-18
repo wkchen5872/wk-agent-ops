@@ -54,7 +54,9 @@ show_codex_wait_status() {
   echo ''
   echo '── Codex 人工等待通知 ──'
   echo '執行方式：hook 觸發、按需啟動；沒有 LaunchAgent 或登入服務。'
-  echo '範圍：授權與同步問題需本機 daemon；非同步題目依成功送出通知；一般文字問句不偵測。'
+  echo '範圍：授權等待優先看 daemon 旗標，查不到時改讀 Session 紀錄、只送「Approval Status Unknown」；'
+  echo '      終端機啟動的 Codex 不在 daemon 中，一律走 Session 紀錄。同步問題需 daemon 能查詢該 Session；'
+  echo '      非同步題目依成功送出通知；一般文字問句不偵測。'
   if ! codex_inspection_selected; then
     echo '設定：授權要求與等待回應皆關閉，不會查看 daemon。'
     return 0
@@ -70,7 +72,7 @@ show_codex_wait_status() {
   if printf '%s' "${result}" | jq -e '.available == true' >/dev/null 2>&1; then
     echo 'daemon：唯讀連線可用。'
   else
-    echo 'daemon：不可用或協定不支援；不會推測人工等待。'
+    echo 'daemon：不可用或協定不支援；授權改讀 Session 紀錄，同步問題無法偵測。'
   fi
   echo '本機端到端驗收：尚未記錄；設定開啟不代表人工授權／問題 hook 已實測。'
   echo '另需在 Codex /hooks 信任並勾選 owned hooks；此處無法讀取該啟用狀態。'

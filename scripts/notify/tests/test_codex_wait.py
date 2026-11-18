@@ -487,6 +487,10 @@ class CodexWaitTests(unittest.TestCase):
         self.assertIn("daemon：唯讀連線可用", result.stdout)
         self.assertIn("本機端到端驗收：尚未記錄", result.stdout)
         self.assertIn("按需啟動", result.stdout)
+        # Since task 1.2: authorization falls back to the session record, not "no inference".
+        self.assertIn("查不到時改讀 Session 紀錄", result.stdout)
+        self.assertIn("Approval Status Unknown", result.stdout)
+        self.assertNotIn("授權與同步問題需本機 daemon", result.stdout)
         self.assertNotIn("fixture-token", result.stdout + result.stderr)
 
 
