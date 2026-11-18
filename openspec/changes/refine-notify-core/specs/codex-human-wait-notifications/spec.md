@@ -34,10 +34,10 @@ Inspection SHALL observe only the triggering session and turn, with at most one 
 
 #### Scenario: Daemon unavailable with a pending authorization request
 - **WHEN** connection or schema checks fail while an authorization request is pending
-- **THEN** inspection keeps the pending request and decides from the session record after the authorization delay, without blocking native work
+- **THEN** inspection keeps the pending request, and after the authorization delay sends the unconfirmed notification if the session record still shows no result, without blocking native work
 
 ### Requirement: Explicit human-wait transitions
-Inspection SHALL notify for an approval only when the wait lasts longer than the authorization delay, using the runtime waiting flag, or the session record when the runtime cannot be queried. Synchronous structured questions SHALL notify as soon as their waiting flag is observed. Each kind SHALL be deduplicated per session, notify once per continuous wait, and re-arm after resolution. For request_user_input_async, a successful PostToolUse accepted=true result SHALL trigger the user-input notification without daemon inspection. Automatic review that resolves within the delay, general text questions, and quiet time without an unresolved authorization request MUST NOT produce human-wait messages.
+Inspection SHALL send a confirmed approval notification only when the runtime waiting flag lasts longer than the authorization delay. When the runtime cannot be queried and the session record still shows the request without a result after the delay, it SHALL send the unconfirmed notification of `notify-authorization-wait` instead. Synchronous structured questions SHALL notify as soon as their waiting flag is observed. Each kind SHALL be deduplicated per session, notify once per continuous wait, and re-arm after resolution. For request_user_input_async, a successful PostToolUse accepted=true result SHALL trigger the user-input notification without daemon inspection. Automatic review that resolves within the delay, general text questions, and quiet time without an unresolved authorization request MUST NOT produce human-wait messages.
 
 #### Scenario: Async question successfully posted
 - **WHEN** request_user_input_async returns accepted=true in PostToolUse

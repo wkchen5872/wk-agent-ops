@@ -9,15 +9,17 @@ Telegram 通知現在有三個問題，都來自同一個原因：通知發在�
 - **Antigravity 正常完成被顯示成 Task Stopped。** hook 只認得舊的終止原因 `model_stop`；`agy` 1.5.10 的正常完成是 `NO_TOOL_CALL`。
 - **通知內容與分類寫死在 bash 的 `case` 裡。** 改文案、改選單名稱或新增事件都要改程式，維護成本隨功能增加。
 
-使用者已確認（Work Item `WI-20261118-notify-optimization` 的 D-001～D-003）：授權通知可以延遲，預設 30 秒後 Agent 仍在等才通知，
+使用者已確認（Work Item `WI-20261118-notify-optimization` 的 D-001～D-005）：授權通知可以延遲，預設 30 秒後 Agent 仍在等才通知，
 Codex、Claude Code、Antigravity 一致；Agent 提問維持立即通知；交件單通知另開 change `add-handoff-notifications`。
 
 ## What Changes
 
 - **授權延遲確認**：收到「可能在等授權」的訊號時不立即通知；N 秒（`NOTIFY_AUTHORIZATION_DELAY_SECONDS`，預設 30）後仍在等才通知，
-  同一段等待只通知一次。三個工具各有起始訊號與「仍在等」的判斷依據。
+  同一段等待只通知一次。三個工具各有起始訊號、等待身分與「仍在等」的判斷依據。
+  Codex 的執行期狀態查不到時無法確認是否在等，改發一則標明「可能在等待授權，無法確認」的通知（使用者確認的例外，D-004）。
 - **通知分類改為四類**：工作結束、授權要求、等待回應、異常停止，各有一個開關。選單的「既有操作提醒」改為「授權要求」；
-  Codex 專用的兩個開關併入共用的授權要求與等待回應。舊設定鍵在新鍵不存在時仍被讀取。**BREAKING**：每次 PermissionRequest 立即通知的行為移除。
+  Codex 專用的兩個開關併入共用的授權要求與等待回應。舊設定鍵在新鍵不存在時仍被讀取。
+  已接受的取捨（D-005）：原本「一般操作提醒開、Codex 等待你授權關」的設定，合併後授權要求為開，Codex 的延遲授權通知隨之開啟。**BREAKING**：每次 PermissionRequest 立即通知的行為移除。
 - **Claude Code 的 Notification 依類型分流**：`permission_prompt` 屬授權要求（延遲確認）；提問與等待輸入屬等待回應（立即）；
   登入成功、額度恢復等資訊類型不再當成「Action Required」送出。
 - **Antigravity 完成判斷**：`NO_TOOL_CALL`（與舊的 `model_stop`）且背景工作結束才是完成；`USER_CANCELED` 不通知；其餘顯示為停止並附固定的原因標籤。
@@ -31,6 +33,8 @@ Codex、Claude Code、Antigravity 一致；Agent 提問維持立即通知；交�
 驗收條件：
 
 - 自動審核在延遲時間內放行的 Codex 請求不產生通知；停著等使用者超過延遲時間的請求產生一則通知。
+  Codex 執行期狀態查不到時，延遲後仍無結果的請求產生一則「無法確認」的通知，文字不宣稱正在等待。
+- 連續兩次授權等待各自計時：前一次的計時不會替後一次提早通知，已通知的等待解除後，下一次等待仍會通知。
 - Claude Code 的授權詢問與 Antigravity 的工具確認套用同一個延遲規則；Claude 與 Codex 的提問立即通知。
 - Antigravity 以 `NO_TOOL_CALL` 結束且背景工作完成時，通知為 Task Complete。
 - 沒有使用者範本時，工作結束、等待回應與異常停止的通知文字與現行相同；放入使用者範本後，通知使用該範本。

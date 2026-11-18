@@ -25,20 +25,24 @@ When a supported tool signals a possible authorization wait, the hook SHALL retu
 - **WHEN** the authorization category is disabled
 - **THEN** no delayed check is started and no authorization notification is sent
 
-### Requirement: Each tool has a start signal and still-waiting evidence
-The start signal SHALL be the `permission_prompt` Notification for Claude Code, the PermissionRequest hook for Codex, and a `tool_confirmation_pending` status of true for Antigravity. Still-waiting evidence SHALL be: for Claude Code, the session record shows the requested tool call without a result; for Codex, the runtime waiting-for-approval flag, or the session record when the runtime cannot be queried; for Antigravity, a pending confirmation that has not been cleared.
+### Requirement: Each tool has a start signal and confirming evidence
+The start signal SHALL be the `permission_prompt` Notification for Claude Code, the PermissionRequest hook for Codex, and a `tool_confirmation_pending` status of true for Antigravity. Confirming evidence SHALL be: for Claude Code, the session record shows the requested tool call without a result; for Codex, the runtime waiting-for-approval flag; for Antigravity, a pending confirmation that has not been cleared.
 
 #### Scenario: Claude Code permission prompt answered
 - **WHEN** Claude Code raises a `permission_prompt` and the session record shows the tool result before the delay ends
 - **THEN** no authorization notification is sent
 
 #### Scenario: Codex automatic review approves
-- **WHEN** Codex raises a PermissionRequest and its automatic reviewer approves it before the delay ends
-- **THEN** no authorization notification is sent
+- **WHEN** the Codex runtime can be queried, Codex raises a PermissionRequest, and its automatic reviewer approves it before the delay ends
+- **THEN** no authorization notification is sent, however long the approved command then runs
 
-#### Scenario: Codex runtime cannot be queried
-- **WHEN** the Codex runtime cannot be queried and the session record still shows the request without a result after the delay
-- **THEN** one authorization notification is sent
+#### Scenario: Codex waits for the user
+- **WHEN** the Codex runtime reports the waiting-for-approval flag continuously past the delay
+- **THEN** one confirmed authorization notification is sent
+
+#### Scenario: Codex request finishes while the runtime is unavailable
+- **WHEN** the Codex runtime cannot be queried and the session record shows the request's result before the delay ends
+- **THEN** no authorization notification is sent
 
 #### Scenario: Antigravity confirmation cleared
 - **WHEN** Antigravity reports `tool_confirmation_pending` false before the delay ends
@@ -59,12 +63,65 @@ The hook SHALL send at most one authorization notification for one continuous wa
 - **WHEN** two sessions each wait past the delay
 - **THEN** each session produces its own notification
 
-### Requirement: Unverifiable waits are reported, not dropped
-When the delay has passed and no still-waiting evidence can be read for the session, the hook SHALL send the authorization notification. A missed real wait is worse than a rare extra notice.
+### Requirement: A Codex session record alone does not confirm a wait
+A Codex session record that shows no result for a request SHALL NOT be treated as confirming evidence, because it cannot tell an approved command that is still running from a request that waits for approval. A recorded result SHALL still count as resolution.
+
+#### Scenario: Record without a result and no runtime
+- **WHEN** only the session record is available and it shows the request without a result after the delay
+- **THEN** the wait is handled as unconfirmed, not as confirmed
+
+### Requirement: Waits that cannot be confirmed are reported as unconfirmed
+When the delay has passed, the wait has not been shown to be resolved, and no confirming evidence can be read, the hook SHALL send one notification that says the agent may be waiting for authorization and that this could not be confirmed. It MUST NOT use the wording of a confirmed wait. This is the accepted exception to notifying only on confirmed waits: a missed real wait is worse than a rare extra notice.
+
+#### Scenario: Real wait while the Codex runtime is unavailable
+- **WHEN** the Codex runtime cannot be queried, the user has not approved, and the session record shows no result after the delay
+- **THEN** one unconfirmed authorization notification is sent
+
+#### Scenario: Approved command still running while the runtime is unavailable
+- **WHEN** the Codex runtime cannot be queried, the request was approved after 6 seconds, and its command is still running after the delay
+- **THEN** one unconfirmed authorization notification is sent, and it does not claim the agent is waiting
 
 #### Scenario: Session record is unreadable
 - **WHEN** the delay has passed and neither the runtime nor the session record can be read
-- **THEN** the authorization notification is sent
+- **THEN** one unconfirmed authorization notification is sent
+
+#### Scenario: Confirmed wait keeps the confirmed wording
+- **WHEN** confirming evidence shows the wait is still pending after the delay
+- **THEN** the confirmed authorization notification is sent, not the unconfirmed one
+
+### Requirement: A delayed check acts only on the wait that started it
+Each wait SHALL have its own identity: the request identifier when the tool exposes one, otherwise a new identity for each start signal that follows a resolved or replaced wait. A delayed check SHALL send or clear only the wait it was started for. It MUST NOT notify early for a later wait, clear a later wait, or let an earlier wait suppress a later one.
+
+#### Scenario: Notified, resolved, then waiting again
+- **WHEN** a wait was notified, the user answered it, and the same session raises a new authorization request
+- **THEN** the new request starts its own delay and is notified if it is still waiting after that delay
+
+#### Scenario: Second wait starts before the first timer ends
+- **WHEN** a first wait is resolved after 5 seconds, a second wait starts after 10 seconds, and the delay is 30 seconds
+- **THEN** nothing is sent at 30 seconds, and the second wait is notified at 40 seconds if it is still waiting
+
+#### Scenario: Earlier check does not clear a later wait
+- **WHEN** the delayed check of a resolved first wait runs while a second wait is pending
+- **THEN** the second wait's pending state is unchanged
+
+#### Scenario: Same request signalled again
+- **WHEN** a start signal arrives for a request that is already pending
+- **THEN** the pending wait keeps its identity and its original start time
+
+### Requirement: Waits are cleared by evidence of resolution
+A pending wait SHALL be cleared when its request has a recorded result, when the tool reports that the confirmation is no longer pending, or when the session's turn ends. A wait that was already notified SHALL be cleared the same way, so the next wait of that session can notify.
+
+#### Scenario: Claude Code prompt answered without a later signal
+- **WHEN** a notified Claude Code wait is answered and the session later stops
+- **THEN** the wait is cleared and a later permission prompt of that session can notify
+
+#### Scenario: Codex turn ends
+- **WHEN** the Codex turn that raised the request completes or is cancelled
+- **THEN** its pending wait is cleared without a notification
+
+#### Scenario: Antigravity conversation stops
+- **WHEN** an Antigravity conversation with a pending confirmation stops
+- **THEN** its pending wait is cleared
 
 ### Requirement: Authorization notices stay within the privacy boundary
 An authorization notification SHALL contain only the tool name, project, session label, time, and a generic label of the requesting tool. It MUST NOT contain the command, tool arguments, prompt text, or transcript content read while checking the wait.

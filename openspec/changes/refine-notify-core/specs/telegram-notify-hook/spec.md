@@ -125,15 +125,26 @@ existing command, track pending confirmations by conversation, and hand a pendin
 ## ADDED Requirements
 
 ### Requirement: Legacy category keys remain readable
-When a new category key is absent, the hook and the settings menu SHALL derive its value from the legacy keys: `NOTIFY_AUTHORIZATION` from `NOTIFY_ACTION_REQUIRED` or `NOTIFY_CODEX_HUMAN_APPROVAL`, and `NOTIFY_USER_INPUT` from `NOTIFY_ACTION_REQUIRED` or `NOTIFY_CODEX_USER_INPUT`, enabled when either legacy key is true. With no legacy key either, the level default SHALL apply. An environment variable SHALL override the config file for both new and legacy keys.
+When a new category key is absent from a source, the hook and the settings menu SHALL derive its value from that source's legacy keys: `NOTIFY_AUTHORIZATION` from `NOTIFY_ACTION_REQUIRED` and `NOTIFY_CODEX_HUMAN_APPROVAL`, and `NOTIFY_USER_INPUT` from `NOTIFY_ACTION_REQUIRED` and `NOTIFY_CODEX_USER_INPUT`. The derived value SHALL be enabled when either legacy key is `true`, and disabled when at least one is `false` and none is `true`.
 
 #### Scenario: Existing config with only legacy keys
 - **WHEN** the config holds `NOTIFY_ACTION_REQUIRED=true` and none of the new keys
 - **THEN** the authorization and user-input categories are both enabled
 
+#### Scenario: One legacy key on and one off
+- **WHEN** the config holds `NOTIFY_ACTION_REQUIRED=true` and `NOTIFY_CODEX_HUMAN_APPROVAL=false` and no `NOTIFY_AUTHORIZATION`
+- **THEN** the authorization category is enabled, including delayed Codex authorization notices
+
 #### Scenario: Both legacy sources are off
 - **WHEN** the config holds `NOTIFY_ACTION_REQUIRED=false` and `NOTIFY_CODEX_USER_INPUT=false` and no `NOTIFY_USER_INPUT`
 - **THEN** the user-input category is disabled
+
+#### Scenario: First menu save migrates the values
+- **WHEN** a config holding `NOTIFY_ACTION_REQUIRED=true`, `NOTIFY_CODEX_HUMAN_APPROVAL=false`, and `NOTIFY_CODEX_USER_INPUT=true` is saved from the category menu without toggling anything
+- **THEN** the config holds `NOTIFY_AUTHORIZATION=true` and `NOTIFY_USER_INPUT=true`, the three legacy keys are gone, and every other key is unchanged
+
+### Requirement: Category values resolve in a fixed order
+A category value SHALL be taken from the first source that defines it, in this order: the new key in the environment, the legacy keys in the environment, the new key in the config file, the legacy keys in the config file, then the level default. Only the exact values `true` and `false` SHALL count; any other value, including an empty one, SHALL be treated as not defined in that source.
 
 #### Scenario: New key wins over legacy keys
 - **WHEN** the config holds `NOTIFY_AUTHORIZATION=false` and `NOTIFY_ACTION_REQUIRED=true`
@@ -141,7 +152,19 @@ When a new category key is absent, the hook and the settings menu SHALL derive i
 
 #### Scenario: Legacy environment override still delivers
 - **WHEN** a caller sets `NOTIFY_ACTION_REQUIRED=true` in the environment and sends a notification event without a type
-- **THEN** the message is delivered even when the config file disables the user-input category
+- **THEN** the message is delivered even when the config file sets `NOTIFY_USER_INPUT=false`
+
+#### Scenario: New environment key beats legacy environment key
+- **WHEN** the environment holds `NOTIFY_USER_INPUT=false` and `NOTIFY_ACTION_REQUIRED=true`
+- **THEN** the user-input category is disabled
+
+#### Scenario: Invalid value is ignored
+- **WHEN** the config holds `NOTIFY_AUTHORIZATION=yes` and `NOTIFY_ACTION_REQUIRED=false`
+- **THEN** the authorization category is disabled, as if `NOTIFY_AUTHORIZATION` were absent
+
+#### Scenario: Nothing defined
+- **WHEN** no source defines the authorization category
+- **THEN** it is enabled
 
 ### Requirement: Claude Code notifications are classified by type
 The hook SHALL classify a Claude Code Notification by its `notification_type`: `permission_prompt` as authorization; `idle_prompt`, `agent_needs_input`, `elicitation_dialog`, and `elicitation_url_dialog` as user input; and a notification without a type as user input. Other types SHALL NOT be sent as a request for the user's action.

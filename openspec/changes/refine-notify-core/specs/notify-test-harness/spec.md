@@ -24,6 +24,14 @@ The harness SHALL verify delayed authorization for Claude Code, Codex, and Antig
 - **WHEN** the harness resolves the request before the shortened delay ends
 - **THEN** it observes no authorization message
 
+#### Scenario: Overlapping waits
+- **WHEN** the harness resolves a first wait and starts a second one before the first delay ends
+- **THEN** it observes no message from the first check and one message for the second wait after the second wait's own delay
+
+#### Scenario: Codex runtime unavailable
+- **WHEN** the harness makes the fake runtime unavailable for a real wait, an approved command that is still running, and an unreadable record
+- **THEN** each case produces one message with the unconfirmed wording and none with the confirmed wording
+
 #### Scenario: Stale state fixtures
 - **WHEN** the harness starts an inspection with old, recent, locked, and unrelated files in the state directory
 - **THEN** only the old unlocked notification-owned files are removed
