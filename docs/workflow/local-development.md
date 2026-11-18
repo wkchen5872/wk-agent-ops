@@ -117,6 +117,12 @@ changes-required 由 hook 把報告路徑轉給實作者，達輪數上限或 bl
 - 別人實作、你審：直接以 `change-review` 審 PR 並發布結論，不需要交件單。
 - 因此迴圈預設不 push、不開 PR，審查結論也只存本地；PR 是交給團隊的時點，不是迴圈的一部分。
 
+> **備註：Xirp 只看得到 Xirp 開的 Session。** 迴圈中的實作者、審查者與收尾 Session 由 `handoff-start`、hook 或
+> `handoff-finish` 透過 Xirp 開啟，會出現在 Xirp；Agent 自己在 Session 內派出的子代理（例如 Claude Code 的 Agent）
+> 與背景指令（例如在背景跑的完整測試）不會出現在 Xirp。此時 Session 可能顯示 `idle`，其實在等背景工作完成，結束後
+> Claude Code 會自動喚醒它繼續。審查者要等實作者寫出 implement 交件單、該輪結束時才由 hook 開啟，所以實作者還在
+> 子代理或背景檢查階段時，Xirp 裡沒有審查者是正常的。判斷進度看 `.agent-handoff/<change-id>/` 的交件單與 `routing.log`。
+
 ## 04 封存與交付
 
 [SVG 原稿](../diagrams/local-development-finish.svg)

@@ -135,6 +135,13 @@ writes to GitHub and never pushes. Its notices are sent even when the notifier's
 - **Nothing happens after an agent stops**: the session was opened before the hook was
   installed, Codex has not trusted the hook, or the agent did not write a record. Check
   `routing.log` and `.agent-handoff/<change-id>/`.
+- **Xirp shows no reviewer, or the implementer shows `idle` mid-round**: Xirp lists only the
+  sessions it opened (the loop's implementer, reviewer, and finish sessions). Subagents an
+  agent starts inside its session (for example Claude Code's Agent tool) and background
+  commands (for example a full test run) never appear there; an `idle` session may be waiting
+  for them and is resumed automatically when they finish. The reviewer opens only after the
+  implementer writes its implement record and its turn ends, so no reviewer before that is
+  expected. Check the records and `routing.log` for progress.
 - **"has uncommitted changes" or "HEAD … differs"**: commit or clean the worktree, then
   write a new record.
 - **`handoff-finish` refuses**: the message names the failed condition, such as a newer
