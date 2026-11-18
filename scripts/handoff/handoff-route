@@ -134,7 +134,13 @@ to_reviewer() {
   if [[ -z "$sess" ]]; then
     if [[ "$mode" == new ]]; then
       wt="${root}-review"
-      # A retry finds the worktree made by an earlier attempt and only moves it.
+      # A retry finds the worktree made by an earlier attempt: move it only when it is clean.
+      if [[ -d "$wt" ]] && ! ho_clean "$wt"; then
+        action="user:review-worktree-unclean"; outcome="stop"
+        detail="審查 worktree $wt 有未提交的變更，未移到新的 commit，也未開啟審查者。"
+        next="清理審查 worktree 後，請實作者寫新的交件單。"
+        return
+      fi
       if [[ -d "$wt" ]]; then git -C "$wt" checkout -q --detach "$head" 2>/dev/null
       else git -C "$root" worktree add -q --detach "$wt" "$head" 2>/dev/null; fi \
         || { action="user:review-worktree-failed"; detail="無法建立審查 worktree ${wt}，第 $round 輪未交給審查者，迴圈已停住。"; return; }

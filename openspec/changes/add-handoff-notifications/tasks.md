@@ -33,6 +33,11 @@
 - [x] 5.1 執行完整檢查：`tests/test_*.sh` 與 `scripts/notify/telegram/test.sh` 全部通過、`openspec validate add-handoff-notifications --strict` 通過。
 - [ ] 5.2 真實演練（需使用者在場，結果記入 Work Item）：在演練用的 repo 跑一輪含一次退回的迴圈，確認依序收到實作完成、審查退回、實作完成、審查通過（等你執行 `handoff-finish`）、收尾完成，每則有 Agent 資訊與下一步；關閉一個開關後該類不再出現，「需要你處理」仍會送出；另外刻意讓一次傳訊失敗（例如先刪除審查 Session），確認收到迴圈停住的通知、沒有進度通知，修復後以 `handoff-route --foreground` 重試成功。
 
+## 6. 實作審查修正（codex-01a1eecf-r01）
+
+- [x] 6.1 F-01：`finish_template.worktree: new` 時，收尾 worktree 已建立但開啟 Session 失敗，重試要重用這個 worktree（確認是此迴圈記錄的收尾 worktree、在 `feature/<change-id>`、HEAD 等於通過的 commit、且乾淨），不符合時照舊失敗、不動使用者內容。測試要求：先寫失敗測試——建立成功、開啟失敗、排除原因、重試成功，恰一個收尾 Session、恰一則 review 進度通知、交件單寫入 `.routed`。
+- [x] 6.2 F-02：`review_template.worktree: new` 重試時重用既有審查 worktree 前先檢查乾淨；不乾淨時依人工停點處理（一則 attention、寫入 `.routed`），不移動、不開啟或傳訊審查者、不發進度通知。測試要求：先寫失敗測試——開啟失敗後在審查 worktree 留下未追蹤檔，重試時沒有新 Session、沒有進度通知、檔案內容保留、交件單在 `.routed`。
+
 ## Workflow follow-up
 
 - 依使用者授權以 `openspec-commit` 封存並提交。

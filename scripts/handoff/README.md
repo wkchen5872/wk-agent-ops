@@ -141,6 +141,9 @@ A retry record is tried again by the next hook run in that worktree, or right aw
 (`~/.config/wk-workflow/handoff/handoff-route`); the routing log shows `send-failed` or
 `open-failed`. Its attention notice is sent once, however many retries fail; the progress notice
 follows once delivery succeeds.
+A retry reuses a review or finish worktree that the failed attempt already made only when it is
+clean; a finish worktree must also be the loop's recorded one, on `feature/<change-id>` at the
+passing commit. An unclean review worktree stops for you instead; nothing in either is removed.
 
 ## Notifications
 

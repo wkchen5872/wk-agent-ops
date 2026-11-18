@@ -617,6 +617,43 @@ if run_section notify; then
   [[ -z "$(msgs)" ]] && retry_case "a review worktree that cannot be moved is one attention notice and stays unprocessed" "$NV" 01-implement.yaml 'worktree' \
     || bad "a review worktree that cannot be moved is one attention notice and stays unprocessed"
 
+  # codex-01a1eecf-r01/F-01: a finish worktree made by a failed attempt is reused on retry.
+  NF="$tmp/n-finretry"; new_loop "$NF" shared auto; use_project "$NF"; fresh_state f6; rpt "$NF"
+  lf="$NF/.agent-handoff/add-export/loop.yaml"
+  awk '/^finish_template:/{s=1} s && /^  worktree: shared$/{print "  worktree: new"; s=0; next} {print}' "$lf" > "$lf.tmp" && mv "$lf.tmp" "$lf"
+  hw "$NF" --role implement --status done --head HEAD; hw "$NF" --role review --status done --verdict pass --head HEAD --report r.md
+  export FAKE_PROJECT_PATH="$tmp/nowhere"; route_in "$NF"
+  [[ -d "${NF}-finish" && "$(created)" == 0 && "$(kinds)" == attention ]] && ! routed "$NF" 02-review.yaml \
+    && ok "a finish session that cannot be opened leaves the prepared finish worktree and the record unprocessed" \
+    || bad "a finish session that cannot be opened leaves the prepared finish worktree and the record unprocessed ($(kinds))"
+  use_project "$NF"; route_in "$NF"
+  [[ "$(created)" == 1 && "$(kinds)" == "attention review" ]] && jt '.verdict=="pass"' && routed "$NF" 02-review.yaml \
+    && jq -e --arg w "${NF}-finish" '.worktreePath==$w' "$FAKE_XIRP_DIR/create-1.json" >/dev/null \
+    && ok "a retry reuses that finish worktree, opens one finish session and sends one review notice" \
+    || bad "a retry reuses that finish worktree, opens one finish session and sends one review notice (created $(created), $(kinds))"
+
+  NF2="$tmp/n-findirty"; new_loop "$NF2" shared auto; use_project "$NF2"; fresh_state f8; rpt "$NF2"
+  lf="$NF2/.agent-handoff/add-export/loop.yaml"
+  awk '/^finish_template:/{s=1} s && /^  worktree: shared$/{print "  worktree: new"; s=0; next} {print}' "$lf" > "$lf.tmp" && mv "$lf.tmp" "$lf"
+  hw "$NF2" --role implement --status done --head HEAD; hw "$NF2" --role review --status done --verdict pass --head HEAD --report r.md
+  export FAKE_PROJECT_PATH="$tmp/nowhere"; route_in "$NF2"
+  printf 'mine\n' > "${NF2}-finish/stray.txt"; use_project "$NF2"; route_in "$NF2"
+  [[ "$(created)" == 0 && "$(cat "${NF2}-finish/stray.txt")" == mine ]] && ! routed "$NF2" 02-review.yaml \
+    && ok "an unclean finish worktree is not reused and its content is kept" || bad "an unclean finish worktree is not reused and its content is kept"
+
+  # codex-01a1eecf-r01/F-02: a reused review worktree must be clean.
+  NRW="$tmp/n-revretry"; new_loop "$NRW" new; use_project "$NRW"; fresh_state f7; hw "$NRW" --role implement --status done --head HEAD
+  export FAKE_PROJECT_PATH="$tmp/nowhere"; route_in "$NRW"
+  rhead="$(git -C "${NRW}-review" rev-parse HEAD 2>/dev/null)"
+  printf 'keep me\n' > "${NRW}-review/stray.txt"
+  use_project "$NRW"; route_in "$NRW"
+  [[ "$(created)" == 0 && "$(kinds)" == "attention attention" && "$(cat "${NRW}-review/stray.txt")" == "keep me" \
+    && "$(git -C "${NRW}-review" rev-parse HEAD)" == "$rhead" ]] && jt '.detail|test("未提交")' && routed "$NRW" 01-implement.yaml \
+    && ok "an unclean reused review worktree stops for the user without opening the reviewer" \
+    || bad "an unclean reused review worktree stops for the user without opening the reviewer (created $(created), $(kinds))"
+  before="$(ncount)"; route_in "$NRW"
+  [[ "$(ncount)" == "$before" && "$(created)" == 0 ]] && ok "that stop is not notified again" || bad "that stop is not notified again"
+
   # Without a notification hook nothing is sent and routing is unchanged.
   route_none() { (cd "$1" && PATH="$FAKES:$PATH" HANDOFF_NOTIFY="$tmp/no-such-notify.sh" HANDOFF_CREATE_WAIT=2 CHIRP_SESSION_ID=chirp-1 "$ROUTE" --foreground </dev/null); }
   one_record "$tmp/n-none-ask" u1 --role review --status done --verdict pass --head HEAD --report r.md; route_none "$tmp/n-none-ask"; rc1=$?

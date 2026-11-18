@@ -328,7 +328,14 @@ ho_finish_open() {
   impl="$(kv_get "$loop" implementer.worktree)"; change="$(kv_get "$loop" change)"
   mode="$(kv_get "$loop" finish_template.worktree 2>/dev/null || echo shared)"
   wt="$impl"
-  if [[ "$mode" == new ]]; then
+  if [[ "$mode" == new && -d "${impl}-finish" ]]; then
+    # A retry after a failed open: reuse only the clean finish worktree this loop prepared
+    # on the feature branch at the passing commit; anything else is left untouched.
+    wt="${impl}-finish"
+    [[ "$(kv_get "$loop" finish.worktree 2>/dev/null)" == "$wt" && "$(git -C "$wt" branch --show-current 2>/dev/null)" == "feature/$change" \
+      && "$(ho_head "$wt")" == "$head" ]] && ho_clean "$wt" \
+      || { ho_err "cannot reuse the finish worktree $wt"; return 1; }
+  elif [[ "$mode" == new ]]; then
     wt="${impl}-finish"
     git -C "$impl" checkout -q --detach "$head" || { ho_err "cannot detach the implementer worktree"; return 1; }
     git -C "$impl" worktree add -q "$wt" "feature/$change" 2>/dev/null \
