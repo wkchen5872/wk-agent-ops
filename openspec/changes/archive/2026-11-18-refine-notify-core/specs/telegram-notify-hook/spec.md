@@ -68,10 +68,12 @@ suppressed or unavailable.
 - **THEN** no authorization message is sent now or later
 
 ### Requirement: Antigravity completion notifications
-The notification installer SHALL register an idempotent named Antigravity
-`Stop` command hook in the global Antigravity hook configuration when
-Antigravity CLI is detected. The hook SHALL return a non-continue decision and
-SHALL notify only after `fullyIdle` is true. It SHALL compare `terminationReason` without regard to letter case, treat `NO_TOOL_CALL` and the legacy `model_stop` as successful completion, send nothing for `USER_CANCELED`, and report every other reason as a stopped execution with a fixed label.
+The installer SHALL register an idempotent named Antigravity `Stop` command
+hook in the global Antigravity hook configuration when Antigravity CLI is
+detected. The hook SHALL return a non-continue decision, notify only after
+`fullyIdle` is true, and match `terminationReason` case-insensitively:
+`NO_TOOL_CALL` and legacy `model_stop` are completion, `USER_CANCELED` sends
+nothing, and any other reason is a stopped execution with a fixed label.
 
 #### Scenario: Fully idle normal completion
 - **WHEN** Antigravity sends `fullyIdle=true` and `terminationReason=NO_TOOL_CALL`
