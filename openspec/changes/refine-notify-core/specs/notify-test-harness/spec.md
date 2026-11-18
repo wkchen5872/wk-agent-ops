@@ -32,6 +32,10 @@ The harness SHALL verify delayed authorization for Claude Code, Codex, and Antig
 - **WHEN** the harness sends repeated start signals without an identifier, with and without resolution evidence between them
 - **THEN** the delay is never restarted by a repeat, a merged wait produces one message, and a wait after the re-arm interval or after resolution evidence produces its own message
 
+#### Scenario: Re-arm interval at or below the delay
+- **WHEN** the harness sets the re-arm interval shorter than, and then equal to, the delay and keeps sending start signals without resolution
+- **THEN** in both runs the first message arrives at the delay
+
 #### Scenario: Codex runtime unavailable
 - **WHEN** the harness makes the fake runtime unavailable for a real wait, an approved command that is still running, and an unreadable record
 - **THEN** each case produces one message with the unconfirmed wording and none with the confirmed wording

@@ -60,7 +60,7 @@ Codex、Claude Code、Antigravity 一致；Agent 提問維持立即通知；交�
   `scripts/notify/codex/wait.py`、`scripts/notify/telegram/test.sh`；新增預設範本與事件對照表。
 - 部署：`~/.config/ai-notify/hooks/` 的腳本、新增內建範本目錄；使用者範本目錄 `~/.config/ai-notify/templates/`（選用）。
   已安裝的環境要執行 `scripts/notify/telegram/update.sh` 重新部署；hook 的登記指令不變，Codex 不需重新信任。
-- 設定：`~/.config/ai-notify/config` 新增 `NOTIFY_AUTHORIZATION`、`NOTIFY_USER_INPUT`、`NOTIFY_AUTHORIZATION_DELAY_SECONDS`、`NOTIFY_AUTHORIZATION_REARM_SECONDS`（工具不提供請求識別時，已記錄的等待多久後可重新通知，預設 600）；
+- 設定：`~/.config/ai-notify/config` 新增 `NOTIFY_AUTHORIZATION`、`NOTIFY_USER_INPUT`、`NOTIFY_AUTHORIZATION_DELAY_SECONDS`、`NOTIFY_AUTHORIZATION_REARM_SECONDS`（工具不提供請求識別時，已通知的等待從通知起算多久後可再次通知，預設 600；只適用已通知的等待）；
   `NOTIFY_ACTION_REQUIRED`、`NOTIFY_CODEX_HUMAN_APPROVAL`、`NOTIFY_CODEX_USER_INPUT` 改為相容讀取。
 - 交接迴圈：`handoff-route` 目前以環境變數 `NOTIFY_ACTION_REQUIRED=true` 經一般通知送出，本 change 保留這個相容行為；專屬事件在 `add-handoff-notifications` 處理。
 - 文件：`docs/notify/telegram.md`、`docs/notify/architecture.md`、`scripts/notify/README.md`。

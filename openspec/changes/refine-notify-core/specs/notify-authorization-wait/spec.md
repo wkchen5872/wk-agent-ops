@@ -113,7 +113,7 @@ Each wait SHALL have its own identity: the request identifier when the tool expo
 - **THEN** either the check finishes for the earlier wait before the replacement, or it sees the replacement and does nothing; the new wait is never notified or cleared by it
 
 ### Requirement: Waits without a request identifier are merged until cleared
-When the tool exposes no request identifier, a start signal that arrives while the session has a wait on record SHALL be treated as the same wait: it MUST NOT change the identity, restart the delay, or cause another notification. Such a wait SHALL be cleared by evidence of resolution, by the end of the turn, or when it is older than `NOTIFY_AUTHORIZATION_REARM_SECONDS`, default 600; a start signal after that SHALL begin a new wait.
+When the tool exposes no request identifier, a start signal that arrives while the session has a wait on record SHALL be treated as the same wait: it MUST NOT change the identity, restart the delay, or cause another notification. Such a wait SHALL be cleared by evidence of resolution or by the end of the turn. A wait that has not been notified MUST NOT be cleared or restarted because of its age.
 
 #### Scenario: Repeated signal does not postpone the notice
 - **WHEN** start signals without an identifier arrive at 0 and 10 seconds with no resolution between them and the delay is 30 seconds
@@ -127,13 +127,44 @@ When the tool exposes no request identifier, a start signal that arrives while t
 - **WHEN** a wait without an identifier was notified, no resolution evidence arrives, and a start signal arrives 60 seconds later
 - **THEN** no second notification is sent
 
-#### Scenario: Re-arm after the interval
-- **WHEN** a notified wait without an identifier is older than the re-arm interval and a start signal arrives
-- **THEN** a new wait begins and is notified if it is still waiting after its own delay
+#### Scenario: Pending wait is never aged out
+- **WHEN** a wait without an identifier has not been notified and start signals keep arriving
+- **THEN** its identity and start time stay the same until its delayed check runs
 
 #### Scenario: Resolution evidence re-arms at once
 - **WHEN** a wait without an identifier is cleared by evidence of resolution and a start signal arrives 5 seconds later
 - **THEN** a new wait begins with its own delay
+
+### Requirement: A notified wait without an identifier re-arms after an interval
+For a wait without a request identifier that has already been notified, a start signal that arrives at least `NOTIFY_AUTHORIZATION_REARM_SECONDS` after that notification, default 600, SHALL begin a new wait with its own delay. The interval SHALL be counted from the notification, never from the start of the wait, and SHALL apply only to notified waits. A non-numeric or negative value SHALL be treated as the default; no relation to the delay is required.
+
+#### Scenario: Re-arm after the interval
+- **WHEN** a wait was notified 600 seconds ago with the default interval and a start signal arrives
+- **THEN** a new wait begins and is notified if it is still waiting after its own delay
+
+#### Scenario: Signal before the interval ends
+- **WHEN** a wait was notified 599 seconds ago with the default interval and a start signal arrives
+- **THEN** it is merged into the notified wait and nothing is sent
+
+#### Scenario: Interval shorter than the delay
+- **WHEN** the delay is 30 seconds, the interval is 10 seconds, and start signals arrive every 11 seconds with no resolution
+- **THEN** the first notification is sent at 30 seconds and none is sent before it
+
+#### Scenario: Interval equal to the delay
+- **WHEN** the delay and the interval are both 30 seconds and start signals arrive every 10 seconds with no resolution
+- **THEN** the first notification is sent at 30 seconds
+
+#### Scenario: Delay longer than the default interval
+- **WHEN** the delay is 900 seconds, the interval is the default 600, and start signals keep arriving with no resolution
+- **THEN** the first notification is sent at 900 seconds
+
+#### Scenario: Reminder after re-arming
+- **WHEN** the delay is 30 seconds, the interval is 10 seconds, a wait was notified at 30 seconds, and the next start signal arrives at 44 seconds with no resolution
+- **THEN** a new wait begins at 44 seconds and is notified at 74 seconds
+
+#### Scenario: Invalid interval
+- **WHEN** `NOTIFY_AUTHORIZATION_REARM_SECONDS` is `abc` or `-5`
+- **THEN** the default of 600 seconds is used
 
 ### Requirement: Waits are cleared by evidence of resolution
 A pending wait SHALL be cleared when its request has a recorded result, when the tool reports that the confirmation is no longer pending, or when the session's turn ends. A wait that was already notified SHALL be cleared the same way, so the next wait of that session can notify.
