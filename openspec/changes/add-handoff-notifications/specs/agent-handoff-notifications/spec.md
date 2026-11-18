@@ -41,7 +41,7 @@ When the routing hook processes a handoff record, it SHALL notify the user with 
 - **THEN** review and finish notifications are still sent
 
 ### Requirement: Notices that need the user cannot be switched off
-The hook SHALL send an attention notification, whatever the three switches say, when the loop cannot continue without the user: a `blocked` status or verdict, the round limit, a worktree that is not clean or not at the recorded head, a reviewer or review worktree that cannot be opened or moved, an unreadable record, a refused or stopped finish, and a passing review that waits for the user to run `handoff-finish`.
+The hook SHALL send an attention notification, whatever the three switches say, when the loop cannot continue without the user: a `blocked` status or verdict, the round limit, a worktree that is not clean or not at the recorded head, a reviewer or review worktree that cannot be opened or moved, a handoff message that could not be delivered, an unreadable record, a refused or stopped finish, and a passing review that waits for the user to run `handoff-finish`.
 
 #### Scenario: Pass waits for the user
 - **WHEN** a review passes, the finish trigger is `ask`, and `NOTIFY_HANDOFF_REVIEW=false`
@@ -59,6 +59,44 @@ The hook SHALL send an attention notification, whatever the three switches say, 
 - **WHEN** a review passes, the finish trigger is `auto`, and `NOTIFY_HANDOFF_REVIEW=false`
 - **THEN** the finish session is opened and no review notification is sent
 
+### Requirement: An undelivered handoff is not announced as progress
+A progress notification SHALL be sent only after the routing action for the record succeeded. When the message to the reviewer or the implementer could not be delivered, the hook SHALL send no implementation or review notification for that record and SHALL send one attention notification that names the agent that could not be reached and how to retry. It SHALL send that attention notification at most once per record, however many retries fail.
+
+#### Scenario: Reviewer cannot be messaged
+- **WHEN** an `implement`/`done` record is processed and the message to the existing reviewer fails
+- **THEN** no implementation notification is sent and the user receives an attention notification saying the reviewer was not reached
+
+#### Scenario: Implementer cannot be messaged
+- **WHEN** a `changes-required` review is processed and the message to the implementer fails
+- **THEN** no review notification is sent and the user receives an attention notification saying the implementer was not reached
+
+#### Scenario: Retry fails again
+- **WHEN** a later hook run retries the same record and delivery fails again
+- **THEN** no second attention notification is sent for that record
+
+#### Scenario: Retry succeeds
+- **WHEN** a later hook run retries the record and the message is delivered
+- **THEN** the progress notification for that record is sent once
+
+### Requirement: Notices reach the user during a mixed deployment
+The handoff hook SHALL send handoff events only when the installed notification hook supports them. Otherwise it SHALL send attention notices through the previous generic notification path, so they are still delivered, and SHALL skip progress notices. Either installer MAY be deployed or rolled back first.
+
+#### Scenario: New handoff hook with an older notification hook
+- **WHEN** the notification hook does not support handoff events and a review passes with the finish trigger `ask`
+- **THEN** the user receives the notice to run `handoff-finish <change-id>` through the generic notification path
+
+#### Scenario: Blocked record with an older notification hook
+- **WHEN** the notification hook does not support handoff events and a record is `blocked`
+- **THEN** the user receives the blocked notice through the generic notification path
+
+#### Scenario: Progress with an older notification hook
+- **WHEN** the notification hook does not support handoff events and an `implement`/`done` record is routed
+- **THEN** routing happens as usual and no progress notice is sent
+
+#### Scenario: Notification hook rolled back
+- **WHEN** the notification hook is rolled back to a version without handoff events while the new handoff hook stays installed
+- **THEN** attention notices are still delivered through the generic notification path
+
 ### Requirement: Notifications name the agent that wrote the record
 A handoff notification SHALL show the tool, model, and effort of the session that wrote the record, as Xirp reports them when the record is processed, in the form `Agent Handoff (<tool> / <model> / <effort>)`. A part that Xirp does not report SHALL be omitted, and with no part known the label SHALL be `Agent Handoff`.
 
@@ -73,6 +111,10 @@ A handoff notification SHALL show the tool, model, and effort of the session tha
 #### Scenario: Model changed during the session
 - **WHEN** the user switched the session's model before it stopped
 - **THEN** the notification shows the model in use when the record was processed
+
+#### Scenario: Agent values contain formatting characters
+- **WHEN** the reported model or effort contains `_` or `*`
+- **THEN** the notification shows those characters literally
 
 ### Requirement: Notifications say what happened and what comes next
 A handoff notification SHALL have a title for its kind, the change, the round, the commit shortened to seven characters when the record has one, and one line saying what happens next or what the user must do. Its title SHALL carry the same session label as that session's ordinary notifications.

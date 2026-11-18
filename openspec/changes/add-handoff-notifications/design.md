@@ -79,13 +79,51 @@ telegram-notify.sh handoff
 - 標題的 Session 標籤沿用 hook 輸入的原生 `session_id`，和同一個 Session 的 Task Complete 通知一致。
 - 內建範本四個：`handoff-implement`、`handoff-review`、`handoff-finish`、`handoff-attention`；使用者可用同名檔覆寫。
 
-### 5. TDD 策略與測試邊界
+### 5. 傳訊失敗（審查 r02/F-01）
+
+現況：`to_reviewer`、`to_implementer` 呼叫 `ho_xirp_message` 後不看結果就回報 `messaged`，交件單也照樣寫入 `.routed`。
+傳訊失敗時迴圈其實已經停住，卻會被記成已交付。
+
+- 路由動作回報三種結果：已交付、交付失敗、需要使用者。只有「已交付」才發進度通知、才寫入 `.routed`。
+- 交付失敗時：`routing.log` 記為 `…:send-failed`；發一則 `attention`，內容為「無法把第 N 輪交給審查者／實作者，迴圈已停住」與重試方式；
+  交件單不寫入 `.routed`。
+- 同一張交件單的失敗通知只發一次：另以 `.notified` 記錄已發過 attention 的交件單，重試再失敗不重發。
+- 重試：之後任何一次在該 worktree 觸發的 hook 都會再試；也可以在該 worktree 手動執行 `handoff-route --foreground`。
+  重試成功後才發進度通知並寫入 `.routed`。
+- 開啟新的審查或收尾 Session 失敗屬於既有的「無法開啟」情況，同樣不寫入 `.routed`、發 attention，一併套用上述規則。
+- hook 仍以成功狀態結束，不影響 Agent。
+- 替代方案：失敗也標成已處理，只靠 attention 提醒。不採用——使用者處理完原因後沒有辦法讓 hook 再送一次，只能自己手動傳訊。
+
+### 6. 混版部署與回退（審查 r02/F-02）
+
+交接端與通知端由兩個 installer 分別部署。只更新交接端（或通知端被回退）時，舊的通知 hook 不認得 `handoff` 事件；
+在 `attention_required` 層級下未知事件會被濾掉，唯一要使用者處理的提示就會消失。
+
+- 交接端送出前先判斷通知端是否支援交件單事件：檢查已部署的事件對照表（`~/.config/ai-notify/hooks/events.tsv`）是否有 `handoff:attention`。
+  不用呼叫通知腳本探測，因為舊版腳本會把不認得的參數當成事件處理。
+- 支援時：走新的 `handoff` 事件。
+- 不支援時（對照表不存在或沒有該列）：`attention` 類改走原本的一般通知路徑——`notification` 事件、純文字訊息、帶 `NOTIFY_ACTION_REQUIRED=true`，
+  與現行行為相同；進度類不送（舊版本來就沒有）。
+- 反方向（舊的交接端、新的通知端）由 `refine-notify-core` 保留的「環境變數舊鍵覆寫仍會送出」保證。
+- 因此兩個 installer 的部署與回退順序都不受限制，文件只需說明：兩者都更新後才會看到新的標題、Agent 資訊與進度通知。
+
+| 交接端 | 通知端 | attention | 進度通知 |
+| --- | --- | --- | --- |
+| 新 | 新 | `handoff` 事件，專屬標題 | 依開關 |
+| 新 | 舊或已回退 | 一般通知路徑（Action Required） | 不送 |
+| 舊 | 新 | 一般通知路徑（由 core 的相容規則送出） | 無 |
+
+### 7. TDD 策略與測試邊界
 
 - `tests/test_agent_handoff.sh` 的假通知腳本改為記錄收到的事件與 JSON。先寫失敗測試：每種交件單產生的事件種類與欄位、
   `attention` 的各個來源、同一張交件單不重複通知、Xirp 讀不到 Agent 資訊時仍路由並送出不含 Agent 的通知、不再出現環境變數覆寫。
 - `scripts/notify/telegram/test.sh` 以 dry-run 驗證：四個範本的輸出、三個開關與缺少鍵的預設、`attention` 在所有開關關閉時仍送出、
   交件單事件不落到等待回應的範本。
-- 既有的路由測試（開啟或通知審查者、退回、輪數上限、乾淨檢查）必須維持通過，證明路由沒有改變。
+- 傳訊失敗：假的 `xirp` 對 `session message` 回傳非零，分別測審查者與實作者兩條路徑——沒有進度通知、有一則 attention、交件單不在 `.routed`、
+  hook 以成功結束；再次執行仍失敗不重發 attention；改為成功後訊息送出一次、進度通知出現、交件單寫入 `.routed`。
+- 混版：以「沒有事件對照表」「對照表沒有交件單事件」「對照表有交件單事件」三種暫時 HOME，驗證審查通過且 `ask`、blocked 兩種情況在前兩者走一般通知路徑、
+  在第三者走 `handoff` 事件；進度類在前兩者不送。
+- 既有的路由測試（開啟或通知審查者、退回、輪數上限、乾淨檢查）必須維持通過，證明傳訊成功時的路由沒有改變。
 - 測試都在暫時的 HOME 與假的 `xirp`、假通知腳本下執行，不送真實 Telegram。
 - 真實驗收另列：在演練用的 repo 跑一輪含退回的迴圈，對照收到的通知順序，結果記入 Work Item。
 
@@ -94,13 +132,15 @@ telegram-notify.sh handoff
 - [實作完成與 Task Complete 會各發一則] → 使用者已接受；兩者帶相同的 Session 標籤，方便之後決定關哪一個。
 - [通知變多] → 三個開關可關；`attention` 才是必須處理的。
 - [Xirp 回報的 effort 欄位名稱依工具不同（`effort`、`reasoning_effort`）] → 兩個都讀；讀不到就省略。
-- [通知腳本是舊版（尚未部署 `refine-notify-core`）時收到 `handoff` 事件] → 舊版會當成未知事件處理；安裝說明要求兩個 installer 都重新部署，
-  `handoff-route` 不因此失敗。
+- [通知端是舊版或已回退] → 交接端偵測不到交件單事件時改走一般通知路徑，attention 仍送達（決策 6）。
+- [傳訊失敗後沒有 Agent 再停下，hook 不會自動重試] → attention 寫明手動重試指令 `handoff-route --foreground`；之後任何一次在該 worktree 的 hook 執行也會重試。
+- [未寫入 `.routed` 的交件單在每次 hook 執行時都重試] → 重試只在傳訊失敗的交件單發生；attention 每張交件單只發一次。
 - [`attention` 不可關閉可能被認為太吵] → 這些情況下迴圈已經停住；文件說明原因。
 
 ## Migration Plan
 
-1. `refine-notify-core` 合併並部署後才實作本 change。
-2. 合併後執行 `scripts/notify/telegram/update.sh` 與 `scripts/handoff/install.sh` 重新部署；hook 的登記指令不變，Codex 不需重新信任。
+1. `refine-notify-core` 合併後才實作本 change（需要它的範本、事件對照表與設定）。
+2. 部署：`scripts/notify/telegram/update.sh` 與 `scripts/handoff/install.sh` 可以任一先執行。只更新其中一個時，
+   「需要你處理」仍經一般通知路徑送達（決策 6）；兩者都更新後才有專屬標題、Agent 資訊與進度通知。hook 的登記指令不變，Codex 不需重新信任。
 3. 進行中的迴圈不受影響：通知只取決於之後處理的交件單。
-4. 回復：重新部署前一版的兩個腳本；新增的三個設定鍵對舊版無作用。
+4. 回退：兩個腳本可以各自回退，順序不限。通知端回退後交接端自動改走一般通知路徑；交接端回退後回到現行行為。新增的三個設定鍵對舊版無作用。

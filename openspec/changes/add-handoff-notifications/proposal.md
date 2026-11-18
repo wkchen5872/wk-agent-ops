@@ -21,6 +21,10 @@ Agent 的工具／模型／effort，並能分別開關實作完成、每輪審�
 - **顯示 Agent 資訊**：`Agent Handoff (Claude / claude-opus-5-5 / high)`，取自寫下該交件單的 Session 當下在 Xirp 的工具、模型與 effort；取不到的部分省略。
 - **訊息內容**：commit 顯示 7 碼；每則附一句接下來會發生什麼；標題帶與該 Session 一般通知相同的 Session 標籤，方便對照。
 - 交件單通知不再以環境變數覆寫一般通知的開關，改走自己的事件與開關。
+- **傳訊失敗不再被當成已交件**：對審查者或實作者的 Xirp 訊息送不出去時，不發進度通知、不把交件單標成已處理，改發一則「需要你處理」，
+  之後的 hook 執行或手動執行會重試。
+- **混版部署仍看得到「需要你處理」**：通知端還不支援交件單事件時（尚未更新或已回退），交接端改走原本的一般通知路徑送出需要你處理的通知，
+  兩個 installer 的部署與回退順序不受限制。
 - 一般的 Task Complete 通知維持不變，不因交件單通知而略過。
 
 支援的 AI CLI：Claude Code、Codex（兩者的 Stop hook 都已登記交接路由）。Antigravity 目前不在交接迴圈內。
@@ -31,6 +35,8 @@ Agent 的工具／模型／effort，並能分別開關實作完成、每輪審�
 - 關閉某一類開關後該類不再通知，其他類與「需要你處理」不受影響。
 - 審查通過且收尾設定為 `ask` 時，即使審查開關關閉，使用者仍收到執行 `handoff-finish` 的通知。
 - 沒有 Xirp 或 Telegram 未啟用時，路由行為與現在相同，hook 仍然安靜結束。
+- 對審查者或實作者傳訊失敗時，使用者收到一則說明迴圈已停住的通知，沒有「已交給對方」的進度通知；重試成功後才出現進度通知。
+- 只更新交接端、通知端仍是舊版時，審查通過（等你執行 `handoff-finish`）與 blocked 的通知仍然送達。
 
 依賴：本 change 使用 `refine-notify-core` 的訊息範本與事件對照表，須在該 change 合併後實作。
 
@@ -43,6 +49,7 @@ Agent 的工具／模型／effort，並能分別開關實作完成、每輪審�
 ### Modified Capabilities
 
 - `telegram-notify-hook`: 通知 hook 接受交件單事件並套用其開關；設定選單列出三個交件單開關。
+- `agent-handoff-routing`: 傳訊失敗的交件單不標成已處理、不記為已交付，之後可重試。
 
 ## Impact
 
@@ -52,4 +59,4 @@ Agent 的工具／模型／effort，並能分別開關實作完成、每輪審�
 - 設定：`~/.config/ai-notify/config` 新增三個鍵；缺少時視為開啟。
 - 部署：需重新執行 `scripts/handoff/install.sh` 與 `scripts/notify/telegram/update.sh`；hook 的登記指令不變，Codex 不需重新信任。
 - 文件：`scripts/handoff/README.md`、`docs/notify/telegram.md`、`docs/workflow/local-development.md`。
-- 規格 `agent-handoff-routing` 的路由規則不變；本 change 只增加對使用者的通知。
+- 規格 `agent-handoff-routing` 的路由對象與條件不變；新增「傳訊失敗時不標成已處理、可重試」。
