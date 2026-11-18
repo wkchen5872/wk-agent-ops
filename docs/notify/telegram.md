@@ -148,7 +148,8 @@ Codex 細節：
 
 ### Claude Notification 類型
 
-- `permission_prompt` → 授權（延遲）。
+- `permission_prompt` → 授權（延遲）。例外：紀錄中等待的工具是 `AskUserQuestion` 時屬於提問，立即送出「Waiting for Your Response」，
+  受「等待回應」開關控制。Claude 約在提問出現 6 秒後才發這則通知（2026-11-18 真實驗收發現）。
 - `idle_prompt`、`agent_needs_input`、`elicitation_dialog`、`elicitation_url_dialog`、無類型 → 等待回應（立即送出）。
 - 其他類型（`auth_success`、`agent_completed` 等）→ 不送。
 

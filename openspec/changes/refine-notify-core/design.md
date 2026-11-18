@@ -172,6 +172,9 @@ stdin JSON + 參數
 - 這修改了既有 spec 的兩句（見 Context），並且是 D-001「只在真的等待時通知」的明確例外，使用者已確認。
   理由：38% 的 Session 連不上 daemon，其餘以 CLI 啟動的 Session 也查不到旗標；不通知等於這些 Session 真的卡住時沒有任何訊號。「靜默時間」本身仍不會觸發通知，必須有一個未解除的授權請求。
 - Claude Code 的 `permission_prompt` 只在真的要詢問使用者時出現（`auto` 模式由分類器決定，不詢問），加上延遲後行為與其他工具一致。
+- 例外（任務 8.2 真實驗收發現，使用者 2026-11-18 確認）：Claude Code 也以 `permission_prompt` 通知 `AskUserQuestion` 提問。
+  hook 讀紀錄尾端未取得結果的工具呼叫，名稱是 `AskUserQuestion` 時改為「等待回應」：立即送出提問範本，受等待回應開關控制（D-002）。
+  Claude 本身約在提問出現 6 秒後才發這則通知，這段延遲無法縮短。
 - 替代方案：依 `approvals_reviewer` 設定直接略過 Codex 的通知。不採用——設定可被 profile 或啟動參數覆寫，而且自動審核拒絕後仍可能需要使用者。
 
 ### 5. 範本

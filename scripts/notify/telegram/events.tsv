@@ -11,6 +11,8 @@ notification:agent_needs_input	user_input	action-required
 notification:elicitation_dialog	user_input	action-required
 notification:elicitation_url_dialog	user_input	action-required
 notification:permission_prompt	authorization	authorization
+# AskUserQuestion arrives as permission_prompt; the hook rewrites it to this key.
+notification:question	user_input	question
 notification:*	none	-
 userpromptsubmitted	user_input	action-required
 antigravity-statusline	authorization	authorization

@@ -167,7 +167,7 @@ A category value SHALL be taken from the first source that defines it, in this o
 - **THEN** it is enabled
 
 ### Requirement: Claude Code notifications are classified by type
-The hook SHALL classify a Claude Code Notification by its `notification_type`: `permission_prompt` as authorization; `idle_prompt`, `agent_needs_input`, `elicitation_dialog`, and `elicitation_url_dialog` as user input; and a notification without a type as user input. Other types SHALL NOT be sent as a request for the user's action.
+The hook SHALL classify a Claude Code Notification by its `notification_type`: `permission_prompt` as authorization (except for questions, see the next requirement); `idle_prompt`, `agent_needs_input`, `elicitation_dialog`, and `elicitation_url_dialog` as user input; and a notification without a type as user input. Other types SHALL NOT be sent as a request for the user's action.
 
 #### Scenario: Permission prompt
 - **WHEN** a Notification with `notification_type=permission_prompt` arrives
@@ -184,6 +184,17 @@ The hook SHALL classify a Claude Code Notification by its `notification_type`: `
 #### Scenario: Informational notification
 - **WHEN** a Notification with `notification_type=auth_success` arrives
 - **THEN** no waiting or authorization message is sent
+
+### Requirement: Claude Code questions are not authorization waits
+Claude Code also raises `AskUserQuestion` through a `permission_prompt` Notification. When the pending tool call in the session record is `AskUserQuestion`, the hook SHALL send the waiting-for-response question message at once under the user-input category, without the authorization delay or authorization wording.
+
+#### Scenario: Question raised through a permission prompt
+- **WHEN** a Notification with `notification_type=permission_prompt` arrives and the pending tool call in the session record is `AskUserQuestion`
+- **THEN** the question message is sent at once under the user-input category and no authorization wait is started
+
+#### Scenario: Questions disabled
+- **WHEN** the same question arrives and the user-input category is disabled
+- **THEN** no message is sent, even when the authorization category is enabled
 
 ### Requirement: Changing the level keeps other switches
 Changing `NOTIFY_LEVEL` through the update menu SHALL write only `NOTIFY_LEVEL` and the completion switch that the level defines. It MUST NOT change the authorization, user-input, or failure switches.

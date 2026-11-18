@@ -189,10 +189,30 @@ if [[ "${EVENT_TYPE}" == "antigravity-stop" ]]; then
   AGY_TERMINATION_REASON="$(_json_str "${STDIN_JSON}" "terminationReason" | tr '[:upper:]' '[:lower:]')"
   EVENT_KEY="antigravity-stop:${AGY_TERMINATION_REASON}"
 fi
-# Claude Code tells notification kinds apart by notification_type.
+# Claude Code: the last tool call without a result in the session record.
+# Prints "<id><TAB><tool name>"; fails when the record cannot be read.
+claude_pending_call() {
+  [[ -r "$1" ]] && command -v jq >/dev/null 2>&1 || return 1
+  tail -n 400 "$1" | jq -Rrn '
+    [inputs | fromjson? | .message.content? | arrays | .[] | objects] as $items
+    | [$items[] | select(.type == "tool_result") | .tool_use_id] as $done
+    | [$items[] | select(.type == "tool_use") | select(.id as $id | $done | any(. == $id) | not)]
+    | last | select(. != null) | "\(.id)\t\(.name // "")"' 2>/dev/null
+}
+
+# Claude Code tells notification kinds apart by notification_type. A permission prompt
+# for AskUserQuestion is a question, not an authorization wait (D-002).
 if [[ "${EVENT_TYPE}" == "notification" ]]; then
   NOTIFICATION_TYPE="$(_json_str "${STDIN_JSON}" "notification_type" | tr '[:upper:]' '[:lower:]')"
   [[ -n "${NOTIFICATION_TYPE}" ]] && EVENT_KEY="notification:${NOTIFICATION_TYPE}"
+  if [[ "${NOTIFICATION_TYPE}" == "permission_prompt" ]]; then
+    CLAUDE_TRANSCRIPT="$(_json_str "${STDIN_JSON}" "transcript_path")"
+    CLAUDE_CALL="$(claude_pending_call "${CLAUDE_TRANSCRIPT}")" || CLAUDE_CALL=""
+    CLAUDE_CALL_ID="$(printf '%s' "${CLAUDE_CALL%%$'\t'*}" | tr -cd '[:alnum:]_-' | cut -c1-128)"
+    CLAUDE_CALL_TOOL="$(printf '%s' "${CLAUDE_CALL#*$'\t'}" | tr -cd '[:alnum:]_.:-' | cut -c1-64)"
+    [[ -z "${CLAUDE_CALL}" ]] && CLAUDE_CALL_TOOL=""
+    [[ "${CLAUDE_CALL_TOOL}" == "AskUserQuestion" ]] && EVENT_KEY="notification:question"
+  fi
 fi
 
 # ── Resolve the event through the data table ──────────────────────────────────
@@ -268,16 +288,6 @@ deliver() {
 }
 
 # ── Delayed authorization confirmation (notify-authorization-wait) ─────────────
-# Claude Code: the last tool call without a result in the session record.
-# Prints "<id><TAB><tool name>"; fails when the record cannot be read.
-claude_pending_call() {
-  [[ -r "$1" ]] && command -v jq >/dev/null 2>&1 || return 1
-  tail -n 400 "$1" | jq -Rrn '
-    [inputs | fromjson? | .message.content? | arrays | .[] | objects] as $items
-    | [$items[] | select(.type == "tool_result") | .tool_use_id] as $done
-    | [$items[] | select(.type == "tool_use") | select(.id as $id | $done | any(. == $id) | not)]
-    | last | select(. != null) | "\(.id)\t\(.name // "")"' 2>/dev/null
-}
 
 # auth_verdict <provider> — pending, resolved, or unknown for the wait in AUTH_*.
 auth_verdict() {
@@ -348,11 +358,6 @@ authorization_start() {
 
 case "${EVENT_KEY}" in
   notification:permission_prompt)
-    CLAUDE_TRANSCRIPT="$(_json_str "${STDIN_JSON}" "transcript_path")"
-    CLAUDE_CALL="$(claude_pending_call "${CLAUDE_TRANSCRIPT}")" || CLAUDE_CALL=""
-    CLAUDE_CALL_ID="$(printf '%s' "${CLAUDE_CALL%%$'\t'*}" | tr -cd '[:alnum:]_-' | cut -c1-128)"
-    CLAUDE_CALL_TOOL="$(printf '%s' "${CLAUDE_CALL#*$'\t'}" | tr -cd '[:alnum:]_.:-' | cut -c1-64)"
-    [[ -z "${CLAUDE_CALL}" ]] && CLAUDE_CALL_TOOL=""
     authorization_start claude "${CLAUDE_CALL_ID}" "${CLAUDE_CALL_TOOL}"
     finish_hook
     ;;

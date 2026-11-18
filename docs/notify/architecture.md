@@ -186,7 +186,7 @@ AI CLI 工具透過 `stdin` 將 JSON payload 傳遞給 Hook 腳本。
 }
 ```
 
-*   **Claude Code**: 傳送 `Stop` 與 `Notification` 事件；`permission_prompt` → 授權（延遲），`idle_prompt`、`agent_needs_input`、`elicitation_dialog`、`elicitation_url_dialog` 與無類型 → 等待回應（立即），其他類型不送。
+*   **Claude Code**: 傳送 `Stop` 與 `Notification` 事件；`permission_prompt` → 授權（延遲；但等待中的工具為 `AskUserQuestion` 時改為事件鍵 `notification:question`，等待回應、立即），`idle_prompt`、`agent_needs_input`、`elicitation_dialog`、`elicitation_url_dialog` 與無類型 → 等待回應（立即），其他類型不送。
 *   **Codex**: 傳送 `Stop` 與 `PermissionRequest`；notification hook 回傳
     neutral `{}`，不代替使用者決定。
 *   **Antigravity CLI**: `Stop` 提供 `fullyIdle` 與

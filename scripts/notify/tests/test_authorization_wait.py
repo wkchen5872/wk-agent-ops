@@ -107,9 +107,9 @@ class ClaudeCodeTests(HookFixture):
         self.transcript = self.home / "transcript.jsonl"
         self.transcript.write_text('{"type":"user","message":{"role":"user","content":"PRIVATE-PROMPT"}}\n')
 
-    def request(self, call_id, command="PRIVATE-COMMAND --secret-arg"):
+    def request(self, call_id, command="PRIVATE-COMMAND --secret-arg", name="Bash"):
         entry = {"type": "assistant", "message": {"role": "assistant", "content": [
-            {"type": "tool_use", "id": call_id, "name": "Bash", "input": {"command": command}}]}}
+            {"type": "tool_use", "id": call_id, "name": name, "input": {"command": command}}]}}
         with self.transcript.open("a") as stream:
             stream.write(json.dumps(entry, separators=(",", ":")) + "\n")
 
@@ -219,6 +219,26 @@ class ClaudeCodeTests(HookFixture):
         sent = self.until(1, 9)
         self.assertEqual(1, len(sent))
         self.assertGreaterEqual(sent[0][0], 3.9)
+
+    # Claude Code raises AskUserQuestion through permission_prompt too (task 8.2 live acceptance).
+    def test_question_through_a_permission_prompt_is_sent_at_once(self):
+        self.request("toolu_Q", command="PRIVATE-QUESTION", name="AskUserQuestion")
+        self.prompt()
+        sent = self.messages("Waiting for Your Response")
+        self.assertEqual(1, len(sent), "a question is sent at once")
+        self.assertIn("Claude Code has a question awaiting your response.", sent[0][1])
+        self.assertNotIn("PRIVATE-QUESTION", sent[0][1])
+        self.assertEqual("", self.marker(), "a question starts no authorization wait")
+        self.at(2.8)
+        self.assertEqual([], self.authorization(), "no authorization wording, now or later")
+
+    def test_question_follows_the_user_input_switch(self):
+        self.request("toolu_Q", name="AskUserQuestion")
+        self.prompt(NOTIFY_USER_INPUT="false", NOTIFY_AUTHORIZATION="true")
+        self.assertEqual([], self.messages("Waiting for Your Response"))
+        self.assertEqual("", self.marker())
+        self.at(2.8)
+        self.assertEqual([], self.authorization())
 
     def test_delay_zero_sends_at_once(self):
         self.request("toolu_A")
