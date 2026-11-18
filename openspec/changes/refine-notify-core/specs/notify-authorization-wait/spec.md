@@ -90,7 +90,7 @@ When the delay has passed, the wait has not been shown to be resolved, and no co
 - **THEN** the confirmed authorization notification is sent, not the unconfirmed one
 
 ### Requirement: A delayed check acts only on the wait that started it
-Each wait SHALL have its own identity: the request identifier when the tool exposes one, otherwise a new identity for each start signal that follows a resolved or replaced wait. A delayed check SHALL send or clear only the wait it was started for. It MUST NOT notify early for a later wait, clear a later wait, or let an earlier wait suppress a later one.
+Each wait SHALL have its own identity: the request identifier when the tool exposes one, otherwise an identity created when a start signal arrives and the session has no wait on record. A delayed check SHALL send or clear only the wait it was started for, and SHALL compare the identity and act as one step that a concurrent start signal cannot interleave. It MUST NOT notify early for a later wait or clear a later wait.
 
 #### Scenario: Notified, resolved, then waiting again
 - **WHEN** a wait was notified, the user answered it, and the same session raises a new authorization request
@@ -107,6 +107,33 @@ Each wait SHALL have its own identity: the request identifier when the tool expo
 #### Scenario: Same request signalled again
 - **WHEN** a start signal arrives for a request that is already pending
 - **THEN** the pending wait keeps its identity and its original start time
+
+#### Scenario: Wait replaced while its check is deciding
+- **WHEN** a start signal with a different request identifier arrives at the moment an earlier wait's check has matched its identity
+- **THEN** either the check finishes for the earlier wait before the replacement, or it sees the replacement and does nothing; the new wait is never notified or cleared by it
+
+### Requirement: Waits without a request identifier are merged until cleared
+When the tool exposes no request identifier, a start signal that arrives while the session has a wait on record SHALL be treated as the same wait: it MUST NOT change the identity, restart the delay, or cause another notification. Such a wait SHALL be cleared by evidence of resolution, by the end of the turn, or when it is older than `NOTIFY_AUTHORIZATION_REARM_SECONDS`, default 600; a start signal after that SHALL begin a new wait.
+
+#### Scenario: Repeated signal does not postpone the notice
+- **WHEN** start signals without an identifier arrive at 0 and 10 seconds with no resolution between them and the delay is 30 seconds
+- **THEN** one notification is sent at 30 seconds, not at 40
+
+#### Scenario: Signals keep repeating
+- **WHEN** start signals without an identifier arrive every 10 seconds for two minutes with no resolution
+- **THEN** exactly one notification is sent, at 30 seconds
+
+#### Scenario: Second wait without a resolution signal
+- **WHEN** a wait without an identifier was notified, no resolution evidence arrives, and a start signal arrives 60 seconds later
+- **THEN** no second notification is sent
+
+#### Scenario: Re-arm after the interval
+- **WHEN** a notified wait without an identifier is older than the re-arm interval and a start signal arrives
+- **THEN** a new wait begins and is notified if it is still waiting after its own delay
+
+#### Scenario: Resolution evidence re-arms at once
+- **WHEN** a wait without an identifier is cleared by evidence of resolution and a start signal arrives 5 seconds later
+- **THEN** a new wait begins with its own delay
 
 ### Requirement: Waits are cleared by evidence of resolution
 A pending wait SHALL be cleared when its request has a recorded result, when the tool reports that the confirmation is no longer pending, or when the session's turn ends. A wait that was already notified SHALL be cleared the same way, so the next wait of that session can notify.

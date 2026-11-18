@@ -35,6 +35,7 @@ Codex、Claude Code、Antigravity 一致；Agent 提問維持立即通知；交�
 - 自動審核在延遲時間內放行的 Codex 請求不產生通知；停著等使用者超過延遲時間的請求產生一則通知。
   Codex 執行期狀態查不到時，延遲後仍無結果的請求產生一則「無法確認」的通知，文字不宣稱正在等待。
 - 連續兩次授權等待各自計時：前一次的計時不會替後一次提早通知，已通知的等待解除後，下一次等待仍會通知。
+- 工具不提供請求識別時，重複的等待訊號不會延後通知，也不會重複通知；沒有解除訊號的緊接等待併入前一段，這個限制寫入文件。
 - Claude Code 的授權詢問與 Antigravity 的工具確認套用同一個延遲規則；Claude 與 Codex 的提問立即通知。
 - Antigravity 以 `NO_TOOL_CALL` 結束且背景工作完成時，通知為 Task Complete。
 - 沒有使用者範本時，工作結束、等待回應與異常停止的通知文字與現行相同；放入使用者範本後，通知使用該範本。
@@ -59,7 +60,7 @@ Codex、Claude Code、Antigravity 一致；Agent 提問維持立即通知；交�
   `scripts/notify/codex/wait.py`、`scripts/notify/telegram/test.sh`；新增預設範本與事件對照表。
 - 部署：`~/.config/ai-notify/hooks/` 的腳本、新增內建範本目錄；使用者範本目錄 `~/.config/ai-notify/templates/`（選用）。
   已安裝的環境要執行 `scripts/notify/telegram/update.sh` 重新部署；hook 的登記指令不變，Codex 不需重新信任。
-- 設定：`~/.config/ai-notify/config` 新增 `NOTIFY_AUTHORIZATION`、`NOTIFY_USER_INPUT`、`NOTIFY_AUTHORIZATION_DELAY_SECONDS`；
+- 設定：`~/.config/ai-notify/config` 新增 `NOTIFY_AUTHORIZATION`、`NOTIFY_USER_INPUT`、`NOTIFY_AUTHORIZATION_DELAY_SECONDS`、`NOTIFY_AUTHORIZATION_REARM_SECONDS`（工具不提供請求識別時，已記錄的等待多久後可重新通知，預設 600）；
   `NOTIFY_ACTION_REQUIRED`、`NOTIFY_CODEX_HUMAN_APPROVAL`、`NOTIFY_CODEX_USER_INPUT` 改為相容讀取。
 - 交接迴圈：`handoff-route` 目前以環境變數 `NOTIFY_ACTION_REQUIRED=true` 經一般通知送出，本 change 保留這個相容行為；專屬事件在 `add-handoff-notifications` 處理。
 - 文件：`docs/notify/telegram.md`、`docs/notify/architecture.md`、`scripts/notify/README.md`。
