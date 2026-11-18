@@ -1,7 +1,7 @@
-🟡 **授權狀態無法確認**{title_suffix}
+🟡 **Approval Status Unknown**{title_suffix}
 
 🤖 {tool}
 📂 {project}
 ⏰ {time}
 
-{tool} 可能在等待授權，無法確認（已超過 {delay} 秒沒有結果，{request_tool}） {tag}
+{tool} may be waiting for approval, but this could not be confirmed (no result after {delay} seconds, {request_tool}) {tag}

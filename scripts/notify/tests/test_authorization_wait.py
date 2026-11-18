@@ -22,8 +22,8 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 SESSION = "abcdef12-3456-7890-abcd-ef1234567890"
-CONFIRMED = "等待你授權"
-UNCONFIRMED = "可能在等待授權，無法確認"
+CONFIRMED = "Waiting for Your Approval"
+UNCONFIRMED = "may be waiting for approval, but this could not be confirmed"
 
 
 class HookFixture(unittest.TestCase):

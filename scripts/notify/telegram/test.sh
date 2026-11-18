@@ -353,7 +353,7 @@ run_test \
 
 run_test \
   "LEVEL-04: attention_required allows a confirmed Codex authorization wait" \
-  "等待你授權" \
+  "Waiting for Your Approval" \
   env NOTIFY_LEVEL=attention_required bash -c "printf '%s' '{\"hook_event_name\":\"HumanApprovalWaiting\",\"cwd\":\"/tmp/p\"}' | bash '${HOOK}' codex-human-approval 'Codex'"
 
 run_test \
@@ -402,7 +402,7 @@ ${AGY_STATUS_REPEAT}
 ${AGY_STATUS_RESET}
 ${AGY_STATUS_AFTER_RESET}"
 
-if [[ "$(printf '%s\n' "${AGY_STATUS_SEQUENCE}" | grep -c "等待你授權\*\*")" -eq 2 ]]; then
+if [[ "$(printf '%s\n' "${AGY_STATUS_SEQUENCE}" | grep -c "Waiting for Your Approval\*\*")" -eq 2 ]]; then
   echo "  ✓ PASS: AGY-STATUS-01: true/repeat/false/true notifies exactly twice"
   PASS_COUNT=$((PASS_COUNT + 1))
 else
@@ -446,7 +446,7 @@ ${AGY_ATTENTION_AFTER_RESET}"
 assert_equal \
   "AGY-STATUS-03: attention_required notifies twice across approval resets" \
   "2" \
-  "$(printf '%s\n' "${AGY_ATTENTION_SEQUENCE}" | grep -c "等待你授權\*\*")"
+  "$(printf '%s\n' "${AGY_ATTENTION_SEQUENCE}" | grep -c "Waiting for Your Approval\*\*")"
 
 AGY_DISABLED_HOME="${TEST_TMP_ROOT}/agy-disabled-home"
 mkdir -p "${AGY_DISABLED_HOME}"
@@ -676,7 +676,7 @@ done
 run_test_empty "CLAUDE-TYPE-04: permission_prompt follows the authorization switch" \
   env NOTIFY_AUTHORIZATION=false NOTIFY_AUTHORIZATION_DELAY_SECONDS=0 bash -c "printf '%s' '$(claude_notification permission_prompt)' | bash '${HOOK}' notification 'Claude Code'"
 run_test "CLAUDE-TYPE-04: permission_prompt is an authorization notice" \
-  "等待你授權" \
+  "Waiting for Your Approval" \
   env NOTIFY_AUTHORIZATION_DELAY_SECONDS=0 bash -c "printf '%s' '$(claude_notification permission_prompt)' | bash '${HOOK}' notification 'Claude Code'"
 
 # ── Antigravity termination reasons ────────────────────────────────────────────

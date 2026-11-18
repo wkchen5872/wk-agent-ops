@@ -44,7 +44,7 @@
 ## 8. 整合驗證
 
 - [x] 8.1 執行完整檢查：`scripts/notify/telegram/test.sh` 與 `tests/test_*.sh` 全部通過、`openspec validate refine-notify-core --strict` 通過。
-- [ ] 8.2 真實驗收（需使用者在場，結果記入 Work Item）：重新部署後，Codex 一次自動審核放行的請求不產生通知；Codex、Claude Code、Antigravity 各一次停著等超過延遲的授權產生一則通知；Claude 與 Codex 的提問立即通知；Antigravity 正常完成顯示 Task Complete；放入一個使用者範本後通知改用該範本。
+- [x] 8.2 真實驗收（需使用者在場，結果記入 Work Item）：重新部署後，Codex 一次自動審核放行的請求不產生通知；Codex、Claude Code、Antigravity 各一次停著等超過延遲的授權產生一則通知；Claude 與 Codex 的提問立即通知；Antigravity 正常完成顯示 Task Complete；放入一個使用者範本後通知改用該範本。
 
 ## Workflow follow-up
 

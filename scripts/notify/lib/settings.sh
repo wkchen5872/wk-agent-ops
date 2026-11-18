@@ -33,7 +33,7 @@ show_notify_help() {
   printf '\n工作結束：各工具既有的完成事件；不保證整個專案所有工作均完成。\n'
   printf '授權要求：Claude Code、Codex、Antigravity 提出授權後，延遲 %s 秒仍在等才通知，\n' "$(notify_authorization_delay)"
   printf '          同一段等待只通知一次。延遲由 NOTIFY_AUTHORIZATION_DELAY_SECONDS 設定，0 為立即。\n'
-  printf '          Codex 無法查詢執行狀態時，改發「可能在等待授權，無法確認」的通知。\n'
+  printf '          Codex 無法查詢執行狀態時，改發「Approval Status Unknown」（可能在等待授權，無法確認）的通知。\n'
   printf '等待回應：Claude 的提問與等待輸入、Codex 的結構化問題；一般文字問句不偵測。\n'
   printf '異常停止：目前依 Antigravity 的終止原因辨識，其他工具未提供對應訊號。\n'
   printf 'Codex 的授權與同步問題由 hook 觸發的暫時檢查器判斷，輪次結束即退出；\n'

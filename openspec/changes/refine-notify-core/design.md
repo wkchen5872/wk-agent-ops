@@ -159,7 +159,7 @@ stdin JSON + 參數
 - **daemon 不可連時的政策（D-004，審查 r01/F-01）**：Session 紀錄只能證明「已有結果」，不能證明「正在等人」——
   紀錄裡沒有「已核准」的標記（任務 1.2 實測：人工等待核准的 40 秒間紀錄沒有任何新項目）。所以無法查詢執行狀態時：
   - 延遲內紀錄已有結果 → 解除，不通知。
-  - 延遲後仍無結果，或紀錄讀不到 → 發**「無法確認」的通知**，文字為「可能在等待授權，無法確認」，使用另一個範本，不使用確認等待的文字。
+  - 延遲後仍無結果，或紀錄讀不到 → 發**「無法確認」的通知**（範本 `authorization-unconfirmed`，英文「Approval Status Unknown … may be waiting for approval, but this could not be confirmed」），不使用確認等待的文字。
   - 固定的三個案例：
 
     | 案例（無法查詢執行狀態） | 延遲後的紀錄 | 結果 |
@@ -185,8 +185,9 @@ stdin JSON + 參數
 - 參數以 `{name}` 表示：`{title_suffix}`、`{tool}`、`{project}`、`{time}`、`{tag}`、`{message}`、`{reason}`、`{request_tool}`。
   取代前先跳脫值裡在 Telegram Markdown 有意義的字元；範本本身的標記不跳脫。只含參數且結果為空的行會被移除；未知參數原樣保留，方便發現打錯。
 - 取代用字串操作完成，不經 `eval`，範本內容不會被當成指令執行。
-- 預設範本逐字對應現有訊息；授權類新增兩個範本：`authorization`（已確認：「<工具> 等待你授權超過 N 秒」）與
-  `authorization-unconfirmed`（無法確認：「<工具> 可能在等待授權，無法確認（已超過 N 秒沒有結果）」）。
+- 預設範本逐字對應現有訊息；授權類新增兩個範本：`authorization`（已確認：「🔴 Waiting for Your Approval … <工具> has been waiting for your approval for over N seconds」）與
+  `authorization-unconfirmed`（無法確認：「🟡 Approval Status Unknown … <工具> may be waiting for approval, but this could not be confirmed (no result after N seconds)」）。
+  兩者原為中文，使用者於 2026-11-18 真實驗收後要求改為英文，與其他內建範本一致。
 - 替代方案：把訊息放進設定檔的鍵值。不採用——多行訊息在 `key=value` 檔裡難以編輯。
 
 ### 6. 狀態檔清理

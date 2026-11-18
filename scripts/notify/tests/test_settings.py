@@ -43,7 +43,7 @@ class SettingsTests(unittest.TestCase):
 
     def test_codex_waits_follow_the_shared_categories(self):
         for event, key, title in [
-            ("codex-human-approval", "NOTIFY_AUTHORIZATION", "等待你授權"),
+            ("codex-human-approval", "NOTIFY_AUTHORIZATION", "Waiting for Your Approval"),
             ("codex-user-input", "NOTIFY_USER_INPUT", "Waiting for Your Response"),
         ]:
             with self.subTest(event=event):

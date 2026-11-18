@@ -165,7 +165,7 @@ Codex 細節：
 
 可用佔位符：`{title_suffix} {tool} {project} {time} {tag} {message} {reason} {request_tool} {delay}`。值會依 Telegram legacy Markdown 跳脫（`_ * \` [`）；整行只有佔位符且全部為空時，該行移除；未知佔位符原樣保留。不支援 eval、條件或迴圈。
 
-工作結束、停止與等待訊息的內建文字不變。新增文字：授權為「🔴 **等待你授權** … `{tool} 等待你授權超過 {delay} 秒（{request_tool}）`」；無法確認為「🟡 **授權狀態無法確認** … `{tool} 可能在等待授權，無法確認（已超過 {delay} 秒沒有結果，{request_tool}）`」。
+工作結束、停止與等待訊息的內建文字不變。新增文字：授權為「🔴 **Waiting for Your Approval** … `{tool} has been waiting for your approval for over {delay} seconds ({request_tool})`」；無法確認為「🟡 **Approval Status Unknown** … `{tool} may be waiting for approval, but this could not be confirmed (no result after {delay} seconds, {request_tool})`」。兩個授權範本於 2026-11-18 改為英文。
 
 ### 狀態清理
 
@@ -181,14 +181,14 @@ PermissionRequest hook
 非同步結構化問題 PostToolUse hook → accepted=true → 等待你回答通知（不需 daemon）
 ```
 
-PermissionRequest 本身不會當下送出通知，只啟動檢查器；授權要求與等待回應都關閉時完全不檢查。標題分別是 `🔴 等待你授權` 與 `🟡 Waiting for Your Response`；問題通知內文為 `Codex has a question awaiting your response.`。`request_user_input_async` 不產生 daemon 等待旗標，改在工具成功送出題目後通知；這表示有題目待回覆，Codex 仍可繼續工作。
+PermissionRequest 本身不會當下送出通知，只啟動檢查器；授權要求與等待回應都關閉時完全不檢查。標題分別是 `🔴 Waiting for Your Approval`（無法確認時為 `🟡 Approval Status Unknown`）與 `🟡 Waiting for Your Response`；問題通知內文為 `Codex has a question awaiting your response.`。`request_user_input_async` 不產生 daemon 等待旗標，改在工具成功送出題目後通知；這表示有題目待回覆，Codex 仍可繼續工作。
 
 啟用授權要求或等待回應後，安裝／更新會部署 Python 3 檢查器與專用 venv 中的 `websocket-client`，不修改全域 Python、不安裝 LaunchAgent。hook 返回後，暫時檢查器透過 `codex app-server proxy` 唯讀觀察既有 daemon；同一 session 共用程序，工作輪次完成／取消後退出。依賴安裝失敗會顯示原因，既有通知仍可使用；以 `fix-hooks` 重試。
 
 支援範圍與限制：
 
 - 確認授權與同步問題需要既有本機 daemon 能查詢該 Session；不啟動 daemon。終端機啟動的 Codex 不在 daemon 中，同步問題的旗標也看不到。
-  無法查詢時，授權改讀 session 紀錄，無法確認則送「授權狀態無法確認」。非同步問題依原生成功事件通知，不需 daemon。
+  無法查詢時，授權改讀 session 紀錄，無法確認則送「Approval Status Unknown」。非同步問題依原生成功事件通知，不需 daemon。
 - 以明確等待旗標辨識，不靠靜默時間或問號。一般文字提問不偵測。
 - 同一 session、同一種類、同段等待只嘗試通知一次，解除後重設；一秒 metadata 輪詢可能錯過更短的等待或中間解除。
 - 不附原始命令、問題全文或 transcript。連線錯誤只保留一般狀態碼，不印原始例外。
@@ -217,7 +217,7 @@ Telegram 通知訊息採用統一的 Markdown 排版，結構如下：
 {MESSAGE} #{HOOK_EVENT_NAME}
 ```
 
-- **STATUS_ICON**: `🟢` (Task Complete) | `🟡` (Action Required / Waiting for Your Response / 授權狀態無法確認) | `🔴` (Task Stopped / 等待你授權) | `🤖` (Generic Event)
+- **STATUS_ICON**: `🟢` (Task Complete) | `🟡` (Action Required / Waiting for Your Response / Approval Status Unknown) | `🔴` (Task Stopped / Waiting for Your Approval) | `🤖` (Generic Event)
 - **TITLE**: `Task Complete` | `Action Required` | `Task Stopped`
 - **SESSION** *(optional)*: shown when session info is available
   - UUID `session_id` (Claude) → `#<first 8 chars>` e.g. `(#a1b2c3d4)`

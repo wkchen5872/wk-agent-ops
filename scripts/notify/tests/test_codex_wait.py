@@ -167,7 +167,7 @@ class CodexWaitTests(unittest.TestCase):
         self.trigger("codex-permission")
         self.wait_done()
         self.assertEqual(1, len(self.messages()))
-        self.assertIn("等待你授權", self.messages()[0])
+        self.assertIn("Waiting for Your Approval", self.messages()[0])
 
     def test_repeated_hooks_share_one_worker(self):
         self.scenario([snapshot("waitingOnUserInput")] * 3 + [snapshot(turn_status="completed")])
@@ -270,10 +270,10 @@ class CodexWaitTests(unittest.TestCase):
         self.settings(approval=True, questions=True, extra=f"NOTIFY_AUTHORIZATION_DELAY_SECONDS={delay}\n")
 
     def confirmed(self):
-        return [m for m in self.messages() if "等待你授權" in m]
+        return [m for m in self.messages() if "Waiting for Your Approval" in m]
 
     def unconfirmed(self):
-        return [m for m in self.messages() if "可能在等待授權，無法確認" in m]
+        return [m for m in self.messages() if "may be waiting for approval, but this could not be confirmed" in m]
 
     def record_path(self):
         return self.home / ".codex/sessions/2026/11/18" / f"rollout-2026-11-18T00-00-00-{SESSION}.jsonl"
