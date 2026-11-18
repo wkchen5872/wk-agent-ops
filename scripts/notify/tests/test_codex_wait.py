@@ -457,6 +457,30 @@ class CodexWaitTests(unittest.TestCase):
         self.scenario([self.NOT_LOADED])
         self.assert_repeat_after_the_checker_ends_sends_one()
 
+    # Review codex-01a1ee38-r03/F-01: a record that becomes readable only identifies the same wait.
+    def test_offline_record_readable_again_is_still_the_same_wait(self):
+        self.authorization_settings(delay=1)
+        self.offline()
+        path = self.record(self.call("call_A"))
+        path.chmod(0o000)
+        try:
+            self.trigger("codex-permission", transcript=str(path))
+            self.wait_done(timeout=12)
+            self.assertEqual(1, len(self.unconfirmed()))
+            state = json.loads(self.state_files()[0].read_text())
+            self.assertEqual("unreadable-record", state.get("offline_notified"))
+        finally:
+            path.chmod(0o600)
+        self.trigger("codex-permission", transcript=str(path))
+        time.sleep(.5)
+        self.wait_done(timeout=12)
+        self.assertEqual(1, len(self.unconfirmed()), "readable again is not a new wait")
+        self.record(self.output("call_A"), self.call("call_B"))
+        self.trigger("codex-permission", transcript=str(path))
+        time.sleep(.5)
+        self.wait_done(timeout=12)
+        self.assertEqual(2, len(self.unconfirmed()), "a real next call is still reported")
+
     def test_offline_question_only_sends_nothing(self):
         self.authorization_settings(delay=1)
         self.offline()

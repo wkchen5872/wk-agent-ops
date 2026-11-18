@@ -67,15 +67,17 @@ auth_write() {
 # auth_clear <marker> — resolution evidence or the end of a turn. The marker is only ever
 # changed under its lock: when another process holds it, a detached retry waits for the lock
 # and clears the marker only if it still belongs to the same wait.
+# The target wait is fixed when resolution arrives, so a wait swapped in while waiting for
+# the lock is never mistaken for it.
 auth_clear() {
-  [[ -e "$1" ]] || return 0
+  auth_read "$1" || return 0
+  local target="${AUTH_ID}"
   if auth_lock "$1" 30; then
-    rm -f -- "$1"
+    if auth_read "$1" && [[ "${AUTH_ID}" == "${target}" ]]; then rm -f -- "$1"; fi
     auth_unlock "$1"
     return 0
   fi
-  auth_read "$1" || return 0
-  ( _auth_clear_later "$1" "${AUTH_ID}" ) </dev/null >/dev/null 2>&1 &
+  ( _auth_clear_later "$1" "${target}" ) </dev/null >/dev/null 2>&1 &
   disown 2>/dev/null || true
 }
 

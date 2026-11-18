@@ -58,6 +58,12 @@
 - [x] 9.8 F-08：`codex-human-wait-notifications` 以 MODIFIED delta 更新 **Metadata privacy and support status**，允許記憶體中的紀錄路徑與有界紀錄讀取，保留不得持久化或傳出的限制。測試要求：規格驗證通過。
 - [x] 9.9 完整檢查：`scripts/notify/telegram/test.sh`、`python3 -m unittest discover -s scripts/notify/tests`、`tests/test_*.sh` 全部通過，`openspec validate refine-notify-core --strict` 通過。
 
+## 10. 審查 codex-01a1ee38-r03 的修正（9.1、9.5 的剩餘邊界）
+
+- [x] 10.1 F-01 剩餘：紀錄由讀不到恢復可讀時，只補上已通知等待的呼叫身分，不視為解除或新等待，不再通知；實際結果、回合結束或新的呼叫才重新通知。測試要求：先寫「同一檔案只恢復讀取權限」的失敗回歸測試，並保留 call_B 會通知的測試。
+- [x] 10.2 F-05 剩餘：清除開始時先固定要清除的等待身分，取得鎖後比對，同步與延後清除都不得刪除等待期間換上的新等待。測試要求：先寫「持鎖期間 A 換成 B」的失敗回歸測試，並保留穩定的 A 在鎖釋放後可清除的測試。
+- [x] 10.3 完整檢查：`scripts/notify/telegram/test.sh`、`python3 -m unittest discover -s scripts/notify/tests`、`tests/test_*.sh` 全部通過，`openspec validate refine-notify-core --strict` 通過。
+
 ## Workflow follow-up
 
 - 依使用者授權以 `openspec-commit` 封存並提交。

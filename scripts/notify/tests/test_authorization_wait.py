@@ -406,6 +406,28 @@ class AntigravityTests(HookFixture):
             time.sleep(.1)
         self.assertFalse(marker.exists(), "the deferred clear completes once the lock is free")
 
+    # Review codex-01a1ee38-r03/F-05: the clear targets the wait current when resolution arrived.
+    def test_clearing_never_removes_a_wait_that_replaced_it_under_the_lock(self):
+        self.status(True)
+        marker = self.state / "antigravity-agy-conversation.pending"
+        lock = marker.with_suffix(".pending.lock")
+        lock.mkdir()
+        (lock / "pid").write_text(str(os.getpid()))
+        payload = {"conversation_id": "agy-conversation", "agent_state": "idle", "cwd": "/tmp/agy-project"}
+        clearing = subprocess.Popen(["bash", str(self.hook_path), "antigravity-statusline", "Antigravity CLI"],
+                                    stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                    env=self.env, text=True)
+        clearing.stdin.write(json.dumps(payload))
+        clearing.stdin.close()
+        time.sleep(.6)
+        replacement = marker.with_name(marker.name + ".tmp")  # the lock owner swaps in wait B
+        replacement.write_text("id=wait-B\nided=0\nstarted=1\nnotified=0\ntool=a tool\n")
+        os.replace(replacement, marker)
+        clearing.wait(timeout=10)
+        shutil.rmtree(lock)
+        time.sleep(1.5)
+        self.assertEqual("wait-B", self.field(self.marker(), "id"), "the later wait B must survive")
+
     def test_conversation_stop_clears_the_wait(self):
         self.status(True)
         self.at(.5)

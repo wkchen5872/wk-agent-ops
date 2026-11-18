@@ -320,6 +320,11 @@ def run_checker(trigger, state_file, lock_fd):
         identity = call or "unreadable-record"
         if resolved or identity == offline_notified or not config["authorization"]:
             return
+        if offline_notified == "unreadable-record" and call:
+            # The record became readable again: this names the wait already reported, it is not a new one.
+            offline_notified = call
+            record(True)
+            return
         offline_notified = identity
         record(True)
         send(request, "codex-authorization-unconfirmed", "HumanApprovalUnconfirmed")
