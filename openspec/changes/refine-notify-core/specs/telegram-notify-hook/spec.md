@@ -107,7 +107,7 @@ existing command, track pending confirmations by conversation, and hand a pendin
 - **THEN** one authorization notification is sent under either supported notification level
 
 #### Scenario: Pending confirmation answered quickly
-- **WHEN** the observer sees `tool_confirmation_pending` become true and then false before the authorization delay ends
+- **WHEN** the observer sees `tool_confirmation_pending` become true and then stop being true (false or absent) before the authorization delay ends
 - **THEN** no notification is sent
 
 #### Scenario: Repeated pending confirmation is deduplicated
@@ -115,7 +115,7 @@ existing command, track pending confirmations by conversation, and hand a pendin
 - **THEN** no duplicate notification is sent
 
 #### Scenario: False state resets the conversation
-- **WHEN** the observer receives a false state
+- **WHEN** the observer receives a state whose `tool_confirmation_pending` is not true, including a state that omits the field
 - **THEN** its pending marker is cleared even when Telegram delivery is disabled
 
 #### Scenario: Observer remains a valid status line

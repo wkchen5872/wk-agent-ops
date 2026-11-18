@@ -318,6 +318,18 @@ class AntigravityTests(HookFixture):
         self.assertEqual([], self.authorization())
         self.assertEqual(1, len(self.until(1, 7)))
 
+    def test_answered_confirmation_omits_the_field_and_clears_the_wait(self):
+        # Antigravity 1.5.10 never sends false: once answered, the field is simply absent (task 1.3).
+        self.status(True)
+        self.assertNotEqual("", self.marker())
+        self.at(.5)
+        answered = {"conversation_id": "agy-conversation", "session_id": "agy-conversation",
+                    "agent_state": "working", "cwd": "/tmp/agy-project"}
+        self.assertEqual("working", self.hook("antigravity-statusline", "Antigravity CLI", answered).strip())
+        self.assertEqual("", self.marker())
+        self.at(2.8)
+        self.assertEqual([], self.authorization())
+
     def test_conversation_stop_clears_the_wait(self):
         self.status(True)
         self.at(.5)

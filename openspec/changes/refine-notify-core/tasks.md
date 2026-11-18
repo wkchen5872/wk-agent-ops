@@ -4,7 +4,7 @@
 
 - [x] 1.1 擷取 Claude Code 真實的 `Notification` 輸入：授權詢問與等待輸入各一次，記錄 `notification_type`、`transcript_path`、`message` 是否存在、詢問出現到 hook 觸發的時間，以及能否從紀錄尾端取得該請求的工具呼叫 ID；另外連續觸發兩次授權詢問（第一次回答後立即出現第二次），記錄兩次之間有哪些事件可作為解除證據。測試要求：查證任務，無自動測試；完成條件是 Work Item 有去除敏感內容的輸入欄位清單與時間。
 - [x] 1.2 擷取 Codex 真實的 `PermissionRequest` 輸入欄位，並在一次自動審核期間每秒查詢 daemon，記錄 `waitingOnApproval` 是否出現與持續多久，以及輸入或 Session 紀錄中能否取得請求的呼叫 ID；在 daemon 不可連的 Session 重複一次，記錄紀錄檔在核准前後的差異。測試要求：查證任務；完成條件是 Work Item 有欄位清單與旗標時間線。
-- [ ] 1.3 擷取 Antigravity 真實的 Stop 輸入（正常完成、使用者取消各一次），並觀察工具確認等待期間與解除時狀態列的回報頻率。測試要求：查證任務；完成條件是 Work Item 有 `terminationReason` 實際值與狀態列回報的時間線。若任一工具拿不到 design 決策 4 表中的等待身分或解除證據，先更新 design 與 spec（該工具改用每個起始訊號一個新身分）再繼續第 4 組。
+- [x] 1.3 擷取 Antigravity 真實的 Stop 輸入（正常完成、使用者取消各一次），並觀察工具確認等待期間與解除時狀態列的回報頻率。測試要求：查證任務；完成條件是 Work Item 有 `terminationReason` 實際值與狀態列回報的時間線。若任一工具拿不到 design 決策 4 表中的等待身分或解除證據，先更新 design 與 spec（該工具改用每個起始訊號一個新身分）再繼續第 4 組。
 
 ## 2. 範本與事件對照表（行為不變）
 

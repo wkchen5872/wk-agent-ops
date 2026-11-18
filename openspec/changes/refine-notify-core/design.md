@@ -141,12 +141,16 @@ stdin JSON + 參數
 | --- | --- | --- | --- | --- | --- |
 | Claude Code | `Notification` 且 `notification_type=permission_prompt` | Session 紀錄尾端未取得結果的工具呼叫 ID | 該 ID 仍沒有結果 | 該 ID 有結果；Session 的 `Stop` | bash + `jq`（只讀檔案尾端） |
 | Codex | `PermissionRequest` hook | 旗標的一段連續期間；無法查詢執行狀態時為紀錄尾端未取得結果的呼叫 ID | daemon 的 `waitingOnApproval` 持續到延遲結束 | 旗標消失；該呼叫有結果；回合結束 | 既有的 `wait.py` |
-| Antigravity | 狀態列 `tool_confirmation_pending` 為 true | 沒有請求識別：套用決策 3 的合併政策 | 標記仍在且身分相同 | 狀態列回報 false；對話的 `Stop`；重新武裝時間 | bash |
+| Antigravity | 狀態列 `tool_confirmation_pending` 為 true | 沒有請求識別：套用決策 3 的合併政策 | 標記仍在且身分相同 | 狀態列不再回報 true（實測為欄位消失）；對話的 `Stop`；重新武裝時間 | bash |
 
 - 各工具能否提供表中的訊號，由 tasks 第 1 組以真實資料確認後才實作第 4 組。某個工具拿不到請求識別時，該工具套用決策 3 的
   「沒有請求識別時的政策」（合併到清除為止，已通知後才有重新武裝），不另外發明規則；拿不到解除證據時，未通知的標記等它的背景檢查，
   已通知的標記只剩回合結束與重新武裝兩種方式。
-  Antigravity 沒有請求識別，一律適用這個政策；它的「false→true 轉換」只在收到過 false（解除證據）之後才算新的一段。
+  Antigravity 沒有請求識別，一律適用這個政策；它的「false→true 轉換」只在收到過「不是 true」的狀態（解除證據）之後才算新的一段。
+- Antigravity 1.5.10 實測（任務 1.3，2026-11-18）：確認等待時狀態列帶 `tool_confirmation_pending: true`（`agent_state: tool_use`），
+  只在開始時回報 2–3 次，等待期間不再回報；核准或拒絕後 0.2–2 秒內再回報一次，該欄位**直接消失**，從未出現 `false`。
+  使用者按 Esc 取消、或拒絕確認時**不會觸發 `Stop`**，由這次狀態列回報清除標記。狀態列的 `session_id` 與 `conversation_id` 相同，
+  也等於 `Stop` 的 `conversationId`。正常完成的 `terminationReason` 為 `NO_TOOL_CALL`；實測中沒有看過 `USER_CANCELED`。
 - Codex 沿用 `wait.py` 的單一檢查器與鎖：旗標首次出現時記下時間，持續超過延遲才發**確認的**通知；旗標消失就重置，
   下一次出現是新的一段等待。
 - **「無法查詢執行狀態」的範圍（任務 1.2 後補，使用者 2026-11-18 確認）**：包括 daemon 連不上或協定不符，
@@ -206,7 +210,8 @@ stdin JSON + 參數
 - [工具不提供請求識別，緊接的第二段等待被併入前一段] → 固定的合併政策與重新武裝時間（決策 3），限制寫入文件；第 1 組先確認各工具實際能提供的訊號。
 - [背景檢查與新的起始訊號同時發生] → 以 Session 為單位的鎖讓比對與動作成為一步；測試以持有鎖的方式重現交錯。
 - [Claude Code 的 `permission_prompt` 實際觸發時機與輸入欄位未以真實資料確認] → tasks 第 1 組先擷取真實輸入；若沒有 `transcript_path` 或類型欄位，改以不延遲送出並回報，不猜測。
-- [Antigravity 等待期間狀態列是否持續回報、解除時是否一定回報 false] → 第 1 組先觀察；若解除後不回報，改在 `Stop` 與下一次狀態列呼叫時清除標記。
+- [Antigravity 等待期間狀態列是否持續回報、解除時是否一定回報 false] → 任務 1.3 已觀察：等待期間不持續回報，解除時一定再回報一次（欄位消失）；
+  實作把「不是 true」都視為解除，所以核准、拒絕、取消都會清除標記。
 - [hook 結束後背景檢查被工具終止] → 沿用 `handoff-route` 已驗證的脫離方式；測試以「hook 立即返回而訊息稍後出現」驗證。
 - [範本被使用者改壞導致 Telegram 拒收] → 值會跳脫；送出失敗時不重試、不阻擋工具（既有行為）；`status` 顯示正在使用的使用者範本。
 - [移除立即通知是行為改變] → 延遲設為 0 可回到立即通知；文件與選單說明寫明。

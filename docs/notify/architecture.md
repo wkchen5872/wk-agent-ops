@@ -314,7 +314,7 @@ automatically whenever Antigravity is detected:
 }
 ```
 
-The observer starts a delayed authorization wait on `tool_confirmation_pending=true`. With no request identifier, a status line reporting false, or the conversation's `Stop`, clears the wait, even when Telegram delivery is disabled. It prints a compact agent-state value so it
+The observer starts a delayed authorization wait on `tool_confirmation_pending=true`. With no request identifier, a status line whose `tool_confirmation_pending` is no longer true (Antigravity 1.5.10 omits the field once the confirmation is answered; it never sends false), or the conversation's `Stop`, clears the wait, even when Telegram delivery is disabled. It prints a compact agent-state value so it
 remains a valid status-line command. A different existing command is preserved
 and reported as `Antigravity approval: unavailable (statusLine conflict)`.
 

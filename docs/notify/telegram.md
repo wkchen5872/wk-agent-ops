@@ -129,7 +129,7 @@ bash scripts/notify/telegram/update.sh types
 | 工具 | 起點 | 解除／靜默 |
 |---|---|---|
 | Claude Code | `Notification` 且 `notification_type=permission_prompt`；等待身分為 `transcript_path` 中最後一個沒有對應 `tool_result` 的 `tool_use` | 延遲前出現對應 `tool_result` 即靜默；紀錄不可讀則送「無法確認」通知；`Stop` 清除等待 |
-| Antigravity | 狀態列回報 `tool_confirmation_pending` 為 true | 沒有請求識別碼：狀態列回報 false 或該對話 `Stop` 即清除（Telegram 關閉時亦然）；狀態列輸出不變 |
+| Antigravity | 狀態列回報 `tool_confirmation_pending` 為 true | 沒有請求識別碼：狀態列不再回報 true（1.5.10 在核准或拒絕後直接省略該欄位）或該對話 `Stop` 即清除（Telegram 關閉時亦然）；取消與拒絕不會觸發 `Stop`；狀態列輸出不變 |
 | Codex | `PermissionRequest` 只啟動 `codex-wait.py`，即使延遲為 0 也不在當下送出 | 見下 |
 
 Codex 細節：

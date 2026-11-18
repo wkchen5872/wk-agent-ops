@@ -45,7 +45,7 @@ The start signal SHALL be the `permission_prompt` Notification for Claude Code, 
 - **THEN** no authorization notification is sent
 
 #### Scenario: Antigravity confirmation cleared
-- **WHEN** Antigravity reports `tool_confirmation_pending` false before the delay ends
+- **WHEN** Antigravity stops reporting `tool_confirmation_pending` as true (false, or the field is absent) before the delay ends
 - **THEN** the pending wait is cleared and no authorization notification is sent
 
 ### Requirement: One notification per continuous wait
