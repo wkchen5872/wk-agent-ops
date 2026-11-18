@@ -201,10 +201,13 @@ def open_calls(trigger):
 
 
 def pending_call(trigger):
-    """The last open call id, "" if none, None when the record cannot be read."""
+    """The request's own call: the last open call written before its record boundary, "" if none,
+    None when the record cannot be read. A checker may look long after the request was raised."""
     calls = open_calls(trigger)
     if calls is None:
         return None
+    bound = trigger.get("record_size")
+    calls = [call for call in calls if bound is None or call[1] < bound]
     return calls[-1][0] if calls else ""
 
 
@@ -312,11 +315,13 @@ def run_checker(trigger, state_file, lock_fd):
     previous = read_json(state_file, {})
     same_turn = previous.get("turn_id") == trigger["turn_id"]
     notified = set(previous.get("notified", [])) if same_turn else set()
-    # The wait already reported as unconfirmed in this turn: {"call": id or None, "offset": record
-    # size at the notice}. Only record content decides identity; readability is never evidence.
-    reported = previous.get("offline_reported") if same_turn else None
-    if not isinstance(reported, dict):
-        reported = None
+    # Waits reported as unconfirmed in this turn and not yet resolved, each {"call": id or None,
+    # "offset": record position}. Only record content decides identity; readability is never evidence.
+    reported = previous.get("offline_reported") if same_turn else []
+    reported = [{"call": entry["call"], "offset": entry["offset"]}
+                for entry in (reported if isinstance(reported, list) else [])
+                if isinstance(entry, dict) and isinstance(entry.get("call"), (str, type(None)))
+                and type(entry.get("offset")) in (int, type(None))]
     pending = set()
     daemon = None
     failures = 0
@@ -346,27 +351,27 @@ def run_checker(trigger, state_file, lock_fd):
 
     def settle_offline(config):
         """Runtime cannot be queried: settle this request's own call from the session record, reporting
-        each continuous wait once as unconfirmed (review codex-01a1ee38-r02/F-01, r03, r04, r05)."""
-        nonlocal reported
-
+        each continuous wait once as unconfirmed (review codex-01a1ee38-r02/F-01, r03, r04, r05, r07)."""
         def report(call, offset):
-            nonlocal reported
             if not config["authorization"]:
                 return  # nothing is attempted, so nothing is reserved
-            reported = {"call": call, "offset": offset}
+            reported.append({"call": call, "offset": offset})
             record(True)
             send(request, "codex-authorization-unconfirmed", "HumanApprovalUnconfirmed")
 
         calls = open_calls(request)
         if calls is None:
             # An unreadable record says nothing: a wait already reported this turn stays reported.
-            if reported is None:
+            if not reported:
                 report(None, request.get("record_size"))
             return
-        if not calls:
-            reported = None  # no open call: the reported wait is resolved
-            record(True)
-            return
+        # A reported wait is resolved only by its own call: an identified one when that call has its
+        # output, an unidentified one when no open call was written before its notice.
+        open_ids = {call for call, _ in calls}
+        reported[:] = [entry for entry in reported if (
+            entry["call"] in open_ids if entry["call"] is not None
+            else calls and (entry["offset"] is None or any(offset < entry["offset"] for _, offset in calls)))]
+        record(True)
         if request_call:
             own_calls = [entry for entry in calls if entry[0] == request_call]
         elif request_call == "":
@@ -377,18 +382,14 @@ def run_checker(trigger, state_file, lock_fd):
         if not own_calls:
             return  # this request's call has its result; later calls are settled by their own requests
         call, offset = own_calls[-1]
-        if reported is None:
-            report(call, offset)
-        elif reported["call"] == call:
-            return
-        elif reported["call"] is None:
-            if reported["offset"] is not None and offset >= reported["offset"]:
-                report(call, offset)  # written after the notice: a new request
-            else:
-                reported = {"call": call, "offset": offset}  # the reported wait, now identified
-                record(True)
+        if any(entry["call"] == call for entry in reported):
+            return  # this call was already reported and has not resolved
+        unidentified = next((entry for entry in reported if entry["call"] is None), None)
+        if unidentified and (unidentified["offset"] is None or offset < unidentified["offset"]):
+            unidentified.update(call=call, offset=offset)  # the reported wait, now identified
+            record(True)
         else:
-            report(call, offset)  # a different call: a new request, whatever happened to the old one
+            report(call, offset)  # a call not reported yet: a new request, whatever the others are doing
 
     try:
         record(True)
@@ -401,7 +402,7 @@ def run_checker(trigger, state_file, lock_fd):
                 trigger = {**latest, "transcript_path": trigger.get("transcript_path", "")}
                 notified.clear()
                 pending.clear()
-                reported = None
+                reported.clear()
                 approval_since = None
                 request, request_call = own(trigger if trigger["kind"] == "permission" else None)
             elif latest.get("kind") == "permission" and request is None:

@@ -468,8 +468,8 @@ class CodexWaitTests(unittest.TestCase):
             self.wait_done(timeout=12)
             self.assertEqual(1, len(self.unconfirmed()))
             state = json.loads(self.state_files()[0].read_text())
-            self.assertIsNone((state.get("offline_reported") or {}).get("call", "missing"),
-                              "the notice was sent before the call could be identified")
+            self.assertEqual([None], [entry.get("call", "missing") for entry in state.get("offline_reported", [])],
+                             "the notice was sent before the call could be identified")
         finally:
             path.chmod(0o600)
         self.trigger("codex-permission", transcript=str(path))
@@ -541,6 +541,23 @@ class CodexWaitTests(unittest.TestCase):
         self.record(self.call("call_B"))  # call_A still has no output
         self.settle(path)
         self.assertEqual(2, len(self.unconfirmed()))
+
+    # Review codex-01a1ee38-r07 (r02/F-01, path B): a reported call stays reported until it resolves.
+    def test_offline_repeat_of_a_reported_call_after_a_later_call_ends_sends_nothing(self):
+        self.authorization_settings(delay=1)
+        self.offline()
+        path = self.record(self.call("call_A"))
+        self.settle(path)
+        self.assertEqual(1, len(self.unconfirmed()))
+        self.record(self.call("call_B"))  # call_A still has no output
+        self.settle(path)
+        self.assertEqual(2, len(self.unconfirmed()))
+        self.record(self.output("call_B"))
+        self.settle(path)  # the same call_A is signalled again
+        self.assertEqual(2, len(self.unconfirmed()), "call_B ending is not a resolution of call_A")
+        self.record(self.output("call_A"), self.call("call_C"))
+        self.settle(path)
+        self.assertEqual(3, len(self.unconfirmed()), "after call_A resolves the next call is a new wait")
 
     # Review codex-01a1ee38-r05/F-01: a notice not attempted while disabled must not be reserved.
     def test_offline_wait_skipped_while_disabled_notifies_after_reenabling(self):
@@ -680,6 +697,49 @@ class CodexCheckerClockTests(unittest.TestCase):
                 record.chmod(0o600)
         self.assertEqual([(104.0, "codex-authorization-unconfirmed")], sent,
                          "B is reported at its own deadline (104), not by A's timer (103)")
+
+    # Review codex-01a1ee38-r07 (r02/F-01, path A): a checker that starts late still ties each
+    # request to the calls written before that request's own record boundary.
+    def test_a_late_checker_never_reports_a_later_request_on_an_earlier_deadline(self):
+        import importlib.util
+        import os as _os
+        from unittest.mock import patch
+        spec = importlib.util.spec_from_file_location("wait_under_test", ROOT / "codex/wait.py")
+        wait = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(wait)
+        clock, sent = [101.0], []  # the checker of request A (raised at 100) only starts at 101
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            record = root / "record.jsonl"
+            state = root / "state.json"
+            call = lambda i: {"type": "response_item", "payload": {"type": "function_call", "call_id": i}}
+            output = lambda i: {"type": "response_item", "payload": {"type": "function_call_output", "call_id": i}}
+            record.write_text(json.dumps(call("call_A")) + "\n")
+            a = {"session_id": "test-session", "turn_id": "test-turn", "cwd": "/tmp/project", "kind": "permission",
+                 "requested_at": 100.0, "transcript_path": str(record), "record_size": record.stat().st_size}
+            with record.open("a") as stream:  # by 101 A has its result and request B was raised
+                for entry in (output("call_A"), call("call_B")):
+                    stream.write(json.dumps(entry) + "\n")
+            b = {**a, "requested_at": 101.0, "record_size": record.stat().st_size}
+            state.with_suffix(".request.json").write_text(json.dumps(wait.persisted(b)))
+
+            def tick(seconds):
+                clock[0] += seconds
+
+            def unavailable():
+                raise wait.InspectionError("daemon-unavailable")
+            lock = _os.open(root / "lock", _os.O_CREAT | _os.O_RDWR, 0o600)
+            config = {"TELEGRAM_ENABLED": True, "authorization": True, "user_input": True, "delay": 3}
+            with patch.object(wait, "notify_root", return_value=root), \
+                    patch.object(wait, "settings", return_value=config), \
+                    patch.object(wait, "Daemon", side_effect=unavailable), \
+                    patch.object(wait.time, "time", side_effect=lambda: clock[0]), \
+                    patch.object(wait.time, "sleep", side_effect=tick), \
+                    patch.object(wait, "send", side_effect=lambda r, e, t: sent.append((clock[0], e))):
+                wait.run_checker(a, state, lock)
+        self.assertEqual([(104.0, "codex-authorization-unconfirmed")], sent,
+                         "B is reported at its own deadline (104), not at A's (103)")
+
 
 
 if __name__ == "__main__":
