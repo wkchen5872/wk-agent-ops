@@ -18,7 +18,7 @@ Codex permission and synchronous structured-question hooks SHALL start non-block
 - **THEN** its hook starts the same inspection path without waiting for the user to answer
 
 ### Requirement: On-demand lifecycle and coalescing
-Inspection SHALL observe only the triggering session and turn, with at most one checker per daemon/session. It SHALL exit when the turn ends or changes, the thread unloads, both categories are disabled, or bounded connection recovery fails and no authorization request is pending. It MUST NOT install a login service or start/resume Codex.
+Inspection SHALL observe only the triggering session and turn, with at most one checker per daemon/session. It SHALL exit when the turn ends or changes, the thread unloads after it was seen active, both categories are disabled, or bounded connection recovery fails and no authorization request is pending. A session that the daemon reports as not loaded on the first query SHALL be handled as a runtime that cannot be queried. It MUST NOT install a login service or start/resume Codex.
 
 #### Scenario: Repeated permission hooks
 - **WHEN** many hooks arrive during the same active turn
@@ -35,6 +35,14 @@ Inspection SHALL observe only the triggering session and turn, with at most one 
 #### Scenario: Daemon unavailable with a pending authorization request
 - **WHEN** connection or schema checks fail while an authorization request is pending
 - **THEN** inspection keeps the pending request, and after the authorization delay sends the unconfirmed notification if the session record still shows no result, without blocking native work
+
+#### Scenario: Session not loaded by the daemon
+- **WHEN** the daemon answers but reports the triggering session as not loaded on the first query, while an authorization request is pending
+- **THEN** the runtime is treated as unable to be queried: the pending request is kept, and after the authorization delay the unconfirmed notification is sent if the session record still shows no result
+
+#### Scenario: Session unloads after it was active
+- **WHEN** the daemon reported the session as active and later reports it as not loaded
+- **THEN** the turn is treated as finished and inspection exits without a notification
 
 ### Requirement: Explicit human-wait transitions
 Inspection SHALL send a confirmed approval notification only when the runtime waiting flag lasts longer than the authorization delay. When the runtime cannot be queried and the session record still shows the request without a result after the delay, it SHALL send the unconfirmed notification of `notify-authorization-wait` instead. Synchronous structured questions SHALL notify as soon as their waiting flag is observed. Each kind SHALL be deduplicated per session, notify once per continuous wait, and re-arm after resolution. For request_user_input_async, a successful PostToolUse accepted=true result SHALL trigger the user-input notification without daemon inspection. Automatic review that resolves within the delay, general text questions, and quiet time without an unresolved authorization request MUST NOT produce human-wait messages.

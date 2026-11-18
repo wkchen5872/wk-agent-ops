@@ -8,6 +8,9 @@
   `codex-permission` 事件同時啟動等待檢查器並立即送「Approval requested」。
 - `scripts/notify/codex/wait.py` 已能向 Codex daemon 查 `waitingOnApproval`／`waitingOnUserInput`，每秒輪詢、看到旗標就發。
   實績：78 個 Session 中 30 個連不上 daemon（`daemon-unavailable`）。
+  任務 1.2 的真實擷取（2026-11-18，codex-cli 0.170.0）另外發現：**以 CLI 啟動的 Session 沒有載入在 daemon 中**，
+  daemon 連得上，但對該 Session 的 `thread/read` 從頭到尾回 `notLoaded`，人工等待核准的 40 秒也看不到 `waitingOnApproval`。
+  所以其餘 48 個 `turn-finished` 也從未看過旗標。
 - Codex 的 Session 紀錄在「提出請求」與「取得結果」之間沒有「已核准」的標記，所以只看紀錄無法區分「等人核准」與「已核准但指令執行很久」。
 - Antigravity 1.5.10 的 hook 只有 `SessionStart`、`PreToolUse`、`PostToolUse`、`PreInvocation`、`PostInvocation`、`Stop`；授權等待只能從狀態列的
   `tool_confirmation_pending` 得知。Stop 的 `terminationReason` 以 `NO_TOOL_CALL` 表示正常完成。
@@ -137,7 +140,7 @@ stdin JSON + 參數
 | 工具 | 起始訊號 | 等待身分 | 確認仍在等的依據 | 解除證據 | 實作位置 |
 | --- | --- | --- | --- | --- | --- |
 | Claude Code | `Notification` 且 `notification_type=permission_prompt` | Session 紀錄尾端未取得結果的工具呼叫 ID | 該 ID 仍沒有結果 | 該 ID 有結果；Session 的 `Stop` | bash + `jq`（只讀檔案尾端） |
-| Codex | `PermissionRequest` hook | 旗標的一段連續期間；daemon 不可連時為紀錄尾端未取得結果的呼叫 ID | daemon 的 `waitingOnApproval` 持續到延遲結束 | 旗標消失；該呼叫有結果；回合結束 | 既有的 `wait.py` |
+| Codex | `PermissionRequest` hook | 旗標的一段連續期間；無法查詢執行狀態時為紀錄尾端未取得結果的呼叫 ID | daemon 的 `waitingOnApproval` 持續到延遲結束 | 旗標消失；該呼叫有結果；回合結束 | 既有的 `wait.py` |
 | Antigravity | 狀態列 `tool_confirmation_pending` 為 true | 沒有請求識別：套用決策 3 的合併政策 | 標記仍在且身分相同 | 狀態列回報 false；對話的 `Stop`；重新武裝時間 | bash |
 
 - 各工具能否提供表中的訊號，由 tasks 第 1 組以真實資料確認後才實作第 4 組。某個工具拿不到請求識別時，該工具套用決策 3 的
@@ -146,21 +149,24 @@ stdin JSON + 參數
   Antigravity 沒有請求識別，一律適用這個政策；它的「false→true 轉換」只在收到過 false（解除證據）之後才算新的一段。
 - Codex 沿用 `wait.py` 的單一檢查器與鎖：旗標首次出現時記下時間，持續超過延遲才發**確認的**通知；旗標消失就重置，
   下一次出現是新的一段等待。
+- **「無法查詢執行狀態」的範圍（任務 1.2 後補，使用者 2026-11-18 確認）**：包括 daemon 連不上或協定不符，
+  以及 daemon 連得上、但觸發的 Session 在第一次查詢時就是 `notLoaded`（從未看過 `active`）。後者是以 CLI 啟動的 Codex 的常態。
+  看過 `active` 之後才變成 `notLoaded`，仍視為回合結束。因此以 CLI 使用 Codex 時，授權等待只會得到「無法確認」的通知，不會有確認的通知。
 - **daemon 不可連時的政策（D-004，審查 r01/F-01）**：Session 紀錄只能證明「已有結果」，不能證明「正在等人」——
-  紀錄裡沒有「已核准」的標記。所以離線時：
+  紀錄裡沒有「已核准」的標記（任務 1.2 實測：人工等待核准的 40 秒間紀錄沒有任何新項目）。所以無法查詢執行狀態時：
   - 延遲內紀錄已有結果 → 解除，不通知。
   - 延遲後仍無結果，或紀錄讀不到 → 發**「無法確認」的通知**，文字為「可能在等待授權，無法確認」，使用另一個範本，不使用確認等待的文字。
   - 固定的三個案例：
 
-    | 案例（daemon 不可連） | 延遲後的紀錄 | 結果 |
+    | 案例（無法查詢執行狀態） | 延遲後的紀錄 | 結果 |
     | --- | --- | --- |
     | 真的在等使用者核准 | 無結果 | 一則「無法確認」 |
     | 第 6 秒已自動核准，指令執行到第 40 秒 | 無結果 | 一則「無法確認」（已接受的多餘通知） |
     | 紀錄讀不到 | — | 一則「無法確認」 |
 
-  daemon 可連時不受影響：自動核准後旗標消失，即使指令繼續執行也不通知。
+  daemon 可查詢該 Session 時不受影響：自動核准後旗標消失，即使指令繼續執行也不通知。
 - 這修改了既有 spec 的兩句（見 Context），並且是 D-001「只在真的等待時通知」的明確例外，使用者已確認。
-  理由：38% 的 Session 連不上 daemon，不通知等於這些 Session 真的卡住時沒有任何訊號。「靜默時間」本身仍不會觸發通知，必須有一個未解除的授權請求。
+  理由：38% 的 Session 連不上 daemon，其餘以 CLI 啟動的 Session 也查不到旗標；不通知等於這些 Session 真的卡住時沒有任何訊號。「靜默時間」本身仍不會觸發通知，必須有一個未解除的授權請求。
 - Claude Code 的 `permission_prompt` 只在真的要詢問使用者時出現（`auto` 模式由分類器決定，不詢問），加上延遲後行為與其他工具一致。
 - 替代方案：依 `approvals_reviewer` 設定直接略過 Codex 的通知。不採用——設定可被 profile 或啟動參數覆寫，而且自動審核拒絕後仍可能需要使用者。
 

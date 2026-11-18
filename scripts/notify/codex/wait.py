@@ -299,6 +299,9 @@ def run_checker(trigger, state_file, lock_fd):
     # An authorization request raised in this turn and not yet settled (offline fallback).
     request = trigger if trigger["kind"] == "permission" else None
     request_call = pending_call(request) if request else None
+    # A session never seen active is not loaded in the daemon (CLI-started Codex): the runtime
+    # cannot answer for it. Once seen active, "not loaded" means the turn has finished.
+    seen_active = False
 
     def record(running):
         atomic_json(state_file, {"pid": os.getpid(), "turn_id": trigger["turn_id"], "running": running,
@@ -338,8 +341,11 @@ def run_checker(trigger, state_file, lock_fd):
                     daemon = Daemon()
                 status, turn = daemon.snapshot(trigger["session_id"])
                 if status["type"] != "active":
+                    if not seen_active:
+                        raise InspectionError("session-not-loaded")
                     code = "turn-finished"
                     break
+                seen_active = True
                 if turn["id"] != trigger["turn_id"] or turn["status"] != "inProgress":
                     code = "turn-finished"
                     break
@@ -364,7 +370,7 @@ def run_checker(trigger, state_file, lock_fd):
                 record(True)
             except Exception as error:
                 code = str(error) if isinstance(error, InspectionError) else "daemon-unavailable"
-                if daemon:
+                if daemon and code != "session-not-loaded":
                     daemon.close()
                     daemon = None
                 failures += 1

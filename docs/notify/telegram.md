@@ -134,8 +134,12 @@ bash scripts/notify/telegram/update.sh types
 
 Codex 細節：
 
-- daemon 可連線：`waitingOnApproval` 持續超過延遲才送確認通知；旗標消失即重設；延遲 0 時第一次看到旗標就送。
-- daemon 不可連線：檢查器保留請求到延遲過後，再讀 Codex session 紀錄（payload 的 `transcript_path`，否則 `$CODEX_HOME/sessions/*/*/*/rollout-*-<session_id>.jsonl`）。該呼叫已有 `*_call_output`，或出現 `task_complete`／`turn_aborted`，即靜默；否則或紀錄不可讀，送「無法確認」通知。已核准但執行超過延遲的命令也會收到「無法確認」通知（已接受的取捨）。同一輪稍後的新請求有自己的延遲。
+- daemon 可查詢該 Session：`waitingOnApproval` 持續超過延遲才送確認通知；旗標消失即重設；延遲 0 時第一次看到旗標就送。
+  只有載入在 daemon 中的 Session（例如桌面 App 開的）才有這條路徑。
+- 無法查詢執行狀態：daemon 連不上，或 daemon 連得上、但第一次查詢就回報該 Session `notLoaded`。
+  **以終端機 `codex` 啟動的 Session 一律屬於後者**（2026-11-18 實測：人工等待核准的 40 秒間仍是 `notLoaded`、沒有旗標），
+  所以終端機的 Codex 只會收到「無法確認」的通知，不會有確認的通知。看過 `active` 之後才變成 `notLoaded`，視為回合結束。
+  檢查器保留請求到延遲過後，再讀 Codex session 紀錄（payload 的 `transcript_path`，否則 `$CODEX_HOME/sessions/*/*/*/rollout-*-<session_id>.jsonl`）。該呼叫已有 `*_call_output`，或出現 `task_complete`／`turn_aborted`，即靜默；否則或紀錄不可讀，送「無法確認」通知。已核准但執行超過延遲的命令也會收到「無法確認」通知（已接受的取捨）。同一輪稍後的新請求有自己的延遲。
 - 同步結構化問題看到旗標即通知；非同步問題行為不變。
 
 沒有識別碼的等待（Antigravity，或 Claude 找不到未完成的工具呼叫）會合併：重複的起點訊號不重啟延遲、不重送。尚未通知的等待不會過期。已通知的等待，只有在通知後至少 `NOTIFY_AUTHORIZATION_REARM_SECONDS`（預設 600，非數字或負值退回 600，自通知時起算）才由新起點重新武裝；時鐘為整秒解析度，不會提早，最多晚一秒。解除證據會立即重新武裝。已知限制：沒有解除訊號時，緊接著的第二次等待會被併入第一次。
@@ -182,7 +186,8 @@ PermissionRequest 本身不會當下送出通知，只啟動檢查器；授權�
 
 支援範圍與限制：
 
-- 確認授權與同步問題需可由目前 `CODEX_HOME` 連線的既有本機 daemon；不啟動 daemon。daemon 不可連線時，授權改讀 session 紀錄，無法確認則送「授權狀態無法確認」。非同步問題依原生成功事件通知，不需 daemon。
+- 確認授權與同步問題需要既有本機 daemon 能查詢該 Session；不啟動 daemon。終端機啟動的 Codex 不在 daemon 中，同步問題的旗標也看不到。
+  無法查詢時，授權改讀 session 紀錄，無法確認則送「授權狀態無法確認」。非同步問題依原生成功事件通知，不需 daemon。
 - 以明確等待旗標辨識，不靠靜默時間或問號。一般文字提問不偵測。
 - 同一 session、同一種類、同段等待只嘗試通知一次，解除後重設；一秒 metadata 輪詢可能錯過更短的等待或中間解除。
 - 不附原始命令、問題全文或 transcript。連線錯誤只保留一般狀態碼，不印原始例外。

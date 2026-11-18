@@ -2,6 +2,12 @@
 
 Every test runs the deployed layout in a temporary HOME with a fake curl that logs each
 message and its arrival time. Delays are shortened to a few seconds.
+
+A notice arrives some time after its check is due (hook start, the check itself, the
+Python fake curl), and later still under load. So the tests never require a notice by a
+fixed moment: they wait for it with `until`, and they decide "restarted or not" from the
+wait marker, which load cannot change. Only "nothing yet" checks use fixed moments,
+because lateness can only help them.
 """
 import json
 import os
@@ -84,6 +90,16 @@ class HookFixture(unittest.TestCase):
     def authorization(self, label=""):
         return [m for m in self.messages(label) if CONFIRMED in m[1] or UNCONFIRMED in m[1]]
 
+    def until(self, count, seconds, label=""):
+        """Wait until `count` notices arrived, or until `seconds` after the test started."""
+        while len(self.authorization(label)) < count and time.time() < self.start + seconds:
+            time.sleep(.05)
+        return self.authorization(label)
+
+    @staticmethod
+    def field(marker, key):
+        return next((line.split("=", 1)[1] for line in marker.splitlines() if line.startswith(key + "=")), "")
+
 
 class ClaudeCodeTests(HookFixture):
     def setUp(self):
@@ -122,8 +138,7 @@ class ClaudeCodeTests(HookFixture):
         self.prompt()
         self.at(1.5)
         self.assertEqual([], self.authorization(), "nothing may be sent before the delay")
-        self.at(3.2)
-        sent = self.authorization()
+        sent = self.until(1, 6)
         self.assertEqual(1, len(sent))
         self.assertGreaterEqual(sent[0][0], 1.9)
         text = sent[0][1]
@@ -141,14 +156,13 @@ class ClaudeCodeTests(HookFixture):
         self.prompt()
         self.at(.5)
         self.answer("toolu_A")
-        self.at(3.2)
+        self.at(3.6)
         self.assertEqual([], self.authorization())
         self.assertEqual("", self.marker(), "a resolved wait is cleared")
 
     def test_unreadable_record_sends_the_unconfirmed_notice(self):
         self.prompt(transcript=self.home / "missing.jsonl")
-        self.at(3.2)
-        sent = self.authorization()
+        sent = self.until(1, 6)
         self.assertEqual(1, len(sent))
         self.assertIn(UNCONFIRMED, sent[0][1])
         self.assertNotIn(CONFIRMED, sent[0][1])
@@ -156,39 +170,38 @@ class ClaudeCodeTests(HookFixture):
     def test_same_request_signalled_again_keeps_its_start(self):
         self.request("toolu_A")
         self.prompt()
-        self.at(1)
+        first = self.marker()
+        self.at(1.2)
         self.prompt()
-        self.at(3.8)
-        sent = self.authorization()
-        self.assertEqual(1, len(sent))
-        self.assertLess(sent[0][0], 2.9, "a repeat must not restart the delay")
+        self.assertEqual(first, self.marker(), "a repeat keeps the identity and the start time")
+        self.assertEqual(1, len(self.until(1, 6)))
+        self.at(self.until(1, 6)[0][0] + 1.5)
+        self.assertEqual(1, len(self.authorization()), "a repeat must not cause a second notice")
 
     def test_answered_then_stopped_then_asked_again_notifies_again(self):
         self.request("toolu_A")
         self.prompt()
-        self.at(2.6)
+        self.assertEqual(1, len(self.until(1, 6)))
         self.answer("toolu_A")
         self.stop()
         self.assertEqual("", self.marker(), "the end of the turn clears the notified wait")
         self.request("toolu_B")
-        self.at(3)
         self.prompt()
-        self.at(5.6)
-        self.assertEqual(2, len(self.authorization()))
+        self.assertEqual(2, len(self.until(2, time.time() - self.start + 6)))
 
     def test_notified_answered_then_a_new_request_has_its_own_delay(self):
         self.request("toolu_A")
         self.prompt()
-        self.at(2.6)
+        self.assertEqual(1, len(self.until(1, 6)))
         self.answer("toolu_A")
         self.request("toolu_B")
+        second = time.time() - self.start
         self.prompt()
-        self.at(4)
+        self.at(second + 1.5)
         self.assertEqual(1, len(self.authorization()), "the second wait needs its own delay")
-        self.at(5.2)
-        sent = self.authorization()
+        sent = self.until(2, second + 6)
         self.assertEqual(2, len(sent))
-        self.assertGreaterEqual(sent[1][0], 4.4)
+        self.assertGreaterEqual(sent[1][0], second + 1.9)
 
     def test_second_wait_before_the_first_timer_ends(self):
         self.env["NOTIFY_AUTHORIZATION_DELAY_SECONDS"] = "3"
@@ -199,11 +212,11 @@ class ClaudeCodeTests(HookFixture):
         self.at(1)
         self.request("toolu_B")
         self.prompt()
-        self.at(3.6)
+        self.at(3.6)  # the first check has run; the second is not due before about 4 s
         self.assertEqual([], self.authorization(), "the first check must not send for the second wait")
-        self.assertIn("id=toolu_B", self.marker(), "the first check must not clear the second wait")
-        self.at(4.9)
-        sent = self.authorization()
+        self.assertEqual("toolu_B", self.field(self.marker(), "id"), "the first check must not clear the second wait")
+        self.assertEqual("0", self.field(self.marker(), "notified"), "the first check must not act on it")
+        sent = self.until(1, 9)
         self.assertEqual(1, len(sent))
         self.assertGreaterEqual(sent[0][0], 3.9)
 
@@ -245,14 +258,15 @@ class ClaudeCodeTests(HookFixture):
         signal.stdin.close()
         self.at(2.4)  # the first check is now waiting for the lock as well
         shutil.rmtree(lock)
+        released = time.time() - self.start
         signal.wait(timeout=5)
-        self.at(3.9)
+        self.at(released + 1.5)  # the new wait is not due before its own delay
         self.assertEqual([], self.authorization(), "the old check must not send for the new wait")
-        self.assertIn("id=toolu_B", self.marker())
-        self.at(5.3)
-        sent = self.authorization()
+        self.assertEqual("toolu_B", self.field(self.marker(), "id"))
+        self.assertEqual("0", self.field(self.marker(), "notified"))
+        sent = self.until(1, released + 7)
         self.assertEqual(1, len(sent))
-        self.assertGreaterEqual(sent[0][0], 4.2)
+        self.assertGreaterEqual(sent[0][0], released + 1.9)
 
 
 class AntigravityTests(HookFixture):
@@ -262,9 +276,9 @@ class AntigravityTests(HookFixture):
         output = self.hook("antigravity-statusline", "Antigravity CLI", payload, **env)
         self.assertEqual("tool_use" if pending else "idle", output.strip(), "status line output is unchanged")
 
-    def marker(self):
-        files = list(self.state.glob("antigravity-*.pending")) if self.state.exists() else []
-        return files[0].read_text() if files else ""
+    def marker(self, conversation="agy-conversation"):
+        path = self.state / f"antigravity-{conversation}.pending"
+        return path.read_text() if path.exists() else ""
 
     def signals(self, every, until, start=0.0, **env):
         moment = start
@@ -274,14 +288,13 @@ class AntigravityTests(HookFixture):
             moment += every
 
     def test_continued_wait_notifies_at_the_delay(self):
-        # Restarting at the second signal would land at 3.5 s or later.
         self.status(True)
+        first = self.marker()
         self.at(1.5)
         self.status(True)
-        self.at(4)
-        sent = self.authorization()
+        self.assertEqual(first, self.marker(), "a repeated true keeps the identity and the start time")
+        sent = self.until(1, 6)
         self.assertEqual(1, len(sent))
-        self.assertLess(sent[0][0], 3.2, "a repeated true must not postpone the notice")
         self.assertIn(CONFIRMED, sent[0][1])
         self.assertNotIn("private@example.com", sent[0][1])
 
@@ -295,14 +308,15 @@ class AntigravityTests(HookFixture):
 
     def test_true_after_false_is_a_new_wait(self):
         self.status(True)
+        first = self.field(self.marker(), "id")
         self.at(.5)
         self.status(False)
         self.at(1)
         self.status(True)
+        self.assertNotEqual(first, self.field(self.marker(), "id"), "true after false starts a new wait")
         self.at(2.6)
         self.assertEqual([], self.authorization())
-        self.at(3.8)
-        self.assertEqual(1, len(self.authorization()))
+        self.assertEqual(1, len(self.until(1, 7)))
 
     def test_conversation_stop_clears_the_wait(self):
         self.status(True)
@@ -321,69 +335,71 @@ class AntigravityTests(HookFixture):
         self.assertEqual("", self.marker())
 
     def test_repeating_signals_send_exactly_one_notice(self):
-        self.signals(every=.5, until=5)
-        self.at(5.3)
+        self.status(True)
+        first = self.field(self.marker(), "id")
+        self.signals(every=.5, until=5, start=.5)
+        self.assertEqual(first, self.field(self.marker(), "id"), "repeats never start a new wait")
+        self.at(5.5)
         sent = self.authorization()
         self.assertEqual(1, len(sent))
-        self.assertLess(sent[0][0], 2.9)
+        self.assertLess(sent[0][0], 5, "repeats every 0.5 s must not postpone the notice")
 
     def test_rearm_counts_from_the_notice(self):
-        self.env.update(NOTIFY_AUTHORIZATION_DELAY_SECONDS="1", NOTIFY_AUTHORIZATION_REARM_SECONDS="3")
+        self.env.update(NOTIFY_AUTHORIZATION_DELAY_SECONDS="1", NOTIFY_AUTHORIZATION_REARM_SECONDS="4")
         self.status(True)
-        self.at(2.4)
-        sent = self.authorization()
+        sent = self.until(1, 5)
         self.assertEqual(1, len(sent))
-        notified = sent[0][0]
+        first = self.field(self.marker(), "id")
+        notified = int(self.field(self.marker(), "notified"))
         # The marker keeps whole seconds; re-arming is never early and at most one second late.
-        self.at(notified + 2)
+        time.sleep(max(0, notified + 3 - time.time()))
         self.status(True)  # short of the re-arm interval: merged
-        self.at(notified + 4.6)
-        self.assertEqual(1, len(self.authorization()))
+        self.assertEqual(first, self.field(self.marker(), "id"))
+        time.sleep(max(0, notified + 6 - time.time()))
         self.status(True)  # past the interval: a new wait with its own delay
-        self.at(notified + 5.2)
+        self.assertNotEqual(first, self.field(self.marker(), "id"))
         self.assertEqual(1, len(self.authorization()), "the new wait has its own delay")
-        self.at(notified + 7)
-        self.assertEqual(2, len(self.authorization()))
+        self.assertEqual(2, len(self.until(2, time.time() - self.start + 5)))
 
     def test_first_notice_arrives_at_the_delay_whatever_the_rearm_interval(self):
         # Each configuration uses its own conversation, so earlier runs cannot interfere.
+        # Signals continue past the delay; a starving design would send nothing until they stop.
         for delay, rearm in (("2", "1"), ("2", "2"), ("3", "2")):
             with self.subTest(delay=delay, rearm=rearm):
                 conversation = f"agy-d{delay}-r{rearm}"
                 self.start = time.time()
-                self.signals(every=.6, until=float(delay) + .6, conversation=conversation,
+                self.signals(every=.6, until=float(delay) + 2.4, conversation=conversation,
                              NOTIFY_AUTHORIZATION_DELAY_SECONDS=delay, NOTIFY_AUTHORIZATION_REARM_SECONDS=rearm)
-                self.at(float(delay) + 1.2)
                 sent = self.authorization(conversation)
-                self.assertTrue(sent, "the first notice must not be starved")
+                self.assertTrue(sent, "the first notice must arrive while signals keep coming")
                 self.assertGreaterEqual(sent[0][0], float(delay) - .1)
-                self.assertLess(sent[0][0], float(delay) + 1.2)
 
     def test_resolution_evidence_rearms_at_once(self):
         self.status(True)
-        self.at(3.2)
-        self.assertEqual(1, len(self.authorization()))
+        self.assertEqual(1, len(self.until(1, 6)))
         self.status(False)
-        self.at(3.7)
+        time.sleep(.5)
+        second = time.time() - self.start
         self.status(True)
-        self.at(5.5)
+        self.at(second + 1.5)
         self.assertEqual(1, len(self.authorization()), "the new wait has its own delay")
-        self.at(7)
-        self.assertEqual(2, len(self.authorization()))
+        sent = self.until(2, second + 6)
+        self.assertEqual(2, len(sent))
+        self.assertGreaterEqual(sent[1][0], second + 1.9)
 
     def test_invalid_rearm_interval_uses_the_default(self):
         for value in ("abc", "-5"):
             with self.subTest(value=value):
-                (self.home / "messages").unlink(missing_ok=True)
-                shutil.rmtree(self.state, ignore_errors=True)
+                conversation = f"agy-rearm{value}"
                 self.start = time.time()
                 env = {"NOTIFY_AUTHORIZATION_DELAY_SECONDS": "1", "NOTIFY_AUTHORIZATION_REARM_SECONDS": value}
-                self.status(True, **env)
-                self.at(2.2)
-                self.assertEqual(1, len(self.authorization()))
-                self.status(True, **env)
-                self.at(4.6)
-                self.assertEqual(1, len(self.authorization()), "an invalid interval must not re-arm at once")
+                self.status(True, conversation=conversation, **env)
+                self.assertEqual(1, len(self.until(1, 5, conversation)))
+                first = self.field(self.marker(conversation), "id")
+                time.sleep(2.2)  # past any interval of 0-1 s
+                self.status(True, conversation=conversation, **env)
+                self.assertEqual(first, self.field(self.marker(conversation), "id"),
+                                 "an invalid interval must not re-arm at once")
 
 
 if __name__ == "__main__":

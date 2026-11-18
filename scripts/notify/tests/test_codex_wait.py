@@ -389,6 +389,36 @@ class CodexWaitTests(unittest.TestCase):
         self.wait_done(timeout=15)
         self.assertEqual(1, len(self.unconfirmed()), "A resolved in time; B is reported once")
 
+    # A CLI-started Codex session is never loaded in the daemon (task 1.2 live capture).
+    NOT_LOADED = {"status": {"type": "notLoaded"}}
+
+    def test_session_not_loaded_with_a_pending_request_is_unconfirmed(self):
+        self.authorization_settings(delay=2)
+        self.scenario([self.NOT_LOADED])
+        path = self.record(self.call("call_A"))
+        self.trigger("codex-permission", transcript=str(path))
+        self.wait_done(timeout=12)
+        self.assertEqual(1, len(self.unconfirmed()))
+        self.assertEqual([], self.confirmed())
+
+    def test_session_not_loaded_with_a_result_within_the_delay_is_silent(self):
+        self.authorization_settings(delay=3)
+        self.scenario([self.NOT_LOADED])
+        path = self.record(self.call("call_A"))
+        self.trigger("codex-permission", transcript=str(path))
+        time.sleep(.5)
+        self.record(self.output("call_A"))
+        self.wait_done(timeout=12)
+        self.assertEqual([], self.messages(), "automatic review that settles in time stays silent")
+
+    def test_session_unloaded_after_it_was_active_ends_the_turn(self):
+        self.authorization_settings(delay=2)
+        self.scenario([snapshot(), self.NOT_LOADED])
+        path = self.record(self.call("call_A"))
+        self.trigger("codex-permission", transcript=str(path))
+        self.wait_done(timeout=12)
+        self.assertEqual([], self.messages())
+
     def test_offline_question_only_sends_nothing(self):
         self.authorization_settings(delay=1)
         self.offline()
