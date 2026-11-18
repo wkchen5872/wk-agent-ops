@@ -13,6 +13,10 @@ The notification hook SHALL accept handoff events from the handoff routing hook,
 - **WHEN** `NOTIFY_HANDOFF_FINISH=false` and a handoff finish event arrives
 - **THEN** no message is sent
 
+#### Scenario: Attention event without a usable template
+- **WHEN** a handoff attention event arrives and its template or table entry is missing
+- **THEN** the attention message is still sent with a built-in fallback text
+
 #### Scenario: Handoff event uses its own template
 - **WHEN** a handoff review event arrives
 - **THEN** the message is rendered from the handoff review template, not from the waiting-for-response template

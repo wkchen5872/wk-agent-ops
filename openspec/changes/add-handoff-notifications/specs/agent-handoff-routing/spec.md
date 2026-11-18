@@ -20,3 +20,19 @@ When the hook cannot deliver the message that hands a record to the reviewer or 
 #### Scenario: Manual retry
 - **WHEN** the user runs the hook in the foreground from the worktree that holds the undelivered record
 - **THEN** the delivery is retried without waiting for an agent to stop
+
+### Requirement: A record that stops for the user is processed once
+A record whose outcome is a stop for the user — a `blocked` status or verdict, the round limit, any `finish` record, a passing review that waits for `handoff-finish`, a worktree that is not clean or not at the recorded head, or an unreadable record — SHALL be marked as processed after the user was notified. Later hook runs MUST NOT notify or route it again. Only a failed delivery or a failed attempt to open a session or prepare the review worktree SHALL leave a record unprocessed for retry.
+
+#### Scenario: Pass that waits for the user
+- **WHEN** a passing review with the finish trigger `ask` is processed and the agent later stops again without a new record
+- **THEN** the record is already marked as processed and nothing is sent
+
+#### Scenario: Blocked record
+- **WHEN** a `blocked` record is processed twice
+- **THEN** the second run does nothing
+
+#### Scenario: Reviewer session cannot be opened
+- **WHEN** the first review session cannot be opened for an `implement`/`done` record
+- **THEN** the record stays unprocessed and a later run tries to open the reviewer again
+

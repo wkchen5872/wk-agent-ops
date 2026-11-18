@@ -7,7 +7,7 @@ Let the user follow a handoff loop from their notifications: which step just fin
 ## ADDED Requirements
 
 ### Requirement: Each handoff step produces a notification kind
-When the routing hook processes a handoff record, it SHALL notify the user with one of four kinds: implementation handed over, review result, finish completed, or attention needed. An `implement`/`done` record SHALL produce the first, a `review`/`done` record with `changes-required` or `pass` the second, and a `finish`/`done` record the third. Each record SHALL produce at most one notification.
+When the routing hook processes a handoff record, it SHALL notify the user with one of four kinds: implementation handed over, review result, finish completed, or attention needed. An `implement`/`done` record SHALL produce the first, a `review`/`done` record with `changes-required` or `pass` the second, and a `finish`/`done` record the third. Each record SHALL produce at most one progress notification and at most one attention notification, however many times the hook runs for it.
 
 #### Scenario: Implementer hands over
 - **WHEN** an `implement`/`done` record is routed to the reviewer
@@ -24,6 +24,14 @@ When the routing hook processes a handoff record, it SHALL notify the user with 
 #### Scenario: Record processed twice
 - **WHEN** an agent stops again without writing a new record
 - **THEN** no second notification is sent for the already processed record
+
+#### Scenario: Pass that waits for the user, hook runs twice
+- **WHEN** a passing review with the finish trigger `ask` has been notified and the hook runs again for the same record
+- **THEN** no second notification is sent
+
+#### Scenario: Blocked record, hook runs twice
+- **WHEN** a `blocked` record has been notified and the hook runs again for the same record
+- **THEN** no second notification is sent
 
 ### Requirement: Progress notifications have switches
 `NOTIFY_HANDOFF_IMPLEMENT`, `NOTIFY_HANDOFF_REVIEW`, and `NOTIFY_HANDOFF_FINISH` SHALL enable or disable the implementation, review, and finish notifications. A missing key SHALL count as enabled. Disabling a switch MUST NOT change routing between agents.
@@ -79,7 +87,7 @@ A progress notification SHALL be sent only after the routing action for the reco
 - **THEN** the progress notification for that record is sent once
 
 ### Requirement: Notices reach the user during a mixed deployment
-The handoff hook SHALL send handoff events only when the installed notification hook supports them. Otherwise it SHALL send attention notices through the previous generic notification path, so they are still delivered, and SHALL skip progress notices. Either installer MAY be deployed or rolled back first.
+The handoff hook SHALL send handoff events only when the notification hook that will actually run declares support for them. It SHALL decide this from that hook itself, not from other deployed files. Otherwise it SHALL send attention notices through the previous generic notification path, so they are still delivered, and SHALL skip progress notices. Either installer MAY be deployed or rolled back first.
 
 #### Scenario: New handoff hook with an older notification hook
 - **WHEN** the notification hook does not support handoff events and a review passes with the finish trigger `ask`
@@ -96,6 +104,14 @@ The handoff hook SHALL send handoff events only when the installed notification 
 #### Scenario: Notification hook rolled back
 - **WHEN** the notification hook is rolled back to a version without handoff events while the new handoff hook stays installed
 - **THEN** attention notices are still delivered through the generic notification path
+
+#### Scenario: Rollback leaves newer data files behind
+- **WHEN** the notification hook is rolled back by an older installer that leaves the newer event table and templates in place, and a review passes with the finish trigger `ask`
+- **THEN** the handoff hook uses the generic notification path and the user receives the notice
+
+#### Scenario: Blocked record after such a rollback
+- **WHEN** the same rolled-back state holds and a record is `blocked`
+- **THEN** the user receives the blocked notice through the generic notification path
 
 ### Requirement: Notifications name the agent that wrote the record
 A handoff notification SHALL show the tool, model, and effort of the session that wrote the record, as Xirp reports them when the record is processed, in the form `Agent Handoff (<tool> / <model> / <effort>)`. A part that Xirp does not report SHALL be omitted, and with no part known the label SHALL be `Agent Handoff`.

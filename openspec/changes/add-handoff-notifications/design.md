@@ -79,39 +79,48 @@ telegram-notify.sh handoff
 - 標題的 Session 標籤沿用 hook 輸入的原生 `session_id`，和同一個 Session 的 Task Complete 通知一致。
 - 內建範本四個：`handoff-implement`、`handoff-review`、`handoff-finish`、`handoff-attention`；使用者可用同名檔覆寫。
 
-### 5. 傳訊失敗（審查 r02/F-01）
+### 5. 路由結果的三種分類（審查 r02/F-01、r04/F-01）
 
-現況：`to_reviewer`、`to_implementer` 呼叫 `ho_xirp_message` 後不看結果就回報 `messaged`，交件單也照樣寫入 `.routed`。
-傳訊失敗時迴圈其實已經停住，卻會被記成已交付。
+現況：`to_reviewer`、`to_implementer` 呼叫 `ho_xirp_message` 後不看結果就回報 `messaged`，交件單也照樣寫入 `.routed`；
+傳訊失敗時迴圈其實已經停住，卻會被記成已交付。另一方面，需要使用者處理的停點如果不寫入 `.routed`，每次 Agent 停下都會重發通知。
+所以「要不要標成已處理」不能只分成兩種：
 
-- 路由動作回報三種結果：已交付、交付失敗、需要使用者。只有「已交付」才發進度通知、才寫入 `.routed`。
-- 交付失敗時：`routing.log` 記為 `…:send-failed`；發一則 `attention`，內容為「無法把第 N 輪交給審查者／實作者，迴圈已停住」與重試方式；
-  交件單不寫入 `.routed`。
-- 同一張交件單的失敗通知只發一次：另以 `.notified` 記錄已發過 attention 的交件單，重試再失敗不重發。
+| 結果 | 例子 | 通知 | 寫入 `.routed` | 之後的 hook 執行 |
+| --- | --- | --- | --- | --- |
+| 已交付 | 已開啟或已通知審查者、已把報告交給實作者、已自動開啟收尾 | 進度通知（依開關） | 是 | 不再處理 |
+| 人工停點 | blocked、輪數上限、任何 finish 交件單、通過且 `ask`、worktree 不乾淨或版本不符、無法判讀 | attention 一則 | **是** | 不再處理、不再通知 |
+| 可重試的失敗 | Xirp 傳訊失敗、開不了審查或收尾 Session、建立或移動審查 worktree 失敗 | attention 一則（以 `.notified` 記錄） | **否** | 重試；成功後才發進度通知並寫入 |
+
+- 人工停點是這張交件單的最終結果：使用者接下來用指令（例如 `handoff-finish`）或讓 Agent 寫新的交件單來推進，交件單本身不需要再處理。
+  這與現行行為一致（現在這些情況都會寫入 `.routed`）。
+- 可重試的失敗是 hook 想做的動作沒做成：`routing.log` 記為 `…:send-failed` 或 `…:open-failed`，attention 內容為
+  「無法把第 N 輪交給審查者／實作者，迴圈已停住」與重試方式；同一張交件單的失敗通知只發一次，重試再失敗不重發。
 - 重試：之後任何一次在該 worktree 觸發的 hook 都會再試；也可以在該 worktree 手動執行 `handoff-route --foreground`。
-  重試成功後才發進度通知並寫入 `.routed`。
-- 開啟新的審查或收尾 Session 失敗屬於既有的「無法開啟」情況，同樣不寫入 `.routed`、發 attention，一併套用上述規則。
+- 因此每張交件單最多一則進度通知、最多一則 attention。
 - hook 仍以成功狀態結束，不影響 Agent。
 - 替代方案：失敗也標成已處理，只靠 attention 提醒。不採用——使用者處理完原因後沒有辦法讓 hook 再送一次，只能自己手動傳訊。
 
-### 6. 混版部署與回退（審查 r02/F-02）
+### 6. 混版部署與回退（審查 r02/F-02、r04）
 
 交接端與通知端由兩個 installer 分別部署。只更新交接端（或通知端被回退）時，舊的通知 hook 不認得 `handoff` 事件；
 在 `attention_required` 層級下未知事件會被濾掉，唯一要使用者處理的提示就會消失。
 
-- 交接端送出前先判斷通知端是否支援交件單事件：檢查已部署的事件對照表（`~/.config/ai-notify/hooks/events.tsv`）是否有 `handoff:attention`。
-  不用呼叫通知腳本探測，因為舊版腳本會把不認得的參數當成事件處理。
-- 支援時：走新的 `handoff` 事件。
-- 不支援時（對照表不存在或沒有該列）：`attention` 類改走原本的一般通知路徑——`notification` 事件、純文字訊息、帶 `NOTIFY_ACTION_REQUIRED=true`，
-  與現行行為相同；進度類不送（舊版本來就沒有）。
+- 判斷依據綁在**實際會被執行的通知腳本**上：新版 `telegram-notify.sh` 內含一行能力宣告（例如 `# ai-notify-capability: handoff-events`），
+  交接端在送出前檢查它要呼叫的那個檔案有沒有這一行。
+- 不用事件對照表判斷：舊版 installer 回退 hook 時不會刪除它不認識的 `events.tsv` 與範本，殘留的表檔會誤報支援。
+  也不呼叫通知腳本探測：舊版腳本會把不認得的參數當成事件處理。
+- 有宣告：走新的 `handoff` 事件。沒有宣告（舊版、已回退、或腳本不存在）：`attention` 類改走原本的一般通知路徑——
+  `notification` 事件、純文字訊息、帶 `NOTIFY_ACTION_REQUIRED=true`，與現行行為相同；進度類不送（舊版本來就沒有）。
+- 新版通知腳本收到 `attention` 而對照表列或範本缺少時（部署不完整），以內建的後備文字送出，不丟棄。
 - 反方向（舊的交接端、新的通知端）由 `refine-notify-core` 保留的「環境變數舊鍵覆寫仍會送出」保證。
-- 因此兩個 installer 的部署與回退順序都不受限制，文件只需說明：兩者都更新後才會看到新的標題、Agent 資訊與進度通知。
+- 限制：能力宣告是腳本內的固定文字，使用者手動改寫通知腳本並移除該行時，交接端會退回一般通知路徑（attention 仍送達，只是沒有專屬標題）。
 
-| 交接端 | 通知端 | attention | 進度通知 |
-| --- | --- | --- | --- |
-| 新 | 新 | `handoff` 事件，專屬標題 | 依開關 |
-| 新 | 舊或已回退 | 一般通知路徑（Action Required） | 不送 |
-| 舊 | 新 | 一般通知路徑（由 core 的相容規則送出） | 無 |
+| 交接端 | 通知腳本 | 殘留的新版表檔與範本 | attention | 進度通知 |
+| --- | --- | --- | --- | --- |
+| 新 | 新 | — | `handoff` 事件，專屬標題 | 依開關 |
+| 新 | 舊（尚未更新） | 無 | 一般通知路徑（Action Required） | 不送 |
+| 新 | 舊（由舊 installer 回退） | **有** | 一般通知路徑（Action Required） | 不送 |
+| 舊 | 新 | — | 一般通知路徑（由 core 的相容規則送出） | 無 |
 
 ### 7. TDD 策略與測試邊界
 
@@ -121,8 +130,10 @@ telegram-notify.sh handoff
   交件單事件不落到等待回應的範本。
 - 傳訊失敗：假的 `xirp` 對 `session message` 回傳非零，分別測審查者與實作者兩條路徑——沒有進度通知、有一則 attention、交件單不在 `.routed`、
   hook 以成功結束；再次執行仍失敗不重發 attention；改為成功後訊息送出一次、進度通知出現、交件單寫入 `.routed`。
-- 混版：以「沒有事件對照表」「對照表沒有交件單事件」「對照表有交件單事件」三種暫時 HOME，驗證審查通過且 `ask`、blocked 兩種情況在前兩者走一般通知路徑、
-  在第三者走 `handoff` 事件；進度類在前兩者不送。
+- 人工停點：同一張通過且 `ask` 的交件單、同一張 blocked 的交件單各執行 hook 兩次，第二次沒有任何通知或路由，交件單在 `.routed`。
+- 混版：以暫時 HOME 做四種通知端——沒有通知腳本、舊版腳本、新版腳本、**完整安裝新版後只把通知腳本換回舊版而保留新版的對照表與範本**——
+  驗證審查通過且 `ask`、blocked 兩種情況在前兩者與最後一種都經一般通知路徑送達，在新版走 `handoff` 事件；進度類只在新版送出。
+  舊版通知腳本以凍結的測試 fixture 提供（變更前的 `hook.sh` 副本），不依賴 Git 歷史。
 - 既有的路由測試（開啟或通知審查者、退回、輪數上限、乾淨檢查）必須維持通過，證明傳訊成功時的路由沒有改變。
 - 測試都在暫時的 HOME 與假的 `xirp`、假通知腳本下執行，不送真實 Telegram。
 - 真實驗收另列：在演練用的 repo 跑一輪含退回的迴圈，對照收到的通知順序，結果記入 Work Item。
@@ -132,9 +143,9 @@ telegram-notify.sh handoff
 - [實作完成與 Task Complete 會各發一則] → 使用者已接受；兩者帶相同的 Session 標籤，方便之後決定關哪一個。
 - [通知變多] → 三個開關可關；`attention` 才是必須處理的。
 - [Xirp 回報的 effort 欄位名稱依工具不同（`effort`、`reasoning_effort`）] → 兩個都讀；讀不到就省略。
-- [通知端是舊版或已回退] → 交接端偵測不到交件單事件時改走一般通知路徑，attention 仍送達（決策 6）。
+- [通知端是舊版或已回退，且留下新版的對照表] → 判斷依據是通知腳本自己的能力宣告，不看表檔；偵測不到時改走一般通知路徑，attention 仍送達（決策 6）。
 - [傳訊失敗後沒有 Agent 再停下，hook 不會自動重試] → attention 寫明手動重試指令 `handoff-route --foreground`；之後任何一次在該 worktree 的 hook 執行也會重試。
-- [未寫入 `.routed` 的交件單在每次 hook 執行時都重試] → 重試只在傳訊失敗的交件單發生；attention 每張交件單只發一次。
+- [未寫入 `.routed` 的交件單在每次 hook 執行時都重試] → 只有可重試的失敗不寫入；人工停點照常寫入，不會重發；attention 每張交件單只發一次。
 - [`attention` 不可關閉可能被認為太吵] → 這些情況下迴圈已經停住；文件說明原因。
 
 ## Migration Plan
