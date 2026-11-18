@@ -95,6 +95,14 @@ commands are configured. It cannot inspect Codex's trust or enabled state.
 
 ---
 
+## 架構與流程圖
+
+完整事件資料流與 30 秒延遲授權狀態機請參閱：
+- [AI CLI 通知架構與延遲授權流程圖 (SVG)](../diagrams/notify-architecture.svg)
+- [Notify Hooks Architecture 詳細架構手冊](/docs/notify/architecture.md)
+
+---
+
 ## 通知類型與設定
 
 ```bash
@@ -103,16 +111,26 @@ bash scripts/notify/telegram/update.sh types
 
 使用編號切換、`h` 查看說明、`s` 顯示儲存摘要並確認，或 `q` 放棄。EOF 也會取消，取消不寫入設定。安裝與更新共用同一套畫面，Bot Token 不列入摘要。
 
-四個分類，各一個開關（括號為選單名稱）：
+### 四大核心分類開關
 
-| 設定鍵 | 選單名稱 | 內容／預設 |
+| 設定鍵 | 選單名稱 | 說明／預設 |
 |---|---|---|
-| `NOTIFY_COMPLETION` | 工作結束 | 缺省沿用 `NOTIFY_LEVEL`（`attention_required` 為關閉） |
-| `NOTIFY_AUTHORIZATION` | 授權要求 | 等你授權；延遲通知，見下節；缺省開啟 |
-| `NOTIFY_USER_INPUT` | 等待回應 | 等你回答或輸入；缺省開啟 |
-| `NOTIFY_FAILURE` | 異常停止 | 目前僅 Antigravity 提供訊號；缺省開啟 |
+| `NOTIFY_COMPLETION` | 工作結束 | 任務完成；缺省沿用 `NOTIFY_LEVEL`（`attention_required` 為關閉，`all` 為開啟） |
+| `NOTIFY_AUTHORIZATION` | 授權要求 | 等你核准工具或越界存取；套用 30 秒延遲確認，缺省開啟 |
+| `NOTIFY_USER_INPUT` | 等待回應 | 等你回答問題或輸入；立即通知，缺省開啟 |
+| `NOTIFY_FAILURE` | 異常停止 | 工具異常中斷或錯誤；缺省開啟 |
 
-分類不代表每個工具都有所有事件。選單已無「既有操作提醒」與兩個 Codex 專用項目。
+### 三大交接迴圈（Agent Handoff）進度開關
+
+| 設定鍵 | 選單名稱 | 說明／預設 |
+|---|---|---|
+| `NOTIFY_HANDOFF_IMPLEMENT` | 實作交件 | 實作者完成實作並提交交件單；缺省開啟 |
+| `NOTIFY_HANDOFF_REVIEW` | 審查結果 | 審查者提出退回修正或通過結論；缺省開啟 |
+| `NOTIFY_HANDOFF_FINISH` | 收尾完成 | 收尾角色完成封存、更新文件與 commit；缺省開啟 |
+
+> **🚨 停點安全保護（不可關閉）**：
+> 當交接迴圈因任何原因停下需要人類處理時（如 blocked、達輪數上限、worktree 不乾淨、或審查通過等候手動執行 `handoff-finish`），系統會強制發送 `handoff-action-required` 通知，**此類停點訊號不可被關閉**，確保迴圈絕不靜默掛起。
+> 交件單通知會自動標記 Agent 身分，格式如：`Agent Handoff (Claude / claude-opus-5-5 / high)`。
 
 ### 舊設定相容
 

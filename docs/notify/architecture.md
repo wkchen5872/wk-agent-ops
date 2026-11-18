@@ -22,6 +22,13 @@ attention, or stops abnormally.
 
 ---
 
+## Architecture Diagram
+
+![AI CLI 通知架構與延遲授權流程](../diagrams/notify-architecture.svg)
+*圖 1：AI CLI 通知系統整體架構與 30 秒延遲授權狀態機（可點擊連結開啟 SVG 原稿）。*
+
+---
+
 ## Directory Structure
 
 ```
@@ -224,6 +231,75 @@ AI CLI 工具透過 `stdin` 將 JSON payload 傳遞給 Hook 腳本。
 | `show_hook_status <hook_path>` | Report provider registration without reading credentials |
 
 All functions require `jq`.
+
+---
+
+## Provider Hook 實作規則與真實踩坑盤點 (Real-World Provider Hook Rules & Pitfalls)
+
+在 `refine-notify-core`、`add-handoff-notifications` 與 `WI-20261118-notify-optimization` 的實作與真實重播驗收中，各 AI Provider 表現出許多未在官方文檔充分說明的邊界行為。本節詳細記錄這些關鍵規則，避免後續重複踩坑。
+
+### 1. Claude Code 實作規則與特例
+
+- **`permission_prompt` 複合型態陷阱 (實測重大特例)**：
+  - Claude Code 的 `AskUserQuestion`（向使用者提出結構化問題）在送出通知時，其 `notification_type` 竟然標註為 `permission_prompt`，而不是問句專屬型態。
+  - **因應實作**：Hook 不能只依賴 `notification_type`。當收到 `permission_prompt` 時，必須向後解析 `transcript_path` 尾端未取得結果的 `tool_use`；若工具名稱為 `AskUserQuestion`，必須轉譯為事件鍵 `notification:question`，分類至「等待回應（User Input）」，**立即發出通知，絕不可進入 30 秒延遲確認**。
+- **原生 6 秒詢問前緩衝**：
+  - Claude Code 在終端機提出提問或等待核准時，其內部原生會在等候約 6 秒後才真正觸發 `Notification` hook。此延遲為 Claude 核心機制，外部 hook 無法縮短。
+- **純資訊型通知靜默過濾**：
+  - 登入成功（`auth_*`）、額度自動恢復（`quota_auto_resume_*`）等通知屬於資訊類，在 `events.tsv` 中歸類為 `none`，完全不發送 Telegram 通知，避免干擾使用者。
+- **等待身分（Wait Identity）定位**：
+  - 提取 `transcript_path` 尾端未取得 `tool_result` 的 `tool_use.id` 作為該次等待的唯一識別碼；一旦出現相同 ID 的 `tool_result` 即視為解除證據；收到 `Stop` hook 也會自動清除。
+
+### 2. Codex CLI 與 Daemon 實作規則與特例
+
+- **CLI Session 未載入 Daemon 之關鍵事實 (實測重大發現)**：
+  - 本機以 CLI 啟動的 Codex session，**預設根本沒有載入在 daemon 中**！daemon 雖能連線，但對該 session 呼叫 `thread/read` 時從頭到尾回報 `notLoaded`。
+  - 實測在終端機人工等待核准 40 秒的過程中，daemon 也從未回報 `waitingOnApproval` 旗標。
+  - 統計本機歷史 session，高達 38% 的情境完全無法連線 daemon。
+- **Session 紀錄盲點與無法確認 (Unconfirmed) 回退**：
+  - Codex 的 session 紀錄（`rollout-*-<session_id>.jsonl`）在「提出授權請求」與「取得執行結果」之間，**完全沒有任何『已核准、開始執行』的狀態標記**！
+  - 因此在無法查詢 daemon 的情境下，只看 session 紀錄根本無法區分「正在等人核准」與「已自動放行但指令執行超過 30 秒」。
+  - **決策與範本 (D-004)**：當無法查詢 daemon 且 30 秒到期時，紀錄若仍無結果，發送 **`authorization-unconfirmed` 範本**（英文：「🟡 Approval Status Unknown … may be waiting for approval, but this could not be confirmed」），標明「可能在等待授權，無法確認」，絕不宣稱確定在等。
+- **自動審核（Auto-review / Approve for me）假警報過濾**：
+  - 當設定 `approvals_reviewer = "auto_review"` 時，越界請求（如 `git push`、`gh`）幾乎都在 5～10 秒內被自動審核放行（統計 156 個 session、226 次請求，中位數 5.9 秒，只有 1 次超過 30 秒）。
+  - 若在 `PermissionRequest` hook 觸發瞬間直接發通知，會產生 99.5% 的虛假警報。**30 秒延遲確認機制成功消除了所有自動審核的誤報**。
+- **非同步提問無等待旗標**：
+  - `request_user_input_async` 透過 message 送出，不會拉起 daemon 的 `waitingOnUserInput` 旗標。Hook 在 `PostToolUse` 驗證其結果為 `accepted=true` 時立即發出等待回應通知。
+- **過期狀態檔自動清理**：
+  - 每次啟動 Codex 檢查器時，自動掃除 `~/.config/ai-notify/state/` 內符合命名規則、超過 7 天且鎖已釋放的過期狀態檔，防止長時間累積。
+- **三態啟用要求**：
+  - `~/.codex/hooks.json` 寫入成功僅代表 `configured`；使用者必須在 Codex 終端機開啟 `/hooks`，確認為 `Trust: Trusted`，並將 `[ ] Hook 1` 勾選手動啟用為 `[x] Hook 1`。
+
+### 3. Antigravity CLI 實作規則與特例
+
+- **原生 Hook 缺乏授權與提問事件**：
+  - Antigravity 只有 `SessionStart`、`PreToolUse`、`PostToolUse`、`PreInvocation`、`PostInvocation`、`Stop` 六個原生 Hook。
+  - 缺乏原生授權/提問 hook，授權確認必須掛在 `~/.gemini/antigravity-cli/settings.json` 的 `statusLine`，監聽 `tool_confirmation_pending: true`。
+- **狀態列回報的真實行為 (實測重大特例)**：
+  - 當需要確認時，狀態列會帶 `tool_confirmation_pending: true`（`agent_state: tool_use`），但它只在觸發當下回報 2～3 次，**等待期間不會持續回報**。
+  - 當使用者核准或拒絕後，約 0.2～2 秒內狀態列會再次刷新，此時 `tool_confirmation_pending` 欄位**直接消失（完全省略），從未出現 `false`**。
+  - 使用者按 `Esc` 取消或拒絕確認時，**完全不會觸發 `Stop` hook**！唯一的解除證據就是狀態列再次更新時該欄位消失。
+- **無請求識別碼的合併與重新武裝政策**：
+  - 狀態列無法提供個別指令的 tool call id。同 session 在等待期間重複收到的訊號一律視為同一段等待（不重新計時、不重複發送）。
+  - 標記在解除證據到達時清除；若已發出通知，必須間隔 `NOTIFY_AUTHORIZATION_REARM_SECONDS`（預設 600 秒）以上到達的新訊號才會視為新一段等待重新武裝。
+- **完成狀態碼演進**：
+  - `agy` 1.5.10+ 的正常完成已改為 `NO_TOOL_CALL`（舊版為 `model_stop`），且須滿足 `fullyIdle: true`（代表背景指令與子代理全部結束）。
+  - `USER_CANCELED` 視為使用者主動中斷，靜默不通知；其餘終止原因標記為 Task Stopped，並附帶乾淨的原因標籤。
+
+### 4. Agent Handoff (交接迴圈) 專屬規則
+
+- **專屬事件與獨立開關**：
+  - 實作完成（`handoff-implement`，開關 `NOTIFY_HANDOFF_IMPLEMENT`）
+  - 審查通過（`handoff-review-pass`，開關 `NOTIFY_HANDOFF_REVIEW`）
+  - 審查退回（`handoff-review-changes-required`，開關 `NOTIFY_HANDOFF_REVIEW`）
+  - 收尾完成（`handoff-finish`，開關 `NOTIFY_HANDOFF_FINISH`）
+  - 需要你處理（`handoff-action-required`，**不可關閉**）
+- **停點不可關閉保護 (Safety Anchor)**：
+  - 當迴圈遇到 blocked、達輪數上限、工作區不乾淨、或審查通過等待使用者執行 `handoff-finish` 時，`handoff-action-required` 永遠強制發送，不受一般開關影響，防止迴圈靜默掛起。
+- **Agent 資訊提取**：
+  - 透過 `xirp session get <id> --json` 提取停下 Session 的工具（`.currentAgent`）、當下模型（`.model`）與推理強度（`.agentLaunchOptions.options.effort` 或 `reasoning_effort`），組合為 `Agent Handoff (Claude / claude-opus-5-5 / high)`。
+- **傳訊失敗重試保障**：
+  - 對審查者或實作者傳訊失敗時，交件單不標記為已處理，而是改發一則「需要你處理」提醒，保留交件單待下次 hook 或手動執行重試。
 
 ---
 

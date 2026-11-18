@@ -35,9 +35,11 @@ OpenSpec compatibility hook 會正規化 Codex payload、忽略失敗的 tool ex
 
 Handoff loop routing hook 在輪次結束時判定交接狀態。若 roles 設定為遠端 PR 交付，`scripts/handoff/install.sh` 會額外提供 `~/.codex/handoff-net.config.toml` 網路沙盒 profile，讓收尾角色在必要時獲取對外網路權限進行 git push 與 PR 建立。
 
-Telegram 的 `PermissionRequest` handler 有兩條獨立分支：依共用開關發送既有操作提醒，以及依 Codex 新開關按需檢查 daemon。同步問題的 PreToolUse 啟動檢查；非同步問題略過檢查，改由 PostToolUse 確認 `accepted=true` 後發送「Waiting for Your Response」。這表示題目已送出，Codex 仍可繼續工作。所有 handler 回傳 neutral 結果，不會批准、拒絕或回答。
+Telegram 的 `PermissionRequest` 不再當下發出即時通知（徹底消除 auto_review 在 5～10 秒內放行時產生的 99.5% 假警報），而是啟動按需檢查器並套用 **30 秒延遲確認**：
+- **Daemon 可連線且載入該 Session**：監聽 `waitingOnApproval` 旗標；若在 30 秒內自動放行則安靜結束，超過 30 秒仍未解除才發送確認等待通知。
+- **Daemon 不可用或 CLI 啟動的 Session（回報 `notLoaded`）**：保留請求等待 30 秒後探針讀取 Session 紀錄（`rollout-*-<session_id>.jsonl`）；若已有執行輸出或任務結束則靜默，若仍無結果則發送「Approval Status Unknown（無法確認）」通知。
 
-按需檢查器不使用 LaunchAgent；同 session 共用程序，輪次結束退出。兩個新項目預設關閉，用 `update.sh types` 選擇。授權與同步問題僅涵蓋既有本機 daemon 的 session；非同步題目通知不依賴 daemon。一般文字問句不偵測。
+同步問題由 PreToolUse 啟動檢查；非同步問題由 PostToolUse 在確認 `accepted=true` 後立即發送「Waiting for Your Response」（表示題目已送出，Codex 仍可繼續工作，不需 daemon）。所有 handler 均回傳 neutral `{}`，絕不干預或批准工具執行。按需檢查器不使用 LaunchAgent，同 session 共用程序，輪次結束自動退出，並自動清理超過 7 天的過期狀態檔。
 
 ## 顯示名稱
 
