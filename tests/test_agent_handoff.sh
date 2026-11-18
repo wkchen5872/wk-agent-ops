@@ -885,6 +885,18 @@ if run_section finish; then
   out="$(finish_in "$FP" add-export 2>&1)"; rc=$?
   [[ "$rc" == 0 ]] && jq -e '.agent.options.profile == "handoff-net"' "$FAKE_XIRP_DIR/create-1.json" >/dev/null \
     && ok "a Codex template profile is passed to the new session" || { bad "a Codex template profile is passed to the new session"; printf '       %s\n' "$out"; }
+  # Running handoff-finish again before the finish session writes a record keeps that session.
+  FR="$tmp/fin-again"; passing_loop "$FR"; use_project "$FR"; fresh_state f1r
+  finish_in "$FR" add-export >/dev/null 2>&1
+  out="$(finish_in "$FR" add-export 2>&1)"; rc=$?
+  [[ "$rc" == 0 && "$(created)" == 1 && "$(kv_get "$FR/.agent-handoff/add-export/loop.yaml" finish.session)" == sess-1 ]] \
+    && grep -q 'already open.*sess-1' <<<"$out" \
+    && ok "a second handoff-finish reuses the open finish session" || { bad "a second handoff-finish reuses the open finish session"; printf '       %s\n' "$out"; }
+  FG="$tmp/fin-gone"; passing_loop "$FG"; use_project "$FG"; fresh_state f1g
+  awk '/^finish:/{f=1} f&&/^  session:/{print "  session: missing-3"; f=0; next} {print}' "$FG/.agent-handoff/add-export/loop.yaml" > "$FG/l.tmp" && mv "$FG/l.tmp" "$FG/.agent-handoff/add-export/loop.yaml"
+  out="$(finish_in "$FG" add-export 2>&1)"; rc=$?
+  [[ "$rc" == 0 && "$(created)" == 1 && "$(kv_get "$FG/.agent-handoff/add-export/loop.yaml" finish.session)" == sess-1 ]] \
+    && ok "a recorded finish session that is gone is replaced by a new one" || { bad "a recorded finish session that is gone is replaced by a new one"; printf '       %s\n' "$out"; }
 
   refuse() {
     local label="$1" d="$2" pat="$3"

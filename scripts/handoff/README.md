@@ -92,6 +92,10 @@ implementer worktree's current, clean `HEAD`, and the loop has not finished yet.
 `finish.worktree: new`, the implementer worktree is detached at the same commit and a new
 worktree `../<repo>-<change-id>-finish` takes over the branch; nothing is deleted.
 
+Running it again before the finish session writes its record opens nothing: it reports the
+finish session already open. If that session died without a record, delete it in Xirp and
+run `handoff-finish` again to open a new one.
+
 After a blocked finish (for example a rejected push), fix the cause and run `handoff-finish`
 again. It retries when the finish worktree is clean and builds on the passing review: the
 finish session resumes from the stopped stage, or a new one opens if it is gone.

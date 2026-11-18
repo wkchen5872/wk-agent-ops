@@ -3,6 +3,7 @@
 # Usage: handoff-finish <change-id>
 # Requirements: the newest record of the loop is review/done/pass, its head equals the
 # implementer worktree's HEAD, that worktree is clean, and no finish record exists.
+# Run again before the finish session writes a record, it reports that session instead of opening another.
 # After a blocked finish, it retries instead: the finish worktree must be clean and build on
 # the passing review; the existing finish session resumes, or a new one opens.
 # With finish worktree "new", the implementer worktree is detached at the same commit
@@ -30,8 +31,13 @@ if [[ -n "$rec" && "$(kv_get "$rec" role)" == finish && "$(kv_get "$rec" status)
   printf 'Finish retried for %s: %s\n' "$change" "$id"
   exit 0
 fi
+before="$(kv_get "$dir/loop.yaml" finish.session 2>/dev/null)"
 if ! id="$(ho_finish_open "$dir" 2>&1)"; then
   printf 'handoff-finish: %s\n' "${id#cannot finish: }" >&2
   exit 1
 fi
-printf 'Finish session opened for %s: %s\n' "$change" "$id"
+if [[ "$id" == "$before" ]]; then
+  printf 'Finish session already open for %s: %s\n' "$change" "$id"
+else
+  printf 'Finish session opened for %s: %s\n' "$change" "$id"
+fi

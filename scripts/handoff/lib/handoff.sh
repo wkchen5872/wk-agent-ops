@@ -325,6 +325,10 @@ ho_finish_retry() {
 ho_finish_open() {
   local dir="$1" loop="$1/loop.yaml" head impl mode wt change id round
   head="$(ho_finish_check "$dir")" || { ho_err "cannot finish: $head"; return 1; }
+  # No finish record yet, so a recorded session that still exists is the finish in progress.
+  # ponytail: an idle one that died without a record is reused too; delete it in Xirp for a new one.
+  id="$(kv_get "$loop" finish.session 2>/dev/null)"
+  if [[ -n "$id" ]] && ho_xirp_exists "$id"; then printf '%s\n' "$id"; return 0; fi
   impl="$(kv_get "$loop" implementer.worktree)"; change="$(kv_get "$loop" change)"
   mode="$(kv_get "$loop" finish_template.worktree 2>/dev/null || echo shared)"
   wt="$impl"
