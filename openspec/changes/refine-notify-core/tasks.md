@@ -69,6 +69,12 @@
 - [x] 11.1 F-01：Codex 無法查詢時的等待身分只依紀錄內容判斷，不受可讀性影響：讀不到時已通知過即為同一段等待；讀得到且沒有未完成呼叫即為解除；當初讀不到時通知的等待，以通知當時的紀錄大小判斷之後的呼叫是原等待（補身分）或新請求（通知）。測試要求：先寫審查表中「可讀變不可讀」「不可讀通知後出現結果與新呼叫」「先觀察到解除再出現新呼叫」的失敗回歸測試，並保留既有的重複、恢復可讀與 call_B 測試。
 - [x] 11.2 完整檢查：`scripts/notify/telegram/test.sh`、`python3 -m unittest discover -s scripts/notify/tests`、`tests/test_*.sh` 全部通過，`openspec validate refine-notify-core --strict` 通過。
 
+## 12. 審查 codex-01a1ee38-r05 的修正
+
+- [x] 12.1 codex-01a1ee38-r02/F-01 剩餘（回連 9.1、11.1）：每個請求只結算自己的呼叫——觸發時可讀用當時未完成的呼叫，不可讀則以觸發時的紀錄大小為界；不同的呼叫 ID 即新等待，不要求舊呼叫先有結果；舊請求的計時器不得替較晚的請求提早通知。測試要求：先寫「A 未完成時的新呼叫 B」整合測試與以虛擬時鐘驅動 `run_checker` 的「舊計時器不提早結算 B」單元測試，皆先失敗。
+- [x] 12.2 codex-01a1ee38-r05/F-01：授權類別關閉時不建立代表已嘗試傳送的通知狀態，重新啟用後同一段等待仍會通知；保留「嘗試前先預留、逾時不重送」。測試要求：先寫停用後重新啟用的失敗整合測試。
+- [x] 12.3 完整檢查：`scripts/notify/telegram/test.sh`、`python3 -m unittest discover -s scripts/notify/tests`、`tests/test_*.sh` 全部通過，`openspec validate refine-notify-core --strict` 通過。
+
 ## Workflow follow-up
 
 - 依使用者授權以 `openspec-commit` 封存並提交。

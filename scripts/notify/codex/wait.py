@@ -138,6 +138,9 @@ def sanitized_trigger(payload):
     trigger["kind"] = "permission" if payload.get("kind") == "permission" else "question"
     requested = payload.get("requested_at")
     trigger["requested_at"] = requested if isinstance(requested, (int, float)) else time.time()
+    # Size of the session record when the request was raised: calls written later belong to later requests.
+    size = payload.get("record_size")
+    trigger["record_size"] = size if isinstance(size, int) and not isinstance(size, bool) and size >= 0 else None
     path = payload.get("transcript_path")
     if isinstance(path, str) and path.startswith("/") and len(path) <= 4096:
         trigger["transcript_path"] = path
@@ -322,8 +325,16 @@ def run_checker(trigger, state_file, lock_fd):
     # Approval waits must last longer than the delay; this is when the current one began.
     approval_since = None
     # An authorization request raised in this turn and not yet settled (offline fallback).
-    request = trigger if trigger["kind"] == "permission" else None
-    request_call = pending_call(request) if request else None
+    def own(candidate):
+        """Fix a request together with its own call: the open call at its trigger, or, when the
+        record was unreadable then, the record size that bounds which calls can be its own."""
+        if candidate is None:
+            return None, None
+        if candidate.get("record_size") is None:
+            candidate = {**candidate, "record_size": record_size(candidate)}
+        return candidate, pending_call(candidate)
+
+    request, request_call = own(trigger if trigger["kind"] == "permission" else None)
     # A session never seen active is not loaded in the daemon (CLI-started Codex): the runtime
     # cannot answer for it. Once seen active, "not loaded" means the turn has finished.
     seen_active = False
@@ -334,31 +345,38 @@ def run_checker(trigger, state_file, lock_fd):
                                  "offline_reported": reported, "updated_at": int(time.time())})
 
     def settle_offline(config):
-        """Runtime cannot be queried: settle the request from the session record, reporting each
-        continuous wait once as unconfirmed (review codex-01a1ee38-r02/F-01, r03, r04)."""
+        """Runtime cannot be queried: settle this request's own call from the session record, reporting
+        each continuous wait once as unconfirmed (review codex-01a1ee38-r02/F-01, r03, r04, r05)."""
         nonlocal reported
 
         def report(call, offset):
             nonlocal reported
+            if not config["authorization"]:
+                return  # nothing is attempted, so nothing is reserved
             reported = {"call": call, "offset": offset}
             record(True)
-            if config["authorization"]:
-                send(request, "codex-authorization-unconfirmed", "HumanApprovalUnconfirmed")
+            send(request, "codex-authorization-unconfirmed", "HumanApprovalUnconfirmed")
 
         calls = open_calls(request)
         if calls is None:
             # An unreadable record says nothing: a wait already reported this turn stays reported.
             if reported is None:
-                report(None, record_size(request))
+                report(None, request.get("record_size"))
             return
         if not calls:
             reported = None  # no open call: the reported wait is resolved
             record(True)
             return
-        open_ids = [call for call, _ in calls]
-        if request_call and request_call not in open_ids:
-            return  # this request already has a result; a newer call has its own trigger
-        call, offset = calls[-1]
+        if request_call:
+            own_calls = [entry for entry in calls if entry[0] == request_call]
+        elif request_call == "":
+            own_calls = []  # nothing was open when this request was raised
+        else:
+            bound = request.get("record_size")
+            own_calls = [entry for entry in calls if bound is None or entry[1] < bound]
+        if not own_calls:
+            return  # this request's call has its result; later calls are settled by their own requests
+        call, offset = own_calls[-1]
         if reported is None:
             report(call, offset)
         elif reported["call"] == call:
@@ -369,8 +387,8 @@ def run_checker(trigger, state_file, lock_fd):
             else:
                 reported = {"call": call, "offset": offset}  # the reported wait, now identified
                 record(True)
-        elif reported["call"] not in open_ids:
-            report(call, offset)  # the reported call has a result: this is a new wait
+        else:
+            report(call, offset)  # a different call: a new request, whatever happened to the old one
 
     try:
         record(True)
@@ -385,12 +403,10 @@ def run_checker(trigger, state_file, lock_fd):
                 pending.clear()
                 reported = None
                 approval_since = None
-                request = trigger if trigger["kind"] == "permission" else None
-                request_call = pending_call(request) if request else None
+                request, request_call = own(trigger if trigger["kind"] == "permission" else None)
             elif latest.get("kind") == "permission" and request is None:
-                request = {**trigger, **sanitized_trigger(latest),
-                           "transcript_path": trigger.get("transcript_path", "")}
-                request_call = pending_call(request)
+                request, request_call = own({**trigger, **sanitized_trigger(latest),
+                                             "transcript_path": trigger.get("transcript_path", "")})
             config = settings()
             if shutdown_marker().exists() or not inspection_enabled(config):
                 code = "disabled"
@@ -442,9 +458,8 @@ def run_checker(trigger, state_file, lock_fd):
                         if (newer.get("kind") == "permission" and newer.get("turn_id") == trigger["turn_id"]
                                 and newer.get("requested_at", 0) > request["requested_at"]):
                             # A later request of this turn gets its own delay.
-                            request = {**trigger, **sanitized_trigger(newer),
-                                       "transcript_path": trigger.get("transcript_path", "")}
-                            request_call = pending_call(request)
+                            request, request_call = own({**trigger, **sanitized_trigger(newer),
+                                                         "transcript_path": trigger.get("transcript_path", "")})
                         else:
                             request = None
                             break
@@ -526,6 +541,8 @@ def start_checker(payload, record_request=True):
     if shutdown_marker().exists() or not inspection_enabled(settings()) or os.environ.get("TELEGRAM_DRY_RUN") == "true":
         return
     trigger = sanitized_trigger(payload)
+    if trigger["kind"] == "permission" and trigger["record_size"] is None:
+        trigger["record_size"] = record_size(trigger)
     lock_path, state_file = state_paths(trigger["session_id"])
     lock_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     prune_state()
