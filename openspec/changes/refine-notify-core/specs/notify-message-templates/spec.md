@@ -40,7 +40,7 @@ Rendering SHALL escape substituted values so that characters with meaning in the
 - **THEN** the delivered message shows those characters literally and is accepted by Telegram
 
 #### Scenario: Optional line has no value
-- **WHEN** a template line contains only `{detail}` and the event has no detail
+- **WHEN** a template line contains only `{reason}` and the event has no reason
 - **THEN** the rendered message has no empty line in its place
 
 #### Scenario: Unknown placeholder

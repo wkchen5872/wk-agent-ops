@@ -64,15 +64,25 @@ auth_write() {
   return 1
 }
 
-# auth_clear <marker> — resolution evidence or the end of a turn. Best effort if the lock is stuck.
+# auth_clear <marker> — resolution evidence or the end of a turn. The marker is only ever
+# changed under its lock: when another process holds it, a detached retry waits for the lock
+# and clears the marker only if it still belongs to the same wait.
 auth_clear() {
   [[ -e "$1" ]] || return 0
   if auth_lock "$1" 30; then
     rm -f -- "$1"
     auth_unlock "$1"
-  else
-    rm -f -- "$1"
+    return 0
   fi
+  auth_read "$1" || return 0
+  ( _auth_clear_later "$1" "${AUTH_ID}" ) </dev/null >/dev/null 2>&1 &
+  disown 2>/dev/null || true
+}
+
+_auth_clear_later() {
+  auth_lock "$1" 600 || return 0
+  if auth_read "$1" && [[ "${AUTH_ID}" == "$2" ]]; then rm -f -- "$1"; fi
+  auth_unlock "$1"
 }
 
 # auth_decide <marker> <identity or empty> <rearm seconds> <now>
@@ -80,15 +90,14 @@ auth_clear() {
 # With an identity: same identity → same wait; a different one → new wait.
 # Without one: any wait on record absorbs the signal, except a notified wait whose
 # notice is at least <rearm> seconds old (design decision 3). Clocks here have whole-second
-# resolution, so the difference must exceed <rearm>: a wait never re-arms early, and
-# re-arms at most one second late.
+# resolution, so a wait may re-arm up to one second early.
 auth_decide() {
   if ! auth_read "$1"; then echo new; return; fi
   if [[ -n "$2" ]]; then
     [[ "${AUTH_IDED}" == 1 && "${AUTH_ID}" == "$2" ]] && { echo same; return; }
     echo new; return
   fi
-  if [[ "${AUTH_NOTIFIED}" -gt 0 && $(( $4 - AUTH_NOTIFIED )) -gt "$3" ]]; then echo new; else echo same; fi
+  if [[ "${AUTH_NOTIFIED}" -gt 0 && $(( $4 - AUTH_NOTIFIED )) -ge "$3" ]]; then echo new; else echo same; fi
 }
 
 auth_new_id() { printf 'w%s-%s-%s\n' "$(date +%s)" "$$" "${RANDOM}"; }

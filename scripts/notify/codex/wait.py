@@ -288,7 +288,10 @@ def send(trigger, event, tag):
 
 def run_checker(trigger, state_file, lock_fd):
     previous = read_json(state_file, {})
-    notified = set(previous.get("notified", [])) if previous.get("turn_id") == trigger["turn_id"] else set()
+    same_turn = previous.get("turn_id") == trigger["turn_id"]
+    notified = set(previous.get("notified", [])) if same_turn else set()
+    # The open call already reported as unconfirmed in this turn; repeats of it are the same wait.
+    offline_notified = previous.get("offline_notified") if same_turn else None
     pending = set()
     daemon = None
     failures = 0
@@ -306,14 +309,20 @@ def run_checker(trigger, state_file, lock_fd):
     def record(running):
         atomic_json(state_file, {"pid": os.getpid(), "turn_id": trigger["turn_id"], "running": running,
                                  "code": code, "pending": sorted(pending), "notified": sorted(notified),
-                                 "updated_at": int(time.time())})
+                                 "offline_notified": offline_notified, "updated_at": int(time.time())})
 
     def settle_offline(config):
-        """Daemon unavailable: a recorded result settles the request; otherwise report it as unconfirmed."""
+        """Daemon unavailable: a recorded result settles the request; otherwise report it as unconfirmed,
+        once per open call (an unreadable record counts as one identity per turn)."""
+        nonlocal offline_notified
         call = pending_call(request)
         resolved = call == "" or (request_call and call is not None and call != request_call)
-        if not resolved and config["authorization"]:
-            send(request, "codex-authorization-unconfirmed", "HumanApprovalUnconfirmed")
+        identity = call or "unreadable-record"
+        if resolved or identity == offline_notified or not config["authorization"]:
+            return
+        offline_notified = identity
+        record(True)
+        send(request, "codex-authorization-unconfirmed", "HumanApprovalUnconfirmed")
     try:
         record(True)
         while True:
@@ -325,6 +334,7 @@ def run_checker(trigger, state_file, lock_fd):
                 trigger = {**latest, "transcript_path": trigger.get("transcript_path", "")}
                 notified.clear()
                 pending.clear()
+                offline_notified = None
                 approval_since = None
                 request = trigger if trigger["kind"] == "permission" else None
                 request_call = pending_call(request) if request else None

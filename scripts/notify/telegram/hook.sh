@@ -200,6 +200,15 @@ claude_pending_call() {
     | last | select(. != null) | "\(.id)\t\(.name // "")"' 2>/dev/null
 }
 
+# claude_has_result <record> <tool_use id> — a tool_result for that id, matched structurally.
+# grep only narrows the lines; jq decides, so JSON spacing does not matter.
+claude_has_result() {
+  command -v jq >/dev/null 2>&1 || return 1
+  grep -F -- "$2" "$1" 2>/dev/null | jq -Rne --arg id "$2" '
+    [inputs | fromjson? | .message.content? | arrays | .[] | objects
+     | select(.type == "tool_result" and .tool_use_id == $id)] | length > 0' >/dev/null 2>&1
+}
+
 # Claude Code tells notification kinds apart by notification_type. A permission prompt
 # for AskUserQuestion is a question, not an authorization wait (D-002).
 if [[ "${EVENT_TYPE}" == "notification" ]]; then
@@ -268,8 +277,12 @@ tpl_request_tool=""
 [[ -z "${tpl_request_tool}" ]] && tpl_request_tool="a tool"
 
 # deliver <template> — render and send; dry-run prints instead.
+# Authorization notices carry metadata only, whatever a user template asks for.
 deliver() {
   local text
+  case "$1" in
+    authorization*) local tpl_message="" tpl_reason="" ;;
+  esac
   text="$(notify_render "$1" "${NOTIFY_SCRIPT_DIR}/templates")" ||
     text="$(notify_render generic "${NOTIFY_SCRIPT_DIR}/templates")" || return 0
   if [[ "${TELEGRAM_DRY_RUN:-}" == "true" ]]; then
@@ -295,7 +308,7 @@ auth_verdict() {
     claude)
       [[ -r "${CLAUDE_TRANSCRIPT}" ]] || { echo unknown; return; }
       if [[ "${AUTH_IDED}" == 1 ]]; then
-        grep -Fq "\"tool_use_id\":\"${AUTH_ID}\"" "${CLAUDE_TRANSCRIPT}" && echo resolved || echo pending
+        claude_has_result "${CLAUDE_TRANSCRIPT}" "${AUTH_ID}" && echo resolved || echo pending
       else
         local call
         call="$(claude_pending_call "${CLAUDE_TRANSCRIPT}")" || { echo unknown; return; }
@@ -332,7 +345,7 @@ authorization_check() {
 
 # authorization_start <provider> <identity or empty> <tool label>
 authorization_start() {
-  local provider="$1" identity="$2" label="${3:-a tool}" marker now id ided=0
+  local provider="$1" identity="$2" label="${3:-a tool}" marker now id ided=0 verdict
   marker="$(auth_marker "${provider}" "${SESSION_KEY}")"
   auth_lock "${marker}" 30 || return 0
   now="$(date +%s)"
@@ -343,10 +356,18 @@ authorization_start() {
   id="${identity}"
   [[ -n "${id}" ]] && ided=1 || id="$(auth_new_id)"
   if [[ "${AUTH_DELAY}" -eq 0 ]]; then
+    # Delay 0 changes the timing only; the evidence and wording rules still apply.
+    AUTH_ID="${id}" AUTH_IDED="${ided}"
+    verdict="$(auth_verdict "${provider}")"
+    if [[ "${verdict}" == resolved ]]; then
+      rm -f -- "${marker}"
+      auth_unlock "${marker}"
+      return 0
+    fi
     auth_write "${marker}" "${id}" "${ided}" "${now}" "${now}" "${label}"
     auth_unlock "${marker}"
     tpl_request_tool="${label}"
-    deliver authorization
+    if [[ "${verdict}" == pending ]]; then deliver authorization; else deliver authorization-unconfirmed; fi
     return 0
   fi
   auth_write "${marker}" "${id}" "${ided}" "${now}" 0 "${label}"

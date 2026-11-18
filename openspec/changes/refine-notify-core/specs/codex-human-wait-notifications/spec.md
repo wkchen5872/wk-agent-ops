@@ -75,6 +75,21 @@ Inspection SHALL send a confirmed approval notification only when the runtime wa
 - **WHEN** independent sessions or waiting kinds become pending
 - **THEN** their notification state is tracked independently
 
+### Requirement: Metadata privacy and support status
+Inspection SHALL read runtime metadata and, only to settle a pending authorization request, a bounded tail of the local session record. It SHALL never grant permissions or answer requests, never persist the transcript path, and never send raw commands, questions, tool input or transcript content. Status SHALL distinguish disabled, on-demand ready, unavailable and unverified coverage. Message titles SHALL distinguish waiting for approval from waiting for an answer.
+
+#### Scenario: Sensitive payload
+- **WHEN** a triggering hook includes raw tool input or a transcript path
+- **THEN** raw tool input is excluded from checker inputs, and the transcript path is kept only in checker memory and excluded from persisted state and Telegram messages
+
+#### Scenario: Session record fallback
+- **WHEN** the checker reads the session record to settle a pending authorization request
+- **THEN** it uses only call identifiers, the presence of outputs, and turn-end events, and neither stores nor sends any record content
+
+#### Scenario: Checker currently inactive
+- **WHEN** the checker is installed but no qualifying hook has fired
+- **THEN** status identifies on-demand behavior rather than a failed service
+
 ## ADDED Requirements
 
 ### Requirement: Stale inspection state is pruned

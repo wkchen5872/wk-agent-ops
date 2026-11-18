@@ -131,6 +131,12 @@ class SettingsTests(unittest.TestCase):
                   "NOTIFY_CODEX_USER_INPUT=true\n")
         self.config.write_text(self.base + legacy)
         self.config.chmod(0o644)
+        # Both categories end up on, which would install the Codex runtime over the network.
+        binary = self.home / "bin"
+        binary.mkdir()
+        (binary / "python3").write_text("#!/bin/sh\nexit 1\n")
+        (binary / "python3").chmod(0o755)
+        self.env["PATH"] = str(binary) + os.pathsep + self.env["PATH"]
         result = self.update("s\ny\n")
         self.assertEqual(0, result.returncode, result.stderr)
         lines = self.config.read_text().replace('"', "").splitlines()

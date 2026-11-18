@@ -675,8 +675,9 @@ for CLAUDE_TYPE in auth_success agent_completed quota_auto_resume_scheduled plug
 done
 run_test_empty "CLAUDE-TYPE-04: permission_prompt follows the authorization switch" \
   env NOTIFY_AUTHORIZATION=false NOTIFY_AUTHORIZATION_DELAY_SECONDS=0 bash -c "printf '%s' '$(claude_notification permission_prompt)' | bash '${HOOK}' notification 'Claude Code'"
+# This payload has no transcript_path, so the wait cannot be confirmed (review codex-01a1ee38-r02/F-02).
 run_test "CLAUDE-TYPE-04: permission_prompt is an authorization notice" \
-  "Waiting for Your Approval" \
+  "Approval Status Unknown" \
   env NOTIFY_AUTHORIZATION_DELAY_SECONDS=0 bash -c "printf '%s' '$(claude_notification permission_prompt)' | bash '${HOOK}' notification 'Claude Code'"
 
 # ── Antigravity termination reasons ────────────────────────────────────────────
@@ -713,6 +714,23 @@ for AGY_CASE in "ERROR|Execution ended: error" "MAX_INVOCATIONS|Execution ended:
     "true true false false" \
     "$(grep -q 'Task Stopped' <<<"${AGY_OUTPUT}" && echo true || echo false) $(grep -qF "${AGY_CASE#*|} #" <<<"${AGY_OUTPUT}" && echo true || echo false) $(grep -q 'Task Complete' <<<"${AGY_OUTPUT}" && echo true || echo false) $(grep -q 'PRIVATE-ERROR-TEXT' <<<"${AGY_OUTPUT}" && echo true || echo false)"
 done
+
+# ── Re-arm boundary (review codex-01a1ee38-r02/F-06) ──────────────────────────
+
+echo ""
+echo "── re-arm boundary Tests ──"
+echo ""
+
+REARM_MARKER="${TEST_TMP_ROOT}/rearm.pending"
+printf '%s\n' 'id=w-test' 'ided=0' 'started=50' 'notified=100' 'tool=a tool' > "${REARM_MARKER}"
+rearm_decide() {  # <now> → new|same for a notice at 100 and an interval of 600
+  HOME="${TEST_TMP_ROOT}/default-home" bash -c 'source "$1"; auth_decide "$2" "" 600 "$3"' _ \
+    "${SCRIPT_DIR}/../lib/authorization.sh" "${REARM_MARKER}" "$1"
+}
+assert_equal "REARM-01: a signal exactly at the interval begins a new wait" "new" "$(rearm_decide 700)"
+assert_equal "REARM-01: a signal one second short is merged" "same" "$(rearm_decide 699)"
+printf '%s\n' 'id=w-test' 'ided=0' 'started=50' 'notified=0' 'tool=a tool' > "${REARM_MARKER}"
+assert_equal "REARM-02: a wait not yet notified never re-arms" "same" "$(rearm_decide 99999)"
 
 # ── Registry tests (isolated HOME/repository) ──────────────────────────────────
 

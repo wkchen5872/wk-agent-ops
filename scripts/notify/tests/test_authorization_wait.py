@@ -113,15 +113,15 @@ class ClaudeCodeTests(HookFixture):
         with self.transcript.open("a") as stream:
             stream.write(json.dumps(entry, separators=(",", ":")) + "\n")
 
-    def answer(self, call_id):
+    def answer(self, call_id, compact=True):
         entry = {"type": "user", "message": {"role": "user", "content": [
             {"type": "tool_result", "tool_use_id": call_id, "content": "PRIVATE-OUTPUT"}]}}
         with self.transcript.open("a") as stream:
-            stream.write(json.dumps(entry, separators=(",", ":")) + "\n")
+            stream.write(json.dumps(entry, separators=(",", ":") if compact else None) + "\n")
 
-    def prompt(self, transcript=None, **env):
+    def prompt(self, transcript=None, message="Claude needs your permission to use Bash", **env):
         payload = {"hook_event_name": "Notification", "notification_type": "permission_prompt",
-                   "message": "Claude needs your permission to use Bash", "session_id": SESSION,
+                   "message": message, "session_id": SESSION,
                    "transcript_path": str(transcript or self.transcript), "cwd": "/tmp/claude-project"}
         self.assertEqual("", self.hook("notification", "Claude Code", payload, **env))
 
@@ -245,6 +245,46 @@ class ClaudeCodeTests(HookFixture):
         self.prompt(NOTIFY_AUTHORIZATION_DELAY_SECONDS="0")
         self.assertEqual(1, len(self.authorization()))
 
+    # Review codex-01a1ee38-r02/F-02: delay 0 changes the timing, not the evidence rules.
+    def test_delay_zero_with_an_unreadable_record_is_unconfirmed(self):
+        self.prompt(transcript=self.home / "missing.jsonl", NOTIFY_AUTHORIZATION_DELAY_SECONDS="0")
+        sent = self.authorization()
+        self.assertEqual(1, len(sent))
+        self.assertIn(UNCONFIRMED, sent[0][1])
+        self.assertNotIn(CONFIRMED, sent[0][1])
+
+    def test_delay_zero_with_a_resolved_request_is_silent(self):
+        self.request("toolu_A")
+        self.answer("toolu_A")
+        self.prompt(NOTIFY_AUTHORIZATION_DELAY_SECONDS="0")
+        self.assertEqual([], self.authorization())
+
+    # Review codex-01a1ee38-r02/F-03: valid JSONL may put spaces after separators.
+    def test_spaced_json_result_resolves_the_wait(self):
+        self.request("toolu_A")
+        self.prompt()
+        self.at(.5)
+        self.answer("toolu_A", compact=False)
+        self.at(3.6)
+        self.assertEqual([], self.authorization())
+
+    # Review codex-01a1ee38-r02/F-04: user templates must not reopen the privacy boundary.
+    def test_user_authorization_templates_cannot_forward_the_message(self):
+        user = self.home / ".config/ai-notify/templates"
+        user.mkdir(parents=True)
+        for name in ("authorization", "authorization-unconfirmed"):
+            (user / f"{name}.md").write_text("LEAK {message} {reason} END\n")
+        self.request("toolu_A")
+        self.prompt(message="PRIVATE-PROMPT command --secret", NOTIFY_AUTHORIZATION_DELAY_SECONDS="0")
+        self.stop()  # end the turn so the next prompt is a new wait
+        self.prompt(transcript=self.home / "missing.jsonl", message="PRIVATE-PROMPT again",
+                    NOTIFY_AUTHORIZATION_DELAY_SECONDS="0")
+        sent = self.messages("LEAK")
+        self.assertEqual(2, len(sent), "both authorization templates were used")
+        for _, text in sent:
+            self.assertNotIn("PRIVATE-PROMPT", text)
+            self.assertNotIn("--secret", text)
+
     def test_invalid_delay_uses_the_default(self):
         for value in ("abc", "-5"):
             with self.subTest(value=value):
@@ -349,6 +389,22 @@ class AntigravityTests(HookFixture):
         self.assertEqual("", self.marker())
         self.at(2.8)
         self.assertEqual([], self.authorization())
+
+    # Review codex-01a1ee38-r02/F-05: clearing must not bypass a live session lock.
+    def test_clearing_waits_for_a_held_lock_and_clears_only_that_wait(self):
+        self.status(True)
+        marker = self.state / "antigravity-agy-conversation.pending"
+        lock = marker.with_suffix(".pending.lock")
+        lock.mkdir()
+        (lock / "pid").write_text(str(os.getpid()))
+        payload = {"conversation_id": "agy-conversation", "agent_state": "idle", "cwd": "/tmp/agy-project"}
+        self.assertEqual("idle", self.hook("antigravity-statusline", "Antigravity CLI", payload, quick=False).strip())
+        self.assertTrue(marker.exists(), "the marker is protected while another process holds the lock")
+        shutil.rmtree(lock)
+        deadline = time.time() + 4
+        while marker.exists() and time.time() < deadline:
+            time.sleep(.1)
+        self.assertFalse(marker.exists(), "the deferred clear completes once the lock is free")
 
     def test_conversation_stop_clears_the_wait(self):
         self.status(True)

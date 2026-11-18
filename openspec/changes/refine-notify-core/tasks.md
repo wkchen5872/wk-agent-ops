@@ -46,6 +46,18 @@
 - [x] 8.1 執行完整檢查：`scripts/notify/telegram/test.sh` 與 `tests/test_*.sh` 全部通過、`openspec validate refine-notify-core --strict` 通過。
 - [x] 8.2 真實驗收（需使用者在場，結果記入 Work Item）：重新部署後，Codex 一次自動審核放行的請求不產生通知；Codex、Claude Code、Antigravity 各一次停著等超過延遲的授權產生一則通知；Claude 與 Codex 的提問立即通知；Antigravity 正常完成顯示 Task Complete；放入一個使用者範本後通知改用該範本。
 
+## 9. 審查 codex-01a1ee38-r02 的修正
+
+- [x] 9.1 F-01：Codex 無法查詢執行狀態時，以未解除的呼叫身分去重並在同一回合持久保存；首次延遲前與檢查器結束後的重複訊號都不再通知，真正的下一個呼叫仍有自己的延遲。測試要求：先寫失敗的回歸測試。
+- [x] 9.2 F-02：延遲為 0 時同樣依 pending／resolved／unknown 判定；紀錄讀不到送「無法確認」，已解除不送。測試要求：先寫失敗的零延遲測試。
+- [x] 9.3 F-03：Claude 的解除檢查以結構化比對 `tool_result.tool_use_id`，不依賴 JSON 空白。測試要求：先寫含空白 JSON 的失敗測試。
+- [x] 9.4 F-04：授權訊息渲染前只提供 metadata，使用者範本含 `{message}` 也無法轉送原始內容。測試要求：先寫失敗的覆寫範本測試。
+- [x] 9.5 F-05：清除標記取得鎖失敗時不刪除，改由背景在取得鎖後只清除同一段等待。測試要求：先寫持鎖超過重試期間的失敗測試。
+- [x] 9.6 F-06：重新武裝在「距通知等於間隔」時生效（整秒精度）。測試要求：先寫不依賴 sleep 的等號邊界失敗測試。
+- [x] 9.7 F-07：`notify-message-templates` 的空行場景改用已支援的 `{reason}`。測試要求：規格驗證通過。
+- [x] 9.8 F-08：`codex-human-wait-notifications` 以 MODIFIED delta 更新 **Metadata privacy and support status**，允許記憶體中的紀錄路徑與有界紀錄讀取，保留不得持久化或傳出的限制。測試要求：規格驗證通過。
+- [x] 9.9 完整檢查：`scripts/notify/telegram/test.sh`、`python3 -m unittest discover -s scripts/notify/tests`、`tests/test_*.sh` 全部通過，`openspec validate refine-notify-core --strict` 通過。
+
 ## Workflow follow-up
 
 - 依使用者授權以 `openspec-commit` 封存並提交。

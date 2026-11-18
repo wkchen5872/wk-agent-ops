@@ -142,9 +142,9 @@ Codex 細節：
   檢查器保留請求到延遲過後，再讀 Codex session 紀錄（payload 的 `transcript_path`，否則 `$CODEX_HOME/sessions/*/*/*/rollout-*-<session_id>.jsonl`）。該呼叫已有 `*_call_output`，或出現 `task_complete`／`turn_aborted`，即靜默；否則或紀錄不可讀，送「無法確認」通知。已核准但執行超過延遲的命令也會收到「無法確認」通知（已接受的取捨）。同一輪稍後的新請求有自己的延遲。
 - 同步結構化問題看到旗標即通知；非同步問題行為不變。
 
-沒有識別碼的等待（Antigravity，或 Claude 找不到未完成的工具呼叫）會合併：重複的起點訊號不重啟延遲、不重送。尚未通知的等待不會過期。已通知的等待，只有在通知後至少 `NOTIFY_AUTHORIZATION_REARM_SECONDS`（預設 600，非數字或負值退回 600，自通知時起算）才由新起點重新武裝；時鐘為整秒解析度，不會提早，最多晚一秒。解除證據會立即重新武裝。已知限制：沒有解除訊號時，緊接著的第二次等待會被併入第一次。
+沒有識別碼的等待（Antigravity，或 Claude 找不到未完成的工具呼叫）會合併：重複的起點訊號不重啟延遲、不重送。尚未通知的等待不會過期。已通知的等待，只有在通知後至少 `NOTIFY_AUTHORIZATION_REARM_SECONDS`（預設 600，非數字或負值退回 600，自通知時起算）才由新起點重新武裝；時鐘為整秒解析度，最多可能提早不到一秒。解除證據會立即重新武裝。已知限制：沒有解除訊號時，緊接著的第二次等待會被併入第一次。
 
-機制：標記檔為 `~/.config/ai-notify/state/claude-<session>.pending` 與 `antigravity-<session>.pending`，各有 `<marker>.lock` 目錄記錄擁有者 PID；每段等待啟動一個背景檢查，只在標記仍帶有自己的等待身分時才動作。通知只含工具、專案、session 標籤、時間與通用工具標籤，不含命令、參數、提示或 transcript。
+機制：標記檔為 `~/.config/ai-notify/state/claude-<session>.pending` 與 `antigravity-<session>.pending`，各有 `<marker>.lock` 目錄記錄擁有者 PID；每段等待啟動一個背景檢查，只在標記仍帶有自己的等待身分時才動作。標記只在持有鎖時修改：清除時若鎖被存活的程序持有，改由背景等鎖，且只清除同一段等待。延遲為 0 時同樣先判斷：紀錄讀不到送「Approval Status Unknown」，已解除則不送。授權通知不帶 `{message}`、`{reason}`，使用者範本也一樣。Codex 無法查詢時，同一個未解除的呼叫在同一回合只通知一次。通知只含工具、專案、session 標籤、時間與通用工具標籤，不含命令、參數、提示或 transcript。
 
 ### Claude Notification 類型
 

@@ -419,6 +419,44 @@ class CodexWaitTests(unittest.TestCase):
         self.wait_done(timeout=12)
         self.assertEqual([], self.messages())
 
+    # Review codex-01a1ee38-r02/F-01: a repeated signal for the same open call is the same wait.
+    def test_offline_repeat_before_the_first_notice_sends_one(self):
+        self.authorization_settings(delay=2)
+        self.offline()
+        path = self.record(self.call("call_A"))
+        self.trigger("codex-permission", transcript=str(path))
+        time.sleep(.4)
+        self.trigger("codex-permission", transcript=str(path))
+        self.wait_done(timeout=12)
+        time.sleep(.5)
+        self.wait_done(timeout=12)
+        self.assertEqual(1, len(self.unconfirmed()))
+
+    def assert_repeat_after_the_checker_ends_sends_one(self):
+        path = self.record(self.call("call_A"))
+        self.trigger("codex-permission", transcript=str(path))
+        self.wait_done(timeout=12)
+        self.assertEqual(1, len(self.unconfirmed()))
+        self.trigger("codex-permission", transcript=str(path))
+        time.sleep(.5)
+        self.wait_done(timeout=12)
+        self.assertEqual(1, len(self.unconfirmed()), "the same open call was already reported")
+        self.record(self.output("call_A"), self.call("call_B"))
+        self.trigger("codex-permission", transcript=str(path))
+        time.sleep(.5)
+        self.wait_done(timeout=12)
+        self.assertEqual(2, len(self.unconfirmed()), "the next call has its own notice")
+
+    def test_offline_repeat_after_the_checker_ends_sends_one(self):
+        self.authorization_settings(delay=1)
+        self.offline()
+        self.assert_repeat_after_the_checker_ends_sends_one()
+
+    def test_not_loaded_repeat_after_the_checker_ends_sends_one(self):
+        self.authorization_settings(delay=1)
+        self.scenario([self.NOT_LOADED])
+        self.assert_repeat_after_the_checker_ends_sends_one()
+
     def test_offline_question_only_sends_nothing(self):
         self.authorization_settings(delay=1)
         self.offline()
