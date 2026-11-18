@@ -1,0 +1,34 @@
+# event key	category	template	reason label
+# Categories: completion, authorization, user_input, failure, or none (never sent).
+# Keys are the lowercase hook argument, optionally with ":<detail>" from parsing.
+# "<prefix>:*" is the fallback for any detail the table does not list.
+stop	completion	completion
+sessionend	completion	completion
+codex-stop	completion	completion
+notification	user_input	action-required
+notification:idle_prompt	user_input	action-required
+notification:agent_needs_input	user_input	action-required
+notification:elicitation_dialog	user_input	action-required
+notification:elicitation_url_dialog	user_input	action-required
+notification:permission_prompt	authorization	authorization
+# AskUserQuestion arrives as permission_prompt; the hook rewrites it to this key.
+notification:question	user_input	question
+notification:*	none	-
+userpromptsubmitted	user_input	action-required
+antigravity-statusline	authorization	authorization
+codex-human-approval	authorization	authorization
+codex-authorization-unconfirmed	authorization	authorization-unconfirmed
+codex-user-input	user_input	question
+# Antigravity terminationReason, compared in lowercase; labels never carry raw error text.
+antigravity-stop:no_tool_call	completion	completion
+antigravity-stop:model_stop	completion	completion
+antigravity-stop:user_canceled	none	-
+antigravity-stop:max_invocations	failure	stopped	max invocations reached
+antigravity-stop:max_forced_invocations	failure	stopped	max forced invocations reached
+antigravity-stop:max_token_budget_exceeded	failure	stopped	token budget exceeded
+antigravity-stop:terminal_step_type	failure	stopped	terminal step
+antigravity-stop:terminal_custom_hook	failure	stopped	stopped by a custom hook
+antigravity-stop:injected_response	failure	stopped	injected response
+antigravity-stop:error	failure	stopped	error
+antigravity-stop:max_steps_exceeded	failure	stopped	max steps exceeded
+antigravity-stop:*	failure	stopped	execution stopped

@@ -84,7 +84,7 @@ echo "This wizard will:"
 echo "  1. Guide you through creating a Telegram Bot"
 echo "  2. Validate your Bot Token"
 echo "  3. Auto-detect your Chat ID"
-echo "  4. 選擇共用與 Codex 專用通知類型，確認摘要後儲存"
+echo "  4. 選擇通知類型（工作結束、授權要求、等待回應、異常停止），確認摘要後儲存"
 echo "  5. Write the notification config"
 echo "  6. Deploy the hook to ~/.config/ai-notify/"
 echo "  7. Register supported hooks, including Antigravity approval when available"
@@ -158,8 +158,8 @@ else
 fi
 
 # ── Step 4: Notify Level ───────────────────────────────────────────────────────
-print_step 4 "選擇通知類型（共用＋Codex 專用）"
-echo '亦可選用舊版預設 all / attention_required；Codex 新項目仍需自行開啟。'
+print_step 4 "選擇通知類型"
+echo '亦可選用層級預設 all / attention_required（只改變工作結束）。'
 if ! edit_notify_types; then exit 0; fi
 NEW_LEVEL="${NOTIFY_DRAFT_LEVEL}"
 

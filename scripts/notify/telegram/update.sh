@@ -28,7 +28,7 @@ show_menu() {
   echo "── Telegram 通知設定 ──"
   echo ""
   echo "通知"
-  echo "  1) 通知類型（共用＋Codex 專用）"
+  echo "  1) 通知類型"
   echo "  2) 工具支援與按需檢查狀態"
   echo "Telegram 連線設定"
   echo "  3) Bot Token"
@@ -68,8 +68,8 @@ update_chat_id() {
 
 update_notify_level() {
   echo ""
-  echo "  all                — completion + action required + failure"
-  echo "  attention_required — action required + failure; suppress successful completion"
+  echo "  all                — 工作結束也通知"
+  echo "  attention_required — 不通知工作結束；其他類別的開關維持原狀"
   echo ""
   echo "Current level: ${NOTIFY_LEVEL:-all}"
   local new_level=""
@@ -83,9 +83,10 @@ update_notify_level() {
   done
   local completion=true
   [[ "${new_level}" == attention_required ]] && completion=false
-  update_config_keys NOTIFY_LEVEL "${new_level}" NOTIFY_COMPLETION "${completion}" NOTIFY_ACTION_REQUIRED true NOTIFY_FAILURE true
+  # A level only defines the completion switch; never touch the others.
+  update_config_keys NOTIFY_LEVEL "${new_level}" NOTIFY_COMPLETION "${completion}"
   NOTIFY_LEVEL="${new_level}"
-  NOTIFY_COMPLETION="${completion}"; NOTIFY_ACTION_REQUIRED=true; NOTIFY_FAILURE=true
+  NOTIFY_COMPLETION="${completion}"
   echo "✓ NOTIFY_LEVEL updated to ${new_level}."
 }
 
@@ -150,6 +151,24 @@ register_copilot_hooks() {
   echo "✓ Copilot CLI hooks registered."
 }
 
+# Non-empty readable user templates replace the built-in ones of the same name.
+show_template_status() {
+  local dir="${HOME}/.config/ai-notify/templates" file names=()
+  echo ''
+  echo '── 授權延遲與範本 ──'
+  echo "授權延遲：$(notify_authorization_delay) 秒（NOTIFY_AUTHORIZATION_DELAY_SECONDS）"
+  for file in "${dir}"/*.md; do
+    [[ -s "${file}" && -r "${file}" ]] && names+=("$(basename "${file}" .md)")
+  done
+  if [[ ${#names[@]} -gt 0 ]]; then
+    local joined
+    joined="$(printf '%s, ' "${names[@]}")"
+    echo "使用者範本：${joined%, }"
+  else
+    echo "使用者範本：無（使用內建範本；可放在 ${dir}/<名稱>.md）"
+  fi
+}
+
 show_status() {
   echo ""
   echo "── Telegram Notify — Provider Status ──"
@@ -157,6 +176,7 @@ show_status() {
   show_hook_status "${DEPLOYED_HOOK}"
   init_notify_draft
   show_notify_draft
+  show_template_status
   show_codex_wait_status
 }
 

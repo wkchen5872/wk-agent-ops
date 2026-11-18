@@ -3,7 +3,7 @@ type: Playbook
 title: Telegram Notify Hook Setup
 description: Install and operate Telegram notifications across supported AI CLIs.
 tags: [telegram, notifications, hooks, codex, antigravity]
-timestamp: 2026-10-15T00:00:00+08:00
+generated: { by: claude-code/claude-sonnet-5-5, at: 2026-11-18T14:17:55+08:00 }
 ---
 
 # Telegram Notify Hook — Quick Setup
@@ -48,7 +48,10 @@ The wizard guides you through:
 | Deployed hook script | `~/.config/ai-notify/hooks/telegram-notify.sh` |
 | Claude Code hooks | `~/.claude/settings.json` → `hooks.Stop`, `hooks.Notification` |
 | Codex hooks | `~/.codex/hooks.json` → `Stop`, `PermissionRequest`, question `PreToolUse` / `PostToolUse` |
-| Shared runtime config helper | `~/.config/ai-notify/lib/config.sh` |
+| Shared runtime helpers | `~/.config/ai-notify/lib/config.sh`、`template.sh`、`authorization.sh` |
+| Event table | `~/.config/ai-notify/hooks/events.tsv` |
+| Built-in message templates | `~/.config/ai-notify/hooks/templates/`（每次更新覆寫） |
+| User template overrides (optional) | `~/.config/ai-notify/templates/<name>.md`（安裝、更新、uninstall 都不動） |
 | Codex on-demand checker | `~/.config/ai-notify/hooks/codex-wait.py` |
 | Optional isolated Python runtime | `~/.config/ai-notify/runtime/codex-wait/` |
 | Antigravity completion | `~/.gemini/config/hooks.json` → `telegram-notify.Stop` |
@@ -100,40 +103,92 @@ bash scripts/notify/telegram/update.sh types
 
 使用編號切換、`h` 查看說明、`s` 顯示儲存摘要並確認，或 `q` 放棄。EOF 也會取消，取消不寫入設定。安裝與更新共用同一套畫面，Bot Token 不列入摘要。
 
-| 分組 | 設定鍵 | 內容／預設 |
-|---|---|---|
-| 共用 | `NOTIFY_COMPLETION` | 工作結束；缺省沿用舊等級 |
-| 共用 | `NOTIFY_ACTION_REQUIRED` | 既有操作提醒，包含 Codex PermissionRequest；缺省開啟 |
-| 共用 | `NOTIFY_FAILURE` | 異常停止，目前僅 Antigravity 提供訊號；缺省開啟 |
-| Codex 專用 | `NOTIFY_CODEX_HUMAN_APPROVAL` | 等待你授權；缺省關閉 |
-| Codex 專用 | `NOTIFY_CODEX_USER_INPUT` | 等待你回答，僅結構化問題；缺省關閉 |
+四個分類，各一個開關（括號為選單名稱）：
 
-共用分類不代表每個工具都有所有事件。既有 PermissionRequest 不增加專屬開關；自動 reviewer 也可能處理這個事件，它本身不代表人工等待。
+| 設定鍵 | 選單名稱 | 內容／預設 |
+|---|---|---|
+| `NOTIFY_COMPLETION` | 工作結束 | 缺省沿用 `NOTIFY_LEVEL`（`attention_required` 為關閉） |
+| `NOTIFY_AUTHORIZATION` | 授權要求 | 等你授權；延遲通知，見下節；缺省開啟 |
+| `NOTIFY_USER_INPUT` | 等待回應 | 等你回答或輸入；缺省開啟 |
+| `NOTIFY_FAILURE` | 異常停止 | 目前僅 Antigravity 提供訊號；缺省開啟 |
+
+分類不代表每個工具都有所有事件。選單已無「既有操作提醒」與兩個 Codex 專用項目。
 
 ### 舊設定相容
 
-保留 `NOTIFY_LEVEL=all` 與 `attention_required`；`notify_only` 是後者的舊名稱。未設定個別開關時，`attention_required` 只關閉成功結束通知；已設定的個別開關優先。環境變數可覆寫同名設定鍵。
+- 仍讀取舊鍵 `NOTIFY_ACTION_REQUIRED`、`NOTIFY_CODEX_HUMAN_APPROVAL`、`NOTIFY_CODEX_USER_INPUT`：授權來自 ACTION_REQUIRED + CODEX_HUMAN_APPROVAL，等待回應來自 ACTION_REQUIRED + CODEX_USER_INPUT。同一來源內，任一為 `true` 即開、否則任一為 `false` 即關、否則未定義。
+- 解析順序：環境變數新鍵 → 環境變數舊鍵 → 設定檔新鍵 → 設定檔舊鍵 → 預設。只有精確的 `true`／`false` 算數。`handoff-route` 在環境變數設定 `NOTIFY_ACTION_REQUIRED=true` 仍有效。
+- `NOTIFY_LEVEL` 保留 `all` 與 `attention_required`（舊名 `notify_only`），只決定工作結束的預設。
+- 儲存分類選單時，一次原子寫入四個新鍵並移除三個舊鍵（mode 600，其他鍵不動）。`update.sh notify_level` 與選單的 all／attention_required 快速預設只寫 `NOTIFY_LEVEL` 與 `NOTIFY_COMPLETION`。
+- 已接受的取捨：`ACTION_REQUIRED=true` 加 `CODEX_HUMAN_APPROVAL=false` 現在等於授權開啟，Codex 會送延遲授權通知；不要的話把「授權要求」關掉。
 
-`update.sh notify_level` 仍可使用，只調整三個共用開關，不改變 Codex 新項目。選單也接受舊版快速預設 `all`／`attention_required`，選取即確認該預設，保留新項目原選擇。
+### 授權延遲通知
+
+`NOTIFY_AUTHORIZATION_DELAY_SECONDS` 預設 30；`0` 立即通知；非數字或負值退回 30。只有等待在延遲後仍未解除才通知，同一段連續等待最多一次。
+
+| 工具 | 起點 | 解除／靜默 |
+|---|---|---|
+| Claude Code | `Notification` 且 `notification_type=permission_prompt`；等待身分為 `transcript_path` 中最後一個沒有對應 `tool_result` 的 `tool_use` | 延遲前出現對應 `tool_result` 即靜默；紀錄不可讀則送「無法確認」通知；`Stop` 清除等待 |
+| Antigravity | 狀態列回報 `tool_confirmation_pending` 為 true | 沒有請求識別碼：狀態列不再回報 true（1.5.10 在核准或拒絕後直接省略該欄位）或該對話 `Stop` 即清除（Telegram 關閉時亦然）；取消與拒絕不會觸發 `Stop`；狀態列輸出不變 |
+| Codex | `PermissionRequest` 只啟動 `codex-wait.py`，即使延遲為 0 也不在當下送出 | 見下 |
+
+Codex 細節：
+
+- daemon 可查詢該 Session：`waitingOnApproval` 持續超過延遲才送確認通知；旗標消失即重設；延遲 0 時第一次看到旗標就送。
+  只有載入在 daemon 中的 Session（例如桌面 App 開的）才有這條路徑。
+- 無法查詢執行狀態：daemon 連不上，或 daemon 連得上、但第一次查詢就回報該 Session `notLoaded`。
+  **以終端機 `codex` 啟動的 Session 一律屬於後者**（2026-11-18 實測：人工等待核准的 40 秒間仍是 `notLoaded`、沒有旗標），
+  所以終端機的 Codex 只會收到「無法確認」的通知，不會有確認的通知。看過 `active` 之後才變成 `notLoaded`，視為回合結束。
+  檢查器保留請求到延遲過後，再讀 Codex session 紀錄（payload 的 `transcript_path`，否則 `$CODEX_HOME/sessions/*/*/*/rollout-*-<session_id>.jsonl`）。該呼叫已有 `*_call_output`，或出現 `task_complete`／`turn_aborted`，即靜默；否則或紀錄不可讀，送「無法確認」通知。已核准但執行超過延遲的命令也會收到「無法確認」通知（已接受的取捨）。同一輪稍後的新請求有自己的延遲。
+- 同步結構化問題看到旗標即通知；非同步問題行為不變。
+
+沒有識別碼的等待（Antigravity，或 Claude 找不到未完成的工具呼叫）會合併：重複的起點訊號不重啟延遲、不重送。尚未通知的等待不會過期。已通知的等待，只有在通知後至少 `NOTIFY_AUTHORIZATION_REARM_SECONDS`（預設 600，非數字或負值退回 600，自通知時起算）才由新起點重新武裝；時鐘為整秒解析度，最多可能提早不到一秒。解除證據會立即重新武裝。已知限制：沒有解除訊號時，緊接著的第二次等待會被併入第一次。
+
+機制：標記檔為 `~/.config/ai-notify/state/claude-<session>.pending` 與 `antigravity-<session>.pending`，各有 `<marker>.lock` 目錄記錄擁有者 PID；每段等待啟動一個背景檢查，只在標記仍帶有自己的等待身分時才動作。標記只在持有鎖時修改：清除的目標在解除訊號到達時就固定；若鎖被存活的程序持有，改由背景等鎖，且只清除該段等待，不會刪掉期間換上的新等待。延遲為 0 時同樣先判斷：紀錄讀不到送「Approval Status Unknown」，已解除則不送。授權通知不帶 `{message}`、`{reason}`，使用者範本也一樣。Codex 無法查詢時，同一段等待在同一回合只通知一次，而且只依紀錄內容判斷：紀錄讀不到不算任何證據（已通知過就不再通知）；讀得到且沒有未完成的呼叫才算解除；當初在讀不到時通知的等待，依通知當時的紀錄大小判斷之後的呼叫是原等待（只補身分）或新請求（再通知）。每個請求只依自己的期限結算自己的呼叫；不同的呼叫 ID 一律是新的等待；授權通知關閉時不會被記成已通知。通知只含工具、專案、session 標籤、時間與通用工具標籤，不含命令、參數、提示或 transcript。
+
+### Claude Notification 類型
+
+- `permission_prompt` → 授權（延遲）。例外：紀錄中等待的工具是 `AskUserQuestion` 時屬於提問，立即送出「Waiting for Your Response」，
+  受「等待回應」開關控制。Claude 約在提問出現 6 秒後才發這則通知（2026-11-18 真實驗收發現）。
+- `idle_prompt`、`agent_needs_input`、`elicitation_dialog`、`elicitation_url_dialog`、無類型 → 等待回應（立即送出）。
+- 其他類型（`auth_success`、`agent_completed` 等）→ 不送。
+
+### Antigravity 結束原因
+
+只在 `fullyIdle` 為 true 時處理 `terminationReason`（不分大小寫）：`NO_TOOL_CALL` 與舊值 `model_stop` → Task Complete；`USER_CANCELED` → 不通知；其餘為 Task Stopped，原因標籤：`ERROR`「error」、`MAX_INVOCATIONS`「max invocations reached」、`MAX_FORCED_INVOCATIONS`「max forced invocations reached」、`MAX_TOKEN_BUDGET_EXCEEDED`「token budget exceeded」、`TERMINAL_STEP_TYPE`「terminal step」、`TERMINAL_CUSTOM_HOOK`「stopped by a custom hook」、`INJECTED_RESPONSE`「injected response」、舊值 `max_steps_exceeded`「max steps exceeded」，其他「execution stopped」。不附原始錯誤文字；對應表在 `scripts/notify/telegram/events.tsv`。
+
+### 範本與事件表
+
+`events.tsv` 欄位為 key、category、template、reason label；`<prefix>:*` 為後備；category `none` 表示不送。表中沒有的事件維持通用的「AI CLI Event」訊息。
+
+內建範本（`scripts/notify/telegram/templates/`）：completion、stopped、question、action-required、generic、authorization、authorization-unconfirmed，部署到 `~/.config/ai-notify/hooks/templates/`，每次更新覆寫。要自訂，在 `~/.config/ai-notify/templates/<name>.md` 放同名檔；檔案不存在、為空或不可讀時退回內建範本。
+
+可用佔位符：`{title_suffix} {tool} {project} {time} {tag} {message} {reason} {request_tool} {delay}`。值會依 Telegram legacy Markdown 跳脫（`_ * \` [`）；整行只有佔位符且全部為空時，該行移除；未知佔位符原樣保留。不支援 eval、條件或迴圈。
+
+工作結束、停止與等待訊息的內建文字不變。新增文字：授權為「🔴 **Waiting for Your Approval** … `{tool} has been waiting for your approval for over {delay} seconds ({request_tool})`」；無法確認為「🟡 **Approval Status Unknown** … `{tool} may be waiting for approval, but this could not be confirmed (no result after {delay} seconds, {request_tool})`」。兩個授權範本於 2026-11-18 改為英文。
+
+### 狀態清理
+
+每次 Codex 檢查啟動時，會移除超過 7 天且鎖已釋放的通知自有狀態：`codex-<24 hex>.{lock,json,request.json}`（一起移除，且僅在沒有檢查器持有 flock 時）、以及鎖目錄沒有存活 PID 的 `claude-*.pending`／`antigravity-*.pending`。其他檔案不動。
 
 ### Codex 按需檢查
 
 ```text
 PermissionRequest hook
-  ├─ 共用操作提醒開啟 → 原本的 PermissionRequest 通知
-  └─ 任一 Codex 新項目開啟 → 啟動按需檢查器 → 查看目前 session 的 daemon 狀態
+  └─ 授權要求或等待回應開啟 → 啟動按需檢查器 → 依延遲規則通知（見上節）
 
 同步結構化問題 PreToolUse hook → 同一個按需檢查流程
 非同步結構化問題 PostToolUse hook → accepted=true → 等待你回答通知（不需 daemon）
 ```
 
-兩條分支互不依賴：關閉原本提醒仍可檢查 daemon；兩個新項目都關閉時完全不檢查。新標題分別是 `🔴 等待你授權` 與 `🟡 Waiting for Your Response`；問題通知內文為 `Codex has a question awaiting your response.`。`request_user_input_async` 不產生 daemon 等待旗標，改在工具成功送出題目後通知；這表示有題目待回覆，Codex 仍可繼續工作。
+PermissionRequest 本身不會當下送出通知，只啟動檢查器；授權要求與等待回應都關閉時完全不檢查。標題分別是 `🔴 Waiting for Your Approval`（無法確認時為 `🟡 Approval Status Unknown`）與 `🟡 Waiting for Your Response`；問題通知內文為 `Codex has a question awaiting your response.`。`request_user_input_async` 不產生 daemon 等待旗標，改在工具成功送出題目後通知；這表示有題目待回覆，Codex 仍可繼續工作。
 
-啟用新項目後，安裝／更新會部署 Python 3 檢查器與專用 venv 中的 `websocket-client`，不修改全域 Python、不安裝 LaunchAgent。hook 返回後，暫時檢查器透過 `codex app-server proxy` 唯讀觀察既有 daemon；同一 session 共用程序，工作輪次完成／取消後退出。依賴安裝失敗會顯示原因，既有通知仍可使用；以 `fix-hooks` 重試。
+啟用授權要求或等待回應後，安裝／更新會部署 Python 3 檢查器與專用 venv 中的 `websocket-client`，不修改全域 Python、不安裝 LaunchAgent。hook 返回後，暫時檢查器透過 `codex app-server proxy` 唯讀觀察既有 daemon；同一 session 共用程序，工作輪次完成／取消後退出。依賴安裝失敗會顯示原因，既有通知仍可使用；以 `fix-hooks` 重試。
 
 支援範圍與限制：
 
-- 授權與同步問題需可由目前 `CODEX_HOME` 連線的既有本機 daemon；不啟動 daemon。非同步問題依原生成功事件通知，不需 daemon。
+- 確認授權與同步問題需要既有本機 daemon 能查詢該 Session；不啟動 daemon。終端機啟動的 Codex 不在 daemon 中，同步問題的旗標也看不到。
+  無法查詢時，授權改讀 session 紀錄，無法確認則送「Approval Status Unknown」。非同步問題依原生成功事件通知，不需 daemon。
 - 以明確等待旗標辨識，不靠靜默時間或問號。一般文字提問不偵測。
 - 同一 session、同一種類、同段等待只嘗試通知一次，解除後重設；一秒 metadata 輪詢可能錯過更短的等待或中間解除。
 - 不附原始命令、問題全文或 transcript。連線錯誤只保留一般狀態碼，不印原始例外。
@@ -162,7 +217,7 @@ Telegram 通知訊息採用統一的 Markdown 排版，結構如下：
 {MESSAGE} #{HOOK_EVENT_NAME}
 ```
 
-- **STATUS_ICON**: `🟢` (Task Complete) | `🟡` (Action Required / Waiting for Your Response) | `🔴` (Task Stopped) | `🤖` (Generic Event)
+- **STATUS_ICON**: `🟢` (Task Complete) | `🟡` (Action Required / Waiting for Your Response / Approval Status Unknown) | `🔴` (Task Stopped / Waiting for Your Approval) | `🤖` (Generic Event)
 - **TITLE**: `Task Complete` | `Action Required` | `Task Stopped`
 - **SESSION** *(optional)*: shown when session info is available
   - UUID `session_id` (Claude) → `#<first 8 chars>` e.g. `(#a1b2c3d4)`
@@ -173,7 +228,7 @@ Telegram 通知訊息採用統一的 Markdown 排版，結構如下：
   - Task Complete: `Process finished successfully`
   - Action Required: `Waiting for user interaction...`
 
-Codex approval notifications include only the requesting tool name. Raw commands,
+Authorization notices include only a generic tool label (the requesting tool name). Raw commands,
 arguments, prompts, transcript paths, and Antigravity raw error text are never
 included.
 
@@ -224,6 +279,14 @@ Please approve the file deletion #Notification
 
 Waiting for user interaction... #Notification
 ```
+
+---
+
+## 更新與回復
+
+`update.sh status` 多一段「授權延遲與範本」：`授權延遲：N 秒`，以及 `使用者範本：<名稱>` 或「無」。
+
+升級：執行 `bash scripts/notify/telegram/update.sh`（或 `fix-hooks`）重新部署即可。hook 註冊不變，Codex 不需重新信任；既有設定檔不需修改。回復到前一版 hook 時重新部署舊版；選單儲存已移除的舊鍵，需在舊版選單重新設定。
 
 ---
 
@@ -294,7 +357,7 @@ Removes:
 - Notification-owned legacy hook entries from `~/.gemini/settings.json`
 - The Antigravity `statusLine` only when it is notification-owned
 - Antigravity notification state markers
-- Codex 按需程序（合作式停止）、自有狀態、檢查器與專用 venv；兩個新項目重設為關閉
+- Codex 按需程序（合作式停止）、自有狀態、檢查器與專用 venv；僅移除內建範本與事件表，`~/.config/ai-notify/templates/` 的使用者範本保留
 - `~/.config/ai-notify/hooks/telegram-notify.sh`
 
 Does **not** touch unrelated config keys or unrelated hooks. Repository-local
@@ -312,7 +375,7 @@ recognize the canonical replacement.
 
 1. Check registration: `bash scripts/notify/telegram/update.sh status`
 2. Check `TELEGRAM_ENABLED=true`
-3. 用 `update.sh types` 檢查該類型開關；缺省時才沿用 `NOTIFY_LEVEL`
+3. 用 `update.sh types` 檢查該類型開關；缺省時工作結束才沿用 `NOTIFY_LEVEL`。授權通知有延遲（預設 30 秒），先等過 `NOTIFY_AUTHORIZATION_DELAY_SECONDS`
 4. Test manually with the curl command above
 5. Verify Bot Token: `curl https://api.telegram.org/bot<TOKEN>/getMe`
 

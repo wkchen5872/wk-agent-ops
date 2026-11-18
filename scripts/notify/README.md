@@ -60,7 +60,7 @@ All provider keys in `~/.config/ai-notify/config` must follow:
 |-----|-------------|
 | `{PROVIDER}_ENABLED` | `true` / `false` master switch |
 | `{PROVIDER}_<CREDENTIAL>` | Provider-specific credential (e.g., `TELEGRAM_BOT_TOKEN`) |
-| `NOTIFY_LEVEL` | Shared: `all` (default) or `attention_required` |
+| `NOTIFY_LEVEL` | Shared: `all` (default) or `attention_required`; defaults completion only |
 
 Examples:
 - `TELEGRAM_ENABLED=true`
@@ -68,16 +68,13 @@ Examples:
 - `LINE_ENABLED=false`
 - `LINE_NOTIFY_TOKEN="..."`
 
-`NOTIFY_LEVEL` supplies legacy defaults across all providers when explicit category keys are absent:
-- `all` — send completion, action-required, and failure events
-- `attention_required` — send action-required and failure events; suppress successful completion
+`NOTIFY_LEVEL` supplies only the default for completion when `NOTIFY_COMPLETION` is absent (`attention_required`, legacy `notify_only`, turns it off).
 
-Existing `notify_only` configs remain a read-time alias for
-`attention_required`. Setup and update persist only canonical values.
+Four boolean category keys are supported: `NOTIFY_COMPLETION`, `NOTIFY_AUTHORIZATION`, `NOTIFY_USER_INPUT`, `NOTIFY_FAILURE`; the last three default on. Legacy `NOTIFY_ACTION_REQUIRED`, `NOTIFY_CODEX_HUMAN_APPROVAL`, `NOTIFY_CODEX_USER_INPUT` are still read (environment new → environment legacy → file new → file legacy → default; only exact `true`/`false`), and the category menu replaces them on save. `NOTIFY_AUTHORIZATION_DELAY_SECONDS` (default 30) and `NOTIFY_AUTHORIZATION_REARM_SECONDS` (default 600) tune delayed authorization notices; see [Telegram setup](../../docs/notify/telegram.md).
 
-Five boolean category keys are supported: `NOTIFY_COMPLETION`, `NOTIFY_ACTION_REQUIRED` (including Codex PermissionRequest), `NOTIFY_FAILURE`, `NOTIFY_CODEX_HUMAN_APPROVAL`, and `NOTIFY_CODEX_USER_INPUT`. The last two default false and bypass the legacy action-required gate. No extra PermissionRequest-specific key exists.
+Messages render from `telegram/events.tsv` and `telegram/templates/` through `lib/template.sh`; users override a template with `~/.config/ai-notify/templates/<name>.md`. Placeholders: `{title_suffix} {tool} {project} {time} {tag} {message} {reason} {request_tool} {delay}`.
 
-Use `bash scripts/notify/telegram/update.sh types` for grouped Traditional Chinese settings, and `status` for support/connection diagnostics. Codex inspection is hook-triggered and turn-scoped, with no LaunchAgent. It never launches/resumes Codex or reads full transcripts. Approval and synchronous-input inspection require the local daemon. Async questions notify from a successful `request_user_input_async` PostToolUse result without daemon access; plain-text questions are unsupported.
+Use `bash scripts/notify/telegram/update.sh types` for grouped Traditional Chinese settings, and `status` for support/connection diagnostics. Codex inspection is hook-triggered and turn-scoped, with no LaunchAgent. It never launches/resumes Codex or reads full transcripts. Confirmed approval and synchronous-input inspection use the local daemon; without it, authorization falls back to the session record. Async questions notify from a successful `request_user_input_async` PostToolUse result without daemon access; plain-text questions are unsupported.
 
 ### 4. Use shared libraries
 
@@ -133,9 +130,15 @@ create a second destination directory merely to support another CLI.
   hooks/
     telegram-notify.sh        # Deployed from scripts/notify/telegram/hook.sh
     codex-wait.py             # Optional on-demand daemon inspector
+    events.tsv                # Deployed event table
+    templates/                # Built-in templates (replaced on update)
+  templates/                  # Optional user overrides (never touched)
   lib/config.sh              # Shared category logic
-  runtime/codex-wait/         # Isolated dependency when new categories are enabled
+  lib/template.sh            # Template rendering
+  lib/authorization.sh       # Delayed authorization logic
+  runtime/codex-wait/         # Isolated dependency when inspection is enabled
   state/codex-*              # Owned locks, sanitized requests and diagnostics
+  state/{claude,antigravity}-*.pending[.lock]  # Authorization wait markers
     <provider-name>.sh        # Your provider's deployed hook
 ```
 

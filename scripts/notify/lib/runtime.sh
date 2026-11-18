@@ -8,6 +8,12 @@ deploy_notify_files() {
   mkdir -p "${root}/hooks" "${root}/lib"
   cp "${NOTIFY_SOURCE_ROOT}/telegram/hook.sh" "${root}/hooks/telegram-notify.sh"
   cp "${NOTIFY_SOURCE_ROOT}/lib/config.sh" "${root}/lib/config.sh"
+  cp "${NOTIFY_SOURCE_ROOT}/lib/template.sh" "${root}/lib/template.sh"
+  cp "${NOTIFY_SOURCE_ROOT}/lib/authorization.sh" "${root}/lib/authorization.sh"
+  cp "${NOTIFY_SOURCE_ROOT}/telegram/events.tsv" "${root}/hooks/events.tsv"
+  # Built-in templates are replaced wholesale; user templates live in ${root}/templates.
+  rm -rf -- "${root}/hooks/templates"
+  cp -R "${NOTIFY_SOURCE_ROOT}/telegram/templates" "${root}/hooks/templates"
   cp "${NOTIFY_SOURCE_ROOT}/codex/wait.py" "${root}/hooks/codex-wait.py"
   cp "${NOTIFY_SOURCE_ROOT}/codex/requirements.txt" "${root}/hooks/codex-wait-requirements.txt"
   chmod +x "${root}/hooks/telegram-notify.sh"
@@ -15,7 +21,7 @@ deploy_notify_files() {
 }
 
 codex_inspection_selected() {
-  notify_category_enabled NOTIFY_CODEX_HUMAN_APPROVAL || notify_category_enabled NOTIFY_CODEX_USER_INPUT
+  notify_category_enabled NOTIFY_AUTHORIZATION || notify_category_enabled NOTIFY_USER_INPUT
 }
 
 ensure_codex_runtime() {
@@ -48,9 +54,11 @@ show_codex_wait_status() {
   echo ''
   echo '── Codex 人工等待通知 ──'
   echo '執行方式：hook 觸發、按需啟動；沒有 LaunchAgent 或登入服務。'
-  echo '範圍：授權與同步問題需本機 daemon；非同步題目依成功送出通知；一般文字問句不偵測。'
+  echo '範圍：授權等待優先看 daemon 旗標，查不到時改讀 Session 紀錄、只送「Approval Status Unknown」；'
+  echo '      終端機啟動的 Codex 不在 daemon 中，一律走 Session 紀錄。同步問題需 daemon 能查詢該 Session；'
+  echo '      非同步題目依成功送出通知；一般文字問句不偵測。'
   if ! codex_inspection_selected; then
-    echo '設定：兩項新通知皆關閉，不會查看 daemon。'
+    echo '設定：授權要求與等待回應皆關閉，不會查看 daemon。'
     return 0
   fi
   if [[ ! -f "${root}/hooks/codex-wait.py" ]]; then
@@ -64,7 +72,7 @@ show_codex_wait_status() {
   if printf '%s' "${result}" | jq -e '.available == true' >/dev/null 2>&1; then
     echo 'daemon：唯讀連線可用。'
   else
-    echo 'daemon：不可用或協定不支援；不會推測人工等待。'
+    echo 'daemon：不可用或協定不支援；授權改讀 Session 紀錄，同步問題無法偵測。'
   fi
   echo '本機端到端驗收：尚未記錄；設定開啟不代表人工授權／問題 hook 已實測。'
   echo '另需在 Codex /hooks 信任並勾選 owned hooks；此處無法讀取該啟用狀態。'
@@ -72,8 +80,7 @@ show_codex_wait_status() {
 
 remove_codex_notify_runtime() {
   local root="${HOME}/.config/ai-notify" python
-  # Let workers observe disabled categories before removing their scripts.
-  update_config_keys NOTIFY_CODEX_HUMAN_APPROVAL false NOTIFY_CODEX_USER_INPUT false
+  # The shutdown marker written by `stop` makes running workers exit first.
   python="${root}/runtime/codex-wait/bin/python3"
   [[ -x "${python}" ]] || python="$(command -v python3 || true)"
   if [[ -n "${python}" && -f "${root}/hooks/codex-wait.py" ]]; then

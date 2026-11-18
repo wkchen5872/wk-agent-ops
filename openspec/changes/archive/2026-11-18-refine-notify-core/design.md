@@ -1,0 +1,239 @@
+# Design
+
+## Context
+
+動機與驗收條件見 proposal.md。這裡只列影響做法的現況：
+
+- `scripts/notify/telegram/hook.sh`（351 行）在同一個檔案裡做五件事：讀輸入、判斷事件、套用開關、以 `case` 組訊息字串、送出。
+  `codex-permission` 事件同時啟動等待檢查器並立即送「Approval requested」。
+- `scripts/notify/codex/wait.py` 已能向 Codex daemon 查 `waitingOnApproval`／`waitingOnUserInput`，每秒輪詢、看到旗標就發。
+  實績：78 個 Session 中 30 個連不上 daemon（`daemon-unavailable`）。
+  任務 1.2 的真實擷取（2026-11-18，codex-cli 0.170.0）另外發現：**以 CLI 啟動的 Session 沒有載入在 daemon 中**，
+  daemon 連得上，但對該 Session 的 `thread/read` 從頭到尾回 `notLoaded`，人工等待核准的 40 秒也看不到 `waitingOnApproval`。
+  所以其餘 48 個 `turn-finished` 也從未看過旗標。
+- Codex 的 Session 紀錄在「提出請求」與「取得結果」之間沒有「已核准」的標記，所以只看紀錄無法區分「等人核准」與「已核准但指令執行很久」。
+- Antigravity 1.5.10 的 hook 只有 `SessionStart`、`PreToolUse`、`PostToolUse`、`PreInvocation`、`PostInvocation`、`Stop`；授權等待只能從狀態列的
+  `tool_confirmation_pending` 得知。Stop 的 `terminationReason` 以 `NO_TOOL_CALL` 表示正常完成。
+- hook 由各工具以短逾時（5–10 秒）呼叫，必須立刻返回；交接迴圈的 `handoff-route` 已驗證「背景子程序在 hook 結束後繼續執行」可行。
+- 訊息以 Telegram 的 `parse_mode=Markdown` 送出，內容沒有跳脫。
+- 既有 spec `codex-human-wait-notifications` 寫明「elapsed quiet time MUST NOT produce human-wait messages」與「daemon 不可用時不得發明等待通知」；
+  本設計在 daemon 不可用時改用 Session 紀錄判斷，與這兩句衝突，已在 delta spec 明確修改（見決策 4）。
+
+## Goals / Non-Goals
+
+**Goals:**
+
+- 授權通知只在 Agent 仍停著等使用者時發出，三個工具同一套規則。
+- 訊息文字與事件分類成為資料，改文案或加事件不必改 hook 邏輯。
+- 既有安裝不需手動改設定；預設範本下，非授權類訊息的文字不變。
+
+**Non-Goals:**
+
+- 不改寫安裝與 hook 登記流程（`registry.sh`、`install.sh` 的結構不動），不新增語言或常駐服務。
+- 不處理交件單通知的事件、開關與模型資訊（`add-handoff-notifications`）。
+- 不嘗試分辨 Codex「已核准但指令執行超過延遲時間」與「等待核准」在 daemon 不可用時的差別（見風險）。
+- 不新增 Claude Code 或 Antigravity 的 hook 登記事件；不改 Copilot CLI 的對應。
+
+## Decisions
+
+### 1. hook 拆成「解析 → 查表 → 套範本 → 送出」
+
+```
+stdin JSON + 參數
+      |
+      v
+  解析事件（工具、事件名、notification_type、terminationReason…）
+      |
+      v
+  事件對照表  ──>  分類、開關、範本名
+      |
+      +── authorization ──> 延遲確認（決策 3）──> 仍在等才往下
+      |
+      v
+  套用開關（決策 2）
+      |
+      v
+  讀範本（使用者覆寫 > 內建）→ 取代參數 → 跳脫 → 送出
+```
+
+- 事件對照表是一個隨 hook 部署的純文字表（每列：事件鍵、分類、範本名），放在 `scripts/notify/telegram/events.tsv`，部署到 `~/.config/ai-notify/hooks/`。
+  開關由分類決定，不在表內重複。
+- 需要程式判斷才知道鍵的事件（Claude 的 `notification_type`、Antigravity 的終止原因）先在解析步驟轉成事件鍵
+  （例如 `claude-notification:permission_prompt`、`antigravity-stop:complete`），之後一律查表。
+- 替代方案：整個 hook 改寫成 Python。不採用——目前的需求用資料表加範本就能把 bash 縮到只剩流程，換語言的收益不足以抵銷重寫與重新驗證五個工具的成本；
+  有狀態的 Codex 檢查已經在 Python。
+
+### 2. 四個分類與設定鍵
+
+| 分類 | 選單名稱 | 設定鍵 | 新鍵不存在時 |
+| --- | --- | --- | --- |
+| completion | 工作結束 | `NOTIFY_COMPLETION` | 依 `NOTIFY_LEVEL` |
+| authorization | 授權要求 | `NOTIFY_AUTHORIZATION` | `NOTIFY_ACTION_REQUIRED` 或 `NOTIFY_CODEX_HUMAN_APPROVAL` 任一為 true；都沒有則開 |
+| user_input | 等待回應 | `NOTIFY_USER_INPUT` | `NOTIFY_ACTION_REQUIRED` 或 `NOTIFY_CODEX_USER_INPUT` 任一為 true；都沒有則開 |
+| failure | 異常停止 | `NOTIFY_FAILURE` | 開 |
+
+- 取值順序：環境變數的新鍵 → 環境變數的舊鍵 → 設定檔的新鍵 → 設定檔的舊鍵 → 層級預設，取第一個有定義的來源。
+  保留「環境變數的舊鍵」是為了讓 `handoff-route` 目前的 `NOTIFY_ACTION_REQUIRED=true` 覆寫在本 change 合併後仍然有效。
+- 同一個來源內兩個舊鍵的合併：任一為 `true` 即開；至少一個為 `false` 且沒有 `true` 即關；都沒有定義則視為該來源未定義。
+  只有 `true`、`false` 兩個值算數，空值或其他字串視為未定義。
+- **已接受的取捨（D-005，審查 r01/F-03）**：舊版對「一般操作提醒」與「Codex 等待你授權」分開判斷。合併後，
+  `NOTIFY_ACTION_REQUIRED=true`、`NOTIFY_CODEX_HUMAN_APPROVAL=false` 的既有設定會得到「授權要求=開」，Codex 的延遲授權通知因此開啟。
+  「不需手動改設定檔」與「原樣保留每個開關的偏好」在這組輸入無法兼得；使用者選擇合併。不想收可以關「授權要求」。
+
+  | 既有設定 | 授權要求 | 等待回應 |
+  | --- | --- | --- |
+  | `ACTION_REQUIRED=true`，Codex 兩鍵皆無 | 開 | 開 |
+  | `ACTION_REQUIRED=true`、`CODEX_HUMAN_APPROVAL=false`、`CODEX_USER_INPUT=true`（目前本機） | 開（Codex 授權通知開啟） | 開 |
+  | `ACTION_REQUIRED=false`、`CODEX_HUMAN_APPROVAL=true` | 開（Claude、Antigravity 授權通知開啟） | 依 `CODEX_USER_INPUT` |
+  | `ACTION_REQUIRED=false`、Codex 兩鍵皆 `false` 或皆無 | 關 | 關 |
+  | 三個舊鍵皆無 | 開 | 開 |
+
+  第一次在選單儲存（不切換任何項目）會把上表的結果寫成新鍵並移除三個舊鍵。
+- 選單儲存時寫入四個新鍵並移除三個舊鍵；只讀不存時不動設定檔。
+- 改層級只寫 `NOTIFY_LEVEL` 與 `NOTIFY_COMPLETION`（層級只定義這一類的差別），不再寫其他開關。
+- 替代方案：保留五個鍵，只改選單文字。不採用——授權改成三工具共用的延遲確認後，「Codex 等待你授權」與「授權要求」是同一件事，留兩個開關只會讓使用者再次分不清。
+
+### 3. 延遲確認的共同機制
+
+- 每一段等待有自己的身分（審查 r01/F-02）。等待標記記錄：工具、Session、**等待身分**、起始時間、請求的工具標籤、是否已通知。
+  等待身分優先用工具提供的請求識別（決策 4 的表）；沒有時，在「該 Session 沒有標記」的情況下收到起始訊號才產生一個新的隨機身分。
+- 起始訊號到達時：
+  - 沒有標記 → 建立標記、啟動背景檢查。
+  - 有標記且身分相同 → 同一段等待，保留原身分與起始時間，不重啟。
+  - 有標記但身分不同（或舊標記的請求已有結果）→ 以新身分取代標記並啟動新的背景檢查。
+- 背景檢查啟動時記下自己的等待身分。到期時先重讀標記：**身分不同或標記已不存在就直接結束**，不送也不刪。
+  身分相同才判斷：已解除 → 刪除標記；仍在等 → 送一次並把標記記為已通知；無法確認 → 送「無法確認」的通知（決策 4）。
+  所以舊的檢查不會替新的等待提早通知，也不會清掉新的標記。
+- 已通知的標記不會自己消失，由解除證據清除：請求有結果、工具回報不再等待、或該 Session 的回合結束（Claude 與 Codex 的 Stop、Antigravity 的 Stop）。
+  下一個起始訊號到達時也會比對身分，身分不同即取代。
+- 延遲為 0 時不啟動背景檢查，直接送出並記為已通知。
+- **沒有請求識別時的政策（審查 r03，r01/F-02 的後續）**：無法從訊號本身分辨「同一段等待的重複訊號」與「另一段等待」，
+  兩種做法各有代價——每個訊號換新身分會讓重複訊號一直把通知往後推；一律合併會吞掉漏報解除後的第二段等待。採用固定而可測的規則：
+  - 有標記時到達的起始訊號一律視為同一段等待：不換身分、不重設起始時間、不再通知。重複訊號因此無法延後通知。
+  - 尚未通知的標記只由解除證據、回合結束或它自己的背景檢查處理，**不會因為存在太久而被清除或重設**。
+  - 已通知的標記另外有重新武裝：距離**通知時間**至少 `NOTIFY_AUTHORIZATION_REARM_SECONDS`（預設 600 秒）之後到達的起始訊號，才開始新的一段等待。
+    這個時間從通知起算、只適用已通知的標記（審查 r05/F-01）：若對所有標記都依存在時間清除，重新武裝時間短於延遲時（或延遲被設得比 600 秒長時），
+    持續回報的等待會在背景檢查到期前不斷被清掉重建，第一則通知永遠發不出去。
+  - 兩個設定之間不需要任何大小關係；重新武裝時間短於延遲只代表持續等待時每隔「重新武裝時間＋延遲」左右會再提醒一次。
+    非數字或負值用預設 600。同一時刻的優先序：未通知的標記只看它的背景檢查；已通知的標記在訊號到達時距通知時間「大於或等於」重新武裝時間即算新的一段。
+    bash 端只有整秒時鐘，等號邊界以整秒比較，可能提早不到一秒（審查 codex-01a1ee38-r02/F-06）。
+  - 已知限制（寫入文件）：沒有解除訊號時，緊接在前一段之後的第二段等待會被併入前一段——若前一段尚未通知，延遲從第一個訊號起算；
+    若前一段已通知，第二段不再通知，直到解除證據、回合結束或重新武裝的時間到。這種情況下使用者剛回應過前一段，通常就在現場。
+
+  | 沒有請求識別的情境（延遲 30 秒） | 結果 |
+  | --- | --- |
+  | 第 0、10 秒各一個訊號，中間沒有解除 | 第 30 秒一則（不是第 40 秒） |
+  | 每 10 秒一個訊號持續兩分鐘，沒有解除 | 只有第 30 秒一則 |
+  | 已通知，60 秒後又一個訊號，沒有解除證據 | 不再通知 |
+  | 已通知，距通知 600 秒（預設）以上又一個訊號 | 新的一段，自己的延遲後通知 |
+  | 重新武裝 10 秒（短於延遲），每 11 秒一個訊號，沒有解除 | 第 30 秒發第一則；之後第 44 秒的訊號開始新的一段，第 74 秒再提醒 |
+  | 重新武裝等於延遲（皆 30 秒），每 10 秒一個訊號 | 第 30 秒發第一則 |
+  | 延遲 900 秒、重新武裝預設 600 秒，持續有訊號 | 第 900 秒發第一則 |
+  | 有解除證據清除後 5 秒又一個訊號 | 新的一段，自己的延遲後通知 |
+
+- **比對與動作不可被插隊**：建立或取代標記、以及背景檢查的「重讀標記、比對身分、送出或刪除、記為已通知」都在同一把以 Session 為單位的鎖內完成
+  （沿用狀態目錄既有的非阻塞檔案鎖做法）。背景檢查拿到鎖後才比對；比對相符就在鎖內完成動作，起始訊號要等鎖釋放才能取代標記，
+  所以不會出現「比對後標記被換掉、卻對新標記送出或刪除」。送 Telegram 的網路呼叫在鎖外進行，鎖內只把標記記為已通知。
+- 標記放在既有的 `~/.config/ai-notify/state/`，檔名帶工具前綴，與 Codex 檢查器的檔案同受決策 6 的清理規則。
+
+### 4. 各工具的起始訊號與判斷依據
+
+| 工具 | 起始訊號 | 等待身分 | 確認仍在等的依據 | 解除證據 | 實作位置 |
+| --- | --- | --- | --- | --- | --- |
+| Claude Code | `Notification` 且 `notification_type=permission_prompt` | Session 紀錄尾端未取得結果的工具呼叫 ID | 該 ID 仍沒有結果 | 該 ID 有結果；Session 的 `Stop` | bash + `jq`（只讀檔案尾端） |
+| Codex | `PermissionRequest` hook | 旗標的一段連續期間；無法查詢執行狀態時為紀錄尾端未取得結果的呼叫 ID | daemon 的 `waitingOnApproval` 持續到延遲結束 | 旗標消失；該呼叫有結果；回合結束 | 既有的 `wait.py` |
+| Antigravity | 狀態列 `tool_confirmation_pending` 為 true | 沒有請求識別：套用決策 3 的合併政策 | 標記仍在且身分相同 | 狀態列不再回報 true（實測為欄位消失）；對話的 `Stop`；重新武裝時間 | bash |
+
+- 各工具能否提供表中的訊號，由 tasks 第 1 組以真實資料確認後才實作第 4 組。某個工具拿不到請求識別時，該工具套用決策 3 的
+  「沒有請求識別時的政策」（合併到清除為止，已通知後才有重新武裝），不另外發明規則；拿不到解除證據時，未通知的標記等它的背景檢查，
+  已通知的標記只剩回合結束與重新武裝兩種方式。
+  Antigravity 沒有請求識別，一律適用這個政策；它的「false→true 轉換」只在收到過「不是 true」的狀態（解除證據）之後才算新的一段。
+- Antigravity 1.5.10 實測（任務 1.3，2026-11-18）：確認等待時狀態列帶 `tool_confirmation_pending: true`（`agent_state: tool_use`），
+  只在開始時回報 2–3 次，等待期間不再回報；核准或拒絕後 0.2–2 秒內再回報一次，該欄位**直接消失**，從未出現 `false`。
+  使用者按 Esc 取消、或拒絕確認時**不會觸發 `Stop`**，由這次狀態列回報清除標記。狀態列的 `session_id` 與 `conversation_id` 相同，
+  也等於 `Stop` 的 `conversationId`。正常完成的 `terminationReason` 為 `NO_TOOL_CALL`；實測中沒有看過 `USER_CANCELED`。
+- Codex 沿用 `wait.py` 的單一檢查器與鎖：旗標首次出現時記下時間，持續超過延遲才發**確認的**通知；旗標消失就重置，
+  下一次出現是新的一段等待。
+- **「無法查詢執行狀態」的範圍（任務 1.2 後補，使用者 2026-11-18 確認）**：包括 daemon 連不上或協定不符，
+  以及 daemon 連得上、但觸發的 Session 在第一次查詢時就是 `notLoaded`（從未看過 `active`）。後者是以 CLI 啟動的 Codex 的常態。
+  看過 `active` 之後才變成 `notLoaded`，仍視為回合結束。因此以 CLI 使用 Codex 時，授權等待只會得到「無法確認」的通知，不會有確認的通知。
+- **daemon 不可連時的政策（D-004，審查 r01/F-01）**：Session 紀錄只能證明「已有結果」，不能證明「正在等人」——
+  紀錄裡沒有「已核准」的標記（任務 1.2 實測：人工等待核准的 40 秒間紀錄沒有任何新項目）。所以無法查詢執行狀態時：
+  - 延遲內紀錄已有結果 → 解除，不通知。
+  - 延遲後仍無結果，或紀錄讀不到 → 發**「無法確認」的通知**（範本 `authorization-unconfirmed`，英文「Approval Status Unknown … may be waiting for approval, but this could not be confirmed」），不使用確認等待的文字。
+  - 固定的三個案例：
+
+    | 案例（無法查詢執行狀態） | 延遲後的紀錄 | 結果 |
+    | --- | --- | --- |
+    | 真的在等使用者核准 | 無結果 | 一則「無法確認」 |
+    | 第 6 秒已自動核准，指令執行到第 40 秒 | 無結果 | 一則「無法確認」（已接受的多餘通知） |
+    | 紀錄讀不到 | — | 一則「無法確認」 |
+
+  - 同一段等待只通知一次，身分只依紀錄內容判斷（審查 codex-01a1ee38-r02/F-01、r03、r04）：紀錄讀不到不算證據，本回合已通知就不再通知；
+    讀得到且沒有未完成的呼叫才算解除；在讀不到時發出的通知記下當時的紀錄大小，之後出現的呼叫在該位置之前是原等待（只補身分），之後是新請求。
+    每個請求只結算自己的呼叫：觸發時讀得到就是當時未完成的呼叫，讀不到就以觸發時的紀錄大小為界；不同的呼叫 ID 即新等待，不要求舊呼叫先有結果，
+    舊請求的計時器不替較晚的請求提早通知。授權類別關閉時不記成已通知（審查 codex-01a1ee38-r05）。
+  daemon 可查詢該 Session 時不受影響：自動核准後旗標消失，即使指令繼續執行也不通知。
+- 這修改了既有 spec 的兩句（見 Context），並且是 D-001「只在真的等待時通知」的明確例外，使用者已確認。
+  理由：38% 的 Session 連不上 daemon，其餘以 CLI 啟動的 Session 也查不到旗標；不通知等於這些 Session 真的卡住時沒有任何訊號。「靜默時間」本身仍不會觸發通知，必須有一個未解除的授權請求。
+- Claude Code 的 `permission_prompt` 只在真的要詢問使用者時出現（`auto` 模式由分類器決定，不詢問），加上延遲後行為與其他工具一致。
+- 例外（任務 8.2 真實驗收發現，使用者 2026-11-18 確認）：Claude Code 也以 `permission_prompt` 通知 `AskUserQuestion` 提問。
+  hook 讀紀錄尾端未取得結果的工具呼叫，名稱是 `AskUserQuestion` 時改為「等待回應」：立即送出提問範本，受等待回應開關控制（D-002）。
+  Claude 本身約在提問出現 6 秒後才發這則通知，這段延遲無法縮短。
+- 替代方案：依 `approvals_reviewer` 設定直接略過 Codex 的通知。不採用——設定可被 profile 或啟動參數覆寫，而且自動審核拒絕後仍可能需要使用者。
+
+### 5. 範本
+
+- 內建範本放 `scripts/notify/telegram/templates/<name>.md`，部署到 `~/.config/ai-notify/hooks/templates/`，每次更新都覆寫。
+- 使用者範本放 `~/.config/ai-notify/templates/<name>.md`，同名優先；空檔或讀不到時用內建。安裝、更新、修復、移除都不碰這個目錄。
+  分成兩個目錄，就不需要判斷「使用者有沒有改過」。
+- 參數以 `{name}` 表示：`{title_suffix}`、`{tool}`、`{project}`、`{time}`、`{tag}`、`{message}`、`{reason}`、`{request_tool}`。
+  取代前先跳脫值裡在 Telegram Markdown 有意義的字元；範本本身的標記不跳脫。只含參數且結果為空的行會被移除；未知參數原樣保留，方便發現打錯。
+- 取代用字串操作完成，不經 `eval`，範本內容不會被當成指令執行。
+- 預設範本逐字對應現有訊息；授權類新增兩個範本：`authorization`（已確認：「🔴 Waiting for Your Approval … <工具> has been waiting for your approval for over N seconds」）與
+  `authorization-unconfirmed`（無法確認：「🟡 Approval Status Unknown … <工具> may be waiting for approval, but this could not be confirmed (no result after N seconds)」）。
+  兩者原為中文，使用者於 2026-11-18 真實驗收後要求改為英文，與其他內建範本一致。
+- 替代方案：把訊息放進設定檔的鍵值。不採用——多行訊息在 `key=value` 檔裡難以編輯。
+
+### 6. 狀態檔清理
+
+- `wait.py` 啟動檢查時順便清理：`state/` 內符合通知自有命名規則、超過 7 天、且鎖沒有被持有的檔案（Codex 的 `.lock`／`.json`／`.request.json` 成組處理，
+  以及延遲確認的等待標記）。沿用既有的非阻塞 `flock` 檢查。
+- 不在檢查結束時立即刪除，因為 `status` 會讀最近的狀態檔顯示支援情況。
+- 替代方案：安裝或更新時才清。不採用——使用者不常跑更新，檔案仍會累積。
+
+### 7. TDD 策略與測試邊界
+
+- 先把現有訊息錄成基準（golden）：對每種事件以 `TELEGRAM_DRY_RUN=true` 取得目前輸出，寫成測試；之後的範本化必須讓這些測試維持通過。
+  這一步是行為不變的重構，Red 來自「範本檔不存在時測試失敗」。
+- 行為變更各自先寫失敗測試：四類開關與舊鍵相容、Claude 類型分流、Antigravity 終止原因、延遲確認（把延遲設成 1 秒）、狀態檔清理。
+- 測試邊界：全部在暫時的 HOME 與假資料下執行，不送真實 Telegram、不連真實 daemon（沿用既有的假 daemon 中繼資料）。
+  Claude 與 Codex 的 Session 紀錄以最小的假紀錄檔代表「有結果」與「沒有結果」。
+- 無法自動化的部分另列可重播的驗收步驟並記錄實際結果：三個工具各一次真實的授權等待（等超過延遲、在延遲內回應各一次）、
+  Antigravity 一次真實的正常完成。
+
+## Risks / Trade-offs
+
+- [Codex daemon 不可連時，已核准但執行超過延遲時間的指令會收到一則「無法確認」的通知] → 使用者已接受（D-004）；通知文字不宣稱正在等待；
+  三天資料中 226 次只有 1 次超過 30 秒；延遲可調；文件寫明。
+- [工具不提供請求識別，緊接的第二段等待被併入前一段] → 固定的合併政策與重新武裝時間（決策 3），限制寫入文件；第 1 組先確認各工具實際能提供的訊號。
+- [背景檢查與新的起始訊號同時發生] → 以 Session 為單位的鎖讓比對與動作成為一步；測試以持有鎖的方式重現交錯。
+- [Claude Code 的 `permission_prompt` 實際觸發時機與輸入欄位未以真實資料確認] → tasks 第 1 組先擷取真實輸入；若沒有 `transcript_path` 或類型欄位，改以不延遲送出並回報，不猜測。
+- [Antigravity 等待期間狀態列是否持續回報、解除時是否一定回報 false] → 任務 1.3 已觀察：等待期間不持續回報，解除時一定再回報一次（欄位消失）；
+  實作把「不是 true」都視為解除，所以核准、拒絕、取消都會清除標記。
+- [hook 結束後背景檢查被工具終止] → 沿用 `handoff-route` 已驗證的脫離方式；測試以「hook 立即返回而訊息稍後出現」驗證。
+- [範本被使用者改壞導致 Telegram 拒收] → 值會跳脫；送出失敗時不重試、不阻擋工具（既有行為）；`status` 顯示正在使用的使用者範本。
+- [移除立即通知是行為改變] → 延遲設為 0 可回到立即通知；文件與選單說明寫明。
+- [舊鍵相容的取值順序複雜] → 以表格化的測試涵蓋每一種組合，含同來源一真一假、未定義、無效值，以及第一次選單儲存後的設定檔。
+- [合併開關改變既有偏好（Codex 授權通知被重新開啟）] → 使用者已接受（D-005）；文件與選單說明寫明，更新說明提醒可關閉「授權要求」。
+
+## Migration Plan
+
+1. 合併後執行 `scripts/notify/telegram/update.sh` 重新部署 hook、對照表與內建範本；hook 的登記指令不變，Codex 不需重新信任。
+2. 既有設定檔不需修改：新鍵不存在時讀舊鍵。使用者下次在選單儲存分類時才改寫成新鍵。
+3. 回復：重新部署前一版的 hook 即可；新鍵對舊版 hook 無作用，舊鍵若已被選單移除，需在選單重新設定一次。
+
+## Open Questions
+
+- `TERMINAL_STEP_TYPE` 是否也應視為正常完成：先歸為停止並顯示標籤，取得真實資料後再調整對照表（只改資料，不影響做法）。
+- auto_review 審核期間 daemon 是否短暫標成 `waitingOnApproval`：不影響設計，延遲確認對兩種情況都成立；第 1 組順便記錄。

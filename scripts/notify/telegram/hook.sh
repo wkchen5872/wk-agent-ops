@@ -8,7 +8,8 @@
 
 # ── Load config ────────────────────────────────────────────────────────────────
 # Save env vars that should take priority over config file values (e.g., in tests).
-_NOTIFY_ENV_KEYS=(NOTIFY_LEVEL NOTIFY_COMPLETION NOTIFY_ACTION_REQUIRED NOTIFY_FAILURE NOTIFY_CODEX_HUMAN_APPROVAL NOTIFY_CODEX_USER_INPUT)
+# Category switches are resolved by config.sh, which keeps env and file apart.
+_NOTIFY_ENV_KEYS=(NOTIFY_LEVEL NOTIFY_AUTHORIZATION_DELAY_SECONDS NOTIFY_AUTHORIZATION_REARM_SECONDS)
 _NOTIFY_ENV_VALUES=()
 for _notify_key in "${_NOTIFY_ENV_KEYS[@]}"; do
   _NOTIFY_ENV_VALUES+=("${!_notify_key:-}")
@@ -16,6 +17,10 @@ done
 NOTIFY_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=../lib/config.sh
 source "${NOTIFY_SCRIPT_DIR}/../lib/config.sh" 2>/dev/null || true
+# shellcheck source=../lib/template.sh
+source "${NOTIFY_SCRIPT_DIR}/../lib/template.sh" 2>/dev/null || true
+# shellcheck source=../lib/authorization.sh
+source "${NOTIFY_SCRIPT_DIR}/../lib/authorization.sh" 2>/dev/null || true
 # shellcheck source=/dev/null
 source "${HOME}/.config/ai-notify/config" 2>/dev/null || true
 # Restore explicitly-set env vars (env var > config file, following Unix convention).
@@ -131,23 +136,24 @@ fi
 TITLE_SUFFIX=""
 [[ -n "${SESSION_LABEL}" ]] && TITLE_SUFFIX=" (${SESSION_LABEL})"
 
-# This branch is independent of the legacy Action Required delivery filter.
+# Permission hooks serve authorization; question hooks serve user input.
 start_codex_inspection() {
   [[ "${TELEGRAM_ENABLED:-}" == true && "${TELEGRAM_DRY_RUN:-}" != true ]] || return 0
-  if ! notify_category_enabled NOTIFY_CODEX_HUMAN_APPROVAL &&
-     ! notify_category_enabled NOTIFY_CODEX_USER_INPUT; then return 0; fi
+  notify_category_enabled "$1" || return 0
   local python="${HOME}/.config/ai-notify/runtime/codex-wait/bin/python3"
   local checker="${NOTIFY_SCRIPT_DIR}/codex-wait.py" trigger
   [[ -x "${python}" && -f "${checker}" ]] || return 0
   command -v jq >/dev/null 2>&1 || return 0
-  trigger="$(printf '%s' "${STDIN_JSON}" | jq -c '{session_id,turn_id,cwd}' 2>/dev/null)" || return 0
+  trigger="$(printf '%s' "${STDIN_JSON}" | jq -c --arg kind "$2" \
+    '{session_id,turn_id,cwd,tool_name,transcript_path,kind:$kind}' 2>/dev/null)" || return 0
   printf '%s' "${trigger}" | "${python}" "${checker}" start >/dev/null 2>&1 || true
 }
 
 case "${EVENT_TYPE}" in
-  codex-permission) start_codex_inspection ;;
+  # The checker confirms Codex waits after the delay; nothing is sent when the request is raised.
+  codex-permission) start_codex_inspection NOTIFY_AUTHORIZATION permission; finish_hook ;;
   codex-question)
-    [[ "$(_json_str "${STDIN_JSON}" tool_name)" == request_user_input_async ]] || start_codex_inspection
+    [[ "$(_json_str "${STDIN_JSON}" tool_name)" == request_user_input_async ]] || start_codex_inspection NOTIFY_USER_INPUT question
     finish_hook
     ;;
   codex-async-question)
@@ -160,56 +166,87 @@ case "${EVENT_TYPE}" in
     ;;
 esac
 
-# ── Antigravity approval transition ───────────────────────────────────────────
-if [[ "${EVENT_TYPE}" == "antigravity-statusline" ]]; then
-  AGY_CONFIRMATION_PENDING="$(_json_query "${STDIN_JSON}" 'if .tool_confirmation_pending == true then "true" else "false" end')"
-  AGY_STATE_KEY="$(printf '%s' "${SESSION_ID:-default}" | tr -cd '[:alnum:]_.-')"
-  [[ -z "${AGY_STATE_KEY}" ]] && AGY_STATE_KEY="default"
-  AGY_STATE_DIR="${HOME}/.config/ai-notify/state"
-  AGY_STATE_FILE="${AGY_STATE_DIR}/antigravity-${AGY_STATE_KEY}.pending"
-
-  if [[ "${AGY_CONFIRMATION_PENDING}" != "true" ]]; then
-    rm -f -- "${AGY_STATE_FILE}"
-    finish_hook
-  fi
-
-  [[ -f "${AGY_STATE_FILE}" ]] && finish_hook
-  mkdir -p "${AGY_STATE_DIR}"
-  chmod 700 "${AGY_STATE_DIR}" 2>/dev/null || true
-  : > "${AGY_STATE_FILE}"
-  chmod 600 "${AGY_STATE_FILE}" 2>/dev/null || true
-fi
-
-# Antigravity Stop is meaningful only after all background work is idle.
-AGY_TERMINATION_REASON=""
-if [[ "${EVENT_TYPE}" == "antigravity-stop" ]]; then
-  AGY_FULLY_IDLE="$(_json_query "${STDIN_JSON}" 'if .fullyIdle == true then "true" else "false" end')"
-  [[ "${AGY_FULLY_IDLE}" != "true" ]] && finish_hook
-  AGY_TERMINATION_REASON="$(_json_str "${STDIN_JSON}" "terminationReason")"
-fi
-
-# Classify provider spellings once, then apply one semantic policy gate.
-EVENT_CATEGORY="unknown"
+# ── Authorization waits: resolution evidence and turn ends clear the marker ────
+# These run before any switch or delivery guard, so a disabled Telegram still clears.
+SESSION_KEY="$(printf '%s' "${SESSION_ID:-default}" | tr -cd '[:alnum:]_.-')"
+[[ -z "${SESSION_KEY}" ]] && SESSION_KEY="default"
 case "${EVENT_TYPE}" in
-  stop|sessionend|codex-stop) EVENT_CATEGORY="completion" ;;
-  notification|userpromptsubmitted|codex-permission|antigravity-statusline) EVENT_CATEGORY="action_required" ;;
-  codex-human-approval) EVENT_CATEGORY="human_approval" ;;
-  codex-user-input) EVENT_CATEGORY="user_input" ;;
-  antigravity-stop)
-    if [[ "${AGY_TERMINATION_REASON}" == "model_stop" ]]; then
-      EVENT_CATEGORY="completion"
-    else
-      EVENT_CATEGORY="failure"
+  stop) auth_clear "$(auth_marker claude "${SESSION_KEY}")" ;;
+  antigravity-stop) auth_clear "$(auth_marker antigravity "${SESSION_KEY}")" ;;
+  antigravity-statusline)
+    if [[ "$(_json_query "${STDIN_JSON}" 'if .tool_confirmation_pending == true then "true" else "false" end')" != "true" ]]; then
+      auth_clear "$(auth_marker antigravity "${SESSION_KEY}")"
+      finish_hook
     fi
     ;;
 esac
 
+# Antigravity Stop is meaningful only after all background work is idle.
+EVENT_KEY="${EVENT_TYPE}"
+if [[ "${EVENT_TYPE}" == "antigravity-stop" ]]; then
+  AGY_FULLY_IDLE="$(_json_query "${STDIN_JSON}" 'if .fullyIdle == true then "true" else "false" end')"
+  [[ "${AGY_FULLY_IDLE}" != "true" ]] && finish_hook
+  AGY_TERMINATION_REASON="$(_json_str "${STDIN_JSON}" "terminationReason" | tr '[:upper:]' '[:lower:]')"
+  EVENT_KEY="antigravity-stop:${AGY_TERMINATION_REASON}"
+fi
+# Claude Code: the last tool call without a result in the session record.
+# Prints "<id><TAB><tool name>"; fails when the record cannot be read.
+claude_pending_call() {
+  [[ -r "$1" ]] && command -v jq >/dev/null 2>&1 || return 1
+  tail -n 400 "$1" | jq -Rrn '
+    [inputs | fromjson? | .message.content? | arrays | .[] | objects] as $items
+    | [$items[] | select(.type == "tool_result") | .tool_use_id] as $done
+    | [$items[] | select(.type == "tool_use") | select(.id as $id | $done | any(. == $id) | not)]
+    | last | select(. != null) | "\(.id)\t\(.name // "")"' 2>/dev/null
+}
+
+# claude_has_result <record> <tool_use id> — a tool_result for that id, matched structurally.
+# grep only narrows the lines; jq decides, so JSON spacing does not matter.
+claude_has_result() {
+  command -v jq >/dev/null 2>&1 || return 1
+  grep -F -- "$2" "$1" 2>/dev/null | jq -Rne --arg id "$2" '
+    [inputs | fromjson? | .message.content? | arrays | .[] | objects
+     | select(.type == "tool_result" and .tool_use_id == $id)] | length > 0' >/dev/null 2>&1
+}
+
+# Claude Code tells notification kinds apart by notification_type. A permission prompt
+# for AskUserQuestion is a question, not an authorization wait (D-002).
+if [[ "${EVENT_TYPE}" == "notification" ]]; then
+  NOTIFICATION_TYPE="$(_json_str "${STDIN_JSON}" "notification_type" | tr '[:upper:]' '[:lower:]')"
+  [[ -n "${NOTIFICATION_TYPE}" ]] && EVENT_KEY="notification:${NOTIFICATION_TYPE}"
+  if [[ "${NOTIFICATION_TYPE}" == "permission_prompt" ]]; then
+    CLAUDE_TRANSCRIPT="$(_json_str "${STDIN_JSON}" "transcript_path")"
+    CLAUDE_CALL="$(claude_pending_call "${CLAUDE_TRANSCRIPT}")" || CLAUDE_CALL=""
+    CLAUDE_CALL_ID="$(printf '%s' "${CLAUDE_CALL%%$'\t'*}" | tr -cd '[:alnum:]_-' | cut -c1-128)"
+    CLAUDE_CALL_TOOL="$(printf '%s' "${CLAUDE_CALL#*$'\t'}" | tr -cd '[:alnum:]_.:-' | cut -c1-64)"
+    [[ -z "${CLAUDE_CALL}" ]] && CLAUDE_CALL_TOOL=""
+    [[ "${CLAUDE_CALL_TOOL}" == "AskUserQuestion" ]] && EVENT_KEY="notification:question"
+  fi
+fi
+
+# ── Resolve the event through the data table ──────────────────────────────────
+# Row: key, category, template, reason label. "<prefix>:*" catches unlisted details.
+EVENT_CATEGORY="unknown"
+EVENT_TEMPLATE="generic"
+EVENT_REASON=""
+lookup_event() {
+  local table="${NOTIFY_SCRIPT_DIR}/events.tsv" key category template reason
+  [[ -r "${table}" ]] || return 1
+  while IFS=$'\t' read -r key category template reason; do
+    [[ "${key}" == "$1" ]] || continue
+    EVENT_CATEGORY="${category}"; EVENT_TEMPLATE="${template:-generic}"; EVENT_REASON="${reason}"
+    return 0
+  done < "${table}"
+  return 1
+}
+lookup_event "${EVENT_KEY}" || { [[ "${EVENT_KEY}" == *:* ]] && lookup_event "${EVENT_KEY%%:*}:*"; } || true
+
 case "${EVENT_CATEGORY}" in
   completion) notify_category_enabled NOTIFY_COMPLETION || finish_hook ;;
-  action_required) notify_category_enabled NOTIFY_ACTION_REQUIRED || finish_hook ;;
+  authorization) notify_category_enabled NOTIFY_AUTHORIZATION || finish_hook ;;
+  user_input) notify_category_enabled NOTIFY_USER_INPUT || finish_hook ;;
   failure) notify_category_enabled NOTIFY_FAILURE || finish_hook ;;
-  human_approval) notify_category_enabled NOTIFY_CODEX_HUMAN_APPROVAL || finish_hook ;;
-  user_input) notify_category_enabled NOTIFY_CODEX_USER_INPUT || finish_hook ;;
+  none) finish_hook ;;
   *) [[ "${NOTIFY_LEVEL}" == attention_required ]] && finish_hook ;;
 esac
 
@@ -221,131 +258,135 @@ if [[ "${TELEGRAM_DRY_RUN:-}" != "true" ]]; then
   [[ -z "${TELEGRAM_CHAT_ID:-}" ]] && finish_hook
 fi
 
-# ── Hook event tag (appended to message line) ─────────────────────────────────
-EVENT_TAG="#${HOOK_EVENT_NAME:-${EVENT_TYPE:-unknown}}"
+# ── Template values ───────────────────────────────────────────────────────────
+AUTH_DELAY="$(auth_seconds "${NOTIFY_AUTHORIZATION_DELAY_SECONDS:-}" 30)"
+AUTH_REARM="$(auth_seconds "${NOTIFY_AUTHORIZATION_REARM_SECONDS:-}" 600)"
+tpl_title_suffix="${TITLE_SUFFIX}"
+tpl_tool="${TOOL_NAME}"
+tpl_project="${PROJECT_NAME}"
+tpl_time="${TIMESTAMP}"
+tpl_tag="#${HOOK_EVENT_NAME:-${EVENT_TYPE:-unknown}}"
+tpl_reason="${EVENT_REASON}"
+tpl_delay="${AUTH_DELAY}"
+tpl_message=""
+[[ -n "${STDIN_JSON}" ]] && tpl_message="$(_json_str "${STDIN_JSON}" "message")"
+[[ -z "${tpl_message}" ]] && tpl_message="Waiting for user interaction..."
+# Only a generic tool label ever reaches a message, never its input.
+tpl_request_tool=""
+[[ -n "${STDIN_JSON}" ]] && tpl_request_tool="$(_json_str "${STDIN_JSON}" "tool_name" | tr -cd '[:alnum:]_.:-' | cut -c1-64)"
+[[ -z "${tpl_request_tool}" ]] && tpl_request_tool="a tool"
 
-# ── Build message ──────────────────────────────────────────────────────────────
-MESSAGE=""
+# deliver <template> — render and send; dry-run prints instead.
+# Authorization notices carry metadata only, whatever a user template asks for.
+deliver() {
+  local text
+  case "$1" in
+    authorization*) local tpl_message="" tpl_reason="" ;;
+  esac
+  text="$(notify_render "$1" "${NOTIFY_SCRIPT_DIR}/templates")" ||
+    text="$(notify_render generic "${NOTIFY_SCRIPT_DIR}/templates")" || return 0
+  if [[ "${TELEGRAM_DRY_RUN:-}" == "true" ]]; then
+    printf '%s\n' "${text}"
+    return 0
+  fi
+  curl \
+    --silent \
+    --max-time 4 \
+    --output /dev/null \
+    -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+    -d "chat_id=${TELEGRAM_CHAT_ID}" \
+    -d "parse_mode=Markdown" \
+    --data-urlencode "text=${text}" \
+    || true
+}
 
-case "${EVENT_TYPE}" in
-  stop|sessionend|codex-stop)
-    MESSAGE="🟢 **Task Complete**${TITLE_SUFFIX}
+# ── Delayed authorization confirmation (notify-authorization-wait) ─────────────
 
-🤖 ${TOOL_NAME}
-📂 ${PROJECT_NAME}
-⏰ ${TIMESTAMP}
+# auth_verdict <provider> — pending, resolved, or unknown for the wait in AUTH_*.
+auth_verdict() {
+  case "$1" in
+    claude)
+      [[ -r "${CLAUDE_TRANSCRIPT}" ]] || { echo unknown; return; }
+      if [[ "${AUTH_IDED}" == 1 ]]; then
+        claude_has_result "${CLAUDE_TRANSCRIPT}" "${AUTH_ID}" && echo resolved || echo pending
+      else
+        local call
+        call="$(claude_pending_call "${CLAUDE_TRANSCRIPT}")" || { echo unknown; return; }
+        [[ -n "${call}" ]] && echo pending || echo resolved
+      fi
+      ;;
+    *) echo pending ;;  # Antigravity: the marker survives only while no false status arrived.
+  esac
+}
 
-Process finished successfully ${EVENT_TAG}"
-    ;;
+# The background check acts only on the wait it was started for (design decision 3).
+authorization_check() {
+  local provider="$1" marker="$2" id="$3" verdict now
+  sleep "${AUTH_DELAY}"
+  auth_lock "${marker}" 100 || return 0
+  if ! auth_read "${marker}" || [[ "${AUTH_ID}" != "${id}" || "${AUTH_NOTIFIED}" -gt 0 ]]; then
+    auth_unlock "${marker}"
+    return 0
+  fi
+  verdict="$(auth_verdict "${provider}")"
+  now="$(date +%s)"
+  if [[ "${verdict}" == resolved ]]; then
+    rm -f -- "${marker}"
+    auth_unlock "${marker}"
+    return 0
+  fi
+  auth_write "${marker}" "${AUTH_ID}" "${AUTH_IDED}" "${AUTH_STARTED}" "${now}" "${AUTH_TOOL}"
+  auth_unlock "${marker}"
+  # The network call happens outside the lock.
+  tpl_time="$(date '+%Y-%m-%d %H:%M:%S')"
+  tpl_request_tool="${AUTH_TOOL:-a tool}"
+  if [[ "${verdict}" == pending ]]; then deliver authorization; else deliver authorization-unconfirmed; fi
+}
 
-  antigravity-stop)
-    if [[ "${AGY_TERMINATION_REASON}" == "model_stop" ]]; then
-      MESSAGE="🟢 **Task Complete**${TITLE_SUFFIX}
-
-🤖 ${TOOL_NAME}
-📂 ${PROJECT_NAME}
-⏰ ${TIMESTAMP}
-
-Process finished successfully ${EVENT_TAG}"
-    else
-      case "${AGY_TERMINATION_REASON}" in
-        error) STOP_REASON="error" ;;
-        max_steps_exceeded) STOP_REASON="max steps exceeded" ;;
-        *) STOP_REASON="execution stopped" ;;
-      esac
-      MESSAGE="🔴 **Task Stopped**${TITLE_SUFFIX}
-
-🤖 ${TOOL_NAME}
-📂 ${PROJECT_NAME}
-⏰ ${TIMESTAMP}
-
-Execution ended: ${STOP_REASON} ${EVENT_TAG}"
+# authorization_start <provider> <identity or empty> <tool label>
+authorization_start() {
+  local provider="$1" identity="$2" label="${3:-a tool}" marker now id ided=0 verdict
+  marker="$(auth_marker "${provider}" "${SESSION_KEY}")"
+  auth_lock "${marker}" 30 || return 0
+  now="$(date +%s)"
+  if [[ "$(auth_decide "${marker}" "${identity}" "${AUTH_REARM}" "${now}")" != new ]]; then
+    auth_unlock "${marker}"
+    return 0
+  fi
+  id="${identity}"
+  [[ -n "${id}" ]] && ided=1 || id="$(auth_new_id)"
+  if [[ "${AUTH_DELAY}" -eq 0 ]]; then
+    # Delay 0 changes the timing only; the evidence and wording rules still apply.
+    AUTH_ID="${id}" AUTH_IDED="${ided}"
+    verdict="$(auth_verdict "${provider}")"
+    if [[ "${verdict}" == resolved ]]; then
+      rm -f -- "${marker}"
+      auth_unlock "${marker}"
+      return 0
     fi
+    auth_write "${marker}" "${id}" "${ided}" "${now}" "${now}" "${label}"
+    auth_unlock "${marker}"
+    tpl_request_tool="${label}"
+    if [[ "${verdict}" == pending ]]; then deliver authorization; else deliver authorization-unconfirmed; fi
+    return 0
+  fi
+  auth_write "${marker}" "${id}" "${ided}" "${now}" 0 "${label}"
+  auth_unlock "${marker}"
+  [[ "${TELEGRAM_DRY_RUN:-}" == "true" ]] && return 0
+  ( authorization_check "${provider}" "${marker}" "${id}" ) </dev/null >/dev/null 2>&1 &
+  disown 2>/dev/null || true
+}
+
+case "${EVENT_KEY}" in
+  notification:permission_prompt)
+    authorization_start claude "${CLAUDE_CALL_ID}" "${CLAUDE_CALL_TOOL}"
+    finish_hook
     ;;
-
-  codex-human-approval|codex-user-input)
-    if [[ "${EVENT_TYPE}" == codex-human-approval ]]; then
-      WAIT_TITLE='🔴 **等待你授權**'
-      WAIT_DESCRIPTION='Codex 正在等待人工授權。'
-    else
-      WAIT_TITLE='🟡 **Waiting for Your Response**'
-      WAIT_DESCRIPTION='Codex has a question awaiting your response.'
-    fi
-    MESSAGE="${WAIT_TITLE}${TITLE_SUFFIX}
-
-🤖 ${TOOL_NAME}
-📂 ${PROJECT_NAME}
-⏰ ${TIMESTAMP}
-
-${WAIT_DESCRIPTION} ${EVENT_TAG}"
-    ;;
-
-  codex-permission)
-    REQUEST_TOOL=""
-    [[ -n "${STDIN_JSON}" ]] && REQUEST_TOOL="$(_json_str "${STDIN_JSON}" "tool_name")"
-    [[ -z "${REQUEST_TOOL}" ]] && REQUEST_TOOL="a tool"
-
-    MESSAGE="🟡 **Action Required**${TITLE_SUFFIX}
-
-🤖 ${TOOL_NAME}
-📂 ${PROJECT_NAME}
-⏰ ${TIMESTAMP}
-
-Approval requested for ${REQUEST_TOOL} ${EVENT_TAG}"
-    ;;
-
   antigravity-statusline)
-    MESSAGE="🟡 **Action Required**${TITLE_SUFFIX}
-
-🤖 ${TOOL_NAME}
-📂 ${PROJECT_NAME}
-⏰ ${TIMESTAMP}
-
-Tool confirmation is waiting ${EVENT_TAG}"
-    ;;
-
-  notification|userpromptsubmitted)
-    NOTIFICATION_MSG=""
-    [[ -n "${STDIN_JSON}" ]] && NOTIFICATION_MSG="$(_json_str "${STDIN_JSON}" "message")"
-
-    [[ -z "${NOTIFICATION_MSG}" ]] && NOTIFICATION_MSG="Waiting for user interaction..."
-
-    MESSAGE="🟡 **Action Required**${TITLE_SUFFIX}
-
-🤖 ${TOOL_NAME}
-📂 ${PROJECT_NAME}
-⏰ ${TIMESTAMP}
-
-${NOTIFICATION_MSG} ${EVENT_TAG}"
-    ;;
-
-  *)
-    MESSAGE="🤖 **AI CLI Event**
-
-🤖 ${TOOL_NAME}
-📂 ${PROJECT_NAME}
-⏰ ${TIMESTAMP}
-
-${EVENT_TAG}"
+    authorization_start antigravity "" ""
+    finish_hook
     ;;
 esac
 
-# ── Send via Telegram Bot API (or dry-run) ─────────────────────────────────────
-if [[ "${TELEGRAM_DRY_RUN:-}" == "true" ]]; then
-  echo "${MESSAGE}"
-  finish_hook
-fi
-
-TELEGRAM_API="https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage"
-
-curl \
-  --silent \
-  --max-time 4 \
-  --output /dev/null \
-  -X POST "${TELEGRAM_API}" \
-  -d "chat_id=${TELEGRAM_CHAT_ID}" \
-  -d "parse_mode=Markdown" \
-  --data-urlencode "text=${MESSAGE}" \
-  || true
-
+deliver "${EVENT_TEMPLATE}"
 finish_hook

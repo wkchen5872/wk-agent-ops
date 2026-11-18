@@ -252,15 +252,13 @@ run_test \
 
 # [CODEX-02] PermissionRequest → action required without raw tool input
 CODEX_PERMISSION_PAYLOAD='{"hook_event_name":"PermissionRequest","session_id":"codex-session","cwd":"/tmp/codex-project","tool_name":"Bash","tool_input":{"command":"rm -rf /private/secret","description":"delete private secret"},"transcript_path":"/private/transcript.jsonl"}'
-run_test \
-  "CODEX-02: PermissionRequest → Action Required" \
-  "Action Required" \
+run_test_empty \
+  "CODEX-02: PermissionRequest sends nothing when it is raised" \
   bash -c "printf '%s' '${CODEX_PERMISSION_PAYLOAD}' | bash '${HOOK}' codex-permission 'Codex'"
 
-run_test \
-  "CODEX-02: PermissionRequest → tool name only" \
-  "Approval requested for Bash" \
-  bash -c "printf '%s' '${CODEX_PERMISSION_PAYLOAD}' | bash '${HOOK}' codex-permission 'Codex'"
+run_test_empty \
+  "CODEX-02: PermissionRequest sends nothing even with delay 0 (the checker owns Codex waits)" \
+  env NOTIFY_AUTHORIZATION_DELAY_SECONDS=0 bash -c "printf '%s' '${CODEX_PERMISSION_PAYLOAD}' | bash '${HOOK}' codex-permission 'Codex'"
 
 run_test_absent \
   "CODEX-02: PermissionRequest hides raw command" \
@@ -354,9 +352,9 @@ run_test \
   env NOTIFY_LEVEL=attention_required bash "${HOOK}" notification "Claude Code"
 
 run_test \
-  "LEVEL-04: attention_required allows Codex action required" \
-  "Action Required" \
-  env NOTIFY_LEVEL=attention_required bash -c "printf '%s' '${CODEX_PERMISSION_PAYLOAD}' | bash '${HOOK}' codex-permission 'Codex'"
+  "LEVEL-04: attention_required allows a confirmed Codex authorization wait" \
+  "Waiting for Your Approval" \
+  env NOTIFY_LEVEL=attention_required bash -c "printf '%s' '{\"hook_event_name\":\"HumanApprovalWaiting\",\"cwd\":\"/tmp/p\"}' | bash '${HOOK}' codex-human-approval 'Codex'"
 
 run_test \
   "LEVEL-04: attention_required allows Copilot action required" \
@@ -389,25 +387,26 @@ run_test_exact \
   env HOME="${NATIVE_HOME}" bash -c "printf '%s' '${AGY_STOP_PAYLOAD}' | bash '${HOOK}' antigravity-stop 'Antigravity CLI'"
 
 # [AGY-STATUS-01] Pending transition is deduplicated and reset by false.
+# Delay 0 keeps the sequence immediate; delayed timing lives in tests/test_authorization_wait.py.
 AGY_STATUS_HOME="${TEST_TMP_ROOT}/agy-status-home"
 mkdir -p "${AGY_STATUS_HOME}"
 AGY_STATUS_TRUE='{"cwd":"/tmp/agy-project","conversation_id":"status-conversation","agent_state":"tool_use","tool_confirmation_pending":true,"email":"private@example.com"}'
 AGY_STATUS_FALSE='{"cwd":"/tmp/agy-project","conversation_id":"status-conversation","agent_state":"idle","tool_confirmation_pending":false,"email":"private@example.com"}'
 
-AGY_STATUS_FIRST="$(TELEGRAM_DRY_RUN=true HOME="${AGY_STATUS_HOME}" bash -c "printf '%s' '${AGY_STATUS_TRUE}' | bash '${HOOK}' antigravity-statusline 'Antigravity CLI'" 2>/dev/null)"
-AGY_STATUS_REPEAT="$(TELEGRAM_DRY_RUN=true HOME="${AGY_STATUS_HOME}" bash -c "printf '%s' '${AGY_STATUS_TRUE}' | bash '${HOOK}' antigravity-statusline 'Antigravity CLI'" 2>/dev/null)"
-AGY_STATUS_RESET="$(TELEGRAM_DRY_RUN=true HOME="${AGY_STATUS_HOME}" bash -c "printf '%s' '${AGY_STATUS_FALSE}' | bash '${HOOK}' antigravity-statusline 'Antigravity CLI'" 2>/dev/null)"
-AGY_STATUS_AFTER_RESET="$(TELEGRAM_DRY_RUN=true HOME="${AGY_STATUS_HOME}" bash -c "printf '%s' '${AGY_STATUS_TRUE}' | bash '${HOOK}' antigravity-statusline 'Antigravity CLI'" 2>/dev/null)"
+AGY_STATUS_FIRST="$(TELEGRAM_DRY_RUN=true NOTIFY_AUTHORIZATION_DELAY_SECONDS=0 HOME="${AGY_STATUS_HOME}" bash -c "printf '%s' '${AGY_STATUS_TRUE}' | bash '${HOOK}' antigravity-statusline 'Antigravity CLI'" 2>/dev/null)"
+AGY_STATUS_REPEAT="$(TELEGRAM_DRY_RUN=true NOTIFY_AUTHORIZATION_DELAY_SECONDS=0 HOME="${AGY_STATUS_HOME}" bash -c "printf '%s' '${AGY_STATUS_TRUE}' | bash '${HOOK}' antigravity-statusline 'Antigravity CLI'" 2>/dev/null)"
+AGY_STATUS_RESET="$(TELEGRAM_DRY_RUN=true NOTIFY_AUTHORIZATION_DELAY_SECONDS=0 HOME="${AGY_STATUS_HOME}" bash -c "printf '%s' '${AGY_STATUS_FALSE}' | bash '${HOOK}' antigravity-statusline 'Antigravity CLI'" 2>/dev/null)"
+AGY_STATUS_AFTER_RESET="$(TELEGRAM_DRY_RUN=true NOTIFY_AUTHORIZATION_DELAY_SECONDS=0 HOME="${AGY_STATUS_HOME}" bash -c "printf '%s' '${AGY_STATUS_TRUE}' | bash '${HOOK}' antigravity-statusline 'Antigravity CLI'" 2>/dev/null)"
 AGY_STATUS_SEQUENCE="${AGY_STATUS_FIRST}
 ${AGY_STATUS_REPEAT}
 ${AGY_STATUS_RESET}
 ${AGY_STATUS_AFTER_RESET}"
 
-if [[ "$(printf '%s\n' "${AGY_STATUS_SEQUENCE}" | grep -c "Action Required")" -eq 2 ]]; then
+if [[ "$(printf '%s\n' "${AGY_STATUS_SEQUENCE}" | grep -c "Waiting for Your Approval\*\*")" -eq 2 ]]; then
   echo "  ✓ PASS: AGY-STATUS-01: true/repeat/false/true notifies exactly twice"
   PASS_COUNT=$((PASS_COUNT + 1))
 else
-  echo "  ✗ FAIL: AGY-STATUS-01: expected exactly two Action Required notifications"
+  echo "  ✗ FAIL: AGY-STATUS-01: expected exactly two authorization notifications"
   echo "    actual output: ${AGY_STATUS_SEQUENCE:-<empty>}"
   FAIL_COUNT=$((FAIL_COUNT + 1))
 fi
@@ -436,10 +435,10 @@ run_test_exact \
 
 AGY_ATTENTION_HOME="${TEST_TMP_ROOT}/agy-attention-home"
 mkdir -p "${AGY_ATTENTION_HOME}"
-AGY_ATTENTION_FIRST="$(TELEGRAM_DRY_RUN=true NOTIFY_LEVEL=attention_required HOME="${AGY_ATTENTION_HOME}" bash -c "printf '%s' '${AGY_STATUS_TRUE}' | bash '${HOOK}' antigravity-statusline 'Antigravity CLI'" 2>/dev/null)"
-AGY_ATTENTION_REPEAT="$(TELEGRAM_DRY_RUN=true NOTIFY_LEVEL=attention_required HOME="${AGY_ATTENTION_HOME}" bash -c "printf '%s' '${AGY_STATUS_TRUE}' | bash '${HOOK}' antigravity-statusline 'Antigravity CLI'" 2>/dev/null)"
-AGY_ATTENTION_RESET="$(TELEGRAM_DRY_RUN=true NOTIFY_LEVEL=attention_required HOME="${AGY_ATTENTION_HOME}" bash -c "printf '%s' '${AGY_STATUS_FALSE}' | bash '${HOOK}' antigravity-statusline 'Antigravity CLI'" 2>/dev/null)"
-AGY_ATTENTION_AFTER_RESET="$(TELEGRAM_DRY_RUN=true NOTIFY_LEVEL=attention_required HOME="${AGY_ATTENTION_HOME}" bash -c "printf '%s' '${AGY_STATUS_TRUE}' | bash '${HOOK}' antigravity-statusline 'Antigravity CLI'" 2>/dev/null)"
+AGY_ATTENTION_FIRST="$(TELEGRAM_DRY_RUN=true NOTIFY_AUTHORIZATION_DELAY_SECONDS=0 NOTIFY_LEVEL=attention_required HOME="${AGY_ATTENTION_HOME}" bash -c "printf '%s' '${AGY_STATUS_TRUE}' | bash '${HOOK}' antigravity-statusline 'Antigravity CLI'" 2>/dev/null)"
+AGY_ATTENTION_REPEAT="$(TELEGRAM_DRY_RUN=true NOTIFY_AUTHORIZATION_DELAY_SECONDS=0 NOTIFY_LEVEL=attention_required HOME="${AGY_ATTENTION_HOME}" bash -c "printf '%s' '${AGY_STATUS_TRUE}' | bash '${HOOK}' antigravity-statusline 'Antigravity CLI'" 2>/dev/null)"
+AGY_ATTENTION_RESET="$(TELEGRAM_DRY_RUN=true NOTIFY_AUTHORIZATION_DELAY_SECONDS=0 NOTIFY_LEVEL=attention_required HOME="${AGY_ATTENTION_HOME}" bash -c "printf '%s' '${AGY_STATUS_FALSE}' | bash '${HOOK}' antigravity-statusline 'Antigravity CLI'" 2>/dev/null)"
+AGY_ATTENTION_AFTER_RESET="$(TELEGRAM_DRY_RUN=true NOTIFY_AUTHORIZATION_DELAY_SECONDS=0 NOTIFY_LEVEL=attention_required HOME="${AGY_ATTENTION_HOME}" bash -c "printf '%s' '${AGY_STATUS_TRUE}' | bash '${HOOK}' antigravity-statusline 'Antigravity CLI'" 2>/dev/null)"
 AGY_ATTENTION_SEQUENCE="${AGY_ATTENTION_FIRST}
 ${AGY_ATTENTION_REPEAT}
 ${AGY_ATTENTION_RESET}
@@ -447,7 +446,7 @@ ${AGY_ATTENTION_AFTER_RESET}"
 assert_equal \
   "AGY-STATUS-03: attention_required notifies twice across approval resets" \
   "2" \
-  "$(printf '%s\n' "${AGY_ATTENTION_SEQUENCE}" | grep -c "Action Required")"
+  "$(printf '%s\n' "${AGY_ATTENTION_SEQUENCE}" | grep -c "Waiting for Your Approval\*\*")"
 
 AGY_DISABLED_HOME="${TEST_TMP_ROOT}/agy-disabled-home"
 mkdir -p "${AGY_DISABLED_HOME}"
@@ -458,6 +457,280 @@ assert_equal \
   "AGY-STATUS-04: disabled delivery still clears false transition" \
   "false" \
   "$([[ -f "${AGY_DISABLED_STATE}" ]] && echo true || echo false)"
+
+# ── Golden messages (built-in templates must reproduce these exactly) ─────────
+
+echo ""
+echo "── golden message Tests ──"
+echo ""
+
+# run_golden <name> <expected> <event> <tool> <payload> [VAR=value...]
+# The clock line is normalized; everything else must match byte for byte.
+run_golden() {
+  local name="$1" expected="$2" event="$3" tool="$4" payload="$5" output
+  shift 5
+  output="$(printf '%s' "${payload}" | env HOME="${TEST_TMP_ROOT}/default-home" TELEGRAM_DRY_RUN=true "$@" \
+    bash "${HOOK}" "${event}" "${tool}" 2>/dev/null | sed 's/^⏰ .*/⏰ <time>/')"
+  assert_equal "${name}" "${expected}" "${output}"
+}
+
+golden_body() {  # <title> <tool> <last line>
+  printf '%s\n\n🤖 %s\n📂 golden-project\n⏰ <time>\n\n%s' "$1" "$2" "$3"
+}
+
+GOLDEN_SESSION='"session_id":"a1b2c3d4-e5f6-7890-abcd-ef1234567890","cwd":"/tmp/golden-project"'
+run_golden "GOLDEN-01: Claude stop" \
+  "$(golden_body '🟢 **Task Complete** (#a1b2c3d4)' 'Claude Code' 'Process finished successfully #Stop')" \
+  stop 'Claude Code' "{\"hook_event_name\":\"Stop\",${GOLDEN_SESSION}}"
+run_golden "GOLDEN-02: Codex stop" \
+  "$(golden_body '🟢 **Task Complete** (#a1b2c3d4)' 'Codex' 'Process finished successfully #Stop')" \
+  codex-stop Codex "{\"hook_event_name\":\"Stop\",${GOLDEN_SESSION}}"
+run_golden "GOLDEN-03: Copilot sessionEnd" \
+  "$(golden_body '🟢 **Task Complete**' 'Copilot CLI' 'Process finished successfully #sessionend')" \
+  sessionEnd 'Copilot CLI' '{"cwd":"/tmp/golden-project"}'
+run_golden "GOLDEN-04: Codex question wait" \
+  "$(golden_body '🟡 **Waiting for Your Response** (#a1b2c3d4)' 'Codex' 'Codex has a question awaiting your response. #UserInputWaiting')" \
+  codex-user-input Codex "{\"hook_event_name\":\"UserInputWaiting\",${GOLDEN_SESSION}}" NOTIFY_CODEX_USER_INPUT=true
+run_golden "GOLDEN-05: Codex async question" \
+  "$(golden_body '🟡 **Waiting for Your Response** (#a1b2c3d4)' 'Codex' 'Codex has a question awaiting your response. #AsyncUserInputRequested')" \
+  codex-async-question Codex "{\"hook_event_name\":\"PostToolUse\",\"tool_name\":\"request_user_input_async\",\"tool_response\":{\"accepted\":true},${GOLDEN_SESSION}}" NOTIFY_CODEX_USER_INPUT=true
+run_golden "GOLDEN-06: Claude notification with message" \
+  "$(golden_body '🟡 **Action Required** (#a1b2c3d4)' 'Claude Code' 'Claude is waiting for your input #Notification')" \
+  notification 'Claude Code' "{\"hook_event_name\":\"Notification\",\"message\":\"Claude is waiting for your input\",${GOLDEN_SESSION}}"
+run_golden "GOLDEN-07: Claude notification without message" \
+  "$(golden_body '🟡 **Action Required** (#a1b2c3d4)' 'Claude Code' 'Waiting for user interaction... #Notification')" \
+  notification 'Claude Code' "{\"hook_event_name\":\"Notification\",${GOLDEN_SESSION}}"
+run_golden "GOLDEN-08: Copilot prompt submitted" \
+  "$(golden_body '🟡 **Action Required**' 'Copilot CLI' 'Waiting for user interaction... #userpromptsubmitted')" \
+  userPromptSubmitted 'Copilot CLI' '{"cwd":"/tmp/golden-project"}'
+run_golden "GOLDEN-09: Antigravity completion" \
+  "$(golden_body '🟢 **Task Complete** (#b1c2d3e4)' 'Antigravity CLI' 'Process finished successfully #antigravity-stop')" \
+  antigravity-stop 'Antigravity CLI' '{"terminationReason":"model_stop","fullyIdle":true,"conversationId":"b1c2d3e4-f5a6-7890-abcd-ef1234567890","workspacePaths":["/tmp/golden-project"]}'
+run_golden "GOLDEN-10: Antigravity stopped" \
+  "$(golden_body '🔴 **Task Stopped** (agy-golden)' 'Antigravity CLI' 'Execution ended: error #antigravity-stop')" \
+  antigravity-stop 'Antigravity CLI' '{"terminationReason":"error","error":"secret","fullyIdle":true,"conversationId":"agy-golden","workspacePaths":["/tmp/golden-project"]}'
+run_golden "GOLDEN-11: unknown event" \
+  "$(golden_body '🤖 **AI CLI Event**' 'AI CLI' '#unknown-event')" \
+  unknown-event 'AI CLI' '{"cwd":"/tmp/golden-project"}'
+
+# ── Template rendering ─────────────────────────────────────────────────────────
+
+echo ""
+echo "── template Tests ──"
+echo ""
+
+TEMPLATE_LIB="${SCRIPT_DIR}/../lib/template.sh"
+# render_text <template text> [name=value...] — renders with the given values only.
+render_text() {
+  bash -c 'source "$1" || exit 9; text="$2"; shift 2
+    for pair in "$@"; do printf -v "tpl_${pair%%=*}" "%s" "${pair#*=}"; done
+    notify_render_text "${text}"' _ "${TEMPLATE_LIB}" "$@" 2>&1
+}
+
+assert_equal "TPL-01: placeholder is replaced" \
+  "📂 fio-pv-twin done" "$(render_text '📂 {project} done' project=fio-pv-twin)"
+assert_equal "TPL-02: values are escaped for Telegram Markdown" \
+  '**Title** a\_b \*c\* \`d\` \[e' "$(render_text '**Title** {message}' 'message=a_b *c* `d` [e')"
+assert_equal "TPL-03: a line holding only empty placeholders is removed" \
+  "$(printf 'top\nbottom')" "$(render_text "$(printf 'top\n{message}\nbottom')")"
+assert_equal "TPL-03: a line with text around an empty value is kept" \
+  "$(printf 'top\nx  y\nbottom')" "$(render_text "$(printf 'top\nx {message} y\nbottom')")"
+assert_equal "TPL-04: unknown placeholder is left unchanged" \
+  "keep {nope} here" "$(render_text 'keep {nope} here')"
+assert_equal "TPL-04: a value is not substituted again" \
+  'a {tool} b' "$(render_text 'a {message} b' 'message={tool}' tool=Codex)"
+TPL_MARKER="${TEST_TMP_ROOT}/template-executed"
+assert_equal "TPL-05: shell syntax is delivered literally" \
+  "\$(touch ${TPL_MARKER}) \`touch ${TPL_MARKER}\` \${HOME}" \
+  "$(render_text "\$(touch ${TPL_MARKER}) \`touch ${TPL_MARKER}\` \${HOME}")"
+assert_equal "TPL-05: template content is never executed" \
+  "false" "$([[ -e "${TPL_MARKER}" ]] && echo true || echo false)"
+for TPL_NAME in completion stopped question action-required generic; do
+  assert_equal "TPL-06: built-in template ${TPL_NAME} exists" \
+    "true" "$([[ -s "${SCRIPT_DIR}/templates/${TPL_NAME}.md" ]] && echo true || echo false)"
+done
+
+# ── Event table ────────────────────────────────────────────────────────────────
+
+echo ""
+echo "── event table Tests ──"
+echo ""
+
+# A copy of the deployed layout whose table can be edited without touching the repo.
+TABLE_ROOT="${TEST_TMP_ROOT}/table-layout"
+mkdir -p "${TABLE_ROOT}/hooks" "${TABLE_ROOT}/lib"
+cp "${HOOK}" "${TABLE_ROOT}/hooks/telegram-notify.sh"
+cp "${SCRIPT_DIR}/../lib/"*.sh "${TABLE_ROOT}/lib/"
+cp -R "${SCRIPT_DIR}/templates" "${TABLE_ROOT}/hooks/templates" 2>/dev/null || mkdir -p "${TABLE_ROOT}/hooks/templates"
+cp "${SCRIPT_DIR}/events.tsv" "${TABLE_ROOT}/hooks/events.tsv" 2>/dev/null || : > "${TABLE_ROOT}/hooks/events.tsv"
+TABLE_HOOK="${TABLE_ROOT}/hooks/telegram-notify.sh"
+
+assert_equal "TABLE-01: repository ships the event table" \
+  "true" "$([[ -s "${SCRIPT_DIR}/events.tsv" ]] && echo true || echo false)"
+sed -i.bak 's/^codex-stop	completion	completion/codex-stop	completion	generic/' "${TABLE_ROOT}/hooks/events.tsv"
+run_test "TABLE-02: a known event resolves its template through the table" \
+  "AI CLI Event" \
+  bash -c "printf '%s' '${CODEX_STOP_PAYLOAD}' | bash '${TABLE_HOOK}' codex-stop Codex"
+run_test_empty "TABLE-02: the table category drives the switch" \
+  env NOTIFY_COMPLETION=false bash -c "printf '%s' '${CODEX_STOP_PAYLOAD}' | bash '${TABLE_HOOK}' codex-stop Codex"
+printf 'custom-event\tfailure\tcustom\n' >> "${TABLE_ROOT}/hooks/events.tsv"
+printf '🧪 custom {project}{title_suffix}\n' > "${TABLE_ROOT}/hooks/templates/custom.md"
+run_test "TABLE-03: a new kind needs only a table row and a template" \
+  "🧪 custom codex-project (#a1b2c3d4)" \
+  bash -c "printf '%s' '${CODEX_STOP_PAYLOAD}' | bash '${TABLE_HOOK}' custom-event Codex"
+run_test_empty "TABLE-03: the new kind follows its category switch" \
+  env NOTIFY_FAILURE=false bash -c "printf '%s' '${CODEX_STOP_PAYLOAD}' | bash '${TABLE_HOOK}' custom-event Codex"
+run_test "TABLE-04: an event absent from the table keeps the generic message" \
+  "AI CLI Event" \
+  bash -c "printf '%s' '${CODEX_STOP_PAYLOAD}' | bash '${TABLE_HOOK}' not-in-table Codex"
+assert_equal "TABLE-05: hook no longer builds messages in a case statement" \
+  "0" "$(grep -c 'MESSAGE="' "${HOOK}")"
+
+# ── Category resolution (design decision 2) ────────────────────────────────────
+
+echo ""
+echo "── category resolution Tests ──"
+echo ""
+
+CONFIG_LIB="${SCRIPT_DIR}/../lib/config.sh"
+CAT_HOME="${TEST_TMP_ROOT}/category-home"
+mkdir -p "${CAT_HOME}/.config/ai-notify"
+# category <KEY> <config lines separated by spaces> [VAR=value...] → resolved value
+category() {
+  local key="$1" lines="$2"; shift 2
+  printf '%s\n' ${lines} > "${CAT_HOME}/.config/ai-notify/config"
+  env -i PATH="${PATH}" HOME="${CAT_HOME}" "$@" bash -c \
+    'source "$1"; read_config; notify_category_value "$2"' _ "${CONFIG_LIB}" "${key}" 2>&1
+}
+both() {  # <config lines> [VAR=value...] → "<authorization> <user_input>"
+  printf '%s %s' "$(category NOTIFY_AUTHORIZATION "$@")" "$(category NOTIFY_USER_INPUT "$@")"
+}
+
+assert_equal "CAT-01: legacy ACTION_REQUIRED=true only" "true true" "$(both 'NOTIFY_ACTION_REQUIRED=true')"
+assert_equal "CAT-02: current machine — one legacy key on, Codex approval off" "true true" \
+  "$(both 'NOTIFY_ACTION_REQUIRED=true NOTIFY_CODEX_HUMAN_APPROVAL=false NOTIFY_CODEX_USER_INPUT=true')"
+assert_equal "CAT-03: ACTION_REQUIRED=false and Codex approval on" "true false" \
+  "$(both 'NOTIFY_ACTION_REQUIRED=false NOTIFY_CODEX_HUMAN_APPROVAL=true')"
+assert_equal "CAT-03: ACTION_REQUIRED=false follows CODEX_USER_INPUT" "true true" \
+  "$(both 'NOTIFY_ACTION_REQUIRED=false NOTIFY_CODEX_HUMAN_APPROVAL=true NOTIFY_CODEX_USER_INPUT=true')"
+assert_equal "CAT-04: every legacy key false" "false false" \
+  "$(both 'NOTIFY_ACTION_REQUIRED=false NOTIFY_CODEX_HUMAN_APPROVAL=false NOTIFY_CODEX_USER_INPUT=false')"
+assert_equal "CAT-04: ACTION_REQUIRED=false and Codex keys absent" "false false" \
+  "$(both 'NOTIFY_ACTION_REQUIRED=false')"
+assert_equal "CAT-05: nothing defined" "true true" "$(both 'TELEGRAM_ENABLED=true')"
+assert_equal "CAT-06: new key wins over legacy keys in the file" "false" \
+  "$(category NOTIFY_AUTHORIZATION 'NOTIFY_AUTHORIZATION=false NOTIFY_ACTION_REQUIRED=true')"
+assert_equal "CAT-06: quoted file value is read" "false" \
+  "$(category NOTIFY_AUTHORIZATION 'NOTIFY_AUTHORIZATION="false" NOTIFY_ACTION_REQUIRED=true')"
+assert_equal "CAT-07: environment new key beats environment legacy key" "false" \
+  "$(category NOTIFY_USER_INPUT 'TELEGRAM_ENABLED=true' NOTIFY_USER_INPUT=false NOTIFY_ACTION_REQUIRED=true)"
+assert_equal "CAT-08: environment legacy key beats the file's new key" "true" \
+  "$(category NOTIFY_USER_INPUT 'NOTIFY_USER_INPUT=false' NOTIFY_ACTION_REQUIRED=true)"
+assert_equal "CAT-09: one true and one false in the environment merge to true" "true" \
+  "$(category NOTIFY_AUTHORIZATION 'NOTIFY_AUTHORIZATION=false' NOTIFY_ACTION_REQUIRED=false NOTIFY_CODEX_HUMAN_APPROVAL=true)"
+assert_equal "CAT-10: invalid value is undefined" "false" \
+  "$(category NOTIFY_AUTHORIZATION 'NOTIFY_AUTHORIZATION=yes NOTIFY_ACTION_REQUIRED=false')"
+assert_equal "CAT-10: empty value is undefined" "true" \
+  "$(category NOTIFY_AUTHORIZATION 'NOTIFY_AUTHORIZATION= NOTIFY_ACTION_REQUIRED=true')"
+assert_equal "CAT-10: empty environment value is undefined" "false" \
+  "$(category NOTIFY_AUTHORIZATION 'NOTIFY_AUTHORIZATION=false' NOTIFY_AUTHORIZATION=)"
+assert_equal "CAT-11: failure defaults on" "true" "$(category NOTIFY_FAILURE 'TELEGRAM_ENABLED=true')"
+assert_equal "CAT-11: completion follows attention_required" "false" \
+  "$(category NOTIFY_COMPLETION 'NOTIFY_LEVEL=attention_required')"
+assert_equal "CAT-11: environment completion overrides the file" "true" \
+  "$(category NOTIFY_COMPLETION 'NOTIFY_COMPLETION=false' NOTIFY_COMPLETION=true)"
+
+# ── Claude Code notification types ─────────────────────────────────────────────
+
+echo ""
+echo "── Claude notification type Tests ──"
+echo ""
+
+claude_notification() {  # <type or empty> → payload
+  if [[ -n "$1" ]]; then
+    printf '{"hook_event_name":"Notification","notification_type":"%s","message":"Claude says %s","cwd":"/tmp/p"}' "$1" "$1"
+  else
+    printf '{"hook_event_name":"Notification","message":"Claude says untyped","cwd":"/tmp/p"}'
+  fi
+}
+for CLAUDE_TYPE in idle_prompt agent_needs_input elicitation_dialog elicitation_url_dialog; do
+  run_test "CLAUDE-TYPE-01: ${CLAUDE_TYPE} is sent at once as waiting for response" \
+    "Claude says ${CLAUDE_TYPE//_/\\\\_}" \
+    bash -c "printf '%s' '$(claude_notification "${CLAUDE_TYPE}")' | bash '${HOOK}' notification 'Claude Code'"
+  run_test_empty "CLAUDE-TYPE-01: ${CLAUDE_TYPE} follows the user-input switch" \
+    env NOTIFY_USER_INPUT=false bash -c "printf '%s' '$(claude_notification "${CLAUDE_TYPE}")' | bash '${HOOK}' notification 'Claude Code'"
+done
+run_test "CLAUDE-TYPE-02: a notification without a type is waiting for response" \
+  "Claude says untyped" \
+  bash -c "printf '%s' '$(claude_notification '')' | bash '${HOOK}' notification 'Claude Code'"
+CLAUDE_TYPE_HOME="${TEST_TMP_ROOT}/claude-type-home"
+mkdir -p "${CLAUDE_TYPE_HOME}/.config/ai-notify"
+printf '%s\n' 'NOTIFY_USER_INPUT=false' > "${CLAUDE_TYPE_HOME}/.config/ai-notify/config"
+assert_equal "CLAUDE-TYPE-02: untyped notification with NOTIFY_ACTION_REQUIRED=true in the environment is still sent" \
+  "true" \
+  "$(printf '%s' "$(claude_notification '')" | env HOME="${CLAUDE_TYPE_HOME}" TELEGRAM_DRY_RUN=true NOTIFY_ACTION_REQUIRED=true bash "${HOOK}" notification 'Claude Code' | grep -q 'Claude says untyped' && echo true || echo false)"
+for CLAUDE_TYPE in auth_success agent_completed quota_auto_resume_scheduled plugin_notification; do
+  run_test_empty "CLAUDE-TYPE-03: informational ${CLAUDE_TYPE} is not sent" \
+    bash -c "printf '%s' '$(claude_notification "${CLAUDE_TYPE}")' | bash '${HOOK}' notification 'Claude Code'"
+done
+run_test_empty "CLAUDE-TYPE-04: permission_prompt follows the authorization switch" \
+  env NOTIFY_AUTHORIZATION=false NOTIFY_AUTHORIZATION_DELAY_SECONDS=0 bash -c "printf '%s' '$(claude_notification permission_prompt)' | bash '${HOOK}' notification 'Claude Code'"
+# This payload has no transcript_path, so the wait cannot be confirmed (review codex-01a1ee38-r02/F-02).
+run_test "CLAUDE-TYPE-04: permission_prompt is an authorization notice" \
+  "Approval Status Unknown" \
+  env NOTIFY_AUTHORIZATION_DELAY_SECONDS=0 bash -c "printf '%s' '$(claude_notification permission_prompt)' | bash '${HOOK}' notification 'Claude Code'"
+
+# ── Antigravity termination reasons ────────────────────────────────────────────
+
+echo ""
+echo "── Antigravity termination reason Tests ──"
+echo ""
+
+agy_stop() {  # <reason> [fullyIdle] → payload with a private error text
+  printf '{"terminationReason":"%s","error":"PRIVATE-ERROR-TEXT","fullyIdle":%s,"conversationId":"agy-reason","workspacePaths":["/tmp/agy-project"]}' "$1" "${2:-true}"
+}
+for AGY_REASON in NO_TOOL_CALL no_tool_call model_stop MODEL_STOP; do
+  run_test "AGY-REASON-01: ${AGY_REASON} with fullyIdle is Task Complete" \
+    "Task Complete" \
+    bash -c "printf '%s' '$(agy_stop "${AGY_REASON}")' | bash '${HOOK}' antigravity-stop 'Antigravity CLI'"
+done
+run_test_empty "AGY-REASON-02: NO_TOOL_CALL while background work runs sends nothing" \
+  bash -c "printf '%s' '$(agy_stop NO_TOOL_CALL false)' | bash '${HOOK}' antigravity-stop 'Antigravity CLI'"
+for AGY_REASON in USER_CANCELED user_canceled; do
+  run_test_empty "AGY-REASON-03: ${AGY_REASON} sends nothing" \
+    bash -c "printf '%s' '$(agy_stop "${AGY_REASON}")' | bash '${HOOK}' antigravity-stop 'Antigravity CLI'"
+done
+run_test_exact "AGY-REASON-03: a cancelled stop still lets Antigravity stop" \
+  '{"decision":"stop"}' \
+  env HOME="${NATIVE_HOME}" bash -c "printf '%s' '$(agy_stop USER_CANCELED)' | bash '${HOOK}' antigravity-stop 'Antigravity CLI'"
+for AGY_CASE in "ERROR|Execution ended: error" "MAX_INVOCATIONS|Execution ended: max invocations reached" \
+                "MAX_TOKEN_BUDGET_EXCEEDED|Execution ended: token budget exceeded" \
+                "MAX_FORCED_INVOCATIONS|Execution ended: max forced invocations reached" \
+                "TERMINAL_STEP_TYPE|Execution ended: terminal step" \
+                "SOMETHING_NEW|Execution ended: execution stopped"; do
+  AGY_REASON="${AGY_CASE%%|*}"
+  AGY_OUTPUT="$(printf '%s' "$(agy_stop "${AGY_REASON}")" | env HOME="${TEST_TMP_ROOT}/default-home" TELEGRAM_DRY_RUN=true bash "${HOOK}" antigravity-stop 'Antigravity CLI' 2>/dev/null)"
+  assert_equal "AGY-REASON-04: ${AGY_REASON} is Task Stopped with its fixed label" \
+    "true true false false" \
+    "$(grep -q 'Task Stopped' <<<"${AGY_OUTPUT}" && echo true || echo false) $(grep -qF "${AGY_CASE#*|} #" <<<"${AGY_OUTPUT}" && echo true || echo false) $(grep -q 'Task Complete' <<<"${AGY_OUTPUT}" && echo true || echo false) $(grep -q 'PRIVATE-ERROR-TEXT' <<<"${AGY_OUTPUT}" && echo true || echo false)"
+done
+
+# ── Re-arm boundary (review codex-01a1ee38-r02/F-06) ──────────────────────────
+
+echo ""
+echo "── re-arm boundary Tests ──"
+echo ""
+
+REARM_MARKER="${TEST_TMP_ROOT}/rearm.pending"
+printf '%s\n' 'id=w-test' 'ided=0' 'started=50' 'notified=100' 'tool=a tool' > "${REARM_MARKER}"
+rearm_decide() {  # <now> → new|same for a notice at 100 and an interval of 600
+  HOME="${TEST_TMP_ROOT}/default-home" bash -c 'source "$1"; auth_decide "$2" "" 600 "$3"' _ \
+    "${SCRIPT_DIR}/../lib/authorization.sh" "${REARM_MARKER}" "$1"
+}
+assert_equal "REARM-01: a signal exactly at the interval begins a new wait" "new" "$(rearm_decide 700)"
+assert_equal "REARM-01: a signal one second short is merged" "same" "$(rearm_decide 699)"
+printf '%s\n' 'id=w-test' 'ided=0' 'started=50' 'notified=0' 'tool=a tool' > "${REARM_MARKER}"
+assert_equal "REARM-02: a wait not yet notified never re-arms" "same" "$(rearm_decide 99999)"
 
 # ── Registry tests (isolated HOME/repository) ──────────────────────────────────
 
@@ -837,6 +1110,56 @@ assert_equal \
   "LIFE-CONFIG-01: rejected input does not change current level" \
   "all" \
   "$(HOME="${INVALID_HOME}" bash -c 'source "$1"; printf "%s" "${NOTIFY_LEVEL:-}"' _ "${INVALID_HOME}/.config/ai-notify/config")"
+
+# [LIFE-TPL-01] Built-in templates deploy with the hook; user templates are never touched.
+TPLD_HOME="${TEST_TMP_ROOT}/template-deploy-home"
+TPLD_ROOT="${TPLD_HOME}/.config/ai-notify"
+TPLD_USER="${TPLD_ROOT}/templates"
+mkdir -p "${TPLD_ROOT}/hooks" "${TPLD_USER}"
+touch "${TPLD_ROOT}/hooks/telegram-notify.sh"
+printf '%s\n' 'TELEGRAM_ENABLED=true' 'TELEGRAM_BOT_TOKEN="t"' 'TELEGRAM_CHAT_ID="1"' > "${TPLD_ROOT}/config"
+printf '🧪 mine {project}{title_suffix}\n' > "${TPLD_USER}/completion.md"
+: > "${TPLD_USER}/stopped.md"
+printf 'unreadable {project}\n' > "${TPLD_USER}/question.md"
+printf 'extra file\n' > "${TPLD_USER}/notes.txt"
+tpl_digest() { (cd "${TPLD_USER}" && ls -lT && cat completion.md stopped.md notes.txt) | shasum; }
+TPLD_BEFORE="$(tpl_digest)"
+bash -c 'cd "$1"; HOME="$2" bash "$3" fix-hooks' _ "${FIX_REPO}" "${TPLD_HOME}" "${UPDATE_SCRIPT}" >/dev/null 2>&1 || true
+bash -c 'cd "$1"; HOME="$2" bash "$3" fix-hooks' _ "${FIX_REPO}" "${TPLD_HOME}" "${UPDATE_SCRIPT}" >/dev/null 2>&1 || true
+assert_equal "LIFE-TPL-01: update deploys built-in templates, table, and renderer" \
+  "true true true" \
+  "$([[ -s "${TPLD_ROOT}/hooks/templates/completion.md" ]] && echo true || echo false) $([[ -s "${TPLD_ROOT}/hooks/events.tsv" ]] && echo true || echo false) $([[ -s "${TPLD_ROOT}/lib/template.sh" ]] && echo true || echo false)"
+assert_equal "LIFE-TPL-01: update leaves user templates byte-identical" "${TPLD_BEFORE}" "$(tpl_digest)"
+assert_equal "LIFE-TPL-01: update deploys the delayed-authorization library" \
+  "true" "$([[ -s "${TPLD_ROOT}/lib/authorization.sh" ]] && echo true || echo false)"
+assert_equal "LIFE-TPL-01: rerunning the update leaves exactly the built-in template set" \
+  "$(cd "${SCRIPT_DIR}/templates" && ls)" "$(cd "${TPLD_ROOT}/hooks/templates" && ls)"
+printf '%s\n' 'NOTIFY_AUTHORIZATION_DELAY_SECONDS=45' >> "${TPLD_ROOT}/config"
+TPLD_STATUS="$(bash -c 'cd "$1"; HOME="$2" bash "$3" status' _ "${FIX_REPO}" "${TPLD_HOME}" "${UPDATE_SCRIPT}" 2>&1 || true)"
+assert_equal "LIFE-STATUS-02: status shows the authorization delay" \
+  "true" "$(grep -q '授權延遲：45 秒' <<<"${TPLD_STATUS}" && echo true || echo false)"
+assert_equal "LIFE-STATUS-02: status lists only the user templates in use" \
+  "使用者範本：completion, question" "$(grep '使用者範本：' <<<"${TPLD_STATUS}")"
+assert_equal "LIFE-STATUS-02: status does not print credentials" \
+  "false" "$(grep -q 'TELEGRAM_BOT_TOKEN\|="t"' <<<"${TPLD_STATUS}" && echo true || echo false)"
+TPLD_HOOK="${TPLD_ROOT}/hooks/telegram-notify.sh"
+run_test "LIFE-TPL-02: a user template overrides the built-in one" \
+  "🧪 mine codex-project (#a1b2c3d4)" \
+  env HOME="${TPLD_HOME}" bash -c "printf '%s' '${CODEX_STOP_PAYLOAD}' | bash '${TPLD_HOOK}' codex-stop Codex"
+run_test "LIFE-TPL-03: an empty user template falls back to the built-in one" \
+  "Task Stopped" \
+  env HOME="${TPLD_HOME}" bash -c "printf '%s' '${AGY_ERROR_PAYLOAD}' | bash '${TPLD_HOOK}' antigravity-stop 'Antigravity CLI'"
+TPLD_QMODE="$(stat -f %Lp "${TPLD_USER}/question.md")"
+chmod 000 "${TPLD_USER}/question.md"
+run_test "LIFE-TPL-03: an unreadable user template falls back to the built-in one" \
+  "Waiting for Your Response" \
+  env HOME="${TPLD_HOME}" NOTIFY_CODEX_USER_INPUT=true bash -c "printf '%s' '{\"cwd\":\"/tmp/p\"}' | bash '${TPLD_HOOK}' codex-user-input Codex"
+chmod "${TPLD_QMODE}" "${TPLD_USER}/question.md"
+printf 'y\nn\n' | HOME="${TPLD_HOME}" bash "${UNINSTALL_SCRIPT}" >/dev/null 2>&1 || true
+assert_equal "LIFE-TPL-04: uninstall leaves user templates byte-identical" "${TPLD_BEFORE}" "$(tpl_digest)"
+assert_equal "LIFE-TPL-04: uninstall removes the built-in templates and table" \
+  "false false" \
+  "$([[ -e "${TPLD_ROOT}/hooks/templates" ]] && echo true || echo false) $([[ -e "${TPLD_ROOT}/hooks/events.tsv" ]] && echo true || echo false)"
 
 # [LIFE-DETECT-01] Antigravity's ~/.gemini directory is not Gemini CLI evidence.
 DETECT_HOME="${TEST_TMP_ROOT}/detect-home"
