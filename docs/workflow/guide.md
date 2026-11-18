@@ -73,6 +73,9 @@ Plan Mode 與 `$openspec-explore` 也不是二選一：前者是 Provider 的執
 | `$openspec-ff-change`／`/opsx:ff` | 建立新 change | 建立 scaffold，接著產生所有 apply-required artifacts |
 | `$openspec-continue-change`／`/opsx:continue` | 繼續既有 change | 解析 change ID，依 status 建立一個 ready artifact |
 
+> [!NOTE]
+> 表中的 `/opsx:*` 名稱為使用者自然語言觸發語或上游 CLI 別名；專案內一律由已安裝之 portable skills 接管，本 repo 僅保留 `/opsx:commit`（`.claude/commands/opsx/commit.md`）作為收尾協調整合入口。
+
 目前 `spec-driven` schema 的常見順序是
 `proposal → specs → design → tasks`；其他 schema 一律遵循 `openspec status` 與
 `openspec instructions` 回傳的 dependencies。

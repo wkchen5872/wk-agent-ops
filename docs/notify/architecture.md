@@ -55,9 +55,9 @@ scripts/
       .placeholder     # Reserved for future Line Notify implementation
     README.md          # Provider extension guide
 
-.claude/
+template/common/.claude/
   commands/
-    notify-setup.md    # /notify-setup Claude Code command
+    notify-setup.md    # /notify-setup Claude Code command template (installed to .claude/)
 ```
 
 **Runtime layout (created by install.sh):**

@@ -18,7 +18,7 @@ sources:
 
 # OpenSpec Commit Workflow
 
-`openspec-commit` 是 `/opsx:apply` 之後、Git 整合（merge）與 cleanup 之前的薄協調層。它不重做
+`openspec-commit` 是 `openspec-apply-change` 實作完成之後、Git 整合（merge）與 cleanup 之前的薄協調層。它不重做
 archive、文件判斷或 commit 邏輯，只依序呼叫三個能力：
 
 1. `openspec-archive-change`
@@ -195,17 +195,17 @@ OpenSpec CLI 產生的原生 action 與 wk-agent-ops 安裝的 portable workflow
 
 ### OpenSpec CLI 原生 archive action
 
-| Provider | 通用 skill | OPSX alias |
-|---|---|---|
-| Claude Code | `.claude/skills/openspec-archive-change/` | `.claude/commands/opsx/archive.md` |
-| Codex | `.codex/skills/openspec-archive-change/` | 無 project command file |
-| Antigravity | `.agent/skills/openspec-archive-change/` | `.agent/workflows/opsx-archive.md` |
+所有 Provider 均透過專案已安裝之通用 skill 執行封存，不另外建立特定 slash command 或 workflow alias：
 
-`apply`、`archive`、`bulk-archive`、`continue` 是 OPSX action 名稱；對應的
-通用 skill 名稱維持 `openspec-apply-change`、
-`openspec-archive-change`、`openspec-bulk-archive-change`、
-`openspec-continue-change`。同一個 action 只能選 skill 或 alias 其中一個，
-不可兩邊都執行。
+| Provider | 通用 skill | 執行方式 |
+|---|---|---|
+| Claude Code | `.agents/skills/openspec-archive-change/`（`.claude/skills/` symlink） | `/openspec-archive-change` 或自然語言觸發 |
+| Codex | `.agents/skills/openspec-archive-change/` | 直接呼叫 `openspec-archive-change` |
+| Antigravity | `.agents/skills/openspec-archive-change/` | `/openspec-archive-change` 或自然語言觸發 |
+
+`apply`、`archive`、`bulk-archive`、`continue` 是 OpenSpec 概念 action；在本專案中
+統一使用 portable skill（如 `openspec-apply-change`、`openspec-archive-change` 等）。
+唯一的專用 slash command 與 workflow alias 保留給收尾協調整合的 `commit`（即 `/opsx:commit` 與 `/opsx-commit`）。
 
 ### wk-agent-ops portable workflow
 
@@ -214,7 +214,7 @@ OpenSpec CLI 產生的原生 action 與 wk-agent-ops 安裝的 portable workflow
 | Template source | Installed target |
 |---|---|
 | `template/common/skills/*` | `.claude/skills/*`、`.agents/skills/*` |
-| `template/common/.claude/commands/opsx/commit.md` | `.claude/commands/opsx/commit.md` |
+| `template/common/.claude/commands/` | `.claude/commands/`（包含 `opsx/commit.md`、`notify-setup.md`） |
 | `template/common/.agents/workflows/opsx-commit.md` | `.agents/workflows/opsx-commit.md` |
 | `template/common/.codex/agents/*.toml` | `.codex/agents/*.toml` |
 

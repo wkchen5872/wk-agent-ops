@@ -157,8 +157,7 @@ branch 完成。每個 Worktree 同一時間只能有一個 active writer，跨 
 | Tool | Purpose |
 |------|---------|
 | `bash scripts/skills/install.sh` | Verify template propagation works (use a temp git repo) |
-| `/opsx:verify` (Claude Code) | Verify change implementation against specs |
-| `/openspec-verify-change` (all tools) | Same, multi-tool compatible |
+| `/openspec-verify-change` (all tools) | Verify change implementation against specs (multi-tool compatible) |
 | `diff template/common/.claude/rules/... .claude/rules/...` | Confirm Claude rules match source |
 | `diff template/common/.claude/rules/... .agents/rules/...` | Confirm Antigravity mirrors the same native entrypoint |
 | `diff template/common/.codex/agents/... .codex/agents/...` | Confirm Codex custom agents match their templates |

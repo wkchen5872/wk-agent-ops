@@ -9,12 +9,11 @@ When invoked without arguments, present an interactive menu. When invoked with a
 ## Subcommands
 
 - `setup` — Run the interactive install wizard
-- `update` — Update a specific config setting
+- `update` — Update a specific config setting (token, chat_id, types, fix-hooks)
 - `test` — Send a test notification to verify the current setup
-- `status` — Show current config (Bot Token masked)
+- `status` — Show current config (Bot Token masked) and hook status
 - `uninstall` — Remove hooks and config entries
 
-## Instructions
 ## Instructions
 
 1. If no argument was provided after `/notify-setup`, show this menu and ask the user to choose:
@@ -23,9 +22,9 @@ When invoked without arguments, present an interactive menu. When invoked with a
    Telegram Notify — What would you like to do?
 
    1) setup      — First-time install (guided wizard)
-   2) update     — Change token / chat_id / notify_level
+   2) update     — Change token / chat_id / notification types / fix hooks
    3) test       — Send a test Telegram message now
-   4) status     — Show current config
+   4) status     — Show current config & hook status
    5) uninstall  — Remove hooks and config
    ```
 
@@ -36,7 +35,8 @@ When invoked without arguments, present an interactive menu. When invoked with a
 3. **update**: Run `bash scripts/notify/telegram/update.sh` interactively. If the user specified what to update (e.g., "update my token"), pass the argument directly:
    - token → `bash scripts/notify/telegram/update.sh token`
    - chat_id → `bash scripts/notify/telegram/update.sh chat_id`
-   - notify_level → `bash scripts/notify/telegram/update.sh notify_level`
+   - types → `bash scripts/notify/telegram/update.sh types`
+   - fix-hooks → `bash scripts/notify/telegram/update.sh fix-hooks`
 
 4. **test**: Send a test notification by running:
    ```bash
@@ -45,11 +45,11 @@ When invoked without arguments, present an interactive menu. When invoked with a
    ```
    Then confirm with the user whether they received the message.
 
-5. **status**: Read `~/.config/ai-notify/config` and display:
+5. **status**: Run `bash scripts/notify/telegram/update.sh status` or read `~/.config/ai-notify/config` and display:
    - `TELEGRAM_ENABLED`
    - `TELEGRAM_BOT_TOKEN` — show only the last 4 characters, mask the rest with `****`
    - `TELEGRAM_CHAT_ID`
-   - `NOTIFY_LEVEL`
+   - Notification switches (`NOTIFY_ATTENTION`, `NOTIFY_PROGRESS`, `NOTIFY_COMPLETION`, `NOTIFY_HANDOFF`)
 
    If the config file does not exist, tell the user that Telegram Notify is not installed and suggest running `/notify-setup setup`.
 

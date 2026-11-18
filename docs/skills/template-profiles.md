@@ -10,7 +10,7 @@ template/
 │   ├── skills/                   → .claude/skills/ and .agents/skills/
 │   ├── .claude/
 │   │   ├── agents/               → Claude Code subagents
-│   │   ├── commands/opsx/        → /opsx:* slash commands
+│   │   ├── commands/             → slash commands (/opsx:commit, /notify-setup)
 │   │   └── rules/                → always-on rules (mirrored to .agents/rules/)
 │   ├── .agents/workflows/        → agent workflow definitions
 │   ├── .codex/agents/            → Codex custom-agent TOML

@@ -104,6 +104,9 @@ event payload normalization，Git mutation 全部交給 `opsx-branch`。
 | `$openspec-continue-change`／`/opsx:continue` | 不觸發；action 不會執行 `openspec new change` |
 | 人工執行 `openspec new change` | 會觸發 |
 
+> [!NOTE]
+> 表中的 `/opsx:new`、`/opsx:ff`、`/opsx:continue` 為使用者自然語言觸發語或上游 CLI 別名；專案內一律由 portable skills（如 `openspec-new-change` 等）接管，不另維護各別斜線命令檔案。
+
 Provider 路徑如下：
 
 | Provider | 現行狀態 |
