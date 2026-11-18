@@ -468,7 +468,8 @@ class CodexWaitTests(unittest.TestCase):
             self.wait_done(timeout=12)
             self.assertEqual(1, len(self.unconfirmed()))
             state = json.loads(self.state_files()[0].read_text())
-            self.assertEqual("unreadable-record", state.get("offline_notified"))
+            self.assertIsNone((state.get("offline_reported") or {}).get("call", "missing"),
+                              "the notice was sent before the call could be identified")
         finally:
             path.chmod(0o600)
         self.trigger("codex-permission", transcript=str(path))
@@ -480,6 +481,55 @@ class CodexWaitTests(unittest.TestCase):
         time.sleep(.5)
         self.wait_done(timeout=12)
         self.assertEqual(2, len(self.unconfirmed()), "a real next call is still reported")
+
+    # Review codex-01a1ee38-r04/F-01: readability alone is never evidence about the wait.
+    def settle(self, path):
+        self.trigger("codex-permission", transcript=str(path))
+        time.sleep(.5)
+        self.wait_done(timeout=12)
+
+    def test_offline_readable_then_unreadable_same_call_sends_one(self):
+        self.authorization_settings(delay=1)
+        self.offline()
+        path = self.record(self.call("call_A"))
+        self.settle(path)
+        self.assertEqual(1, len(self.unconfirmed()))
+        path.chmod(0o000)
+        try:
+            self.settle(path)
+        finally:
+            path.chmod(0o600)
+        self.assertEqual(1, len(self.unconfirmed()), "an unreadable record is not a new wait")
+
+    def test_offline_unreadable_notice_then_result_and_new_call_reports_the_new_call(self):
+        self.authorization_settings(delay=1)
+        self.offline()
+        path = self.record(self.call("call_A"))
+        path.chmod(0o000)
+        try:
+            self.settle(path)
+        finally:
+            path.chmod(0o600)
+        self.assertEqual(1, len(self.unconfirmed()))
+        self.record(self.output("call_A"), self.call("call_B"))
+        self.settle(path)
+        self.assertEqual(2, len(self.unconfirmed()), "call_B came after the notice and gets its own")
+
+    def test_offline_unreadable_notice_then_observed_resolution_then_new_call(self):
+        self.authorization_settings(delay=1)
+        self.offline()
+        path = self.record(self.call("call_A"))
+        path.chmod(0o000)
+        try:
+            self.settle(path)
+        finally:
+            path.chmod(0o600)
+        self.record(self.output("call_A"))
+        self.settle(path)
+        self.assertEqual(1, len(self.unconfirmed()), "a resolution sends nothing")
+        self.record(self.call("call_B"))
+        self.settle(path)
+        self.assertEqual(2, len(self.unconfirmed()), "after a resolution the next call is a new wait")
 
     def test_offline_question_only_sends_nothing(self):
         self.authorization_settings(delay=1)

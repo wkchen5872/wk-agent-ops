@@ -64,6 +64,11 @@
 - [x] 10.2 F-05 剩餘：清除開始時先固定要清除的等待身分，取得鎖後比對，同步與延後清除都不得刪除等待期間換上的新等待。測試要求：先寫「持鎖期間 A 換成 B」的失敗回歸測試，並保留穩定的 A 在鎖釋放後可清除的測試。
 - [x] 10.3 完整檢查：`scripts/notify/telegram/test.sh`、`python3 -m unittest discover -s scripts/notify/tests`、`tests/test_*.sh` 全部通過，`openspec validate refine-notify-core --strict` 通過。
 
+## 11. 審查 codex-01a1ee38-r04 的修正（F-01 等待身分與紀錄可讀性脫鉤）
+
+- [x] 11.1 F-01：Codex 無法查詢時的等待身分只依紀錄內容判斷，不受可讀性影響：讀不到時已通知過即為同一段等待；讀得到且沒有未完成呼叫即為解除；當初讀不到時通知的等待，以通知當時的紀錄大小判斷之後的呼叫是原等待（補身分）或新請求（通知）。測試要求：先寫審查表中「可讀變不可讀」「不可讀通知後出現結果與新呼叫」「先觀察到解除再出現新呼叫」的失敗回歸測試，並保留既有的重複、恢復可讀與 call_B 測試。
+- [x] 11.2 完整檢查：`scripts/notify/telegram/test.sh`、`python3 -m unittest discover -s scripts/notify/tests`、`tests/test_*.sh` 全部通過，`openspec validate refine-notify-core --strict` 通過。
+
 ## Workflow follow-up
 
 - 依使用者授權以 `openspec-commit` 封存並提交。

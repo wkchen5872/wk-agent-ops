@@ -160,8 +160,8 @@ def record_path(trigger):
     return found[-1] if found else None
 
 
-def pending_call(trigger):
-    """The last tool call without an output, or "" if none; None when the record cannot be read.
+def open_calls(trigger):
+    """Tool calls without an output as [(call_id, byte offset)], oldest first; None when unreadable.
 
     A record shows that a request has a result; it never proves that a request waits for
     approval, so callers treat an open call only as "could not confirm".
@@ -172,14 +172,16 @@ def pending_call(trigger):
     try:
         with path.open("rb") as stream:
             stream.seek(0, os.SEEK_END)
-            stream.seek(max(0, stream.tell() - 2_000_000))
-            lines = stream.read().decode("utf-8", "replace").splitlines()
+            offset = max(0, stream.tell() - 2_000_000)
+            stream.seek(offset)
+            data = stream.read()
     except OSError:
         return None
-    open_calls = []
-    for line in lines:
+    calls = []
+    for raw in data.splitlines(keepends=True):
+        position, offset = offset, offset + len(raw)
         try:
-            entry = json.loads(line)
+            entry = json.loads(raw)
         except ValueError:
             continue
         payload = entry.get("payload") if isinstance(entry, dict) else None
@@ -187,12 +189,29 @@ def pending_call(trigger):
             continue
         kind = payload.get("type")
         if entry.get("type") == "event_msg" and kind in ("task_complete", "turn_aborted"):
-            open_calls.clear()
+            calls.clear()
         elif isinstance(kind, str) and kind.endswith("_call") and isinstance(payload.get("call_id"), str):
-            open_calls.append(payload["call_id"])
+            calls.append((payload["call_id"], position))
         elif isinstance(kind, str) and kind.endswith("_call_output"):
-            open_calls = [call for call in open_calls if call != payload.get("call_id")]
-    return open_calls[-1] if open_calls else ""
+            calls = [call for call in calls if call[0] != payload.get("call_id")]
+    return calls
+
+
+def pending_call(trigger):
+    """The last open call id, "" if none, None when the record cannot be read."""
+    calls = open_calls(trigger)
+    if calls is None:
+        return None
+    return calls[-1][0] if calls else ""
+
+
+def record_size(trigger):
+    """Size of the session record even when its content cannot be read, else None."""
+    path = record_path(trigger)
+    try:
+        return path.stat().st_size if path else None
+    except OSError:
+        return None
 
 
 class Daemon:
@@ -290,8 +309,11 @@ def run_checker(trigger, state_file, lock_fd):
     previous = read_json(state_file, {})
     same_turn = previous.get("turn_id") == trigger["turn_id"]
     notified = set(previous.get("notified", [])) if same_turn else set()
-    # The open call already reported as unconfirmed in this turn; repeats of it are the same wait.
-    offline_notified = previous.get("offline_notified") if same_turn else None
+    # The wait already reported as unconfirmed in this turn: {"call": id or None, "offset": record
+    # size at the notice}. Only record content decides identity; readability is never evidence.
+    reported = previous.get("offline_reported") if same_turn else None
+    if not isinstance(reported, dict):
+        reported = None
     pending = set()
     daemon = None
     failures = 0
@@ -309,25 +331,47 @@ def run_checker(trigger, state_file, lock_fd):
     def record(running):
         atomic_json(state_file, {"pid": os.getpid(), "turn_id": trigger["turn_id"], "running": running,
                                  "code": code, "pending": sorted(pending), "notified": sorted(notified),
-                                 "offline_notified": offline_notified, "updated_at": int(time.time())})
+                                 "offline_reported": reported, "updated_at": int(time.time())})
 
     def settle_offline(config):
-        """Daemon unavailable: a recorded result settles the request; otherwise report it as unconfirmed,
-        once per open call (an unreadable record counts as one identity per turn)."""
-        nonlocal offline_notified
-        call = pending_call(request)
-        resolved = call == "" or (request_call and call is not None and call != request_call)
-        identity = call or "unreadable-record"
-        if resolved or identity == offline_notified or not config["authorization"]:
+        """Runtime cannot be queried: settle the request from the session record, reporting each
+        continuous wait once as unconfirmed (review codex-01a1ee38-r02/F-01, r03, r04)."""
+        nonlocal reported
+
+        def report(call, offset):
+            nonlocal reported
+            reported = {"call": call, "offset": offset}
+            record(True)
+            if config["authorization"]:
+                send(request, "codex-authorization-unconfirmed", "HumanApprovalUnconfirmed")
+
+        calls = open_calls(request)
+        if calls is None:
+            # An unreadable record says nothing: a wait already reported this turn stays reported.
+            if reported is None:
+                report(None, record_size(request))
             return
-        if offline_notified == "unreadable-record" and call:
-            # The record became readable again: this names the wait already reported, it is not a new one.
-            offline_notified = call
+        if not calls:
+            reported = None  # no open call: the reported wait is resolved
             record(True)
             return
-        offline_notified = identity
-        record(True)
-        send(request, "codex-authorization-unconfirmed", "HumanApprovalUnconfirmed")
+        open_ids = [call for call, _ in calls]
+        if request_call and request_call not in open_ids:
+            return  # this request already has a result; a newer call has its own trigger
+        call, offset = calls[-1]
+        if reported is None:
+            report(call, offset)
+        elif reported["call"] == call:
+            return
+        elif reported["call"] is None:
+            if reported["offset"] is not None and offset >= reported["offset"]:
+                report(call, offset)  # written after the notice: a new request
+            else:
+                reported = {"call": call, "offset": offset}  # the reported wait, now identified
+                record(True)
+        elif reported["call"] not in open_ids:
+            report(call, offset)  # the reported call has a result: this is a new wait
+
     try:
         record(True)
         while True:
@@ -339,7 +383,7 @@ def run_checker(trigger, state_file, lock_fd):
                 trigger = {**latest, "transcript_path": trigger.get("transcript_path", "")}
                 notified.clear()
                 pending.clear()
-                offline_notified = None
+                reported = None
                 approval_since = None
                 request = trigger if trigger["kind"] == "permission" else None
                 request_call = pending_call(request) if request else None
