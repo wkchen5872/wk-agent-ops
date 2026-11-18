@@ -132,7 +132,7 @@ When no notification hook is installed, the handoff hook SHALL send no notice of
 - **THEN** the reviewer is opened or messaged as usual and nothing else is sent
 
 ### Requirement: Notifications name the agent that wrote the record
-A handoff notification SHALL show the tool, model, and effort of the session that wrote the record, as Xirp reports them when the record is processed, in the form `Agent Handoff (<tool> / <model> / <effort>)`. A part that Xirp does not report SHALL be omitted, and with no part known the label SHALL be `Agent Handoff`.
+A handoff notification SHALL show the tool, model, and effort of the session that wrote the record, as Xirp reports them when the record is processed, in the form `Agent Handoff (<tool> / <model> / <effort>)`. A part that Xirp does not report SHALL be omitted, and with no part known the label SHALL be `Agent Handoff`. A manual run or a retry after a failure SHALL omit the agent parts and the session label.
 
 #### Scenario: All parts known
 - **WHEN** the record was written by a Claude Code session running `claude-opus-5-5` at effort `high`
@@ -145,6 +145,10 @@ A handoff notification SHALL show the tool, model, and effort of the session tha
 #### Scenario: Model changed during the session
 - **WHEN** the user switched the session's model before it stopped
 - **THEN** the notification shows the model in use when the record was processed
+
+#### Scenario: Retry triggered by another session
+- **WHEN** a record whose delivery failed is retried by a manual foreground run or by another agent's stop
+- **THEN** the notification shows `Agent Handoff` without agent parts or a session label
 
 #### Scenario: Agent values contain formatting characters
 - **WHEN** the reported model or effort contains `_` or `*`

@@ -310,7 +310,8 @@ YAML
 }
 fresh_state() { export FAKE_XIRP_DIR="$tmp/state-$1"; rm -rf "$FAKE_XIRP_DIR"; mkdir -p "$FAKE_XIRP_DIR"; }
 use_project() { export FAKE_PROJECT_PATH="$(dirname "$(git -C "$1" rev-parse --path-format=absolute --git-common-dir)")"; }
-route_in() { (cd "$1" && PATH="$FAKES:$PATH" HANDOFF_NOTIFY="$FAKES/notify.sh" HANDOFF_CREATE_WAIT=2 CHIRP_SESSION_ID="${T_SID-chirp-1}" "$ROUTE" --foreground </dev/null); }
+# Hook mode run synchronously (HANDOFF_ROUTE_WAIT=1), as when an agent stops.
+route_in() { (cd "$1" && PATH="$FAKES:$PATH" HANDOFF_NOTIFY="$FAKES/notify.sh" HANDOFF_CREATE_WAIT=2 HANDOFF_ROUTE_WAIT=1 CHIRP_SESSION_ID="${T_SID-chirp-1}" "$ROUTE" </dev/null); }
 hw() { local d="$1"; shift; (cd "$d" && "$WRITE" --change add-export "$@") >/dev/null 2>&1; }
 commit_in() { printf '%s\n' "$2" > "$1/work.txt"; git -C "$1" add work.txt; git -C "$1" commit -qm "$2"; }
 msgs() { cat "$FAKE_XIRP_DIR/messages" 2>/dev/null; }
@@ -526,9 +527,14 @@ if run_section notify; then
   [[ "$rc" == 0 && "$(created)" == 1 ]] && jt '.kind=="implement" and .agent==""' \
     && ok "when Xirp cannot report the session the record is routed and notified without agent parts" || bad "when Xirp cannot report the session the record is routed and notified without agent parts"
   one_record "$tmp/n-sid" n3 --role implement --status done --head HEAD
-  (cd "$tmp/n-sid" && printf '{"session_id":"native-1"}' | PATH="$FAKES:$PATH" HANDOFF_NOTIFY="$FAKES/notify.sh" HANDOFF_CREATE_WAIT=2 CHIRP_SESSION_ID=chirp-1 "$ROUTE" --foreground)
+  (cd "$tmp/n-sid" && printf '{"session_id":"native-1"}' | PATH="$FAKES:$PATH" HANDOFF_NOTIFY="$FAKES/notify.sh" HANDOFF_CREATE_WAIT=2 HANDOFF_ROUTE_WAIT=1 CHIRP_SESSION_ID=chirp-1 "$ROUTE")
   jt '.session_id=="native-1"' && ok "the notice carries the native session id from the hook input" || bad "the notice carries the native session id from the hook input"
 
+  one_record "$tmp/n-manual" n5 --role implement --status done --head HEAD
+  (cd "$tmp/n-manual" && printf '{"session_id":"native-1"}' | PATH="$FAKES:$PATH" HANDOFF_NOTIFY="$FAKES/notify.sh" HANDOFF_CREATE_WAIT=2 CHIRP_SESSION_ID=chirp-1 "$ROUTE" --foreground)
+  [[ "$(created)" == 1 ]] && jt '.kind=="implement" and .agent=="" and .session_id==""' \
+    && ok "a manual foreground run routes the record and leaves out the agent and session label" \
+    || bad "a manual foreground run routes the record and leaves out the agent and session label ($(jl | tail -1))"
   one_record "$tmp/n-rc" n4 --role implement --status done --head HEAD
   FAKE_NOTIFY_RC=1 route_in "$tmp/n-rc"; rc=$?
   [[ "$rc" == 0 && "$(created)" == 1 ]] && routed "$tmp/n-rc" 01-implement.yaml \
@@ -588,6 +594,9 @@ if run_section notify; then
   rm -f "$FAKE_XIRP_DIR/msg-fail"; route_in "$NR"
   [[ "$(msgs | grep -c $'^sess-r\t')" == 1 && "$(kinds)" == "attention implement" ]] && routed "$NR" 01-implement.yaml \
     && ok "a retry that reaches the reviewer sends the message and the progress notice once" || bad "a retry that reaches the reviewer sends the message and the progress notice once ($(kinds))"
+  [[ "$(jl | head -1 | jq -r .agent)" == "Claude / fake-model / high" ]] && jt '.agent=="" and .session_id==""' \
+    && ok "a retried record's notice leaves out the agent and session label of whoever triggered the retry" \
+    || bad "a retried record's notice leaves out the agent and session label of whoever triggered the retry ($(jl | tail -1))"
   NI="$tmp/n-sendimpl"; one_record "$NI" f2 --role implement --status done --head HEAD
   hw "$NI" --role review --status done --verdict changes-required --head HEAD --report r.md
   touch "$FAKE_XIRP_DIR/msg-fail"; route_in "$NI"; rc=$?

@@ -6,7 +6,8 @@
 # GitHub, never pushes, never blocks the agent: the work runs in the background and
 # every failure ends with exit 0.
 #   handoff-route              hook entry point (reads the hook payload on stdin)
-#   handoff-route --foreground route synchronously (tests and manual runs)
+#   handoff-route --foreground route synchronously (manual runs; notices carry no agent)
+#   HANDOFF_ROUTE_WAIT=1       hook mode, but synchronous (tests)
 set -u
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -18,6 +19,7 @@ if [[ ! -t 0 ]]; then payload="$(cat 2>/dev/null || true)"; fi
 cwd="$(jq -r '.cwd // empty' <<<"$payload" 2>/dev/null || true)"
 cwd="${cwd:-${CLAUDE_PROJECT_DIR:-$PWD}}"
 native_session="$(jq -r '.session_id // empty' <<<"$payload" 2>/dev/null || true)"
+manual=0
 
 route() {
   # shellcheck source=lib/handoff.sh
@@ -111,8 +113,12 @@ route_dir() {
   sess_json="$(ho_xirp_session "${CHIRP_SESSION_ID:-}")" || sess_json=""
   [[ -n "$sess_json" ]] || sess_json='{}'
   ho_log "$dir" "$base action=$action session=${CHIRP_SESSION_ID:-unknown} model=$(jq -r '.model // "unknown"' <<<"$sess_json" 2>/dev/null || echo unknown)"
-  ctx="$(jq -nc --arg c "$change" --arg r "$round" --arg h "${head:0:7}" --arg a "$(ho_agent_label "$sess_json")" \
-    --arg s "$native_session" --arg w "$root" '{change:$c, round:$r, commit:$h, agent:$a, session_id:$s, cwd:$w}')"
+  # Records do not say who wrote them: only an agent's own stop on a first attempt names it.
+  # A manual run or a retry may be triggered by someone else, so it names nobody.
+  local agent_json="$sess_json" sid="$native_session"
+  if [[ "$manual" == 1 ]] || grep -qxF "$base" "$dir/.notified" 2>/dev/null; then agent_json='{}'; sid=""; fi
+  ctx="$(jq -nc --arg c "$change" --arg r "$round" --arg h "${head:0:7}" --arg a "$(ho_agent_label "$agent_json")" \
+    --arg s "$sid" --arg w "$root" '{change:$c, round:$r, commit:$h, agent:$a, session_id:$s, cwd:$w}')"
   if [[ "$outcome" == retry ]]; then
     grep -qxF "$base" "$dir/.notified" 2>/dev/null && return 0
     printf '%s\n' "$base" >> "$dir/.notified"
@@ -193,6 +199,9 @@ to_implementer() {
 }
 
 if [[ "${1:-}" == "--foreground" ]]; then
+  manual=1
+  route
+elif [[ "${HANDOFF_ROUTE_WAIT:-}" == 1 ]]; then
   route
 else
   ( route ) </dev/null >/dev/null 2>&1 &

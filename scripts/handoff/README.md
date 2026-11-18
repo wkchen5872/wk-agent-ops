@@ -168,7 +168,9 @@ worktree), that stop sends one more attention notice so you learn the new cause.
   happens next. Its title shows `Agent Handoff (<tool> / <model> / <effort>)` for the session that
   wrote the record, as Xirp reports it when the record is processed (for example
   `Claude / claude-opus-5-5 / high`); parts Xirp does not report are left out. The title also
-  carries the same session label as that session's other notifications.
+  carries the same session label as that session's other notifications. A manual
+  `--foreground` run or a retry names no agent and no session label, because whoever triggers it
+  may not have written the record.
 - The ordinary completion notice of the same session is still sent.
 - Mixed versions: the hook sends handoff events only when the notifier script declares
   `# ai-notify-capability: handoff-events`. An older or rolled-back notifier gets attention as

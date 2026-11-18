@@ -68,6 +68,8 @@ telegram-notify.sh handoff
   與 `routing.log` 用同一次查詢，不多打一次。
 - 顯示為 `Agent Handoff (<工具> / <模型> / <effort>)`。工具顯示為 Claude 或 Codex；模型與 effort 原樣顯示（例如 `claude-opus-5-5`、`high`）。
   取不到的部分省略；都取不到時只顯示 `Agent Handoff`。
+- 手動執行（`--foreground`）或重試（交件單已在 `.notified`）時省略 Agent 與 Session 標籤：交件單不記錄作者，觸發這次執行的
+  Session 可能是重試的人或別的 Agent（task 5.2 真實演練發現，使用者決定，task 6.4）。
 - 替代方案：顯示「Opus 5.5」這類名稱。不採用——需要一張隨新模型更新的對照表；原樣顯示不會過時，也和 `routing.log`、Xirp 一致。
   使用者可在自己的範本調整其他文字，但模型名稱以 Xirp 回報為準。
 
