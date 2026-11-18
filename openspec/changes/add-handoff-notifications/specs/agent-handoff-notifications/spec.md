@@ -87,7 +87,7 @@ A progress notification SHALL be sent only after the routing action for the reco
 - **THEN** the progress notification for that record is sent once
 
 ### Requirement: Notices reach the user during a mixed deployment
-The handoff hook SHALL send handoff events only when the notification hook that will actually run declares support for them. It SHALL decide this from that hook itself, not from other deployed files. Otherwise it SHALL send attention notices through the previous generic notification path, so they are still delivered, and SHALL skip progress notices. Either installer MAY be deployed or rolled back first.
+The handoff hook SHALL send handoff events only when the notification hook that will actually run declares support for them, deciding from that hook itself and not from other deployed files. When a notification hook is installed but does not declare support, it SHALL send attention notices through the previous generic notification path, so they are still delivered, and SHALL skip progress notices. Either installer MAY be deployed or rolled back first.
 
 #### Scenario: New handoff hook with an older notification hook
 - **WHEN** the notification hook does not support handoff events and a review passes with the finish trigger `ask`
@@ -112,6 +112,17 @@ The handoff hook SHALL send handoff events only when the notification hook that 
 #### Scenario: Blocked record after such a rollback
 - **WHEN** the same rolled-back state holds and a record is `blocked`
 - **THEN** the user receives the blocked notice through the generic notification path
+
+### Requirement: Without a notification hook nothing is sent
+When no notification hook is installed, the handoff hook SHALL send no notice of any kind, SHALL route records exactly as it does with notifications available, and SHALL exit successfully. This keeps the behavior of a machine where notifications were never installed.
+
+#### Scenario: Notification hook is not installed
+- **WHEN** no notification hook exists and a review passes with the finish trigger `ask`
+- **THEN** no notice is sent, the record is marked as processed, and the hook exits successfully
+
+#### Scenario: Routing without a notification hook
+- **WHEN** no notification hook exists and an `implement`/`done` record is processed
+- **THEN** the reviewer is opened or messaged as usual and nothing else is sent
 
 ### Requirement: Notifications name the agent that wrote the record
 A handoff notification SHALL show the tool, model, and effort of the session that wrote the record, as Xirp reports them when the record is processed, in the form `Agent Handoff (<tool> / <model> / <effort>)`. A part that Xirp does not report SHALL be omitted, and with no part known the label SHALL be `Agent Handoff`.
