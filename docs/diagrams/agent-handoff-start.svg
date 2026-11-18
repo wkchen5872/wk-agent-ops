@@ -12,7 +12,7 @@
 <text x="40" y="70" font-size="34" fill="#19344c" font-weight="700" text-anchor="start">啟動一個交接迴圈：誰開什麼</text>
 <text x="40" y="108" font-size="19" fill="#42556d" font-weight="400" text-anchor="start">你下啟動指令；審查由 hook 依範本自動開，收尾預設等你執行 handoff-finish</text>
 <rect x="1202" y="40" width="158" height="42" rx="21" fill="#fde8d7"/>
-<text x="1281" y="68" font-size="19" fill="#9a3412" font-weight="600" text-anchor="middle">已實作 · 待演練</text>
+<text x="1281" y="68" font-size="19" fill="#9a3412" font-weight="600" text-anchor="middle">已實作 · 已演練</text>
 <rect x="40" y="140" width="426" height="196" rx="14" fill="#ffffff" stroke="#b4c6d8" stroke-width="2"/>
 <text x="58" y="174" font-size="20" fill="#19344c" font-weight="700" text-anchor="start">implement 範本</text>
 <text x="58" y="198" font-size="14" fill="#5f7186" font-weight="600" text-anchor="start">觸發：你的 handoff-start 指令</text>
@@ -146,5 +146,5 @@
 <text x="40" y="1630" font-size="16" fill="#42556d" font-weight="400" text-anchor="start">• ③、⑦、⑨ 由同一個核心依範本開 Session；prompt 依工具寫成 /skill（Claude Code）或 $skill（Codex）。</text>
 <text x="40" y="1658" font-size="16" fill="#42556d" font-weight="400" text-anchor="start">• 審查者不在啟動時開：開 Session 一定要給第一個任務，而那時還沒有東西可審。</text>
 <text x="40" y="1686" font-size="16" fill="#42556d" font-weight="400" text-anchor="start">• 同一個分支不能同時被兩個 worktree 使用：收尾 new 時 A 先分離在同一 commit。</text>
-<text x="40" y="1730" font-size="15" fill="#5f7186" font-weight="400" text-anchor="start">handoff-start、handoff-write、hook 與 handoff-finish 已實作並通過自動測試；真實多 Agent 演練待完成。用法見 scripts/handoff/README.md。</text>
+<text x="40" y="1730" font-size="15" fill="#5f7186" font-weight="400" text-anchor="start">handoff-start、handoff-write、hook 與 handoff-finish 已實作並通過自動測試；真實多 Agent 演練已通過。用法見 scripts/handoff/README.md。</text>
 </g></svg>

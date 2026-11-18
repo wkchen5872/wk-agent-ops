@@ -12,7 +12,7 @@
 <text x="40" y="70" font-size="34" fill="#19344c" font-weight="700" text-anchor="start">實作、Review、收尾：交接流程</text>
 <text x="40" y="108" font-size="19" fill="#42556d" font-weight="400" text-anchor="start">同一台機器的 worktree 共用 Git 資料庫，交接只需要本機 commit，不必 push</text>
 <rect x="1202" y="40" width="158" height="42" rx="21" fill="#fde8d7"/>
-<text x="1281" y="68" font-size="19" fill="#9a3412" font-weight="600" text-anchor="middle">已實作 · 待演練</text>
+<text x="1281" y="68" font-size="19" fill="#9a3412" font-weight="600" text-anchor="middle">已實作 · 已演練</text>
 <rect x="40" y="138" width="34" height="22" rx="5" fill="#ffffff" stroke="#b4c6d8" stroke-width="2"/>
 <text x="84" y="156" font-size="17" fill="#42556d" font-weight="400" text-anchor="start">必做</text>
 <rect x="150" y="138" width="34" height="22" rx="5" fill="#fffaf0" stroke="#d2a14a" stroke-width="2" stroke-dasharray="6 4"/>
@@ -126,5 +126,5 @@
 <text x="40" y="1560" font-size="17" fill="#42556d" font-weight="400" text-anchor="start">• 交件單由 handoff-write 寫入 .agent-handoff/&lt;change&gt;/，每輪一個檔案；hook 在 Agent 自己的工作目錄執行，直接讀得到。</text>
 <text x="40" y="1588" font-size="17" fill="#42556d" font-weight="400" text-anchor="start">• hook 只在新開的 Session 生效；Codex 的新 hook 要你信任一次。所有 GitHub 寫入都在有回讀規則的 Skill 裡。</text>
 <text x="40" y="1616" font-size="17" fill="#42556d" font-weight="400" text-anchor="start">• hook 失敗不阻斷主流程，鏈條可能無聲中斷；現有的 Telegram「Agent 停下」通知是你這端的保險。</text>
-<text x="40" y="1660" font-size="15" fill="#5f7186" font-weight="400" text-anchor="start">handoff-write、hook、handoff-start 與 handoff-finish 已實作並通過自動測試；真實多 Agent 演練待完成。用法見 scripts/handoff/README.md。</text>
+<text x="40" y="1660" font-size="15" fill="#5f7186" font-weight="400" text-anchor="start">handoff-write、hook、handoff-start 與 handoff-finish 已實作並通過自動測試；真實多 Agent 演練已通過。用法見 scripts/handoff/README.md。</text>
 </g></svg>
