@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Stop hook for the agent handoff loop (Claude Code and Codex).
 # Reads the newest unprocessed handoff record in the stopping agent's worktree and
-# routes it: notify the next agent through Xirp, or notify the user. Never writes to
+# routes it: notify the next agent through Xirp, or notify the user, then tells the user
+# what happened (progress or attention, see lib/handoff.sh ho_notify). Never writes to
 # GitHub, never pushes, never blocks the agent: the work runs in the background and
 # every failure ends with exit 0.
 #   handoff-route              hook entry point (reads the hook payload on stdin)
@@ -16,6 +17,7 @@ payload=""
 if [[ ! -t 0 ]]; then payload="$(cat 2>/dev/null || true)"; fi
 cwd="$(jq -r '.cwd // empty' <<<"$payload" 2>/dev/null || true)"
 cwd="${cwd:-${CLAUDE_PROJECT_DIR:-$PWD}}"
+native_session="$(jq -r '.session_id // empty' <<<"$payload" 2>/dev/null || true)"
 
 route() {
   # shellcheck source=lib/handoff.sh
@@ -30,8 +32,14 @@ route() {
   done
 }
 
+# Each record ends in one outcome (design decision 5):
+#   delivered — the next step was taken: progress notice, marked processed;
+#   stop      — the loop waits for the user: one attention notice, marked processed;
+#   retry     — sending or opening failed: one attention notice (.notified), left unprocessed
+#               so a later hook run or `handoff-route --foreground` tries again.
 route_dir() {
-  local dir="$1" root="$2" rec base change role status verdict head round report loop max action=""
+  local dir="$1" root="$2" rec base change role status verdict head round report loop max
+  local action="" outcome="stop" kind="attention" out_verdict="" next="" detail="" why sess_json ctx
   loop="$dir/loop.yaml"
   rec="$(ho_newest_in "$dir")" || return 0
   base="$(basename "$rec")"
@@ -44,59 +52,92 @@ route_dir() {
 
   if [[ "$(ho_head "$root")" != "$head" ]]; then
     action="user:unclean-head"
-    ho_notify_user "$root" "[$change] ${base}：worktree 的 HEAD $(ho_head "$root") 與交件單的 head $head 不同，未交接。"
+    detail="${base}：worktree 的 HEAD $(ho_head "$root") 與交件單的 head $head 不同，未交接。"
+    next="把 worktree 移回交件單的 commit，或請 Agent 寫新的交件單。"
   elif ! ho_clean "$root"; then
     action="user:unclean-worktree"
-    ho_notify_user "$root" "[$change] ${base}：$root 有未提交的變更，未交接。"
+    detail="${base}：$root 有未提交的變更，未交接。"
+    next="提交或清掉變更後，請 Agent 寫新的交件單。"
   elif [[ "$role" == finish ]]; then
     action="user:finish-$status"
     if [[ "$status" == blocked ]]; then
-      ho_notify_user "$root" "[$change] 收尾停下（${base}）：$(kv_get "$rec" note 2>/dev/null)。處理後執行：handoff-finish $change"
+      detail="收尾停下（${base}）：$(kv_get "$rec" note 2>/dev/null)"
+      next="處理後執行：handoff-finish $change"
     else
-      ho_notify_user "$root" "[$change] 收尾結束：status ${status}（${base}）。"
+      outcome="delivered"; kind="finish"; next="收尾結束（status ${status}），迴圈完成。"
     fi
   elif [[ "$status" == blocked || "$verdict" == blocked ]]; then
     action="user:blocked"
-    ho_notify_user "$root" "[$change] $base 為 blocked，需要你處理：$(kv_get "$rec" note 2>/dev/null)"
+    detail="$base 為 blocked：$(kv_get "$rec" note 2>/dev/null)"
+    next="處理後請 Agent 寫新的交件單。"
   elif [[ "$role" == implement ]]; then
-    action="$(to_reviewer "$dir" "$root" "$change" "$head" "$round")"
+    to_reviewer "$dir" "$root" "$change" "$head" "$round"
   elif [[ "$verdict" == changes-required ]]; then
     if (( round >= max )); then
       action="user:round-limit"
-      ho_notify_user "$root" "[$change] 已達 $max 輪上限，第 $round 輪審查仍為 changes-required；不再自動退回。"
+      detail="已達 $max 輪上限，第 $round 輪審查仍為 changes-required；不再自動退回。"
+      next="決定是否繼續：提高 max_rounds 後請實作者修正，或結束迴圈。"
     else
-      action="$(to_implementer "$dir" "$root" "$change" "$head" "$round" "$report")"
+      to_implementer "$dir" "$root" "$change" "$head" "$round" "$report"
     fi
   elif [[ "$verdict" == pass ]]; then
     if [[ "$(kv_get "$loop" finish.trigger 2>/dev/null || echo ask)" == auto ]]; then
-      if id="$(ho_finish_open "$(kv_get "$loop" implementer.worktree)/.agent-handoff/$change" 2>&1)"; then
-        action="finish:opened:$id"
-      else
+      local impl_dir
+      impl_dir="$(kv_get "$loop" implementer.worktree)/.agent-handoff/$change"
+      if ! why="$(ho_finish_check "$impl_dir")"; then
         action="user:finish-refused"
-        ho_notify_user "$root" "[$change] 審查通過，但無法自動收尾：$id"
+        detail="第 $round 輪審查通過，但無法自動收尾：$why"
+        next="處理後執行：handoff-finish $change"
+      elif why="$(ho_finish_open "$impl_dir" 2>&1)"; then
+        action="finish:opened:$why"; outcome="delivered"; kind="review"; out_verdict="pass"
+        next="已自動開啟收尾 Session。"
+      else
+        action="finish:open-failed"; outcome="retry"
+        detail="第 $round 輪審查通過，但無法開啟收尾 Session：${why##*$'\n'}"
+        next="$(retry_next "$root")"
       fi
     else
       action="user:pass-ask"
-      ho_notify_user "$root" "[$change] 第 $round 輪審查通過（commit ${head}）。確認後執行：handoff-finish $change"
+      detail="第 $round 輪審查通過（commit ${head:0:7}）。"
+      next="請執行：handoff-finish $change"
     fi
   else
     action="user:unknown-record"
-    ho_notify_user "$root" "[$change] 無法判讀交件單 ${base}。"
+    detail="無法判讀交件單 ${base}。"
+    next="請 Agent 依 agent-handoff Skill 寫新的交件單。"
   fi
 
-  ho_log "$dir" "$base action=$action session=${CHIRP_SESSION_ID:-unknown} model=$(ho_xirp_model "${CHIRP_SESSION_ID:-}")"
-  printf '%s\n' "$base" >> "$dir/.routed"
+  # One Xirp query serves the routing log and the agent label.
+  sess_json="$(ho_xirp_session "${CHIRP_SESSION_ID:-}")" || sess_json=""
+  [[ -n "$sess_json" ]] || sess_json='{}'
+  ho_log "$dir" "$base action=$action session=${CHIRP_SESSION_ID:-unknown} model=$(jq -r '.model // "unknown"' <<<"$sess_json" 2>/dev/null || echo unknown)"
+  ctx="$(jq -nc --arg c "$change" --arg r "$round" --arg h "${head:0:7}" --arg a "$(ho_agent_label "$sess_json")" \
+    --arg s "$native_session" --arg w "$root" '{change:$c, round:$r, commit:$h, agent:$a, session_id:$s, cwd:$w}')"
+  if [[ "$outcome" == retry ]]; then
+    grep -qxF "$base" "$dir/.notified" 2>/dev/null && return 0
+    printf '%s\n' "$base" >> "$dir/.notified"
+  fi
+  ho_notify "$ctx" "$kind" "$out_verdict" "$next" "$detail"
+  [[ "$outcome" == retry ]] || printf '%s\n' "$base" >> "$dir/.routed"
 }
 
+# The installed hook is not on PATH, so the retry line names its full path.
+retry_next() { printf '原因排除後在 %s 執行：bash ~/.config/wk-workflow/handoff/handoff-route --foreground' "$1"; }
+
+# to_reviewer and to_implementer set the caller's action, outcome, kind, next and detail.
 to_reviewer() {
   local dir="$1" root="$2" change="$3" head="$4" round="$5" loop="$1/loop.yaml" sess wt mode id
+  outcome="retry"; next="$(retry_next "$root")"
   sess="$(kv_get "$loop" reviewer.session 2>/dev/null || true)"
   wt="$(kv_get "$loop" reviewer.worktree 2>/dev/null || true)"
   mode="$(kv_get "$loop" review_template.worktree 2>/dev/null || echo shared)"
   if [[ -z "$sess" ]]; then
     if [[ "$mode" == new ]]; then
       wt="${root}-review"
-      git -C "$root" worktree add -q --detach "$wt" "$head" 2>/dev/null || { ho_notify_user "$root" "[$change] 無法建立審查 worktree ${wt}。"; echo "user:review-worktree-failed"; return; }
+      # A retry finds the worktree made by an earlier attempt and only moves it.
+      if [[ -d "$wt" ]]; then git -C "$wt" checkout -q --detach "$head" 2>/dev/null
+      else git -C "$root" worktree add -q --detach "$wt" "$head" 2>/dev/null; fi \
+        || { action="user:review-worktree-failed"; detail="無法建立審查 worktree ${wt}，第 $round 輪未交給審查者，迴圈已停住。"; return; }
       kv_set "$loop" reviewer.worktree "$wt"
       mkdir -p "$wt/.agent-handoff/$change" && cp "$loop" "$wt/.agent-handoff/$change/loop.yaml"
     else
@@ -104,31 +145,45 @@ to_reviewer() {
     fi
     if id="$(ho_open_role "$dir" review_template "$wt" "$head" "$round" "" 2>/dev/null)"; then
       ho_loop_set "$dir" reviewer.session "$id"
-      echo "reviewer:opened:$id"
+      action="reviewer:opened:$id"; outcome="delivered"; kind="implement"
+      next="已開啟審查者的 Session，請其審查第 ${round} 輪。"
     else
-      ho_notify_user "$root" "[$change] 無法開啟審查 Session。"
-      echo "user:reviewer-open-failed"
+      action="reviewer:open-failed"; detail="無法開啟審查 Session，第 $round 輪未交給審查者，迴圈已停住。"
     fi
     return
   fi
   [[ -n "$wt" ]] || wt="$root"
   if [[ "$wt" != "$root" ]]; then
     if ! ho_clean "$wt"; then
-      ho_notify_user "$root" "[$change] 審查 worktree $wt 有未提交的變更，未移到新的 commit。"
-      echo "user:review-worktree-unclean"; return
+      action="user:review-worktree-unclean"; outcome="stop"
+      detail="審查 worktree $wt 有未提交的變更，未移到新的 commit。"
+      next="清理審查 worktree 後，請實作者寫新的交件單。"
+      return
     fi
-    git -C "$wt" checkout -q --detach "$head" 2>/dev/null || { ho_notify_user "$root" "[$change] 無法把審查 worktree 移到 ${head}。"; echo "user:review-move-failed"; return; }
+    git -C "$wt" checkout -q --detach "$head" 2>/dev/null \
+      || { action="user:review-move-failed"; detail="無法把審查 worktree $wt 移到 ${head:0:7}，第 $round 輪未交給審查者，迴圈已停住。"; return; }
   fi
-  ho_xirp_message "$sess" "[agent-handoff] $change 第 $round 輪：請以 change-review 審查 commit ${head}（worktree ${wt}）。完成後依 agent-handoff Skill 寫 review 交件單。"
-  echo "reviewer:messaged:$sess"
+  if ho_xirp_message "$sess" "[agent-handoff] $change 第 $round 輪：請以 change-review 審查 commit ${head}（worktree ${wt}）。完成後依 agent-handoff Skill 寫 review 交件單。"; then
+    action="reviewer:messaged:$sess"; outcome="delivered"; kind="implement"
+    next="已請審查者審查第 $round 輪。"
+  else
+    action="reviewer:send-failed:$sess"
+    detail="無法把第 $round 輪交給審查者（Session ${sess}），迴圈已停住。"
+  fi
 }
 
 to_implementer() {
   local dir="$1" root="$2" change="$3" head="$4" round="$5" report="$6" loop="$1/loop.yaml" sess abs
   sess="$(kv_get "$loop" implementer.session)"
   abs="$root/$report"
-  ho_xirp_message "$sess" "[agent-handoff] $change 第 $round 輪審查結果為 changes-required。受審 commit：${head}。報告：${abs}。請依報告修正，測試通過後本機 commit，再寫 implement 交件單。"
-  echo "implementer:messaged:$sess"
+  if ho_xirp_message "$sess" "[agent-handoff] $change 第 $round 輪審查結果為 changes-required。受審 commit：${head}。報告：${abs}。請依報告修正，測試通過後本機 commit，再寫 implement 交件單。"; then
+    action="implementer:messaged:$sess"; outcome="delivered"; kind="review"; out_verdict="changes-required"
+    next="已把第 $round 輪的審查報告交給實作者修正。"
+  else
+    action="implementer:send-failed:$sess"; outcome="retry"
+    detail="無法把第 $round 輪的審查報告交給實作者（Session ${sess}），迴圈已停住。"
+    next="$(retry_next "$root")"
+  fi
 }
 
 if [[ "${1:-}" == "--foreground" ]]; then

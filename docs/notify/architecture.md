@@ -108,6 +108,9 @@ NOTIFY_COMPLETION=true
 NOTIFY_AUTHORIZATION=true
 NOTIFY_USER_INPUT=true
 NOTIFY_FAILURE=true
+NOTIFY_HANDOFF_IMPLEMENT=true    # handoff loop progress; attention has no switch
+NOTIFY_HANDOFF_REVIEW=true
+NOTIFY_HANDOFF_FINISH=true
 NOTIFY_AUTHORIZATION_DELAY_SECONDS=30   # optional; 0 = immediate
 NOTIFY_AUTHORIZATION_REARM_SECONDS=600  # optional
 # LINE_ENABLED=false       # Future extension
@@ -167,7 +170,8 @@ bash ~/.config/ai-notify/hooks/telegram-notify.sh <event-type> [tool-name]
         ├─ update Antigravity approval state and parse terminal reason
         ├─ for Codex permission/sync-question hooks: independently start opt-in inspection
         ├─ for Codex async-question results: validate accepted=true without daemon inspection
-        ├─ classify via events.tsv: completion / authorization / user_input / failure
+        ├─ classify via events.tsv: completion / authorization / user_input / failure,
+        │  or handoff_implement / handoff_review / handoff_finish / attention for `handoff` events
         ├─ apply the category switch (NOTIFY_LEVEL only defaults completion)
         ├─ authorization: record a wait and let a detached check decide after the delay
         ├─ check TELEGRAM_ENABLED and credentials (skipped in dry-run)
@@ -365,6 +369,8 @@ Markers `claude-<session>.pending` and `antigravity-<session>.pending` each have
 ## Message Templates
 
 `telegram/events.tsv` maps an event key to category, template and reason label (`<prefix>:*` is the fallback; category `none` is never sent; absent events keep the generic "AI CLI Event" message). Built-in templates in `telegram/templates/` deploy to `~/.config/ai-notify/hooks/templates/` and are replaced on every update; `~/.config/ai-notify/templates/<name>.md` overrides one by name, and a missing, empty or unreadable file falls back to the built-in. Install, update, fix-hooks and uninstall never touch the override directory; uninstall removes only the built-in templates and the table.
+
+`handoff` events come from the agent handoff loop (`scripts/handoff/handoff-route`) with a JSON body; the `kind` field selects `handoff:<kind>`. Progress kinds follow `NOTIFY_HANDOFF_IMPLEMENT`, `NOTIFY_HANDOFF_REVIEW` and `NOTIFY_HANDOFF_FINISH` (missing = on); `attention` is always sent while Telegram is enabled and falls back to built-in text when its row or template is missing. The hook script carries the line `# ai-notify-capability: handoff-events`, which the handoff side reads to decide between handoff events and the generic notice.
 
 Placeholders: `{title_suffix} {tool} {project} {time} {tag} {message} {reason} {request_tool} {delay}`. Values are escaped for Telegram legacy Markdown; a line made only of empty placeholders is removed; unknown placeholders stay as is. There is no eval, condition or loop.
 

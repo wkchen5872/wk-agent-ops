@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Offline tests for the agent handoff loop: record parser, handoff-write, routing hook, and launcher.
-# Usage: bash tests/test_agent_handoff.sh [kv|write|skill|install|route|start|finish|hookinstall|cleanup|all]
+# Usage: bash tests/test_agent_handoff.sh [kv|write|skill|install|route|notify|mixed|start|finish|hookinstall|cleanup|all]
 set -u
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -252,15 +252,25 @@ case "$1 $2" in
     printf '%s\n' "$json" > "$S/create-$n.json"
     jq -c --arg id "sess-$n" '{id:$id, name:.customName}' <<<"$json" >> "$S/sessions"; echo '{}' ;;
   "session list") if [[ -s "$S/sessions" ]]; then jq -s '.' "$S/sessions"; else echo '[]'; fi ;;
-  "session get") [[ "$3" == missing-* ]] && exit 1; jq -n --arg id "$3" '{id:$id, model:"fake-model"}' ;;
-  "session message") printf '%s\t%s\n' "$3" "$4" >> "$S/messages" ;;
+  "session get") [[ "$3" == missing-* ]] && exit 1
+    if [[ -f "$S/session.json" ]]; then jq --arg id "$3" '. + {id:$id}' "$S/session.json"
+    else jq -n --arg id "$3" '{id:$id, currentAgent:"claude", model:"fake-model", agentLaunchOptions:{agentName:"claude", options:{model:"opus", effort:"high"}}}'; fi ;;
+  "session message") [[ -e "$S/msg-fail" ]] && exit 1; printf '%s\t%s\n' "$3" "$4" >> "$S/messages" ;;
   "session delete") [[ "$3" == missing-* ]] && exit 1; printf '%s\n' "$3" >> "$S/deleted" ;;
   "project list") jq -n --arg p "$FAKE_PROJECT_PATH" '[{id:"proj-1", path:$p}]' ;;
 esac
 exit 0
 SH
 printf '#!/usr/bin/env bash\ntouch "$FAKE_XIRP_DIR/gh-called"\nexit 1\n' > "$FAKES/gh"
-printf '#!/usr/bin/env bash\nprintf "action_required=%%s\\n" "${NOTIFY_ACTION_REQUIRED:-unset}" >> "$FAKE_XIRP_DIR/notified"\ncat >> "$FAKE_XIRP_DIR/notified"\nprintf "\\n" >> "$FAKE_XIRP_DIR/notified"\n' > "$FAKES/notify.sh"
+# Fake notification hook: declares handoff events, records each call on one line.
+cat > "$FAKES/notify.sh" <<'SH'
+#!/usr/bin/env bash
+# ai-notify-capability: handoff-events
+payload="$(cat)"
+printf 'event=%s action_required=%s %s\n' "$1" "${NOTIFY_ACTION_REQUIRED:-unset}" "$payload" >> "$FAKE_XIRP_DIR/notified"
+[[ "$1" == handoff ]] && printf '%s\n' "$payload" >> "$FAKE_XIRP_DIR/handoff.jsonl"
+exit "${FAKE_NOTIFY_RC:-0}"
+SH
 chmod +x "$FAKES/xirp" "$FAKES/gh" "$FAKES/notify.sh"
 
 # new_loop <dir> [review-mode] [finish-trigger] [max] : repo with a loop for change add-export
@@ -300,7 +310,7 @@ YAML
 }
 fresh_state() { export FAKE_XIRP_DIR="$tmp/state-$1"; rm -rf "$FAKE_XIRP_DIR"; mkdir -p "$FAKE_XIRP_DIR"; }
 use_project() { export FAKE_PROJECT_PATH="$(dirname "$(git -C "$1" rev-parse --path-format=absolute --git-common-dir)")"; }
-route_in() { (cd "$1" && PATH="$FAKES:$PATH" HANDOFF_NOTIFY="$FAKES/notify.sh" HANDOFF_CREATE_WAIT=2 "$ROUTE" --foreground </dev/null); }
+route_in() { (cd "$1" && PATH="$FAKES:$PATH" HANDOFF_NOTIFY="$FAKES/notify.sh" HANDOFF_CREATE_WAIT=2 CHIRP_SESSION_ID="${T_SID-chirp-1}" "$ROUTE" --foreground </dev/null); }
 hw() { local d="$1"; shift; (cd "$d" && "$WRITE" --change add-export "$@") >/dev/null 2>&1; }
 commit_in() { printf '%s\n' "$2" > "$1/work.txt"; git -C "$1" add work.txt; git -C "$1" commit -qm "$2"; }
 msgs() { cat "$FAKE_XIRP_DIR/messages" 2>/dev/null; }
@@ -354,8 +364,8 @@ if run_section route; then
   hw "$A" --role review --status blocked --verdict changes-required --head HEAD --report report-r1.md --note "reply timed out"
   route_in "$A"
   [[ "$(msgs | wc -l)" == "$before" ]] && notes | grep -q 'reply timed out' && ok "a blocked review only notifies the user" || bad "a blocked review only notifies the user"
-  notes | grep -q 'action_required=true' && ! notes | grep -q 'action_required=unset' \
-    && ok "handoff notices are sent even when action-required notices are turned off" || bad "handoff notices are sent even when action-required notices are turned off"
+  notes | grep -q '^event=handoff action_required=unset ' && ! notes | grep -q 'action_required=true' \
+    && ok "handoff notices use the handoff event without an environment override" || bad "handoff notices use the handoff event without an environment override"
 
   A2="$tmp/route-limit"; new_loop "$A2" shared ask 2; use_project "$A2"; fresh_state r2
   printf 'r\n' > "$A2/r.md"; mkdir -p "$A2/.git/info"; printf '/r.md\n' >> "$A2/.git/info/exclude"
@@ -451,6 +461,236 @@ if run_section route; then
 
   [[ ! -e "$tmp/state-r1/gh-called" && ! -e "$tmp/state-r9/gh-called" ]] && ! compgen -G "$tmp/state-*/gh-called" >/dev/null \
     && ok "routing never calls gh" || bad "routing never calls gh"
+fi
+
+# ---------------------------------------------------------------- handoff notifications
+jl() { cat "$FAKE_XIRP_DIR/handoff.jsonl" 2>/dev/null; }
+kinds() { jl | jq -r .kind 2>/dev/null | paste -sd' ' -; }
+jt() { jl | tail -1 | jq -e "$@" >/dev/null 2>&1; }
+ncount() { if [[ -f "$FAKE_XIRP_DIR/notified" ]]; then wc -l < "$FAKE_XIRP_DIR/notified" | tr -d ' '; else echo 0; fi; }
+routed() { grep -qxF "$2" "$1/.agent-handoff/add-export/.routed" 2>/dev/null; }
+lset() { (source "$ROOT/scripts/handoff/lib/handoff.sh" && kv_set "$@"); }
+rpt() { printf 'r\n' > "$1/r.md"; mkdir -p "$1/.git/info"; printf '/r.md\n' >> "$1/.git/info/exclude"; }
+# one_record <dir> <state> <handoff-write args...>: fresh loop and state with one record written
+one_record() { local d="$1" s="$2"; shift 2; new_loop "$d"; use_project "$d"; fresh_state "$s"; rpt "$d"; hw "$d" "$@"; }
+
+if run_section notify; then
+  printf 'handoff notifications\n'
+  source "$KV"
+
+  N="$tmp/n-loop"; new_loop "$N"; use_project "$N"; fresh_state n1; rpt "$N"
+  commit_in "$N" one; X="$(git -C "$N" rev-parse HEAD)"; hw "$N" --role implement --status done --head HEAD
+  route_in "$N"
+  notes | grep -q '^event=handoff action_required=unset ' && ! notes | grep -q 'action_required=true' \
+    && ok "notifies through the handoff event without an environment override" || bad "notifies through the handoff event without an environment override"
+  jt --arg c "${X:0:7}" --arg w "$N" '.kind=="implement" and .change=="add-export" and .round=="1" and .commit==$c and .cwd==$w and (.next|test("審查者")) and (.next|test("1"))' \
+    && ok "implementation handover names change, round, 7-character commit and the reviewer step" || bad "implementation handover names change, round, 7-character commit and the reviewer step ($(jl | tail -1))"
+  jt '.agent=="Claude / fake-model / high"' && ok "agent label comes from Xirp's tool, model and effort" || bad "agent label comes from Xirp's tool, model and effort ($(jl | tail -1))"
+  hw "$N" --role review --status done --verdict changes-required --head HEAD --report r.md; route_in "$N"
+  jt '.kind=="review" and .verdict=="changes-required" and .round=="1" and (.next|test("實作者"))' \
+    && ok "changes-required sends a review notice that the implementer was asked" || bad "changes-required sends a review notice that the implementer was asked ($(jl | tail -1))"
+  commit_in "$N" two; Y="$(git -C "$N" rev-parse HEAD)"; hw "$N" --role implement --status done --head HEAD; route_in "$N"
+  jt --arg c "${Y:0:7}" '.kind=="implement" and .round=="2" and .commit==$c and (.next|test("第 2 輪"))' \
+    && ok "a later handover names round 2 and its commit" || bad "a later handover names round 2 and its commit ($(jl | tail -1))"
+  hw "$N" --role review --status done --verdict pass --head HEAD --report r.md; route_in "$N"
+  jt '.kind=="attention" and (.next|test("handoff-finish add-export"))' \
+    && ok "a pass with trigger ask is an attention notice to run handoff-finish" || bad "a pass with trigger ask is an attention notice to run handoff-finish ($(jl | tail -1))"
+  hw "$N" --role finish --status done --head HEAD; route_in "$N"
+  jt '.kind=="finish"' && ok "a finish record sends a finish notice" || bad "a finish record sends a finish notice"
+  [[ "$(kinds)" == "implement review implement attention finish" ]] && ok "notices follow the loop in order" || bad "notices follow the loop in order ($(kinds))"
+  before="$(ncount)"; route_in "$N"
+  [[ "$(ncount)" == "$before" ]] && ok "an agent stopping again sends nothing new" || bad "an agent stopping again sends nothing new"
+
+  NA="$tmp/n-auto"; new_loop "$NA" shared auto; use_project "$NA"; fresh_state n2; rpt "$NA"
+  hw "$NA" --role implement --status done --head HEAD; hw "$NA" --role review --status done --verdict pass --head HEAD --report r.md
+  route_in "$NA"
+  [[ "$(created)" == 1 && "$(kinds)" == review ]] && jt '.verdict=="pass" and (.next|test("收尾"))' \
+    && ok "a pass with trigger auto opens finish and sends a review notice" || bad "a pass with trigger auto opens finish and sends a review notice ($(kinds))"
+
+  # Agent information
+  agent_case() {  # <state> <session.json or empty> → agent field of the implementation notice
+    one_record "$tmp/n-agent-$1" "$1" --role implement --status done --head HEAD
+    [[ -n "$2" ]] && printf '%s\n' "$2" > "$FAKE_XIRP_DIR/session.json"
+    route_in "$tmp/n-agent-$1"; jl | tail -1 | jq -r .agent
+  }
+  [[ "$(agent_case a1 '{"currentAgent":"codex","model":"gpt-6.1-sol","agentLaunchOptions":{"options":{"reasoning_effort":null}}}')" == "Codex / gpt-6.1-sol" ]] \
+    && ok "an unknown effort is left out of the agent label" || bad "an unknown effort is left out of the agent label"
+  [[ "$(agent_case a2 '{"currentAgent":"codex","model":"gpt-6.1-sol","agentLaunchOptions":{"options":{"reasoning_effort":"xhigh"}}}')" == "Codex / gpt-6.1-sol / xhigh" ]] \
+    && ok "Codex effort is read from reasoning_effort" || bad "Codex effort is read from reasoning_effort"
+  [[ "$(agent_case a3 '{"currentAgent":"claude","model":"claude-sonnet-5-5","requestedModel":"opus","agentLaunchOptions":{"options":{"model":"opus","effort":"high"}}}')" == "Claude / claude-sonnet-5-5 / high" ]] \
+    && ok "the agent label shows the model in use, not the one requested at launch" || bad "the agent label shows the model in use, not the one requested at launch"
+  [[ "$(agent_case a4 '{"currentAgent":"codex","model":"gpt_6*x"}')" == "Codex / gpt_6*x" ]] \
+    && ok "agent values are passed as reported" || bad "agent values are passed as reported"
+  one_record "$tmp/n-agent-a5" a5 --role implement --status done --head HEAD
+  T_SID=missing-1 route_in "$tmp/n-agent-a5"; rc=$?
+  [[ "$rc" == 0 && "$(created)" == 1 ]] && jt '.kind=="implement" and .agent==""' \
+    && ok "when Xirp cannot report the session the record is routed and notified without agent parts" || bad "when Xirp cannot report the session the record is routed and notified without agent parts"
+  one_record "$tmp/n-sid" n3 --role implement --status done --head HEAD
+  (cd "$tmp/n-sid" && printf '{"session_id":"native-1"}' | PATH="$FAKES:$PATH" HANDOFF_NOTIFY="$FAKES/notify.sh" HANDOFF_CREATE_WAIT=2 CHIRP_SESSION_ID=chirp-1 "$ROUTE" --foreground)
+  jt '.session_id=="native-1"' && ok "the notice carries the native session id from the hook input" || bad "the notice carries the native session id from the hook input"
+
+  one_record "$tmp/n-rc" n4 --role implement --status done --head HEAD
+  FAKE_NOTIFY_RC=1 route_in "$tmp/n-rc"; rc=$?
+  [[ "$rc" == 0 && "$(created)" == 1 ]] && routed "$tmp/n-rc" 01-implement.yaml \
+    && ok "a failing notifier changes neither routing nor the exit status" || bad "a failing notifier changes neither routing nor the exit status"
+
+  # Attention sources that stop for the user: notified once, then marked processed.
+  stop_case() {  # <label> <dir> <detail regex> <next regex>
+    if jt --arg d "$3" --arg n "$4" '.kind=="attention" and (.detail|test($d)) and (.next|test($n))' && routed "$2" "$(ls "$2/.agent-handoff/add-export" | grep -E '^[0-9]{2}-' | sort | tail -1)"; then
+      local before; before="$(ncount)"; route_in "$2"
+      [[ "$(ncount)" == "$before" ]] && ok "$1" || bad "$1 (notified again)"
+    else
+      bad "$1 ($(jl | tail -1))"
+    fi
+  }
+  one_record "$tmp/n-blocked" s1 --role implement --status blocked --head HEAD --note "need a decision"; route_in "$tmp/n-blocked"
+  stop_case "a blocked record is one attention notice with its note" "$tmp/n-blocked" 'need a decision' '.'
+  NL="$tmp/n-limit"; new_loop "$NL" shared ask 1; use_project "$NL"; fresh_state s2; rpt "$NL"
+  hw "$NL" --role implement --status done --head HEAD; hw "$NL" --role review --status done --verdict changes-required --head HEAD --report r.md; route_in "$NL"
+  [[ -z "$(msgs)" ]] && stop_case "the round limit is one attention notice and the implementer gets no message" "$NL" '上限' '.' \
+    || bad "the round limit is one attention notice and the implementer gets no message"
+  one_record "$tmp/n-dirty" s3 --role implement --status done --head HEAD; printf 'wip\n' > "$tmp/n-dirty/wip.txt"; route_in "$tmp/n-dirty"
+  stop_case "an unclean worktree is one attention notice" "$tmp/n-dirty" '未提交' '.'
+  one_record "$tmp/n-moved" s4 --role implement --status done --head HEAD; commit_in "$tmp/n-moved" moved; route_in "$tmp/n-moved"
+  stop_case "a worktree at another head is one attention notice" "$tmp/n-moved" 'HEAD' '.'
+  NU="$tmp/n-unknown"; new_loop "$NU"; use_project "$NU"; fresh_state s5
+  printf 'change: add-export\nround: 1\nrole: review\nstatus: done\nverdict: weird\nhead: %s\n' "$(git -C "$NU" rev-parse HEAD)" > "$NU/.agent-handoff/add-export/01-review.yaml"
+  route_in "$NU"
+  stop_case "an unreadable record is one attention notice" "$NU" '01-review.yaml' '.'
+  one_record "$tmp/n-fblocked" s6 --role finish --status blocked --head HEAD --note "push rejected"; route_in "$tmp/n-fblocked"
+  stop_case "a stopped finish is one attention notice with the reason and the retry command" "$tmp/n-fblocked" 'push rejected' 'handoff-finish add-export'
+  one_record "$tmp/n-ask" s7 --role review --status done --verdict pass --head HEAD --report r.md; route_in "$tmp/n-ask"
+  stop_case "a pass waiting for handoff-finish is notified once" "$tmp/n-ask" '.' '^請執行：handoff-finish add-export$'
+  # Refused auto finish: the review passed in B while the implementer moved on in A.
+  FA="$tmp/n-refuse"; new_loop "$FA" new auto; use_project "$FA"; fresh_state s8; FB="${FA}-review"
+  commit_in "$FA" one; hw "$FA" --role implement --status done --head HEAD; route_in "$FA"
+  fcommon="$(git -C "$FA" rev-parse --path-format=absolute --git-common-dir)"; mkdir -p "$fcommon/info"; printf '/r.md\n' >> "$fcommon/info/exclude"
+  printf 'r\n' > "$FB/r.md"; hw "$FB" --role review --status done --verdict pass --head HEAD --report r.md
+  commit_in "$FA" moved-on; route_in "$FB"
+  [[ "$(created)" == 1 ]] && stop_case "a refused automatic finish is one attention notice" "$FB" '收尾' 'handoff-finish add-export' \
+    || bad "a refused automatic finish is one attention notice (created $(created))"
+
+  # Retryable failures: one attention notice, left unprocessed, retried by the next run.
+  retry_case() {  # <label> <dir> <record> <detail regex>
+    if jt --arg d "$4" '.kind=="attention" and (.detail|test($d)) and (.next|test("handoff-route --foreground"))' && ! routed "$2" "$3"; then
+      local before; before="$(ncount)"; route_in "$2"
+      [[ "$(ncount)" == "$before" ]] && ! routed "$2" "$3" && ok "$1" || bad "$1 (second run)"
+    else
+      bad "$1 ($(jl | tail -1))"
+    fi
+  }
+  NR="$tmp/n-sendrev"; one_record "$NR" f1 --role implement --status done --head HEAD
+  lset "$NR/.agent-handoff/add-export/loop.yaml" reviewer.session sess-r; lset "$NR/.agent-handoff/add-export/loop.yaml" reviewer.worktree "$NR"
+  touch "$FAKE_XIRP_DIR/msg-fail"; route_in "$NR"; rc=$?
+  [[ "$rc" == 0 && "$(kinds)" == attention ]] && grep -q 'send-failed' "$NR/.agent-handoff/add-export/routing.log" \
+    && retry_case "a message the reviewer did not get is one attention notice and stays unprocessed" "$NR" 01-implement.yaml '審查者' \
+    || bad "a message the reviewer did not get is one attention notice and stays unprocessed ($(kinds))"
+  rm -f "$FAKE_XIRP_DIR/msg-fail"; route_in "$NR"
+  [[ "$(msgs | grep -c $'^sess-r\t')" == 1 && "$(kinds)" == "attention implement" ]] && routed "$NR" 01-implement.yaml \
+    && ok "a retry that reaches the reviewer sends the message and the progress notice once" || bad "a retry that reaches the reviewer sends the message and the progress notice once ($(kinds))"
+  NI="$tmp/n-sendimpl"; one_record "$NI" f2 --role implement --status done --head HEAD
+  hw "$NI" --role review --status done --verdict changes-required --head HEAD --report r.md
+  touch "$FAKE_XIRP_DIR/msg-fail"; route_in "$NI"; rc=$?
+  [[ "$rc" == 0 && "$(kinds)" == attention ]] && grep -q 'send-failed' "$NI/.agent-handoff/add-export/routing.log" \
+    && retry_case "a message the implementer did not get is one attention notice and stays unprocessed" "$NI" 02-review.yaml '實作者' \
+    || bad "a message the implementer did not get is one attention notice and stays unprocessed ($(kinds))"
+  rm -f "$FAKE_XIRP_DIR/msg-fail"; route_in "$NI"
+  [[ "$(msgs | grep -c $'^impl-1\t')" == 1 && "$(kinds)" == "attention review" ]] && routed "$NI" 02-review.yaml \
+    && ok "a retry that reaches the implementer sends the message and the review notice once" || bad "a retry that reaches the implementer sends the message and the review notice once ($(kinds))"
+  NO="$tmp/n-open"; one_record "$NO" f3 --role implement --status done --head HEAD
+  export FAKE_PROJECT_PATH="$tmp/nowhere"; route_in "$NO"
+  [[ "$(created)" == 0 ]] && retry_case "a reviewer that cannot be opened is one attention notice and stays unprocessed" "$NO" 01-implement.yaml '審查' \
+    || bad "a reviewer that cannot be opened is one attention notice and stays unprocessed"
+  use_project "$NO"; route_in "$NO"
+  [[ "$(created)" == 1 && "$(kinds)" == "attention implement" ]] && routed "$NO" 01-implement.yaml \
+    && ok "a later run opens the reviewer and sends the progress notice" || bad "a later run opens the reviewer and sends the progress notice ($(kinds))"
+  NW="$tmp/n-wtfail"; new_loop "$NW" new; use_project "$NW"; fresh_state f4; hw "$NW" --role implement --status done --head HEAD
+  touch "${NW}-review"; route_in "$NW"
+  [[ "$(created)" == 0 ]] && retry_case "a review worktree that cannot be created is one attention notice and stays unprocessed" "$NW" 01-implement.yaml 'worktree' \
+    || bad "a review worktree that cannot be created is one attention notice and stays unprocessed"
+  rm -f "${NW}-review"; route_in "$NW"
+  [[ "$(created)" == 1 && -d "${NW}-review" ]] && routed "$NW" 01-implement.yaml \
+    && ok "a later run creates the review worktree and opens the reviewer" || bad "a later run creates the review worktree and opens the reviewer"
+  NV="$tmp/n-movefail"; one_record "$NV" f5 --role implement --status done --head HEAD
+  lset "$NV/.agent-handoff/add-export/loop.yaml" reviewer.session sess-r; lset "$NV/.agent-handoff/add-export/loop.yaml" reviewer.worktree "$tmp/n-not-a-worktree"
+  mkdir -p "$tmp/n-not-a-worktree"; route_in "$NV"
+  [[ -z "$(msgs)" ]] && retry_case "a review worktree that cannot be moved is one attention notice and stays unprocessed" "$NV" 01-implement.yaml 'worktree' \
+    || bad "a review worktree that cannot be moved is one attention notice and stays unprocessed"
+
+  # Without a notification hook nothing is sent and routing is unchanged.
+  route_none() { (cd "$1" && PATH="$FAKES:$PATH" HANDOFF_NOTIFY="$tmp/no-such-notify.sh" HANDOFF_CREATE_WAIT=2 CHIRP_SESSION_ID=chirp-1 "$ROUTE" --foreground </dev/null); }
+  one_record "$tmp/n-none-ask" u1 --role review --status done --verdict pass --head HEAD --report r.md; route_none "$tmp/n-none-ask"; rc1=$?
+  one_record "$tmp/n-none-blocked" u2 --role implement --status blocked --head HEAD --note x; route_none "$tmp/n-none-blocked"; rc2=$?
+  one_record "$tmp/n-none-impl" u3 --role implement --status done --head HEAD; route_none "$tmp/n-none-impl"; rc3=$?
+  [[ "$rc1$rc2$rc3" == 000 && ! -e "$tmp/state-u1/notified" && ! -e "$tmp/state-u2/notified" && ! -e "$tmp/state-u3/notified" ]] \
+    && routed "$tmp/n-none-ask" 01-review.yaml && routed "$tmp/n-none-blocked" 01-implement.yaml && routed "$tmp/n-none-impl" 01-implement.yaml \
+    && [[ "$(created)" == 1 ]] \
+    && ok "without a notification hook nothing is sent, records are processed and the reviewer is opened" || bad "without a notification hook nothing is sent, records are processed and the reviewer is opened"
+fi
+
+# ---------------------------------------------------------------- mixed deployments (real installers, dry-run notifier)
+if run_section mixed; then
+  printf 'mixed deployments\n'
+  source "$KV"
+  OLD_HOOK="$ROOT/tests/fixtures/notify/telegram-notify-pre-handoff.sh"
+  install_handoff() { HOME="$1" bash "$ROOT/scripts/handoff/install.sh" >/dev/null 2>&1; }
+  install_notify() { HOME="$1" bash -c 'source "$1"; deploy_notify_files' _ "$ROOT/scripts/notify/lib/runtime.sh" >/dev/null 2>&1; }
+  # notify_variant <home> <old|rollback>: old = the hook and data before this change; rollback = only the hook reverted
+  notify_variant() {
+    local hooks="$1/.config/ai-notify/hooks"
+    cp "$OLD_HOOK" "$hooks/telegram-notify.sh"
+    if [[ "$2" == old ]]; then
+      grep -v '^handoff' "$hooks/events.tsv" > "$hooks/events.tsv.tmp" && mv "$hooks/events.tsv.tmp" "$hooks/events.tsv"
+      rm -f "$hooks"/templates/handoff-*.md
+    fi
+  }
+  route_real() { (cd "$1" && env -u HANDOFF_NOTIFY HOME="$2" TELEGRAM_DRY_RUN=true PATH="$FAKES:$PATH" HANDOFF_CREATE_WAIT=2 CHIRP_SESSION_ID=chirp-1 \
+    "$2/.config/wk-workflow/handoff/handoff-route" --foreground </dev/null 2>/dev/null); }
+  # three_cases <home> <tag>: sets OUT_ASK, OUT_BLOCKED, OUT_IMPL and checks routing of each
+  three_cases() {
+    one_record "$tmp/m-$2-ask" "m-$2-ask" --role review --status done --verdict pass --head HEAD --report r.md; OUT_ASK="$(route_real "$tmp/m-$2-ask" "$1")"
+    one_record "$tmp/m-$2-blk" "m-$2-blk" --role implement --status blocked --head HEAD --note "needs-decision-$2"; OUT_BLOCKED="$(route_real "$tmp/m-$2-blk" "$1")"
+    one_record "$tmp/m-$2-impl" "m-$2-impl" --role implement --status done --head HEAD; OUT_IMPL="$(route_real "$tmp/m-$2-impl" "$1")"
+    routed "$tmp/m-$2-ask" 01-review.yaml && routed "$tmp/m-$2-blk" 01-implement.yaml && routed "$tmp/m-$2-impl" 01-implement.yaml && [[ "$(created)" == 1 ]]
+  }
+  generic_case() {  # <label> <home> <tag>
+    if three_cases "$2" "$3" && grep -q 'Action Required' <<<"$OUT_ASK" && grep -q 'handoff-finish add-export' <<<"$OUT_ASK" \
+      && grep -q 'Action Required' <<<"$OUT_BLOCKED" && grep -q "needs-decision-$3" <<<"$OUT_BLOCKED" && [[ -z "$OUT_IMPL" ]]; then
+      ok "$1"
+    else
+      bad "$1"; printf '       ask: %s\n       blocked: %s\n       impl: %s\n' "$OUT_ASK" "$OUT_BLOCKED" "$OUT_IMPL"
+    fi
+  }
+  handoff_case() {  # <label> <home> <tag>
+    if three_cases "$2" "$3" && grep -q '需要你處理' <<<"$OUT_ASK" && grep -q 'handoff-finish add-export' <<<"$OUT_ASK" \
+      && grep -q '需要你處理' <<<"$OUT_BLOCKED" && grep -q "needs-decision-$3" <<<"$OUT_BLOCKED" && grep -q '實作完成' <<<"$OUT_IMPL"; then
+      ok "$1"
+    else
+      bad "$1"; printf '       ask: %s\n       blocked: %s\n       impl: %s\n' "$OUT_ASK" "$OUT_BLOCKED" "$OUT_IMPL"
+    fi
+  }
+
+  H1="$tmp/m-home-old"; install_notify "$H1"; notify_variant "$H1" old; install_handoff "$H1"
+  generic_case "only the handoff side updated: attention reaches the user through the generic path, progress is skipped" "$H1" old
+  H2="$tmp/m-home-nh"; install_notify "$H2"; install_handoff "$H2"
+  handoff_case "both updated, notifier first: handoff events with their own titles" "$H2" nh
+  H3="$tmp/m-home-hn"; install_handoff "$H3"; install_notify "$H3"
+  handoff_case "both updated, handoff side first: handoff events with their own titles" "$H3" hn
+  H4="$tmp/m-home-rb"; install_notify "$H4"; install_handoff "$H4"; notify_variant "$H4" rollback
+  generic_case "notifier rolled back with newer data files left behind: attention still uses the generic path" "$H4" rb
+  H5="$tmp/m-home-rbc"; install_notify "$H5"; install_handoff "$H5"; notify_variant "$H5" old
+  generic_case "notifier rolled back with its data files cleared: attention still uses the generic path" "$H5" rbc
+  # Only the notifier updated: the previous handoff side sent this generic notice with an env override.
+  out="$(jq -n --arg m "[add-export] 第 1 輪審查通過。確認後執行：handoff-finish add-export" '{hook_event_name:"Notification", message:$m, cwd:"/tmp/p"}' \
+    | env -i PATH="$PATH" HOME="$H2" TELEGRAM_DRY_RUN=true NOTIFY_ACTION_REQUIRED=true bash "$H2/.config/ai-notify/hooks/telegram-notify.sh" notification "Agent Handoff" 2>/dev/null)"
+  grep -q 'Action Required' <<<"$out" && grep -q 'handoff-finish add-export' <<<"$out" \
+    && ok "only the notifier updated: the previous handoff notice is still delivered" || bad "only the notifier updated: the previous handoff notice is still delivered ($out)"
+  H6="$tmp/m-home-none"; install_handoff "$H6"
+  three_cases "$H6" none && [[ -z "$OUT_ASK$OUT_BLOCKED$OUT_IMPL" ]] \
+    && ok "never installed notifier: nothing is sent and routing is unchanged" || bad "never installed notifier: nothing is sent and routing is unchanged"
+  hc="$(jq -r '[.hooks.Stop[]?.hooks[]?.command | select(test("handoff-route"))] | join("|")' "$H2/.claude/settings.json" "$H2/.codex/hooks.json" | paste -sd'|' -)"
+  [[ "$hc" == "bash \"$H2/.config/wk-workflow/handoff/handoff-route\"|bash \"$H2/.config/wk-workflow/handoff/handoff-route\"" ]] \
+    && ok "the registered hook command is unchanged for Claude Code and Codex" || bad "the registered hook command is unchanged for Claude Code and Codex ($hc)"
 fi
 
 # ---------------------------------------------------------------- launcher (handoff-start)

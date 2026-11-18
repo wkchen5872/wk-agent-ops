@@ -124,11 +124,51 @@ For a loop that will not finish (for example a blocked finish whose PR was close
 | `finish` | Notify you only |
 
 Before routing, the worktree holding the record must be clean at the record's `head`;
-otherwise you are notified. Each record is routed once and logged in
-`.agent-handoff/<change-id>/routing.log` with the stopping session's model. The hook never
-writes to GitHub and never pushes. Its notices are sent even when the notifier's
-"action required" category is turned off, because the loop waits for you; failures end silently, so watch for the usual
-"agent stopped" notification if a loop seems stuck.
+otherwise you are notified. Each record is logged in `.agent-handoff/<change-id>/routing.log`
+with the stopping session's model. The hook never writes to GitHub and never pushes, and it
+always exits successfully.
+
+Each record ends in one of three outcomes:
+
+| Outcome | Examples | Notice | Marked processed (`.routed`) |
+| --- | --- | --- | --- |
+| Delivered | reviewer opened or messaged, report handed to the implementer, finish opened | progress notice (if its switch is on) | yes |
+| Stops for you | `blocked`, round limit, any `finish` record, pass with `ask`, worktree not clean or not at `head`, review worktree not clean, unreadable record | one attention notice | yes |
+| Retry | Xirp message not delivered, reviewer or finish session not opened, review worktree not created or moved | one attention notice (recorded in `.notified`) | no |
+
+A retry record is tried again by the next hook run in that worktree, or right away with
+`handoff-route --foreground` run from that worktree
+(`~/.config/wk-workflow/handoff/handoff-route`); the routing log shows `send-failed` or
+`open-failed`. Its attention notice is sent once, however many retries fail; the progress notice
+follows once delivery succeeds.
+
+## Notifications
+
+The hook tells you what happened through the Telegram notifier
+([docs/notify/telegram.md](../../docs/notify/telegram.md)). Each record gives at most one progress
+notice and at most one attention notice.
+
+| Notice | When | Switch (`~/.config/ai-notify/config`) |
+| --- | --- | --- |
+| ✅ 實作完成 | an `implement` record was handed to the reviewer | `NOTIFY_HANDOFF_IMPLEMENT` |
+| 🔁 審查退回／🟢 審查通過 | a `changes-required` review reached the implementer, or a pass with `finish.trigger: auto` opened finish | `NOTIFY_HANDOFF_REVIEW` |
+| 📦 收尾完成 | a `finish`/`done` record | `NOTIFY_HANDOFF_FINISH` |
+| 🔴 需要你處理 | the loop stops for you, or a retry outcome | none: always sent while Telegram is enabled |
+
+- A missing switch counts as on; change them in `bash scripts/notify/telegram/update.sh types`.
+  Turning a switch off never changes routing.
+- A pass with `finish.trigger: ask` is an attention notice, so you are told to run
+  `handoff-finish <change-id>` even with review notices off.
+- Every notice names the change, the round, the commit (7 characters) and one line on what
+  happens next. Its title shows `Agent Handoff (<tool> / <model> / <effort>)` for the session that
+  wrote the record, as Xirp reports it when the record is processed (for example
+  `Claude / claude-opus-5-5 / high`); parts Xirp does not report are left out. The title also
+  carries the same session label as that session's other notifications.
+- The ordinary completion notice of the same session is still sent.
+- Mixed versions: the hook sends handoff events only when the notifier script declares
+  `# ai-notify-capability: handoff-events`. An older or rolled-back notifier gets attention as
+  the previous generic notice (Action Required) and no progress notices. Without a notifier
+  nothing is sent and routing is unchanged.
 
 ## Troubleshooting
 

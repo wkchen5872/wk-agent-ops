@@ -111,13 +111,26 @@ ho_loop_set() {
 }
 
 # --- user notification and logging -------------------------------------------
-# The loop stops until the user acts on these notices, so they are sent even when the
-# notifier's own "action required" category is turned off (env overrides its config).
-ho_notify_user() {
-  local cwd="$1" message="$2"
+HANDOFF_NOTIFY_CAPABILITY="# ai-notify-capability: handoff-events"
+
+# ho_notify <context-json> <kind> <verdict> <next> <detail>
+# kind: implement, review, finish (progress) or attention (the loop waits for the user).
+# A notifier that declares handoff events gets the structured event and applies its own
+# switches; an older one gets attention as the previous generic notice and no progress.
+# No notifier installed: nothing is sent. Failures never reach the caller.
+ho_notify() {
+  local ctx="$1" kind="$2" verdict="$3" next="$4" detail="$5"
   [[ -f "$HANDOFF_NOTIFY" ]] || return 0
-  jq -n --arg m "$message" --arg c "$cwd" '{hook_event_name:"Notification", message:$m, cwd:$c}' \
-    | NOTIFY_ACTION_REQUIRED=true bash "$HANDOFF_NOTIFY" notification "Agent Handoff" >/dev/null 2>&1 || true
+  if grep -qxF "$HANDOFF_NOTIFY_CAPABILITY" "$HANDOFF_NOTIFY" 2>/dev/null; then
+    jq -c --arg k "$kind" --arg v "$verdict" --arg n "$next" --arg d "$detail" \
+      '. + {kind:$k, verdict:$v, next:$n, detail:$d}' <<<"$ctx" \
+      | bash "$HANDOFF_NOTIFY" handoff 2>/dev/null || true
+  elif [[ "$kind" == attention ]]; then
+    jq -c --arg n "$next" --arg d "$detail" \
+      '{hook_event_name:"Notification", message:("[\(.change)] \($d) \($n)"), cwd:.cwd}' <<<"$ctx" \
+      | NOTIFY_ACTION_REQUIRED=true bash "$HANDOFF_NOTIFY" notification "Agent Handoff" 2>/dev/null || true
+  fi
+  return 0
 }
 
 ho_log() {
@@ -126,7 +139,15 @@ ho_log() {
 }
 
 # --- Xirp ----------------------------------------------------------------------
-ho_xirp_model() { xirp session get "$1" --json 2>/dev/null | jq -r '.model // "unknown"' 2>/dev/null; }
+ho_xirp_session() { [[ -n "$1" ]] && xirp session get "$1" --json 2>/dev/null; }
+
+# ho_agent_label <session-json>: "<tool> / <model> / <effort>", leaving out what Xirp does not report.
+ho_agent_label() {
+  jq -r '[(.currentAgent // "" | if . == "claude" then "Claude" elif . == "codex" then "Codex" else . end),
+          (.model // ""),
+          (.agentLaunchOptions.options.effort // .agentLaunchOptions.options.reasoning_effort // "")]
+         | map(select(type == "string" and . != "")) | join(" / ")' <<<"$1" 2>/dev/null
+}
 
 ho_xirp_exists() { xirp session get "$1" --json >/dev/null 2>&1; }
 

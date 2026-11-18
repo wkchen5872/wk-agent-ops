@@ -4,7 +4,8 @@
 init_notify_draft() {
   NOTIFY_DRAFT=()
   local key
-  for key in "${NOTIFY_CATEGORY_KEYS[@]}"; do
+  # Indexes 0-3 are the four categories, 4-6 the handoff progress switches.
+  for key in "${NOTIFY_CATEGORY_KEYS[@]}" "${NOTIFY_HANDOFF_KEYS[@]}"; do
     NOTIFY_DRAFT+=("$(notify_category_value "${key}")")
   done
   NOTIFY_DRAFT_LEVEL="$(normalize_notify_level "${NOTIFY_LEVEL:-all}" 2>/dev/null || echo all)"
@@ -27,6 +28,11 @@ show_notify_draft() {
   printf '  3  [%s] 等待回應\n' "$(notify_switch_label "${NOTIFY_DRAFT[2]}")"
   printf '           Agent 提問、等待你輸入時立即通知\n'
   printf '  4  [%s] 異常停止（目前僅 Antigravity 提供訊號）\n' "$(notify_switch_label "${NOTIFY_DRAFT[3]}")"
+  printf '\n── 交接迴圈 ──────────────────────────\n'
+  printf '  5  [%s] 交件單實作完成\n' "$(notify_switch_label "${NOTIFY_DRAFT[4]}")"
+  printf '  6  [%s] 交件單每輪審查\n' "$(notify_switch_label "${NOTIFY_DRAFT[5]}")"
+  printf '  7  [%s] 交件單收尾\n' "$(notify_switch_label "${NOTIFY_DRAFT[6]}")"
+  printf '           「需要你處理」（迴圈停下等你）一律送出，不受開關影響\n'
 }
 
 show_notify_help() {
@@ -36,6 +42,7 @@ show_notify_help() {
   printf '          Codex 無法查詢執行狀態時，改發「Approval Status Unknown」（可能在等待授權，無法確認）的通知。\n'
   printf '等待回應：Claude 的提問與等待輸入、Codex 的結構化問題；一般文字問句不偵測。\n'
   printf '異常停止：目前依 Antigravity 的終止原因辨識，其他工具未提供對應訊號。\n'
+  printf '交件單：交接迴圈的實作完成、每輪審查與收尾進度，缺少設定時為開；「需要你處理」一律送出。\n'
   printf 'Codex 的授權與同步問題由 hook 觸發的暫時檢查器判斷，輪次結束即退出；\n'
   printf '需要 Python 3 與專用環境中的 websocket-client，不修改全域 Python。\n'
   printf '若介面或 hook 不支援，狀態畫面會列出限制；勾選不等於已實測可用。\n'
@@ -50,7 +57,7 @@ edit_notify_types() {
     printf '舊版快速預設：all / attention_required（選取即確認此預設）\n'
     if ! read -rp '選擇：' choice; then echo '已取消，未儲存。'; return 1; fi
     case "${choice}" in
-      1|2|3|4)
+      1|2|3|4|5|6|7)
         index=$((choice - 1))
         if [[ "${NOTIFY_DRAFT[index]}" == true ]]; then NOTIFY_DRAFT[index]=false; else NOTIFY_DRAFT[index]=true; fi ;;
       h|H) show_notify_help ;;
@@ -76,15 +83,15 @@ edit_notify_types() {
   done
 }
 
-# Writes the four category keys and retires the legacy ones in one atomic write.
+# Writes the category and handoff keys and retires the legacy ones in one atomic write.
 save_notify_draft() {
-  local i args=("$@" NOTIFY_LEVEL "${NOTIFY_DRAFT_LEVEL}")
-  for ((i=0; i<${#NOTIFY_CATEGORY_KEYS[@]}; i++)); do
-    args+=("${NOTIFY_CATEGORY_KEYS[i]}" "${NOTIFY_DRAFT[i]}")
+  local i keys=("${NOTIFY_CATEGORY_KEYS[@]}" "${NOTIFY_HANDOFF_KEYS[@]}") args=("$@" NOTIFY_LEVEL "${NOTIFY_DRAFT_LEVEL}")
+  for ((i=0; i<${#keys[@]}; i++)); do
+    args+=("${keys[i]}" "${NOTIFY_DRAFT[i]}")
   done
   update_config_keys_dropping "${NOTIFY_LEGACY_CATEGORY_KEYS[*]}" "${args[@]}"
-  for ((i=0; i<${#NOTIFY_CATEGORY_KEYS[@]}; i++)); do
-    printf -v "${NOTIFY_CATEGORY_KEYS[i]}" '%s' "${NOTIFY_DRAFT[i]}"
+  for ((i=0; i<${#keys[@]}; i++)); do
+    printf -v "${keys[i]}" '%s' "${NOTIFY_DRAFT[i]}"
   done
   NOTIFY_LEVEL="${NOTIFY_DRAFT_LEVEL}"
 }

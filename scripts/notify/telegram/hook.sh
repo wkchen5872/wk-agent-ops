@@ -5,6 +5,8 @@
 #              $2 = tool name (optional),
 #              JSON on stdin.
 # Always exits 0 — never blocks the calling AI CLI.
+# The handoff hook reads the next line to decide whether this hook takes handoff events.
+# ai-notify-capability: handoff-events
 
 # ── Load config ────────────────────────────────────────────────────────────────
 # Save env vars that should take priority over config file values (e.g., in tests).
@@ -183,6 +185,8 @@ esac
 
 # Antigravity Stop is meaningful only after all background work is idle.
 EVENT_KEY="${EVENT_TYPE}"
+# Handoff loop events: the kind selects the table row.
+[[ "${EVENT_TYPE}" == "handoff" ]] && EVENT_KEY="handoff:$(_json_str "${STDIN_JSON}" kind | tr -cd 'a-z')"
 if [[ "${EVENT_TYPE}" == "antigravity-stop" ]]; then
   AGY_FULLY_IDLE="$(_json_query "${STDIN_JSON}" 'if .fullyIdle == true then "true" else "false" end')"
   [[ "${AGY_FULLY_IDLE}" != "true" ]] && finish_hook
@@ -240,12 +244,21 @@ lookup_event() {
   return 1
 }
 lookup_event "${EVENT_KEY}" || { [[ "${EVENT_KEY}" == *:* ]] && lookup_event "${EVENT_KEY%%:*}:*"; } || true
+# The handoff loop is stopped until the user acts, so attention survives a missing row.
+if [[ "${EVENT_KEY}" == "handoff:attention" ]]; then
+  EVENT_CATEGORY="attention"
+  [[ "${EVENT_TEMPLATE}" == "-" || "${EVENT_TEMPLATE}" == "generic" ]] && EVENT_TEMPLATE="handoff-attention"
+fi
 
 case "${EVENT_CATEGORY}" in
   completion) notify_category_enabled NOTIFY_COMPLETION || finish_hook ;;
   authorization) notify_category_enabled NOTIFY_AUTHORIZATION || finish_hook ;;
   user_input) notify_category_enabled NOTIFY_USER_INPUT || finish_hook ;;
   failure) notify_category_enabled NOTIFY_FAILURE || finish_hook ;;
+  handoff_implement) notify_category_enabled NOTIFY_HANDOFF_IMPLEMENT || finish_hook ;;
+  handoff_review) notify_category_enabled NOTIFY_HANDOFF_REVIEW || finish_hook ;;
+  handoff_finish) notify_category_enabled NOTIFY_HANDOFF_FINISH || finish_hook ;;
+  attention) ;;
   none) finish_hook ;;
   *) [[ "${NOTIFY_LEVEL}" == attention_required ]] && finish_hook ;;
 esac
@@ -276,6 +289,30 @@ tpl_request_tool=""
 [[ -n "${STDIN_JSON}" ]] && tpl_request_tool="$(_json_str "${STDIN_JSON}" "tool_name" | tr -cd '[:alnum:]_.:-' | cut -c1-64)"
 [[ -z "${tpl_request_tool}" ]] && tpl_request_tool="a tool"
 
+if [[ "${EVENT_TYPE}" == "handoff" ]]; then
+  tpl_agent="Agent Handoff"
+  _handoff_agent="$(_json_str "${STDIN_JSON}" agent)"
+  [[ -n "${_handoff_agent}" ]] && tpl_agent+=" (${_handoff_agent})"
+  tpl_change="$(_json_str "${STDIN_JSON}" change)"
+  tpl_round="$(_json_str "${STDIN_JSON}" round)"
+  tpl_commit="$(_json_str "${STDIN_JSON}" commit)"
+  tpl_next="$(_json_str "${STDIN_JSON}" next)"
+  tpl_detail="$(_json_str "${STDIN_JSON}" detail)"
+  tpl_verdict="$(_json_str "${STDIN_JSON}" verdict)"
+  case "${tpl_verdict}" in
+    changes-required) tpl_verdict="🔁 審查退回" ;;
+    pass) tpl_verdict="🟢 審查通過" ;;
+  esac
+fi
+# Built-in attention text for a deployment without the handoff-attention template.
+HANDOFF_ATTENTION_TEXT='🔴 **需要你處理** · {agent}{title_suffix}
+
+📋 {change} · 第 {round} 輪 · commit {commit}
+📂 {project}
+
+{detail}
+➡️ {next}'
+
 # deliver <template> — render and send; dry-run prints instead.
 # Authorization notices carry metadata only, whatever a user template asks for.
 deliver() {
@@ -283,8 +320,13 @@ deliver() {
   case "$1" in
     authorization*) local tpl_message="" tpl_reason="" ;;
   esac
-  text="$(notify_render "$1" "${NOTIFY_SCRIPT_DIR}/templates")" ||
-    text="$(notify_render generic "${NOTIFY_SCRIPT_DIR}/templates")" || return 0
+  if ! text="$(notify_render "$1" "${NOTIFY_SCRIPT_DIR}/templates")"; then
+    if [[ "$1" == "handoff-attention" ]]; then
+      text="$(notify_render_text "${HANDOFF_ATTENTION_TEXT}")"
+    else
+      text="$(notify_render generic "${NOTIFY_SCRIPT_DIR}/templates")" || return 0
+    fi
+  fi
   if [[ "${TELEGRAM_DRY_RUN:-}" == "true" ]]; then
     printf '%s\n' "${text}"
     return 0

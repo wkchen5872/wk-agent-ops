@@ -126,6 +126,31 @@ class SettingsTests(unittest.TestCase):
         self.assertIn("仍在等待", result.stdout)
         self.assertIn("30 秒", result.stdout)
 
+    def test_menu_lists_handoff_switches_and_always_on_attention(self):
+        result = self.update("q\n")
+        for name in ["交件單實作完成", "交件單每輪審查", "交件單收尾"]:
+            self.assertIn(name, result.stdout)
+        self.assertIn("需要你處理", result.stdout)
+        self.assertIn("一律送出", result.stdout)
+
+    def test_handoff_switch_saved_without_touching_other_keys(self):
+        before = self.base + "NOTIFY_AUTHORIZATION=false\nNOTIFY_USER_INPUT=false\n"
+        self.config.write_text(before)
+        result = self.update("5\ns\ny\n")
+        self.assertEqual(0, result.returncode, result.stderr)
+        lines = self.config.read_text().replace('"', "").splitlines()
+        for line in ["NOTIFY_HANDOFF_IMPLEMENT=false", "NOTIFY_HANDOFF_REVIEW=true", "NOTIFY_HANDOFF_FINISH=true"]:
+            self.assertIn(line, lines)
+        for line in before.splitlines():
+            self.assertIn(line, self.config.read_text().splitlines())
+        self.assertNotIn("secret-for-fixture", result.stdout + result.stderr)
+
+    def test_handoff_switch_state_is_read_back(self):
+        self.config.write_text(self.base + "NOTIFY_HANDOFF_REVIEW=false\n")
+        result = self.update("q\n")
+        self.assertRegex(result.stdout, r"\[關\] 交件單每輪審查")
+        self.assertRegex(result.stdout, r"\[開\] 交件單實作完成")
+
     def test_first_save_migrates_legacy_keys(self):
         legacy = ("NOTIFY_ACTION_REQUIRED=true\nNOTIFY_CODEX_HUMAN_APPROVAL=false\n"
                   "NOTIFY_CODEX_USER_INPUT=true\n")

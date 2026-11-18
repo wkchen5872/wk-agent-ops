@@ -1179,6 +1179,105 @@ HOME="${DETECT_HOME}" bash -c '
 assert_equal "LIFE-DETECT-01: Antigravity completion is registered" "true" "$([[ -f "${DETECT_HOME}/.gemini/config/hooks.json" ]] && echo true || echo false)"
 assert_equal "LIFE-DETECT-01: Antigravity-only HOME does not create Gemini settings" "false" "$([[ -f "${DETECT_HOME}/.gemini/settings.json" ]] && echo true || echo false)"
 
+# ── Handoff events (add-handoff-notifications) ─────────────────────────────────
+
+echo ""
+echo "── Handoff event Tests ──"
+echo ""
+
+# handoff_payload <kind> [verdict] [agent] [detail] → one handoff event as the handoff hook sends it
+handoff_payload() {
+  jq -nc --arg k "$1" --arg v "${2:-}" --arg a "${3-Claude / claude-opus-5-5 / high}" --arg d "${4:-}" \
+    '{kind:$k, change:"add-export", round:"2", verdict:$v, commit:"3f2a91c", next:"已請審查者審查第 2 輪",
+      detail:$d, agent:$a, session_id:"6ec9b3e2-cf84-4574-923c-b58a23964d1b", cwd:"/tmp/handoff-project"}'
+}
+handoff_out() {  # <payload> [VAR=value...] → dry-run output of the source hook
+  local payload="$1"; shift
+  printf '%s' "${payload}" | env -i PATH="${PATH}" HOME="${TEST_TMP_ROOT}/default-home" TELEGRAM_DRY_RUN=true "$@" bash "${HOOK}" handoff 2>/dev/null
+}
+has() { grep -qF -- "$2" <<<"$1" && echo true || echo false; }
+
+assert_equal "HO-CAP-01: the hook declares the handoff-events capability" \
+  "true" "$(grep -qx '# ai-notify-capability: handoff-events' "${HOOK}" && echo true || echo false)"
+
+HO_OUT="$(handoff_out "$(handoff_payload implement)")"
+assert_equal "HO-TPL-01: implementation title carries the agent and the session label" \
+  "true" "$(has "${HO_OUT}" '實作完成** · Agent Handoff (Claude / claude-opus-5-5 / high) (#6ec9b3e2)')"
+assert_equal "HO-TPL-01: implementation shows change, round, short commit and the next step" \
+  "true true true true" \
+  "$(has "${HO_OUT}" 'add-export') $(has "${HO_OUT}" '第 2 輪') $(has "${HO_OUT}" '3f2a91c') $(has "${HO_OUT}" '已請審查者審查第 2 輪')"
+assert_equal "HO-TPL-02: changes-required review is titled as a review asking for changes" \
+  "true" "$(has "$(handoff_out "$(handoff_payload review changes-required)")" '審查退回')"
+assert_equal "HO-TPL-02: passing review is titled as a pass" \
+  "true" "$(has "$(handoff_out "$(handoff_payload review pass)")" '審查通過')"
+assert_equal "HO-TPL-03: finish event is titled as finish completed" \
+  "true" "$(has "$(handoff_out "$(handoff_payload finish)")" '收尾完成')"
+HO_OUT="$(handoff_out "$(handoff_payload attention '' 'Claude / claude-opus-5-5 / high' 'reply timed out')")"
+assert_equal "HO-TPL-04: attention event is titled as needing the user and shows the detail" \
+  "true true" "$(has "${HO_OUT}" '需要你處理') $(has "${HO_OUT}" 'reply timed out')"
+assert_equal "HO-TPL-05: an unknown effort is left out of the agent label" \
+  "true" "$(has "$(handoff_out "$(handoff_payload implement '' 'Codex / gpt-6.1-sol')")" 'Agent Handoff (Codex / gpt-6.1-sol) (#6ec9b3e2)')"
+HO_OUT="$(handoff_out "$(handoff_payload implement '' '')")"
+assert_equal "HO-TPL-05: with no agent part known the label is Agent Handoff" \
+  "true false" "$(has "${HO_OUT}" '· Agent Handoff (#6ec9b3e2)') $(has "${HO_OUT}" 'Agent Handoff ()')"
+assert_equal "HO-TPL-06: formatting characters in agent values are escaped" \
+  "true" "$(has "$(handoff_out "$(handoff_payload implement '' 'Codex / gpt_6*x / x_high')")" 'Codex / gpt\_6\*x / x\_high')"
+for HO_KIND in implement review finish attention; do
+  HO_OUT="$(handoff_out "$(handoff_payload "${HO_KIND}" pass)")"
+  assert_equal "HO-TPL-07: ${HO_KIND} does not use the waiting-for-response or generic template" \
+    "false false" "$(has "${HO_OUT}" 'Waiting for Your Response') $(has "${HO_OUT}" 'AI CLI Event')"
+done
+
+# Switches: a missing key is on; each switch covers only its own kind.
+assert_equal "HO-SW-01: with no handoff keys every progress kind is sent" \
+  "true true true" \
+  "$(has "$(handoff_out "$(handoff_payload implement)")" '實作完成') $(has "$(handoff_out "$(handoff_payload review pass)")" '審查通過') $(has "$(handoff_out "$(handoff_payload finish)")" '收尾完成')"
+assert_equal "HO-SW-02: NOTIFY_HANDOFF_FINISH=false silences finish only" \
+  "| true true" \
+  "|$(handoff_out "$(handoff_payload finish)" NOTIFY_HANDOFF_FINISH=false) $(has "$(handoff_out "$(handoff_payload implement)" NOTIFY_HANDOFF_FINISH=false)" '實作完成') $(has "$(handoff_out "$(handoff_payload review pass)" NOTIFY_HANDOFF_FINISH=false)" '審查通過')"
+assert_equal "HO-SW-03: NOTIFY_HANDOFF_IMPLEMENT=false silences implementation only" \
+  "| true true" \
+  "|$(handoff_out "$(handoff_payload implement)" NOTIFY_HANDOFF_IMPLEMENT=false) $(has "$(handoff_out "$(handoff_payload review changes-required)" NOTIFY_HANDOFF_IMPLEMENT=false)" '審查退回') $(has "$(handoff_out "$(handoff_payload finish)" NOTIFY_HANDOFF_IMPLEMENT=false)" '收尾完成')"
+assert_equal "HO-SW-04: NOTIFY_HANDOFF_REVIEW=false silences reviews only" \
+  "| true" \
+  "|$(handoff_out "$(handoff_payload review pass)" NOTIFY_HANDOFF_REVIEW=false) $(has "$(handoff_out "$(handoff_payload implement)" NOTIFY_HANDOFF_REVIEW=false)" '實作完成')"
+HO_SW_HOME="${TEST_TMP_ROOT}/handoff-switch-home"
+mkdir -p "${HO_SW_HOME}/.config/ai-notify"
+printf '%s\n' 'NOTIFY_HANDOFF_REVIEW=false' > "${HO_SW_HOME}/.config/ai-notify/config"
+assert_equal "HO-SW-05: a switch in the config file is honored" \
+  "" "$(printf '%s' "$(handoff_payload review pass)" | env -i PATH="${PATH}" HOME="${HO_SW_HOME}" TELEGRAM_DRY_RUN=true bash "${HOOK}" handoff 2>/dev/null)"
+assert_equal "HO-SW-06: attention is sent with every switch and category off" \
+  "true" \
+  "$(has "$(handoff_out "$(handoff_payload attention)" NOTIFY_HANDOFF_IMPLEMENT=false NOTIFY_HANDOFF_REVIEW=false NOTIFY_HANDOFF_FINISH=false \
+      NOTIFY_COMPLETION=false NOTIFY_AUTHORIZATION=false NOTIFY_USER_INPUT=false NOTIFY_FAILURE=false NOTIFY_LEVEL=attention_required)" '需要你處理')"
+
+# Telegram delivery: observed through a fake curl, never the network.
+HO_TG_HOME="${TEST_TMP_ROOT}/handoff-telegram-home"
+HO_TG_BIN="${TEST_TMP_ROOT}/handoff-telegram-bin"
+mkdir -p "${HO_TG_HOME}/.config/ai-notify" "${HO_TG_BIN}"
+printf '#!/usr/bin/env bash\ntouch "%s/curl-called"\n' "${HO_TG_HOME}" > "${HO_TG_BIN}/curl"
+chmod +x "${HO_TG_BIN}/curl"
+ho_telegram() {  # <enabled> → whether curl was called for an attention event
+  rm -f "${HO_TG_HOME}/curl-called"
+  printf '%s\n' "TELEGRAM_ENABLED=$1" 'TELEGRAM_BOT_TOKEN="t"' 'TELEGRAM_CHAT_ID="1"' > "${HO_TG_HOME}/.config/ai-notify/config"
+  printf '%s' "$(handoff_payload attention)" | env -i PATH="${HO_TG_BIN}:${PATH}" HOME="${HO_TG_HOME}" bash "${HOOK}" handoff >/dev/null 2>&1
+  [[ -e "${HO_TG_HOME}/curl-called" ]] && echo sent || echo none
+}
+assert_equal "HO-SW-07: attention is delivered when Telegram is enabled" "sent" "$(ho_telegram true)"
+assert_equal "HO-SW-07: attention is not delivered when Telegram is disabled" "none" "$(ho_telegram false)"
+
+# A partial deployment without the attention row or template still sends attention.
+HO_PART="${TEST_TMP_ROOT}/handoff-partial"
+mkdir -p "${HO_PART}/telegram" "${HO_PART}/lib"
+cp "${SCRIPT_DIR}/../lib/"*.sh "${HO_PART}/lib/"
+cp "${HOOK}" "${HO_PART}/telegram/hook.sh"
+grep -v '^handoff:attention' "${SCRIPT_DIR}/events.tsv" > "${HO_PART}/telegram/events.tsv"
+cp -R "${SCRIPT_DIR}/templates" "${HO_PART}/telegram/templates"
+rm -f "${HO_PART}/telegram/templates/handoff-attention.md"
+HO_OUT="$(printf '%s' "$(handoff_payload attention '' '' 'push rejected')" | env -i PATH="${PATH}" HOME="${TEST_TMP_ROOT}/default-home" TELEGRAM_DRY_RUN=true bash "${HO_PART}/telegram/hook.sh" handoff 2>/dev/null)"
+assert_equal "HO-FB-01: attention without its row or template uses the built-in text with change, detail and next step" \
+  "true true true" "$(has "${HO_OUT}" 'add-export') $(has "${HO_OUT}" 'push rejected') $(has "${HO_OUT}" '已請審查者審查第 2 輪')"
+
 # ── Summary ────────────────────────────────────────────────────────────────────
 
 echo ""

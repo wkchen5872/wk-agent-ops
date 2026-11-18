@@ -5,10 +5,12 @@
 AI_NOTIFY_CONFIG="${HOME}/.config/ai-notify/config"
 NOTIFY_CATEGORY_KEYS=(NOTIFY_COMPLETION NOTIFY_AUTHORIZATION NOTIFY_USER_INPUT NOTIFY_FAILURE)
 NOTIFY_LEGACY_CATEGORY_KEYS=(NOTIFY_ACTION_REQUIRED NOTIFY_CODEX_HUMAN_APPROVAL NOTIFY_CODEX_USER_INPUT)
+# Handoff loop progress switches; attention notices have no switch.
+NOTIFY_HANDOFF_KEYS=(NOTIFY_HANDOFF_IMPLEMENT NOTIFY_HANDOFF_REVIEW NOTIFY_HANDOFF_FINISH)
 
 # Snapshot category keys from the environment before any config file is sourced,
 # so the environment and the file stay separate sources (design decision 2).
-for _notify_key in "${NOTIFY_CATEGORY_KEYS[@]}" "${NOTIFY_LEGACY_CATEGORY_KEYS[@]}"; do
+for _notify_key in "${NOTIFY_CATEGORY_KEYS[@]}" "${NOTIFY_LEGACY_CATEGORY_KEYS[@]}" "${NOTIFY_HANDOFF_KEYS[@]}"; do
   printf -v "_NOTIFY_ENV_${_notify_key}" '%s' "${!_notify_key:-}"
 done
 unset _notify_key
@@ -47,7 +49,7 @@ notify_category_value() {
   case "${key}" in
     NOTIFY_AUTHORIZATION) legacy=(NOTIFY_ACTION_REQUIRED NOTIFY_CODEX_HUMAN_APPROVAL) ;;
     NOTIFY_USER_INPUT) legacy=(NOTIFY_ACTION_REQUIRED NOTIFY_CODEX_USER_INPUT) ;;
-    NOTIFY_COMPLETION|NOTIFY_FAILURE) ;;
+    NOTIFY_COMPLETION|NOTIFY_FAILURE|NOTIFY_HANDOFF_IMPLEMENT|NOTIFY_HANDOFF_REVIEW|NOTIFY_HANDOFF_FINISH) ;;
     *) return 1 ;;
   esac
   for source in env file; do

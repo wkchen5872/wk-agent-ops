@@ -32,3 +32,10 @@ antigravity-stop:injected_response	failure	stopped	injected response
 antigravity-stop:error	failure	stopped	error
 antigravity-stop:max_steps_exceeded	failure	stopped	max steps exceeded
 antigravity-stop:*	failure	stopped	execution stopped
+# Handoff loop events from handoff-route; the kind field selects the row.
+# Attention needs the user and is always sent, even without its row or template.
+handoff:implement	handoff_implement	handoff-implement
+handoff:review	handoff_review	handoff-review
+handoff:finish	handoff_finish	handoff-finish
+handoff:attention	attention	handoff-attention
+handoff:*	none	-

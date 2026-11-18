@@ -132,12 +132,28 @@ bash scripts/notify/telegram/update.sh types
 > 當交接迴圈因任何原因停下需要人類處理時（如 blocked、達輪數上限、worktree 不乾淨、或審查通過等候手動執行 `handoff-finish`），系統會強制發送 `handoff-action-required` 通知，**此類停點訊號不可被關閉**，確保迴圈絕不靜默掛起。
 > 交件單通知會自動標記 Agent 身分，格式如：`Agent Handoff (Claude / claude-opus-5-5 / high)`。
 
+### 交接迴圈通知
+
+`scripts/handoff/handoff-route`（交接迴圈的 Stop hook）以 `handoff` 事件送出結構化資料（kind、change、round、verdict、commit、next、detail、agent、session_id、cwd），由本 hook 查表、套開關與範本。選單第 5–7 項：
+
+| 設定鍵 | 選單名稱 | 範本 | 內容 |
+|---|---|---|---|
+| `NOTIFY_HANDOFF_IMPLEMENT` | 交件單實作完成 | `handoff-implement` | 實作交件已交給審查者 |
+| `NOTIFY_HANDOFF_REVIEW` | 交件單每輪審查 | `handoff-review` | 退回已交給實作者，或通過且自動收尾 |
+| `NOTIFY_HANDOFF_FINISH` | 交件單收尾 | `handoff-finish` | 收尾完成 |
+| （無） | 需要你處理 | `handoff-attention` | 迴圈停下等你；Telegram 啟用時一律送出 |
+
+- 三個鍵缺少時為開，不受 `NOTIFY_LEVEL` 影響；儲存選單時與四個分類一起寫入。
+- 需要你處理不受任何開關或 `NOTIFY_LEVEL` 影響；對照表列或範本缺少時以內建文字送出。
+- 標題為 `Agent Handoff (<工具> / <模型> / <effort>)` 加上 Session 標籤，取不到的部分省略。
+- 新版 `telegram-notify.sh` 含一行 `# ai-notify-capability: handoff-events`，交接端以此判斷是否送 `handoff` 事件；沒有這一行（舊版或已回退）時，需要你處理改走一般通知（`notification` 事件加 `NOTIFY_ACTION_REQUIRED=true`），進度通知不送。
+
 ### 舊設定相容
 
 - 仍讀取舊鍵 `NOTIFY_ACTION_REQUIRED`、`NOTIFY_CODEX_HUMAN_APPROVAL`、`NOTIFY_CODEX_USER_INPUT`：授權來自 ACTION_REQUIRED + CODEX_HUMAN_APPROVAL，等待回應來自 ACTION_REQUIRED + CODEX_USER_INPUT。同一來源內，任一為 `true` 即開、否則任一為 `false` 即關、否則未定義。
-- 解析順序：環境變數新鍵 → 環境變數舊鍵 → 設定檔新鍵 → 設定檔舊鍵 → 預設。只有精確的 `true`／`false` 算數。`handoff-route` 在環境變數設定 `NOTIFY_ACTION_REQUIRED=true` 仍有效。
+- 解析順序：環境變數新鍵 → 環境變數舊鍵 → 設定檔新鍵 → 設定檔舊鍵 → 預設。只有精確的 `true`／`false` 算數。舊版 `handoff-route` 在環境變數設定 `NOTIFY_ACTION_REQUIRED=true` 仍有效；新版遇到不支援交件單事件的通知腳本時也走這條路徑。
 - `NOTIFY_LEVEL` 保留 `all` 與 `attention_required`（舊名 `notify_only`），只決定工作結束的預設。
-- 儲存分類選單時，一次原子寫入四個新鍵並移除三個舊鍵（mode 600，其他鍵不動）。`update.sh notify_level` 與選單的 all／attention_required 快速預設只寫 `NOTIFY_LEVEL` 與 `NOTIFY_COMPLETION`。
+- 儲存分類選單時，一次原子寫入四個新鍵與三個交件單鍵並移除三個舊鍵（mode 600，其他鍵不動）。`update.sh notify_level` 與選單的 all／attention_required 快速預設只寫 `NOTIFY_LEVEL` 與 `NOTIFY_COMPLETION`。
 - 已接受的取捨：`ACTION_REQUIRED=true` 加 `CODEX_HUMAN_APPROVAL=false` 現在等於授權開啟，Codex 會送延遲授權通知；不要的話把「授權要求」關掉。
 
 ### 授權延遲通知
@@ -179,9 +195,9 @@ Codex 細節：
 
 `events.tsv` 欄位為 key、category、template、reason label；`<prefix>:*` 為後備；category `none` 表示不送。表中沒有的事件維持通用的「AI CLI Event」訊息。
 
-內建範本（`scripts/notify/telegram/templates/`）：completion、stopped、question、action-required、generic、authorization、authorization-unconfirmed，部署到 `~/.config/ai-notify/hooks/templates/`，每次更新覆寫。要自訂，在 `~/.config/ai-notify/templates/<name>.md` 放同名檔；檔案不存在、為空或不可讀時退回內建範本。
+內建範本（`scripts/notify/telegram/templates/`）：completion、stopped、question、action-required、generic、authorization、authorization-unconfirmed、handoff-implement、handoff-review、handoff-finish、handoff-attention，部署到 `~/.config/ai-notify/hooks/templates/`，每次更新覆寫。要自訂，在 `~/.config/ai-notify/templates/<name>.md` 放同名檔；檔案不存在、為空或不可讀時退回內建範本。
 
-可用佔位符：`{title_suffix} {tool} {project} {time} {tag} {message} {reason} {request_tool} {delay}`。值會依 Telegram legacy Markdown 跳脫（`_ * \` [`）；整行只有佔位符且全部為空時，該行移除；未知佔位符原樣保留。不支援 eval、條件或迴圈。
+可用佔位符：`{title_suffix} {tool} {project} {time} {tag} {message} {reason} {request_tool} {delay}`；交件單範本另有 `{agent} {change} {round} {verdict} {commit} {next} {detail}`（`{verdict}` 顯示為「🔁 審查退回」或「🟢 審查通過」）。值會依 Telegram legacy Markdown 跳脫（`_ * \` [`）；整行只有佔位符且全部為空時，該行移除；未知佔位符原樣保留。不支援 eval、條件或迴圈。
 
 工作結束、停止與等待訊息的內建文字不變。新增文字：授權為「🔴 **Waiting for Your Approval** … `{tool} has been waiting for your approval for over {delay} seconds ({request_tool})`」；無法確認為「🟡 **Approval Status Unknown** … `{tool} may be waiting for approval, but this could not be confirmed (no result after {delay} seconds, {request_tool})`」。兩個授權範本於 2026-11-18 改為英文。
 

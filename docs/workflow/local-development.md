@@ -98,7 +98,10 @@ GitHub Issue／PR 的格式、寫入前核對與結案規則在 `github-issue`�
 
 **交接迴圈（選用）**：以 `handoff-start` 啟動時，02 與 03 之間的交接由交件單與 Stop hook 完成：實作者 commit 後寫
 implement 交件單，hook 開或通知審查者；審查者以交件單的 head 固定版本，結束時寫 review 交件單，不自行通知實作者；
-changes-required 由 hook 把報告路徑轉給實作者，達輪數上限或 blocked 時通知你。流程見
+changes-required 由 hook 把報告路徑轉給實作者，達輪數上限或 blocked 時通知你。hook 對每張交件單發一則進度通知
+（實作完成、審查退回或通過、收尾完成，可用 `NOTIFY_HANDOFF_IMPLEMENT`、`NOTIFY_HANDOFF_REVIEW`、`NOTIFY_HANDOFF_FINISH` 關閉），
+迴圈停下等你時發「需要你處理」，這一則不能關閉；訊息附 Agent 的工具／模型／effort 與下一步。傳給審查者或實作者失敗時不算交付，
+之後的 hook 執行或 `handoff-route --foreground` 會重試。流程見
 [交接流程](../diagrams/agent-handoff-loop.svg) 與 [啟動流程](../diagrams/agent-handoff-start.svg)，操作見
 [交接迴圈說明](../../scripts/handoff/README.md)。
 

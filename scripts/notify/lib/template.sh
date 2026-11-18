@@ -4,7 +4,7 @@
 
 shopt -u patsub_replacement 2>/dev/null || true
 
-NOTIFY_TPL_PARAMS=" title_suffix tool project time tag message reason request_tool delay "
+NOTIFY_TPL_PARAMS=" title_suffix tool project time tag message reason request_tool delay agent change round verdict commit next detail "
 NOTIFY_USER_TEMPLATES="${HOME}/.config/ai-notify/templates"
 
 # Telegram legacy Markdown treats these characters as markup inside values.
