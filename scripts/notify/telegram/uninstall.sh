@@ -24,7 +24,7 @@ echo "  • Remove hook entries from ~/.claude/settings.json"
 echo "  • Remove owned Codex and Antigravity hook entries"
 echo "  • Remove notification-owned legacy Gemini hook entries"
 echo "  • Remove TELEGRAM_* keys from ~/.config/ai-notify/config"
-echo "  • Delete ${DEPLOYED_HOOK}"
+echo "  • Delete ${DEPLOYED_HOOK} with its built-in templates (your ~/.config/ai-notify/templates/ stays)"
 echo "  • 關閉 Codex 新通知，合作式停止自有按需檢查器"
 echo "  • 移除 ~/.config/ai-notify/hooks/codex-wait.py 與其 requirements 檔"
 echo "  • 移除 ~/.config/ai-notify/runtime/codex-wait/ 與自有 codex 狀態檔"
@@ -55,7 +55,9 @@ remove_codex_notify_runtime
 remove_config_keys_by_prefix "TELEGRAM_"
 echo "✓ Removed TELEGRAM_* keys from ${AI_NOTIFY_CONFIG}"
 
-# 5. Remove deployed hook script
+# 5. Remove deployed hook script, its table, and built-in templates.
+#    User templates under ~/.config/ai-notify/templates/ are kept.
+rm -rf -- "${HOME}/.config/ai-notify/hooks/templates" "${HOME}/.config/ai-notify/hooks/events.tsv"
 if [[ -f "${DEPLOYED_HOOK}" ]]; then
   rm -f "${DEPLOYED_HOOK}"
   echo "✓ Removed ${DEPLOYED_HOOK}"

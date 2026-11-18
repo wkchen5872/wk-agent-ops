@@ -17,9 +17,15 @@ import time
 
 
 FLAGS = {
-    "waitingOnApproval": ("NOTIFY_CODEX_HUMAN_APPROVAL", "codex-human-approval", "HumanApprovalWaiting"),
-    "waitingOnUserInput": ("NOTIFY_CODEX_USER_INPUT", "codex-user-input", "UserInputWaiting"),
+    "waitingOnApproval": ("authorization", "codex-human-approval", "HumanApprovalWaiting"),
+    "waitingOnUserInput": ("user_input", "codex-user-input", "UserInputWaiting"),
 }
+# New key, then the legacy keys it replaces (design decision 2 of refine-notify-core).
+CATEGORIES = {
+    "authorization": ("NOTIFY_AUTHORIZATION", ("NOTIFY_ACTION_REQUIRED", "NOTIFY_CODEX_HUMAN_APPROVAL")),
+    "user_input": ("NOTIFY_USER_INPUT", ("NOTIFY_ACTION_REQUIRED", "NOTIFY_CODEX_USER_INPUT")),
+}
+STALE_SECONDS = 7 * 86400
 RPC_TIMEOUT = 2
 POLL_INTERVAL = 1
 MAX_FAILURES = 3
@@ -33,25 +39,59 @@ def notify_root():
     return Path.home() / ".config/ai-notify"
 
 
-def settings():
-    keys = {"TELEGRAM_ENABLED", *(entry[0] for entry in FLAGS.values())}
-    result = dict.fromkeys(keys, False)
+def read_config():
+    values = {}
     try:
         for line in (notify_root() / "config").read_text().splitlines():
             key, separator, value = line.partition("=")
-            if separator and key in keys:
-                tokens = shlex.split(value, comments=True)
-                result[key] = tokens == ["true"]
-    except (OSError, ValueError):
-        return dict.fromkeys(keys, False)
-    for key in keys:
-        if key in os.environ:
-            result[key] = os.environ[key] == "true"
+            if separator and re.fullmatch(r"[A-Z][A-Z0-9_]*", key):
+                try:
+                    tokens = shlex.split(value, comments=True)
+                except ValueError:
+                    continue
+                values[key] = tokens[0] if len(tokens) == 1 else ""
+    except OSError:
+        return None
+    return values
+
+
+def category_enabled(name, config_file, environment):
+    """Environment new key, environment legacy keys, file new key, file legacy keys, default on."""
+    key, legacy = CATEGORIES[name]
+    for source in (environment, config_file):
+        if source.get(key) in ("true", "false"):
+            return source[key] == "true"
+        values = [source.get(entry) for entry in legacy]
+        if "true" in values:
+            return True
+        if "false" in values:
+            return False
+    return True
+
+
+def seconds(name, environment, config_file, default):
+    for source in (environment, config_file):
+        value = source.get(name, "")
+        if re.fullmatch(r"[0-9]+", value or ""):
+            return int(value)
+    return default
+
+
+def settings():
+    config_file = read_config()
+    if config_file is None:
+        return {"TELEGRAM_ENABLED": False, "authorization": False, "user_input": False, "delay": 30}
+    environment = dict(os.environ)
+    enabled = environment.get("TELEGRAM_ENABLED", config_file.get("TELEGRAM_ENABLED")) == "true"
+    result = {"TELEGRAM_ENABLED": enabled,
+              "delay": seconds("NOTIFY_AUTHORIZATION_DELAY_SECONDS", environment, config_file, 30)}
+    for name in CATEGORIES:
+        result[name] = category_enabled(name, config_file, environment)
     return result
 
 
 def inspection_enabled(config):
-    return config["TELEGRAM_ENABLED"] and any(config[entry[0]] for entry in FLAGS.values())
+    return config["TELEGRAM_ENABLED"] and any(config[name] for name in CATEGORIES)
 
 
 def shutdown_marker():
@@ -92,7 +132,67 @@ def sanitized_trigger(payload):
         raise InspectionError("missing-session-or-turn")
     if not isinstance(trigger["cwd"], str) or len(trigger["cwd"]) > 4096:
         trigger["cwd"] = ""
+    # Only a generic tool label may reach a message; never the tool input.
+    tool = payload.get("tool_name")
+    trigger["tool_name"] = tool if isinstance(tool, str) and re.fullmatch(r"[A-Za-z0-9_.:-]{1,64}", tool) else ""
+    trigger["kind"] = "permission" if payload.get("kind") == "permission" else "question"
+    requested = payload.get("requested_at")
+    trigger["requested_at"] = requested if isinstance(requested, (int, float)) else time.time()
+    path = payload.get("transcript_path")
+    if isinstance(path, str) and path.startswith("/") and len(path) <= 4096:
+        trigger["transcript_path"] = path
     return trigger
+
+
+def persisted(trigger):
+    """The record path stays in memory; state files never hold it."""
+    return {key: value for key, value in trigger.items() if key != "transcript_path"}
+
+
+def record_path(trigger):
+    path = trigger.get("transcript_path")
+    if path and os.path.isfile(path):
+        return Path(path)
+    if not re.fullmatch(r"[A-Za-z0-9-]{1,128}", trigger["session_id"]):
+        return None
+    codex_home = Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex")))
+    found = sorted((codex_home / "sessions").glob(f"*/*/*/rollout-*-{trigger['session_id']}.jsonl"))
+    return found[-1] if found else None
+
+
+def pending_call(trigger):
+    """The last tool call without an output, or "" if none; None when the record cannot be read.
+
+    A record shows that a request has a result; it never proves that a request waits for
+    approval, so callers treat an open call only as "could not confirm".
+    """
+    path = record_path(trigger)
+    if path is None:
+        return None
+    try:
+        with path.open("rb") as stream:
+            stream.seek(0, os.SEEK_END)
+            stream.seek(max(0, stream.tell() - 2_000_000))
+            lines = stream.read().decode("utf-8", "replace").splitlines()
+    except OSError:
+        return None
+    open_calls = []
+    for line in lines:
+        try:
+            entry = json.loads(line)
+        except ValueError:
+            continue
+        payload = entry.get("payload") if isinstance(entry, dict) else None
+        if not isinstance(payload, dict):
+            continue
+        kind = payload.get("type")
+        if entry.get("type") == "event_msg" and kind in ("task_complete", "turn_aborted"):
+            open_calls.clear()
+        elif isinstance(kind, str) and kind.endswith("_call") and isinstance(payload.get("call_id"), str):
+            open_calls.append(payload["call_id"])
+        elif isinstance(kind, str) and kind.endswith("_call_output"):
+            open_calls = [call for call in open_calls if call != payload.get("call_id")]
+    return open_calls[-1] if open_calls else ""
 
 
 class Daemon:
@@ -174,8 +274,14 @@ class Daemon:
 
 def emit(trigger, flag):
     _, event, tag = FLAGS[flag]
+    send(trigger, event, tag)
+
+
+def send(trigger, event, tag):
     hook = Path(__file__).with_name("telegram-notify.sh")
     payload = {"session_id": trigger["session_id"], "cwd": trigger["cwd"], "hook_event_name": tag}
+    if trigger.get("tool_name"):
+        payload["tool_name"] = trigger["tool_name"]
     subprocess.run(["bash", str(hook), event, "Codex"], input=json.dumps(payload).encode(),
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5, check=False)
 
@@ -188,22 +294,41 @@ def run_checker(trigger, state_file, lock_fd):
     failures = 0
     code = "observing"
     request_file = state_file.with_suffix(".request.json")
+    # Approval waits must last longer than the delay; this is when the current one began.
+    approval_since = None
+    # An authorization request raised in this turn and not yet settled (offline fallback).
+    request = trigger if trigger["kind"] == "permission" else None
+    request_call = pending_call(request) if request else None
 
     def record(running):
         atomic_json(state_file, {"pid": os.getpid(), "turn_id": trigger["turn_id"], "running": running,
                                  "code": code, "pending": sorted(pending), "notified": sorted(notified),
                                  "updated_at": int(time.time())})
+
+    def settle_offline(config):
+        """Daemon unavailable: a recorded result settles the request; otherwise report it as unconfirmed."""
+        call = pending_call(request)
+        resolved = call == "" or (request_call and call is not None and call != request_call)
+        if not resolved and config["authorization"]:
+            send(request, "codex-authorization-unconfirmed", "HumanApprovalUnconfirmed")
     try:
         record(True)
         while True:
-            latest = read_json(request_file, trigger)
+            latest = read_json(request_file, persisted(trigger))
             if latest.get("turn_id") != trigger["turn_id"]:
                 latest = sanitized_trigger(latest)
                 if latest["session_id"] != trigger["session_id"]:
                     raise InspectionError("invalid-trigger")
-                trigger = latest
+                trigger = {**latest, "transcript_path": trigger.get("transcript_path", "")}
                 notified.clear()
                 pending.clear()
+                approval_since = None
+                request = trigger if trigger["kind"] == "permission" else None
+                request_call = pending_call(request) if request else None
+            elif latest.get("kind") == "permission" and request is None:
+                request = {**trigger, **sanitized_trigger(latest),
+                           "transcript_path": trigger.get("transcript_path", "")}
+                request_call = pending_call(request)
             config = settings()
             if shutdown_marker().exists() or not inspection_enabled(config):
                 code = "disabled"
@@ -218,14 +343,22 @@ def run_checker(trigger, state_file, lock_fd):
                 if turn["id"] != trigger["turn_id"] or turn["status"] != "inProgress":
                     code = "turn-finished"
                     break
+                request = None  # the runtime answers for the request from now on
                 pending = set(status["activeFlags"]) & FLAGS.keys()
                 notified.intersection_update(pending)
+                if "waitingOnApproval" in pending:
+                    approval_since = approval_since or time.monotonic()
+                else:
+                    approval_since = None
                 for flag in sorted(pending):
-                    if config[FLAGS[flag][0]] and flag not in notified:
-                        # Reserve before attempting delivery: a timeout must not spam this wait.
-                        notified.add(flag)
-                        record(True)
-                        emit(trigger, flag)
+                    if not config[FLAGS[flag][0]] or flag in notified:
+                        continue
+                    if flag == "waitingOnApproval" and time.monotonic() - approval_since < config["delay"]:
+                        continue
+                    # Reserve before attempting delivery: a timeout must not spam this wait.
+                    notified.add(flag)
+                    record(True)
+                    emit(trigger, flag)
                 code = "observing"
                 failures = 0
                 record(True)
@@ -236,7 +369,21 @@ def run_checker(trigger, state_file, lock_fd):
                     daemon = None
                 failures += 1
                 record(True)
-                if failures >= MAX_FAILURES:
+                if request is not None:
+                    # Keep the request until its delay has passed, then settle it from the record.
+                    if time.time() - request["requested_at"] >= config["delay"]:
+                        settle_offline(config)
+                        newer = read_json(request_file, {})
+                        if (newer.get("kind") == "permission" and newer.get("turn_id") == trigger["turn_id"]
+                                and newer.get("requested_at", 0) > request["requested_at"]):
+                            # A later request of this turn gets its own delay.
+                            request = {**trigger, **sanitized_trigger(newer),
+                                       "transcript_path": trigger.get("transcript_path", "")}
+                            request_call = pending_call(request)
+                        else:
+                            request = None
+                            break
+                elif failures >= MAX_FAILURES:
                     break
             time.sleep(POLL_INTERVAL)
     finally:
@@ -245,9 +392,69 @@ def run_checker(trigger, state_file, lock_fd):
         record(False)
         os.close(lock_fd)
         # Closing and then rechecking closes the lost-wakeup race at turn handoff.
-        latest = read_json(request_file, trigger)
+        latest = read_json(request_file, persisted(trigger))
         if latest.get("turn_id") != trigger["turn_id"] and not shutdown_marker().exists():
             start_checker(latest, record_request=False)
+
+
+def prune_state():
+    """Remove notification-owned state older than seven days whose lock nobody holds."""
+    folder = notify_root() / "state"
+    try:
+        entries = list(folder.iterdir())
+    except OSError:
+        return
+    now = time.time()
+
+    def age(paths):
+        try:
+            return now - max(path.stat().st_mtime for path in paths)
+        except OSError:
+            return 0
+    # Codex keeps three files per session; they go together, only when the checker lock is free.
+    groups = {}
+    for path in entries:
+        match = re.fullmatch(r"(codex-[0-9a-f]{24})\.(json|request\.json|lock)", path.name)
+        if match:
+            groups.setdefault(match.group(1), []).append(path)
+    for key, paths in groups.items():
+        if age(paths) < STALE_SECONDS:
+            continue
+        lock = folder / f"{key}.lock"
+        try:
+            descriptor = os.open(lock, os.O_RDWR) if lock.exists() else None
+        except OSError:
+            continue
+        try:
+            if descriptor is not None:
+                try:
+                    fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except BlockingIOError:
+                    continue
+            for path in paths:
+                path.unlink(missing_ok=True)
+        finally:
+            if descriptor is not None:
+                os.close(descriptor)
+    # Delayed-authorization markers of the bash providers use a lock directory holding a PID.
+    for path in entries:
+        if not re.fullmatch(r"(claude|antigravity)-[A-Za-z0-9_.-]+\.pending", path.name) or age([path]) < STALE_SECONDS:
+            continue
+        lock = path.with_name(path.name + ".lock")
+        try:
+            owner = int((lock / "pid").read_text().strip())
+        except (OSError, ValueError):
+            owner = None
+        if owner is not None:
+            try:
+                os.kill(owner, 0)
+                continue  # a live process holds the lock
+            except PermissionError:
+                continue  # alive, owned by someone else
+            except ProcessLookupError:
+                pass
+        path.unlink(missing_ok=True)
+        shutil.rmtree(lock, ignore_errors=True)
 
 
 def start_checker(payload, record_request=True):
@@ -256,8 +463,9 @@ def start_checker(payload, record_request=True):
     trigger = sanitized_trigger(payload)
     lock_path, state_file = state_paths(trigger["session_id"])
     lock_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    prune_state()
     if record_request:
-        atomic_json(state_file.with_suffix(".request.json"), trigger)
+        atomic_json(state_file.with_suffix(".request.json"), persisted(trigger))
     fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
     try:
         try:

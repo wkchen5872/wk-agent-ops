@@ -3,18 +3,64 @@
 # This file only defines functions — it does NOT write anything on source.
 
 AI_NOTIFY_CONFIG="${HOME}/.config/ai-notify/config"
-NOTIFY_CATEGORY_KEYS=(NOTIFY_COMPLETION NOTIFY_ACTION_REQUIRED NOTIFY_FAILURE NOTIFY_CODEX_HUMAN_APPROVAL NOTIFY_CODEX_USER_INPUT)
+NOTIFY_CATEGORY_KEYS=(NOTIFY_COMPLETION NOTIFY_AUTHORIZATION NOTIFY_USER_INPUT NOTIFY_FAILURE)
+NOTIFY_LEGACY_CATEGORY_KEYS=(NOTIFY_ACTION_REQUIRED NOTIFY_CODEX_HUMAN_APPROVAL NOTIFY_CODEX_USER_INPUT)
 
-# Missing shared keys inherit the legacy level; new Codex keys are opt-in.
+# Snapshot category keys from the environment before any config file is sourced,
+# so the environment and the file stay separate sources (design decision 2).
+for _notify_key in "${NOTIFY_CATEGORY_KEYS[@]}" "${NOTIFY_LEGACY_CATEGORY_KEYS[@]}"; do
+  printf -v "_NOTIFY_ENV_${_notify_key}" '%s' "${!_notify_key:-}"
+done
+unset _notify_key
+
+# Only the exact strings true and false count as defined.
+_notify_bool() { case "$1" in true|false) printf '%s\n' "$1" ;; *) return 1 ;; esac; }
+
+_notify_file_value() {
+  local key="$1" line value="" found=false
+  [[ -r "${AI_NOTIFY_CONFIG}" ]] || return 1
+  while IFS= read -r line || [[ -n "${line}" ]]; do
+    [[ "${line}" == "${key}="* ]] && { value="${line#*=}"; found=true; }
+  done < "${AI_NOTIFY_CONFIG}"
+  [[ "${found}" == true ]] || return 1
+  value="${value#\"}"; value="${value%\"}"; value="${value#\'}"; value="${value%\'}"
+  _notify_bool "${value}"
+}
+
+_notify_env_value() { local var="_NOTIFY_ENV_$1"; _notify_bool "${!var:-}"; }
+
+# Legacy keys of one source: any true wins; otherwise any false; otherwise undefined.
+_notify_legacy() {
+  local source="$1" key value any_false=false
+  shift
+  for key in "$@"; do
+    value="$("_notify_${source}_value" "${key}")" || continue
+    [[ "${value}" == true ]] && { echo true; return 0; }
+    any_false=true
+  done
+  [[ "${any_false}" == true ]] && echo false
+}
+
+# Order: env new key → env legacy keys → file new key → file legacy keys → default.
 notify_category_value() {
-  local key="$1" value="${!1:-}"
-  case "${value}" in true|false) printf '%s\n' "${value}"; return ;; esac
+  local key="$1" legacy=() value
+  case "${key}" in
+    NOTIFY_AUTHORIZATION) legacy=(NOTIFY_ACTION_REQUIRED NOTIFY_CODEX_HUMAN_APPROVAL) ;;
+    NOTIFY_USER_INPUT) legacy=(NOTIFY_ACTION_REQUIRED NOTIFY_CODEX_USER_INPUT) ;;
+    NOTIFY_COMPLETION|NOTIFY_FAILURE) ;;
+    *) return 1 ;;
+  esac
+  for source in env file; do
+    value="$("_notify_${source}_value" "${key}")" && { echo "${value}"; return 0; }
+    if [[ ${#legacy[@]} -gt 0 ]]; then
+      value="$(_notify_legacy "${source}" "${legacy[@]}")"
+      [[ -n "${value}" ]] && { echo "${value}"; return 0; }
+    fi
+  done
   case "${key}" in
     NOTIFY_COMPLETION)
       case "${NOTIFY_LEVEL:-all}" in attention_required|notify_only) echo false ;; *) echo true ;; esac ;;
-    NOTIFY_ACTION_REQUIRED|NOTIFY_FAILURE) echo true ;;
-    NOTIFY_CODEX_HUMAN_APPROVAL|NOTIFY_CODEX_USER_INPUT) echo false ;;
-    *) return 1 ;;
+    *) echo true ;;
   esac
 }
 
@@ -61,6 +107,14 @@ update_config_key() {
 
 # One atomic replacement for a whole settings draft; never evaluate values.
 update_config_keys() {
+  update_config_keys_dropping "" "$@"
+}
+
+# update_config_keys_dropping "<keys to remove>" KEY VALUE... — same atomic write,
+# also removing the listed keys (used to retire legacy category keys).
+update_config_keys_dropping() {
+  local drop=" $1 "
+  shift
   [[ $# -gt 0 && $(( $# % 2 )) -eq 0 ]] || return 1
   local keys=() values=() key value line replace i tmp
   while [[ $# -gt 0 ]]; do
@@ -76,6 +130,7 @@ update_config_keys() {
       for key in "${keys[@]}"; do
         [[ "${line}" == "${key}="* ]] && replace=true
       done
+      [[ "${line}" =~ ^([A-Z][A-Z0-9_]*)= && "${drop}" == *" ${BASH_REMATCH[1]} "* ]] && replace=true
       if [[ "${replace}" != true ]]; then
         printf '%s\n' "${line}" >> "${tmp}" || { rm -f -- "${tmp}"; return 1; }
       fi

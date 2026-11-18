@@ -8,6 +8,12 @@ deploy_notify_files() {
   mkdir -p "${root}/hooks" "${root}/lib"
   cp "${NOTIFY_SOURCE_ROOT}/telegram/hook.sh" "${root}/hooks/telegram-notify.sh"
   cp "${NOTIFY_SOURCE_ROOT}/lib/config.sh" "${root}/lib/config.sh"
+  cp "${NOTIFY_SOURCE_ROOT}/lib/template.sh" "${root}/lib/template.sh"
+  cp "${NOTIFY_SOURCE_ROOT}/lib/authorization.sh" "${root}/lib/authorization.sh"
+  cp "${NOTIFY_SOURCE_ROOT}/telegram/events.tsv" "${root}/hooks/events.tsv"
+  # Built-in templates are replaced wholesale; user templates live in ${root}/templates.
+  rm -rf -- "${root}/hooks/templates"
+  cp -R "${NOTIFY_SOURCE_ROOT}/telegram/templates" "${root}/hooks/templates"
   cp "${NOTIFY_SOURCE_ROOT}/codex/wait.py" "${root}/hooks/codex-wait.py"
   cp "${NOTIFY_SOURCE_ROOT}/codex/requirements.txt" "${root}/hooks/codex-wait-requirements.txt"
   chmod +x "${root}/hooks/telegram-notify.sh"
@@ -15,7 +21,7 @@ deploy_notify_files() {
 }
 
 codex_inspection_selected() {
-  notify_category_enabled NOTIFY_CODEX_HUMAN_APPROVAL || notify_category_enabled NOTIFY_CODEX_USER_INPUT
+  notify_category_enabled NOTIFY_AUTHORIZATION || notify_category_enabled NOTIFY_USER_INPUT
 }
 
 ensure_codex_runtime() {
@@ -50,7 +56,7 @@ show_codex_wait_status() {
   echo '執行方式：hook 觸發、按需啟動；沒有 LaunchAgent 或登入服務。'
   echo '範圍：授權與同步問題需本機 daemon；非同步題目依成功送出通知；一般文字問句不偵測。'
   if ! codex_inspection_selected; then
-    echo '設定：兩項新通知皆關閉，不會查看 daemon。'
+    echo '設定：授權要求與等待回應皆關閉，不會查看 daemon。'
     return 0
   fi
   if [[ ! -f "${root}/hooks/codex-wait.py" ]]; then
@@ -72,8 +78,7 @@ show_codex_wait_status() {
 
 remove_codex_notify_runtime() {
   local root="${HOME}/.config/ai-notify" python
-  # Let workers observe disabled categories before removing their scripts.
-  update_config_keys NOTIFY_CODEX_HUMAN_APPROVAL false NOTIFY_CODEX_USER_INPUT false
+  # The shutdown marker written by `stop` makes running workers exit first.
   python="${root}/runtime/codex-wait/bin/python3"
   [[ -x "${python}" ]] || python="$(command -v python3 || true)"
   if [[ -n "${python}" && -f "${root}/hooks/codex-wait.py" ]]; then

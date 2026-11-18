@@ -33,20 +33,22 @@ class SettingsTests(unittest.TestCase):
 
     def test_shared_switches_control_their_categories(self):
         cases = [("codex-stop", "NOTIFY_COMPLETION", {}),
-                 ("codex-permission", "NOTIFY_ACTION_REQUIRED", {"tool_name": "Bash"}),
+                 ("codex-human-approval", "NOTIFY_AUTHORIZATION", {}),
+                 ("codex-user-input", "NOTIFY_USER_INPUT", {}),
                  ("antigravity-stop", "NOTIFY_FAILURE", {"fullyIdle": True, "terminationReason": "error"})]
         for event, key, payload in cases:
             with self.subTest(key=key):
                 self.assertEqual("", self.hook(event, f"{key}=false\n", payload).stdout)
                 self.assertTrue(self.hook(event, f"{key}=true\n", payload).stdout)
 
-    def test_new_categories_default_off_and_are_independent(self):
+    def test_codex_waits_follow_the_shared_categories(self):
         for event, key, title in [
-            ("codex-human-approval", "NOTIFY_CODEX_HUMAN_APPROVAL", "等待你授權"),
-            ("codex-user-input", "NOTIFY_CODEX_USER_INPUT", "Waiting for Your Response"),
+            ("codex-human-approval", "NOTIFY_AUTHORIZATION", "等待你授權"),
+            ("codex-user-input", "NOTIFY_USER_INPUT", "Waiting for Your Response"),
         ]:
             with self.subTest(event=event):
-                self.assertEqual("", self.hook(event).stdout)
+                self.assertIn(title, self.hook(event).stdout, "nothing defined means enabled")
+                self.assertEqual("", self.hook(event, "NOTIFY_ACTION_REQUIRED=false\n").stdout)
                 output = self.hook(event, f"NOTIFY_ACTION_REQUIRED=false\n{key}=true\n",
                                    {"session_id": "12345678-abcd-abcd-abcd-123456789abc",
                                     "cwd": "/tmp/project", "tool_input": {"command": "PRIVATE-COMMAND"}}).stdout
@@ -65,7 +67,7 @@ class SettingsTests(unittest.TestCase):
         for response in [{"accepted": True}, '{"accepted":true}']:
             with self.subTest(response=response):
                 result = self.hook("codex-async-question",
-                                   "NOTIFY_ACTION_REQUIRED=false\nNOTIFY_CODEX_USER_INPUT=true\n",
+                                   "NOTIFY_ACTION_REQUIRED=false\nNOTIFY_USER_INPUT=true\n",
                                    {**payload, "tool_response": response})
                 self.assertEqual(0, result.returncode, result.stderr)
                 self.assertIn("Waiting for Your Response", result.stdout)
@@ -76,7 +78,7 @@ class SettingsTests(unittest.TestCase):
 
     def test_async_question_rejects_unaccepted_results_and_disabled_category(self):
         payload = {"hook_event_name": "PostToolUse", "tool_name": "request_user_input_async"}
-        settings = "NOTIFY_CODEX_USER_INPUT=true\n"
+        settings = "NOTIFY_USER_INPUT=true\n"
         for response in [None, {}, {"accepted": False}, {"accepted": "true"}, "invalid", "{}", []]:
             with self.subTest(response=response):
                 result = self.hook("codex-async-question", settings, {**payload, "tool_response": response})
@@ -85,7 +87,7 @@ class SettingsTests(unittest.TestCase):
         for extra in [{"tool_name": "another_tool"}, {"hook_event_name": "PreToolUse"}]:
             self.assertEqual("", self.hook("codex-async-question", settings,
                                            {**payload, "tool_response": {"accepted": True}, **extra}).stdout)
-        result = self.hook("codex-async-question", "NOTIFY_CODEX_USER_INPUT=false\n",
+        result = self.hook("codex-async-question", "NOTIFY_USER_INPUT=false\n",
                            {**payload, "tool_response": {"accepted": True}}, TELEGRAM_DRY_RUN="false")
         self.assertEqual("{}", result.stdout.strip())
         self.assertEqual(0, result.returncode)
@@ -99,20 +101,48 @@ class SettingsTests(unittest.TestCase):
             with self.subTest(text=text):
                 result = self.update(text)
                 self.assertEqual(self.base, self.config.read_text())
-                self.assertIn("Codex 專用", result.stdout)
+                self.assertIn("授權要求", result.stdout)
+                self.assertNotIn("既有操作提醒", result.stdout)
                 self.assertNotIn("secret-for-fixture", result.stdout + result.stderr)
 
     def test_grouped_menu_save_and_permissions(self):
+        self.config.write_text(self.base + "NOTIFY_USER_INPUT=false\n")
         result = self.update("2\ns\ny\n")
         self.assertEqual(0, result.returncode, result.stderr)
-        config = self.config.read_text()
-        self.assertIn("NOTIFY_ACTION_REQUIRED=false", config.replace('"', ""))
-        self.assertIn('OTHER_SETTING="keep-me"', config)
-        self.assertIn('TELEGRAM_BOT_TOKEN="secret-for-fixture"', config)
-        self.assertIn("NOTIFY_CODEX_HUMAN_APPROVAL=false", config.replace('"', ""))
+        config = self.config.read_text().replace('"', "")
+        for line in ["NOTIFY_COMPLETION=true", "NOTIFY_AUTHORIZATION=false",
+                     "NOTIFY_USER_INPUT=false", "NOTIFY_FAILURE=true"]:
+            self.assertIn(line, config)
+        self.assertIn('OTHER_SETTING="keep-me"', self.config.read_text())
+        self.assertIn('TELEGRAM_BOT_TOKEN="secret-for-fixture"', self.config.read_text())
         self.assertEqual(0o600, self.config.stat().st_mode & 0o777)
         self.assertIn("儲存摘要", result.stdout)
-        self.assertNotIn("NOTIFY_CODEX_PERMISSION_REQUEST", config)
+
+    def test_menu_names_four_categories_and_the_delay(self):
+        result = self.update("q\n")
+        for name in ["工作結束", "授權要求", "等待回應", "異常停止"]:
+            self.assertIn(name, result.stdout)
+        self.assertNotIn("既有操作提醒", result.stdout)
+        self.assertIn("仍在等待", result.stdout)
+        self.assertIn("30 秒", result.stdout)
+
+    def test_first_save_migrates_legacy_keys(self):
+        legacy = ("NOTIFY_ACTION_REQUIRED=true\nNOTIFY_CODEX_HUMAN_APPROVAL=false\n"
+                  "NOTIFY_CODEX_USER_INPUT=true\n")
+        self.config.write_text(self.base + legacy)
+        self.config.chmod(0o644)
+        result = self.update("s\ny\n")
+        self.assertEqual(0, result.returncode, result.stderr)
+        lines = self.config.read_text().replace('"', "").splitlines()
+        self.assertIn("NOTIFY_AUTHORIZATION=true", lines)
+        self.assertIn("NOTIFY_USER_INPUT=true", lines)
+        for key in ["NOTIFY_ACTION_REQUIRED", "NOTIFY_CODEX_HUMAN_APPROVAL", "NOTIFY_CODEX_USER_INPUT"]:
+            self.assertFalse(any(line.startswith(key + "=") for line in lines), key)
+        for line in self.base.splitlines():
+            if not line.startswith("NOTIFY_LEVEL="):
+                self.assertIn(line, self.config.read_text().splitlines())
+        self.assertIn("NOTIFY_LEVEL=all", lines)
+        self.assertEqual(0o600, self.config.stat().st_mode & 0o777)
 
     def test_legacy_level_command_changes_shared_only(self):
         self.config.write_text(self.base + 'NOTIFY_COMPLETION=false\nNOTIFY_CODEX_USER_INPUT=true\n')
@@ -122,7 +152,19 @@ class SettingsTests(unittest.TestCase):
         self.assertIn("NOTIFY_COMPLETION=true", config)
         self.assertIn("NOTIFY_CODEX_USER_INPUT=true", config)
 
+    def test_level_change_keeps_other_switches(self):
+        before = self.base + "NOTIFY_AUTHORIZATION=false\nNOTIFY_USER_INPUT=false\nNOTIFY_FAILURE=false\n"
+        self.config.write_text(before)
+        result = self.update("attention_required\n", "notify_level")
+        self.assertEqual(0, result.returncode, result.stderr)
+        lines = self.config.read_text().replace('"', "").splitlines()
+        for line in ["NOTIFY_AUTHORIZATION=false", "NOTIFY_USER_INPUT=false", "NOTIFY_FAILURE=false",
+                     "NOTIFY_LEVEL=attention_required", "NOTIFY_COMPLETION=false"]:
+            self.assertIn(line, lines)
+        self.assertFalse(any(line.startswith("NOTIFY_ACTION_REQUIRED=") for line in lines))
+
     def test_repair_deploys_helpers_without_launch_service(self):
+        self.config.write_text(self.base + "NOTIFY_AUTHORIZATION=false\nNOTIFY_USER_INPUT=false\n")
         deployed = self.home / ".config/ai-notify/hooks/telegram-notify.sh"
         deployed.parent.mkdir(parents=True)
         deployed.touch()
@@ -167,13 +209,16 @@ class SettingsTests(unittest.TestCase):
         curl.write_text('#!/bin/sh\necho \'{"ok":true,"result":[{"message":{"chat":{"id":123}}}]}\'\n')
         curl.chmod(0o755)
         result = subprocess.run(["bash", str(ROOT / "telegram/install.sh")],
-                                input="fixture-token\n\n2\ns\ny\nn\n", text=True, capture_output=True,
+                                input="fixture-token\n\n2\n3\ns\ny\nn\n", text=True, capture_output=True,
                                 env={**self.env, "PATH": str(binary) + os.pathsep + self.env["PATH"]}, timeout=10)
         self.assertEqual(0, result.returncode, result.stderr)
-        self.assertIn("Codex 專用", result.stdout)
-        self.assertIn("NOTIFY_ACTION_REQUIRED=false", self.config.read_text().replace('"', ""))
+        self.assertIn("授權要求", result.stdout)
+        config = self.config.read_text().replace('"', "")
+        self.assertIn("NOTIFY_AUTHORIZATION=false", config)
+        self.assertIn("NOTIFY_USER_INPUT=false", config)
 
     def test_uninstall_cleans_owned_runtime_state_only(self):
+        self.config.write_text(self.base + "NOTIFY_AUTHORIZATION=false\nNOTIFY_USER_INPUT=false\n")
         deployed = self.home / ".config/ai-notify/hooks/telegram-notify.sh"
         deployed.parent.mkdir(parents=True)
         deployed.touch()
@@ -198,13 +243,14 @@ class SettingsTests(unittest.TestCase):
         python.write_text('#!/bin/sh\nexit 1\n')
         python.chmod(0o755)
         self.env["PATH"] = str(binary) + os.pathsep + self.env["PATH"]
-        result = self.update("4\ns\ny\n")
+        self.config.write_text(self.base + "NOTIFY_AUTHORIZATION=false\nNOTIFY_USER_INPUT=false\n")
+        result = self.update("2\ns\ny\n")
         self.assertEqual(0, result.returncode)
         self.assertIn("無法建立專用 Python 環境", result.stderr)
         legacy = subprocess.run(["bash", str(self.config.parent / "hooks/telegram-notify.sh"),
-                                 "codex-permission", "Codex"], input='{"tool_name":"Bash"}',
+                                 "codex-stop", "Codex"], input='{"cwd":"/tmp/project"}',
                                 text=True, capture_output=True, env=self.env, timeout=3)
-        self.assertIn("Action Required", legacy.stdout)
+        self.assertIn("Task Complete", legacy.stdout)
 
     def test_atomic_update_preserves_literal_shell_characters(self):
         value = 'literal $HOME `uname` $(uname) | slash\\quote"'
