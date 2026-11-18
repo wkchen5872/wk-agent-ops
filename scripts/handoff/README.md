@@ -149,7 +149,9 @@ passing commit. An unclean review worktree stops for you instead; nothing in eit
 
 The hook tells you what happened through the Telegram notifier
 ([docs/notify/telegram.md](../../docs/notify/telegram.md)). Each record gives at most one progress
-notice and at most one attention notice.
+notice and at most one attention notice. One exception: when a retry outcome was already
+notified and the retry then stops for you for a different reason (for example an unclean review
+worktree), that stop sends one more attention notice so you learn the new cause.
 
 | Notice | When | Switch (`~/.config/ai-notify/config`) |
 | --- | --- | --- |

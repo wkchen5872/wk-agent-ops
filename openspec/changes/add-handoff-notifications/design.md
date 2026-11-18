@@ -96,7 +96,7 @@ telegram-notify.sh handoff
 - 可重試的失敗是 hook 想做的動作沒做成：`routing.log` 記為 `…:send-failed` 或 `…:open-failed`，attention 內容為
   「無法把第 N 輪交給審查者／實作者，迴圈已停住」與重試方式；同一張交件單的失敗通知只發一次，重試再失敗不重發。
 - 重試：之後任何一次在該 worktree 觸發的 hook 都會再試；也可以在該 worktree 手動執行 `handoff-route --foreground`。
-- 因此每張交件單最多一則進度通知、最多一則 attention。
+- 因此每張交件單最多一則進度通知、最多一則 attention。例外（使用者決定，審查 codex-01a1eecf-r02/F-01）：可重試的失敗已通知過，重試時又因不同原因成為人工停點（例如審查 worktree 不乾淨），這個停點再發一則，總共最多兩則；停點寫入 `.routed` 後不再通知。不抑制第二則，否則迴圈會在使用者不知道新原因的情況下停住。
 - hook 仍以成功狀態結束，不影響 Agent。
 - 替代方案：失敗也標成已處理，只靠 attention 提醒。不採用——使用者處理完原因後沒有辦法讓 hook 再送一次，只能自己手動傳訊。
 

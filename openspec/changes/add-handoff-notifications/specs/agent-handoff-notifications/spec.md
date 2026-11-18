@@ -7,7 +7,7 @@ Let the user follow a handoff loop from their notifications: which step just fin
 ## ADDED Requirements
 
 ### Requirement: Each handoff step produces a notification kind
-When the routing hook processes a handoff record, it SHALL notify the user with one of four kinds: implementation handed over, review result, finish completed, or attention needed. An `implement`/`done` record SHALL produce the first, a `review`/`done` record with `changes-required` or `pass` the second, and a `finish`/`done` record the third. Each record SHALL produce at most one progress notification and at most one attention notification, however many times the hook runs for it.
+When the routing hook processes a handoff record, it SHALL notify the user with one of four kinds: implementation handed over, review result, finish completed, or attention needed. An `implement`/`done` record SHALL produce the first, a `review`/`done` record with `changes-required` or `pass` the second, and a `finish`/`done` record the third.
 
 #### Scenario: Implementer hands over
 - **WHEN** an `implement`/`done` record is routed to the reviewer
@@ -21,6 +21,9 @@ When the routing hook processes a handoff record, it SHALL notify the user with 
 - **WHEN** a `finish`/`done` record is processed
 - **THEN** the user receives a finish notification
 
+### Requirement: Each record is notified a bounded number of times
+Each record SHALL produce at most one progress notification and at most one attention notification, however many times the hook runs for it. One exception: a record whose retryable failure was already notified and whose retry then stops for the user for a different reason SHALL get one more attention notification for that stop.
+
 #### Scenario: Record processed twice
 - **WHEN** an agent stops again without writing a new record
 - **THEN** no second notification is sent for the already processed record
@@ -32,6 +35,10 @@ When the routing hook processes a handoff record, it SHALL notify the user with 
 #### Scenario: Blocked record, hook runs twice
 - **WHEN** a `blocked` record has been notified and the hook runs again for the same record
 - **THEN** no second notification is sent
+
+#### Scenario: Retry that turns into a stop
+- **WHEN** the reviewer could not be opened for an `implement`/`done` record, the user was notified, and the retry finds the review worktree not clean
+- **THEN** the user receives one more attention notification for the unclean worktree, the record is marked as processed, and later hook runs send nothing
 
 ### Requirement: Progress notifications have switches
 `NOTIFY_HANDOFF_IMPLEMENT`, `NOTIFY_HANDOFF_REVIEW`, and `NOTIFY_HANDOFF_FINISH` SHALL enable or disable the implementation, review, and finish notifications. A missing key SHALL count as enabled. Disabling a switch MUST NOT change routing between agents.
