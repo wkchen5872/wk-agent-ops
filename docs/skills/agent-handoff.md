@@ -1,7 +1,7 @@
 ---
 type: Playbook
 title: Agent Handoff 交接迴圈指南
-description: 使用 handoff-start、handoff-finish 與 handoff-cleanup 協調多 Agent 自動化實作、審查與收尾。
+description: 使用 handoff-start、handoff-role、handoff-finish 與 handoff-cleanup 協調多 Agent 自動化實作、審查與收尾。
 tags: [skills, handoff, workflow, xirp, agents, notify]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-19T10:06:02+08:00" }
 sources:
@@ -137,9 +137,24 @@ handoff-start <change-id> [選項]
 
 override 換了工具時，prompt 開頭的 skill 呼叫會改成新工具的寫法（例如 `$change-review` 換成 Pi 的 `/skill:change-review`），以舊工具名稱開頭的 session 名稱也會改成新工具名稱。
 
-**迴圈中更換角色：** 審查或收尾的 session 尚未開啟時，可用 `handoff-role <change-id> <review|finish> <override>` 更換（例：`handoff-role add-export review pi:openai/gpt-6.2-sol:high:api`）。它會先跑與 `handoff-start` 相同的檢查（範本欄位、一個 worktree 最多一個 Pi 角色、Pi 的模型、憑證、計費與信任），全部通過才寫入實作者的 `loop.yaml`；角色 session 已開啟時拒絕，永不修改 `roles.yaml` 與實作者。
+### 2. `handoff-role <change-id> <review|finish> <override>`
 
-### 2. `handoff-finish <change-id>`
+在交接迴圈運行中，若審查（review）或收尾（finish）的 Session 尚未開啟，可使用此指令動態更換其角色範本：
+
+```bash
+# 例如：將審查者換為 Pi
+handoff-role <change-id> review pi:openai/gpt-6.2-sol:high:api
+
+# 例如：將收尾者換為 Codex
+handoff-role <change-id> finish codex:gpt-6.1-sol:high
+```
+
+**行為與安全檢查：**
+- **自動適應工具寫法**：重寫 Prompt 開頭的 Skill 呼叫與 Session 名稱，使其符合新工具慣例。
+- **嚴格關卡驗證**：執行與 `handoff-start` 完全相同的安全檢查（範本欄位完整性、一個 worktree 最多一個 Pi 角色限制、Pi 模型/憑證/計費與信任狀態），全部通過後才寫入實作者的 `loop.yaml`。
+- **防止衝突**：若目標角色的 Session 已經開啟，指令會直接拒絕更換；永不修改原始 `roles.yaml` 與正在執行的實作者角色。
+
+### 3. `handoff-finish <change-id>`
 
 當審查通過後，啟動收尾階段：
 
@@ -154,12 +169,12 @@ handoff-finish <change-id>
 - **失敗重試（Retry）**：若收尾過程因網路中斷或遠端拒絕而停下（交件單為 `finish` / `blocked`），排解問題後再次執行 `handoff-finish`，系統會直接自中斷點接續或重開收尾 Session。
 - **實作或審查 blocked 後接續**：迴圈不會自行恢復。排除原因後，請實作者在乾淨且已 commit 的 `HEAD` 寫一筆新的 `implement` / `done` 交件單，hook 會把它當成下一輪交給審查者（計入 `max_rounds`）。審查只因需要人親自做的步驟（例如真實環境驗收）而 blocked 時：由人完成該步驟、把證據記在該 change 的 Work Item（cleanup 會歸檔被移除 worktree 的 Work Item），再請實作者勾選 task、commit 並交件。
 
-### 3. `handoff-cleanup <change-id> [--abandon] [--yes]`
+### 4. `handoff-cleanup <change-id> [--abandon] [--yes]`
 
 當迴圈完成或決定放棄時，執行安全回收：
 
 ```bash
-# 預覽將被清理的項目（乾跑，Dry Run，不變更狀態）
+# 預覽將被清理的項目（乾跑，Dry Run，不變更狀態；列出要刪除的 Sessions、Worktrees、將歸檔的 Work Items 與主工作區的 Pi 設定）
 handoff-cleanup <change-id>
 
 # 正式執行清理
@@ -175,7 +190,7 @@ handoff-cleanup <change-id> --abandon --yes
 3. **主工作區保護**：主 repo 工作區永遠保留，不執行 worktree remove。
 
 **執行清理動作：**
-1. **歷史證據歸檔**：將 `.agent-handoff/<change-id>/` 內的交件單與審查報告拷貝至主工作區 `.agent-handoff/archive/<change-id>/` 保存；即將移除的 worktree 中的 `work-items/WI-*` 也整個複製到 `archive/<change-id>/<worktree>/work-items/`，避免審查引用的驗收證據隨 worktree 消失。主工作區的 Work Item 留在原處；預覽（不加 `--yes`）會列出將歸檔的 Work Item。
+1. **歷史證據歸檔**：將 `.agent-handoff/<change-id>/` 內的交件單與審查報告拷貝至主工作區 `.agent-handoff/archive/<change-id>/` 保存；即將移除的 worktree 中的 `work-items/WI-*` 也整個複製到 `archive/<change-id>/<worktree>/work-items/`，避免審查引用的驗收證據隨 worktree 消失。主工作區的 Work Item 留在原處；預覽（不加 `--yes`）會列出將歸檔的 Work Item，以及若由本次迴圈寫入則將從保留的主工作區中移除的 `.pi/settings.json`。
 2. **刪除 Sessions**：呼叫 `xirp session delete` 釋放背景程序。
 3. **移除臨時 Worktrees**：安全移除額外建立的實作與收尾 worktree。
 4. **保留分支**：`feature/<change-id>` 分支與已提交 commit 永遠保留，由團隊另行授權 merge 與清理。
@@ -242,6 +257,13 @@ Pi 會在有 `.pi/settings.json` 或 `.agents/skills` 的資料夾詢問是否�
 
 `anthropic` 搭配 `subscription` 且認證為 `oauth` 時照常執行，但 `handoff-start` 會提醒可能使用付費的 extra usage。角色內 subagent 會換 provider 的三種例外，見 [Pi roles](/scripts/handoff/README.md#pi-roles)。
 
+### 費用與 Context 膨脹考量
+
+- **審查 Session 延續性**：審查者在整個交接迴圈中保持同一個 Session，因此 Context 會隨著輪數增加而膨脹；當 Context 填滿時，Pi 會自動執行 Compaction 壓縮並繼續工作。
+- **Provider Context Window 差異**：不同 Provider 提供的 Context 上限不同（可透過 `pi --list-models <model>` 查詢；例如同一個模型在 `openai` 下的 Window 可能小於 `openai-codex`）。
+- **計費模式選擇**：若使用 `billing: api`，每輪審查都會產生 API 調用費用，且 Pi 會將使用者的全域 Packages 與 Skills 注入每個角色 Session 增加 Token 消耗。因此長輪數迴圈強烈建議優先選用 `subscription`，並選擇 Window 較大的 Provider。
+- **Subagent 行為**：角色內的 subagent 不會被鎖定在特定 provider，但交件單依然由外層 Session 撰寫，不影響路由判定。
+
 ---
 
 ## 交接迴圈即時通知 (Notifications)
@@ -306,6 +328,14 @@ Agent Handoff (Codex / gpt-6.1-sol / medium) (#9a8b7c6d)
 Codex 預設的 `workspace-write` 沙盒禁止對外網路存取。若收尾角色需執行 `git push` 或呼叫 GitHub API，請確保：
 1. 執行過 `bash scripts/handoff/install.sh` 生成 `~/.codex/handoff-net.config.toml`。
 2. `.agent-handoff/roles.yaml` 中的 `finish` 角色加上 `profile: handoff-net`。
+
+### Q5: 迴圈因 `blocked` 停下後，該如何恢復與接續？
+`blocked` 的交件單會暫停迴圈，系統不會自行重啟：
+- **實作或審查 blocked**：排除阻礙原因後，由實作者在乾淨且已 commit 的 `HEAD` 產生一筆新的 `implement` / `done` 交件單。Stop hook 會將其作為新一輪轉交給審查者（計入 `max_rounds`）。若審查僅因「需要人工親自驗收（例如真實環境驗證）」而 blocked，請人工完成驗收並將證據記錄在該 Change 的 Work Item 中，再請實作者勾選 Task、commit 並交件。
+- **收尾 blocked**：若因網路或權限問題導致 `finish` 失敗，排解問題後再次執行 `handoff-finish <change-id>` 即可重試或重開收尾 Session。
+
+### Q6: Xirp 顯示 Pi 角色為 `finished`，但工作似乎還沒完成？
+Pi 角色在背景工作或等待時，Xirp 介面可能暫時標記其為 `finished`，但實際執行程序仍在進行，Stop hook 發送的訊息依然能正常送達。請以交件單記錄及 `.agent-handoff/<change-id>/routing.log` 的實際進度為準。
 
 [^handoff-scripts]: [Agent Handoff Loop Scripts](/scripts/handoff/README.md)
 [^handoff-skill]: [Agent Handoff Skill](/template/common/skills/agent-handoff/SKILL.md)

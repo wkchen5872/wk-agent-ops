@@ -82,6 +82,7 @@ template/common/.claude/
   state/codex-*       # Scoped lock, sanitized trigger mailbox and diagnostics
   state/claude-<session>.pending[.lock/]       # Delayed authorization wait marker + owner PID
   state/antigravity-<session>.pending[.lock/]
+  state/deliveries.log # Optional Telegram delivery log (NOTIFY_DELIVERY_LOG=true, max 500 lines)
 
 # Copilot CLI hooks (opt-in, created by install.sh if user accepts):
 .github/
@@ -118,10 +119,11 @@ NOTIFY_HANDOFF_REVIEW=true
 NOTIFY_HANDOFF_FINISH=true
 NOTIFY_AUTHORIZATION_DELAY_SECONDS=30   # optional; 0 = immediate
 NOTIFY_AUTHORIZATION_REARM_SECONDS=600  # optional
+NOTIFY_DELIVERY_LOG=true                # optional; log Telegram API response to state/deliveries.log
 # LINE_ENABLED=false       # Future extension
 ```
 
-**Security:** The file is created with `chmod 600` and never committed to the repository.
+**Security:** The file is created with `chmod 600` and never committed to the repository. The hook and setup wizard hand the bot token and chat ID to `curl --config -` on standard input (`stdin`), keeping credentials off `argv` and out of `ps`. Token and chat ID values are strictly validated against Telegram character sets (`^[A-Za-z0-9:_-]+$` and `^[A-Za-z0-9_@-]+$`) before making calls, preventing argument or option injection.
 
 **Category resolution.** Four categories, one switch each: completion, authorization, user input, failure. Order: environment new key → environment legacy keys → config-file new key → config-file legacy keys → default. Only exact `true`/`false` count. Legacy keys `NOTIFY_ACTION_REQUIRED`, `NOTIFY_CODEX_HUMAN_APPROVAL`, `NOTIFY_CODEX_USER_INPUT` are still read: authorization from ACTION_REQUIRED + CODEX_HUMAN_APPROVAL, user input from ACTION_REQUIRED + CODEX_USER_INPUT; within one source any `true` wins, otherwise any `false`, otherwise undefined. Defaults: completion follows `NOTIFY_LEVEL`; the other three are on.
 
@@ -416,6 +418,22 @@ All seven built-in non-handoff templates render the tool line as `🤖 {tool}{mo
   - Claude model IDs are normalized to family and version (e.g. `claude-opus-5-5` → `Opus 5.5`, `claude-sonnet-4-6` → `Sonnet 4.6`, `claude-haiku-4-5` → `Haiku 4.5`, with aliases `opus`/`sonnet`/`haiku` mapped to family only).
   - Non-Claude IDs retain their raw string (e.g. `gpt-6.1-terra`).
   - `{model_suffix}` includes the version with parentheses and leading space (e.g. ` (Opus 5.5)`); `{model_family_suffix}` excludes the version (e.g. ` (Opus)`). User overrides can use `{model_family_suffix}` to hide minor version numbers.
+
+### Delivery Security and Delivery Log
+
+- **Process-List Protection (Argv-Clean)**:
+  - The notification hook and setup wizard pass the bot token and chat ID via `curl --config -` on standard input (`stdin`).
+  - Neither token nor chat ID appears on the command line, keeping them invisible to other users on the system via `ps`.
+  - Input validation strictly accepts only Telegram character sets: tokens must match `^[A-Za-z0-9:_-]+$` and chat IDs `^[A-Za-z0-9_@-]+$`. Values with invalid characters are rejected before invoking `curl`, preventing option or argument injection.
+- **Optional Delivery Log (`NOTIFY_DELIVERY_LOG`)**:
+  - Setting `NOTIFY_DELIVERY_LOG=true` in `~/.config/ai-notify/config` logs Telegram's response for every delivery call.
+  - Appends one line to `~/.config/ai-notify/state/deliveries.log`:
+    ```text
+    2026-11-19T22:10:04+0800 event=stop template=completion ok=true message_id=12987
+    ```
+  - `ok=true` indicates Telegram accepted the message; `message_id` is the message ID assigned by Telegram. If rejected or if curl fails, it logs `ok=false message_id=-`.
+  - The log strictly records timestamps, sanitized event keys, template names, status, and message ID; it never records message text, bot tokens, or chat IDs.
+  - Automatically capped at the newest 500 lines upon write. Dry-run and suppressed events write nothing.
 
 ---
 
