@@ -51,7 +51,7 @@ Before routing a record whose role template in `loop.yaml` has `harness: pi`, th
 - **THEN** the record is routed as usual
 
 ### Requirement: The hook verifies a Pi role before opening it
-Before the hook opens a Pi reviewer or finish session, it SHALL repeat the model, credential, and billing verification of `agent-handoff-pi`. When verification fails, it SHALL open no session, notify the user naming the failed check, and leave the record unprocessed so that a later hook run, after the user fixes the cause, retries the opening.
+Before the hook opens a Pi reviewer or finish session, it SHALL repeat the model, credential, and billing verification, the trigger and trust check, and the settings file step of `agent-handoff-pi` for that role's worktree. When any of them fails, it SHALL open no session, notify the user naming the failed check, and leave the record unprocessed so that a later hook run, after the user fixes the cause, retries the opening.
 
 #### Scenario: Credential changed after start
 - **WHEN** the review template declares `billing: subscription` and, by the first implement handoff, the provider's credential has become an API key

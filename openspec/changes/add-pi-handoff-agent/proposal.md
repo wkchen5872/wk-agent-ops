@@ -21,6 +21,11 @@ Xirp 已支援 `pi` harness（啟動選項有 `provider` 與 `thinking`），Pi 
   - hook 開啟審查或收尾 Session 前再驗證一次；不通過就不開，通知使用者，交件單保留待重試。
   - 交件單由 Pi Session 寫下時記錄當下的 provider、模型、effort、計費方式與 Session ID；路由前與該角色範本比對，
     任何一項不同就不接棒，通知使用者。
+- **以角色 worktree 的 Pi 設定開啟**：Xirp 目前不套用 Pi 1.x 的啟動選項，所以開 Pi 角色前在該角色的 worktree 寫入
+  `.pi/settings.json`（provider、model、thinking），以 repo 本機的 exclude 忽略、不進 Git；一個 worktree 最多一個 Pi 角色，
+  一個 Pi 角色可以和 Claude Code、Codex 角色共用 worktree。
+- **只對交接 worktree 自動信任**：Pi 會在背景 Session 停在信任提示；Pi extension 只對「主 repo 已被使用者信任、且未被追蹤的
+  `loop.yaml` 列為角色 worktree」的交接 worktree 回答信任，不保存決定。缺 extension 或主 repo 未被信任時，迴圈不開 Pi 角色。
 - **Anthropic 訂閱只提醒**：Pi 角色宣告 `anthropic` + `subscription` 且實際為 `oauth` 時照常執行，但 `handoff-start`
   提醒可能使用付費的 extra usage。宣告與實際不一致時仍然停下。
 - **不改動角色內的 subagent 機制**：pstack 在 Pi 上把模型別名解析成父 Session 同一個 provider 的模型，調高模型或 effort
@@ -28,7 +33,7 @@ Xirp 已支援 `pi` harness（啟動選項有 `provider` 與 `thinking`），Pi 
   `pstack-models.md` 的 `pi models:` 設定、父 provider 不在 pstack 對照表內而退回 anthropic）寫入文件作為已知限制。
   本 repo 的 `.claude/agents/`、`.codex/agents/` 定義在 Pi 上不會被讀取，不在本 change 範圍。
 - **Pi 的停止觸發**：新增 Pi extension，在 Pi 確定不再自動續跑時（`agent_settled`）呼叫既有的 `handoff-route`；
-  subagent 停下時不觸發。由 `scripts/handoff/install.sh` 安裝到 `~/.pi/agent/extensions/`。
+  subagent 停下時不觸發；同一個 extension 負責上述的信任判斷。由 `scripts/handoff/install.sh` 安裝到 `~/.pi/agent/extensions/`。
 - **其他配合**：`loop.yaml` 一併記錄實作範本；`handoff-start` 的覆寫參數支援 Pi；`handoff-author --tool Pi` 讀 `PI_SESSION_ID`；
   範例範本與文件說明 Pi 的 skill 呼叫語法 `/skill:<name>`；交件單通知的 Agent 資訊顯示 Pi 的 provider 與計費方式。
 
@@ -62,9 +67,10 @@ Xirp 已支援 `pi` harness（啟動選項有 `provider` 與 `thinking`），Pi 
 ## Impact
 
 - 程式：`scripts/handoff/lib/handoff.sh`（範本驗證、Pi 驗證、Xirp 開啟參數）、`scripts/handoff/handoff-start`、
-  `scripts/handoff/handoff-route`、`scripts/handoff/install.sh`、新增 `scripts/handoff/pi/wk-handoff.ts`（Pi 停止觸發）、
+  `scripts/handoff/handoff-route`、`scripts/handoff/handoff-cleanup`、`scripts/handoff/install.sh`、新增 `scripts/handoff/handoff-pi-trust`、新增 `scripts/handoff/pi/wk-handoff.ts`（Pi 停止觸發）、
   `template/common/skills/agent-handoff/scripts/{handoff-write,handoff-author}`、`roles.example.yaml`、`SKILL.md`。
 - 測試：`tests/test_agent_handoff.sh`（假的 `pi` 與 `xirp`）。
 - 文件：`scripts/handoff/README.md`、`docs/hooks/index.md`、`docs/skills/agent-handoff.md`。
 - 依賴：Pi CLI（`pi auth check`、`pi --list-models`）、Xirp 的 `pi` harness。
-- 使用者設定：`~/.pi/agent/extensions/` 新增一個檔案；`roles.yaml` 新增欄位（舊檔不受影響）。
+- 使用者設定：`~/.pi/agent/extensions/` 新增一個檔案；`roles.yaml` 新增欄位（舊檔不受影響）；使用 Pi 角色的 repo 在
+  `info/exclude` 加入 `/.pi/settings.json`，且主 worktree 需先在 Pi 執行過 `/trust`。

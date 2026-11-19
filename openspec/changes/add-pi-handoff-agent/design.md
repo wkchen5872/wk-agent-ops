@@ -23,6 +23,16 @@
     別名（opus、fable、sonnet、haiku）在父 provider 為 `anthropic`、`openai`、`openai-codex` 時解析成同 provider 的模型，
     調高模型或 effort 不換 provider。會換 provider 的只有：明確的別家 `provider/id`、`pstack-models.md` 的 `pi models:`、
     父 provider 不在對照表內時退回 anthropic。本 repo 的 `.claude/agents/`、`.codex/agents/` 不會被 pstack 在 Pi 上讀取。
+- task 1.2 實測（2026-11-19，Xirp 0.68.0、Pi 1.5.2）：
+  - Xirp 的 `buildPiArgs` 以 `provider`、`model`、`thinking` 組成 `--provider`、`--model`、`--thinking`，鍵名與本設計相同；
+    但 `resolveAgentLaunchOptions` 只對測試過的版本套用選項（`TESTED_VERSIONS.pi` 為 0.83.0 起、major 小於 1）。Pi 1.5.2
+    被判為未測試版本，三個選項整組被丟掉，Session 以 Pi 自己的儲存預設啟動。
+  - Pi 專案設定 `.pi/settings.json` 的 `defaultProvider`、`defaultModel`、`defaultThinkingLevel` 覆蓋使用者設定；實測在
+    全域預設為 `openai-codex/gpt-6-sol medium` 時，專案設定讓 Session 跑在 `openai-codex/gpt-5.6-luna low`。
+  - 目錄中有 `.pi/settings.json` 或目前目錄（或上層）有 `.agents/skills` 時，Pi 啟動前要求信任決定；不信任就不載入專案設定。
+    wk-agent-ops 的 installer 會在每個 repo 放 `.agents/skills`，所以每個交接 worktree 都會觸發。全域 extension 的
+    `project_trust` handler 可回傳 `{trusted:"yes"}` 取代互動提示，不帶 `remember` 時只對該程序有效（實測不寫入 `trust.json`）。
+  - 使用者已存的信任決定在 `~/.pi/agent/trust.json`，以最近的上層目錄為準；交接 worktree 與主 worktree 同層，不被主 worktree 的決定涵蓋。
 
 ## Goals / Non-Goals
 
@@ -48,10 +58,17 @@
 roles.yaml / --impl / --review 覆寫
       |
       v
-[1] handoff-start：所有 Pi 角色 ho_pi_verify ------------- 任一失敗：不開 Session、不建 worktree
+[1] handoff-start：一個 worktree 最多一個 Pi 角色、extension 已安裝、
+    主 worktree 已被信任、所有 Pi 角色 ho_pi_verify ------- 任一失敗：不開 Session、不建 worktree
       |                                                   anthropic+oauth+subscription：印提醒
       v
+ho_pi_settings：角色 worktree 寫入 .pi/settings.json（info/exclude 忽略）
+      |
+      v
 xirp session:create agent:{agentName:pi, options:{model, provider, thinking}}
+      |
+      v
+Pi 啟動：wk-handoff extension 對交接 worktree 回答信任 → 載入 .pi/settings.json
       |
       v
 Pi 角色工作
@@ -66,7 +83,7 @@ Pi agent_settled --> wk-handoff extension --> handoff-route
 [2] 路由前比對交件單 agent 區塊與 loop.yaml 範本 --------- 不符：人工停點（通知、寫入 .routed）
       |
       v
-[3] hook 開 Pi 審查／收尾前再 ho_pi_verify -------------- 失敗：可重試失敗（通知一次、不寫入 .routed）
+[3] hook 開 Pi 審查／收尾前再驗證並寫入設定 ------------ 失敗：可重試失敗（通知一次、不寫入 .routed）
 ```
 
 - `ho_pi_verify <provider> <model> <effort> <billing>` 放在 `handoff.sh`，`handoff-start` 與 `handoff-route` 共用。檢查順序：
@@ -77,11 +94,22 @@ Pi agent_settled --> wk-handoff extension --> handoff-route
 - 替代方案：讀 `~/.pi/agent/auth.json` 的 `type`。不採用——憑證可能來自環境變數或 extension，`pi auth check` 用的是 Pi 自己的解析順序，
   也不必讀含 secret 的檔案。
 
-### 2. Xirp 開 Pi Session 的參數
+### 2. Pi Session 以角色 worktree 的專案設定開啟
 
-- `ho_xirp_create` 新增 `pi` 分支：effort 鍵為 `thinking`，並加入 `provider`。`agent.options` 為 `{model, provider, thinking}`。
-- Xirp 是否以 `options.model` 接收 Pi 的模型尚未實測，列為第一個 task（真實開一個 Session，在其中讀 `PI_PROVIDER`、`PI_MODEL`、
-  `PI_REASONING_LEVEL`）。若鍵名不同，只改這個分支；即使傳錯，關口 [2] 會因交件單的 agent 區塊不符而停下，不會靜默跑錯。
+- Xirp 目前不套用 Pi 1.x 的啟動選項（見 Context），所以 provider、model、thinking 改由角色 worktree 的 `.pi/settings.json`
+  指定：開 Pi Session 前，`ho_pi_settings <worktree> <provider> <model> <effort>` 寫入
+  `{"defaultProvider":…, "defaultModel":…, "defaultThinkingLevel":…}`。
+- `ho_xirp_create` 的 `pi` 分支仍在 `agent.options` 帶 `{model, provider, thinking}`：Xirp 日後支援 Pi 1.x 時以命令列參數套用，
+  值與專案設定相同，不會互相矛盾。
+- 這個檔案不能讓 worktree 變髒（路由前的乾淨檢查會擋下）：寫入前把 `/.pi/settings.json` 加進 repo 的 `info/exclude`
+  （`git rev-parse --git-path info/exclude`，每個 repo 只加一次），不改專案的 `.gitignore`。
+- 已有 `.pi/settings.json` 時：內容與要寫的完全相同就沿用（開啟失敗後的重試）；不同或被 Git 追蹤就拒絕開啟，說明該檔案，
+  不覆蓋。repo 自帶 Pi 專案設定時不能用 Pi 角色，列為已知限制。
+- 一個 worktree 最多一個 Pi 角色（使用者決定）：實作 worktree 由實作角色使用；審查、收尾角色 `worktree: shared` 時與實作者同一個
+  worktree，`new` 時各自是 `<impl>-review`、`<impl>-finish`。`handoff-start` 依此計算每個 worktree 的 Pi 角色數，超過一個即拒絕，
+  指出角色並要求把其中的 Pi 審查或收尾改成 `worktree: new`。一個 Pi 角色與 Claude Code、Codex 角色共用 worktree 不受限。
+  因此同一份 `.pi/settings.json` 只服務一個角色，Session 執行中不會被改寫。
+- 背景開啟的 Pi Session 由 Pi extension 回答信任提示（決策 8），否則會停在互動提示。
 - `ho_template_check` 接受 `pi`，Pi 角色必填 `provider`、`billing`，非 Pi 角色設了這兩欄即拒絕（與 `profile` 只限 Codex 同一模式）。
 - `handoff-start` 覆寫格式新增 `pi:<provider>/<model>:<effort>:<billing>`；claude／codex 格式不變。
 - `loop.yaml` 新增 `implement_template`（以 `ho_copy_template` 複製，欄位加入 `provider`、`billing`），路由比對實作交件單時才有依據。
@@ -113,7 +141,9 @@ Pi agent_settled --> wk-handoff extension --> handoff-route
   `bash ~/.config/wk-workflow/handoff/handoff-route`，stdin 給 `{"hook_event_name":"Stop","cwd":<ctx.cwd>,"session_id":<Pi session id>}`。
   `handoff-route` 本來就在背景處理並一律成功結束；extension 自己也吞掉所有錯誤。
 - 不用 `agent_end`：Pi 自動重試或續跑時會提早交接，審查者可能看到還在變動的 worktree。
-- 替代方案：把路由邏輯寫成 TypeScript。不採用——規則已經在 shell 且有測試，兩份實作會分歧。
+- `project_trust`：以 `pi.exec` 執行 `bash ~/.config/wk-workflow/handoff/handoff-pi-trust <event.cwd>`，結束碼 0 回傳
+  `{trusted:"yes"}`（不帶 `remember`），其他結果與任何錯誤都回傳 `{trusted:"undecided"}`，交回 Pi 原本的信任流程（決策 8）。
+- 替代方案：把路由與信任判斷寫成 TypeScript。不採用——規則已經在 shell 且有測試，兩份實作會分歧。
 
 ### 6. 不鎖定角色內的 subagent
 
@@ -130,7 +160,21 @@ Pi agent_settled --> wk-handoff extension --> handoff-route
 - 只在 `handoff-start` 的驗證中印出（stderr，`⚠️` 前綴），涵蓋之後才開的審查與收尾角色；Pi 自身的 `warnings.anthropicExtraUsage`
   只在互動模式顯示，交接迴圈不能依賴它。宣告與實際不符時走拒絕，不印提醒。
 
-### 8. TDD 策略與測試邊界
+### 8. 只對交接 worktree 自動信任
+
+- 使用者決定由 extension 自動信任交接 worktree，不要求事先信任上層資料夾。
+- `handoff-pi-trust <dir>`（shell，與路由腳本一起安裝）在下列條件全部成立時結束碼為 0：
+  1. `<dir>` 所在的 Git 頂層 T 是 linked worktree（不是主 worktree M）；
+  2. T 底下有某個 `.agent-handoff/<change>/loop.yaml`，其 `implementer.worktree`、`reviewer.worktree` 或 `finish.worktree` 等於 T，
+     且該檔案未被 Git 追蹤（clone 下來的 repo 無法靠提交 `loop.yaml` 取得信任）；
+  3. 使用者已信任 M：`~/.pi/agent/trust.json` 中離 M 最近的上層目錄（含 M 本身）的決定為 `true`。
+- 第 3 點讓 worktree 沿用主 repo 的信任決定：沒被使用者信任過的 repo 不會因為開了交接迴圈而被信任。不符合時回傳 `undecided`，
+  Pi 照原本的流程詢問或拒絕。
+- 背景 Session 若停在提示會讓迴圈無聲卡住，所以關口 [1] 與 [3] 對 Pi 角色檢查 `~/.pi/agent/extensions/wk-handoff.ts` 存在、
+  M 已被信任；不成立就拒絕並說明（安裝 extension、在主 worktree 以 Pi 執行 `/trust`）。
+- 替代方案：要求使用者信任 worktree 的上層資料夾。不採用——範圍涵蓋該資料夾下所有專案（使用者決定）。
+
+### 9. TDD 策略與測試邊界
 
 - 全部在 `tests/test_agent_handoff.sh`，以暫時 HOME、假的 `xirp`（記錄 `session:create` 的 JSON）與假的 `pi`
   （依環境變數回傳 `auth check` JSON 與 `--list-models` 表格）執行，不碰真實憑證或網路。
@@ -140,6 +184,9 @@ Pi agent_settled --> wk-handoff extension --> handoff-route
   - `handoff-start`：任一 Pi 角色失敗時沒有 `session:create`、沒有新 worktree；成功時 JSON 帶 `provider`、`thinking`；覆寫格式。
   - `handoff-write`：Pi 環境下的 agent 區塊、`pi auth check` 失敗寫 `unknown`、非 Pi 環境沒有 agent 區塊。
   - `handoff-author --tool Pi`。
+  - `ho_pi_settings`：寫入內容、`info/exclude` 只加一次、worktree 維持乾淨、相同內容沿用、不同內容或被追蹤時拒絕。
+  - worktree 規則：兩個 Pi 角色共用 worktree 時拒絕、一個 Pi 角色與 Claude／Codex 共用時通過。
+  - `handoff-pi-trust`：三個條件各自不成立時非零、全部成立時為 0；以暫時 HOME 的 `trust.json` 驗證最近上層規則。
   - `handoff-route`：四項各自不符、缺 agent 區塊、`unknown`，皆通知一次並寫入 `.routed`；相符則照常路由；開審查前驗證失敗不寫入、
     修好後重試成功；Claude／Codex 範本不受影響（既有測試維持通過）。
 - extension 本身是轉接層，不寫 TypeScript 單元測試；以真實驗收確認：Pi 角色交件後 `routing.log` 有一筆、subagent 停下沒有。
@@ -147,7 +194,14 @@ Pi agent_settled --> wk-handoff extension --> handoff-route
 
 ## Risks / Trade-offs
 
-- [Xirp 的 Pi 模型選項鍵未實測] → 第一個 task 實測；就算錯，關口 [2] 會停下。
+- [Xirp 不套用 Pi 1.x 的啟動選項] → 改用角色 worktree 的 `.pi/settings.json`；Xirp 日後套用時值相同。設定沒生效時，
+  關口 [2] 仍會因交件單不符而停下。
+- [`/.pi/settings.json` 加進 repo 的 `info/exclude`，主 worktree 也會忽略這個路徑] → 只影響本機；repo 自己追蹤的
+  `.pi/settings.json` 不受 exclude 影響，且這種 repo 會被拒絕使用 Pi 角色。
+- [extension 自動信任會讓交接 worktree 載入 repo 內的 `.pi` 資源與 `.agents/skills`] → 只在主 repo 已被使用者信任、`loop.yaml`
+  未被追蹤時成立，信任範圍與使用者在主 repo 的決定相同。
+- [`--worktree here` 的 checkout 在迴圈結束後仍留著 `.pi/settings.json`] → `handoff-cleanup` 移除它保留的 worktree 中由迴圈寫入的
+  `.pi/settings.json`，避免之後一般的 Pi Session 沿用角色設定。
 - [`pi auth check` 是檢查當下的狀態，Session 啟動後憑證仍可能被換] → 交件時再查一次並記入交件單，路由前比對；最壞情況是一輪的用量，不會連續接棒。
 - [Pi 依模型能力夾住 thinking 等級，例如範本 `max` 但模型只到 `high`] → 關口 [1] 擋掉不支援 thinking 的模型；仍被夾住時交件單 effort 不符而停下，
   訊息指出宣告與實際，使用者改範本即可。這是「一律停下」的預期代價。
@@ -159,6 +213,7 @@ Pi agent_settled --> wk-handoff extension --> handoff-route
 
 1. `add-handoff-notifications` 封存並合併後才開始實作（它改寫 `handoff-route` 與通知流程）。
 2. 部署：重跑 `scripts/handoff/install.sh` 安裝 Pi extension；已開啟的 Pi Session 需 `/reload` 或重開才會路由。
+   使用 Pi 角色的 repo 需先在主 worktree 以 Pi 執行過 `/trust`（或已在 `trust.json` 被信任）。
    重跑 `scripts/skills/install.sh` 更新 `handoff-write`、`handoff-author` 與範例範本。
 3. 既有 `roles.yaml`（只有 claude／codex）不需修改；進行中的迴圈沒有 `implement_template`，其實作交件單不做 Pi 比對（只有 Pi 範本才比對）。
 4. 回退：刪除 `~/.pi/agent/extensions/wk-handoff.ts` 即停止 Pi 路由；舊版 shell 腳本會拒絕 `harness: pi` 的範本，不會誤開。
