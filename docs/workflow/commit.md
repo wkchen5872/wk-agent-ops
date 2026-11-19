@@ -167,7 +167,7 @@ assisting_model=<current root-session model>
 ```
 
 `tool_name` 是擁有 root session 的 agent tool；`assisting_model` 是當下協作的 AI 模型，只用於 commit 的 `AI-Assisted-By` trailer。協調層會自動使用目前確認的執行工具與模型，並寫入符合規範的 attribution 標籤。
-在 Pi root session 中（`PI_CODING_AGENT=true` 且沒有 `PI_SUBAGENT_PARENT_SESSION`），`tool_name` 為 `Pi`，`assisting_model` 取 commit 步驟當下的 `PI_MODEL`（原樣記錄模型 ID，不加 provider），trailer 為 `Co-Authored-By: Pi` 與 `AI-Assisted-By: <PI_MODEL>`；這個例外不適用於 Pi subagent 與其他工具。
+在 Pi root session 中（`PI_CODING_AGENT=true` 且沒有 `PI_SUBAGENT_PARENT_SESSION`），`tool_name` 為 `Pi`；使用者沒有提供模型名稱時，`assisting_model` 取 commit 步驟當下的 `PI_MODEL`（原樣記錄模型 ID，不加 provider），trailer 為 `Co-Authored-By: Pi` 與 `AI-Assisted-By: <PI_MODEL>`；`PI_MODEL` 為空時視為未知，省略 `AI-Assisted-By` 並回報。這個例外不適用於 Pi subagent 與其他工具。
 驗證 context 後執行 final `git add -A`；若 staged diff 為空則停止；pre-commit hook 修正檔案後會重新 staging，再重試 commit。
 
 ## 遠端交付

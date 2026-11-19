@@ -109,4 +109,3 @@ the workflow MUST stop without falling back to the portable skill.
 #### Scenario: Pi model variable outside Pi
 - **WHEN** `openspec-commit` runs in Codex and the environment contains `PI_MODEL`
 - **THEN** it does not use that value as `assisting_model`
-
