@@ -39,7 +39,7 @@ Telegram 的 `PermissionRequest` 不再當下發出即時通知（徹底消除 a
 - **Daemon 可連線且載入該 Session**：監聽 `waitingOnApproval` 旗標；若在 30 秒內自動放行則安靜結束，超過 30 秒仍未解除才發送確認等待通知。
 - **Daemon 不可用或 CLI 啟動的 Session（回報 `notLoaded`）**：保留請求等待 30 秒後探針讀取 Session 紀錄（`rollout-*-<session_id>.jsonl`）；若已有執行輸出或任務結束則靜默，若仍無結果則發送「Approval Status Unknown（無法確認）」通知。
 
-同步問題由 PreToolUse 啟動檢查；非同步問題由 PostToolUse 在確認 `accepted=true` 後立即發送「Waiting for Your Response」（表示題目已送出，Codex 仍可繼續工作，不需 daemon）。所有 handler 均回傳 neutral `{}`，絕不干預或批准工具執行。按需檢查器不使用 LaunchAgent，同 session 共用程序，輪次結束自動退出，並自動清理超過 7 天的過期狀態檔。
+同步問題由 PreToolUse 啟動檢查；非同步問題由 PostToolUse 在確認 `accepted=true` 後立即發送「Waiting for Your Response」（表示題目已送出，Codex 仍可繼續工作，不需 daemon）。所有 handler 均回傳 neutral `{}`，絕不干預或批准工具執行。按需檢查器不使用 LaunchAgent，同 session 共用程序，輪次結束自動退出，並自動清理超過 7 天的過期狀態檔。此外，Codex hook 輸入之 payload 帶有必填 `model` 欄位，檢查器會將其快取在 `state/codex-<24 hex>.model.json`，於 Telegram 通知送出時自動載入，顯示為 `🤖 Codex (gpt-6.1-terra)` 等原始模型 ID。
 
 ## 顯示名稱
 

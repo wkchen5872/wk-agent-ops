@@ -180,7 +180,7 @@
 
 <rect x="495" y="888" width="460" height="95" rx="8" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.2"/>
 <text x="510" y="910" font-size="14" fill="#0f172a" font-weight="700">動態變數注入與安全跳脫 (Escape)</text>
-<text x="510" y="932" font-size="12" fill="#334155">• 支援參數：<tspan font-family="monospace">{tool} {project} {time} {request_tool} {delay} {tag} {message}</tspan></text>
+<text x="510" y="932" font-size="12" fill="#334155">• 支援參數：<tspan font-family="monospace">{tool} {model_suffix} {project} {time} {tag} {delay}</tspan> 等</text>
 <text x="510" y="950" font-size="12" fill="#334155">• 純字串變數替換，不使用 <tspan font-family="monospace">eval</tspan>，杜絕 Shell 代碼注入風險</text>
 <text x="510" y="968" font-size="12" fill="#334155">• 自動對注入變數轉義 Telegram Markdown 特殊字符；空行自動修剪</text>
 

@@ -33,6 +33,7 @@ Telegram hook 是背景通知，不會回傳批准或阻擋決策。實作細節
 - **特例**：Claude 執行 `AskUserQuestion` 提問工具時，型態亦標為 `permission_prompt`。Hook 會自動向後解析未完成呼叫，若為提問則立即以 `notification:question` 送出，不延遲。
 - `idle_prompt`、`agent_needs_input` 等歸類為等待回應，立即送出；登入或額度資訊類（`auth_*`、`quota_*`）則靜默過濾。
 - Claude Code 原生在詢問前有約 6 秒的內部緩衝，外部無法消除。
+- **通知 Model 顯示**：因 Claude Code 原生 `Stop` payload 未包含 model 欄位，通知 hook 會讀取 `transcript_path` 尾端（最後 400 行）最新一則 assistant 紀錄的 `message.model`，自動格式化為家族版本（如 `Opus 5.5`、`Sonnet 4.6`），注入 `{model_suffix}` 顯示為 `🤖 Claude Code (Opus 5.5)`。
 
 ## 安裝與檢查
 

@@ -49,7 +49,8 @@ When invoked without arguments, present an interactive menu. When invoked with a
    - `TELEGRAM_ENABLED`
    - `TELEGRAM_BOT_TOKEN` — show only the last 4 characters, mask the rest with `****`
    - `TELEGRAM_CHAT_ID`
-   - Notification switches (`NOTIFY_ATTENTION`, `NOTIFY_PROGRESS`, `NOTIFY_COMPLETION`, `NOTIFY_HANDOFF`)
+   - Notification switches (`NOTIFY_COMPLETION`, `NOTIFY_AUTHORIZATION`, `NOTIFY_USER_INPUT`, `NOTIFY_FAILURE`, and handoff switches `NOTIFY_HANDOFF_*`)
+   - Provider hook registration status (Claude Code, Codex, Antigravity, Pi, Copilot)
 
    If the config file does not exist, tell the user that Telegram Notify is not installed and suggest running `/notify-setup setup`.
 

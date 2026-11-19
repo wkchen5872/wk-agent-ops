@@ -313,6 +313,27 @@ All functions require `jq`.
 - **傳訊失敗重試保障**：
   - 對審查者或實作者傳訊失敗時，交件單不標記為已處理，而是改發一則「需要你處理」提醒，保留交件單待下次 hook 或手動執行重試。
 
+### 5. Pi CLI / Extension 實作規則與特例
+
+- **以全域 Extension 橋接事件**：
+  - Pi 無原生命令 hook 設定檔（如 `hooks.json`），通知由全域 extension（`~/.pi/agent/extensions/ai-notify.ts`）以背景程序呼叫 `telegram-notify.sh`。
+- **結算停下（`agent_settled` vs `agent_end`）重試防誤報**：
+  - Pi 在低階執行結束（`agent_end`）後，仍可能自動重試、壓縮 Context（compaction）或接續處理佇列訊息。
+  - 若在 `agent_end` 發送通知會造成嚴重的提早與重複誤報；因此嚴格於最終結算（`agent_settled`）時才判定發送 `pi-stop:completed` 或 `pi-stop:error`。重試成功者只會發送一則工作結束，絕不先送異常停止。
+- **嚴格過濾互動主 Session (`ctx.mode === 'tui'`)**：
+  - 不能僅依賴 `ctx.hasUI`，因為 RPC 模式下 `ctx.hasUI` 亦可能為真。
+  - 必須嚴格驗證 `ctx.mode === 'tui'` 且環境無 `PI_SUBAGENT_PARENT_SESSION`，以徹底靜默非互動的批次模式（`pi -p`、`--mode json`、`--mode rpc`）與 pstack subagent。
+- **UI 提問合流與閒置防抖**：
+  - 僅在執行狀態中（`agent_start` ~ `agent_settled`）由 `ui_prompt_start`（涵蓋 `select/confirm/input/editor/custom`，如 pstack `ask_user_question`）發送等待回應通知。
+  - Pi 會將重疊的提問合併為一段，同段等待只發送一次；使用者於閒置時主動開啟的選單則靜默不通知。
+- **無授權通知與純文字提問限制**：
+  - Pi 原生不具備命令確認或授權攔截機制，不送授權等待；未開啟 UI 選單的純文字提問亦不偵測。
+- **背景子程序隔離 (Fail-Soft)**：
+  - 以 detached 子程序在背景呼叫 hook，Pi 絕不等待；任何傳送失敗、腳本遺失皆靜默忽略，絕不干擾 Pi 操作。
+- **全域 Extension 擁有標記保護**：
+  - 檔案第一行帶有 `// managed by wk-agent-ops ai-notify` 擁有標記。
+  - 遇到同名未標記檔案或 symlink 時自動退避，在 `status` 標註 `unavailable`，避免覆寫或刪除使用者的自訂 extension。已開啟的 Pi Session 需執行 `/reload` 或重開方能載入。
+
 ---
 
 ## Codex Integration
@@ -380,7 +401,21 @@ Markers `claude-<session>.pending` and `antigravity-<session>.pending` each have
 
 `handoff` events come from the agent handoff loop (`scripts/handoff/handoff-route`) with a JSON body; the `kind` field selects `handoff:<kind>`. Progress kinds follow `NOTIFY_HANDOFF_IMPLEMENT`, `NOTIFY_HANDOFF_REVIEW` and `NOTIFY_HANDOFF_FINISH` (missing = on); `attention` is always sent while Telegram is enabled and falls back to built-in text when its row or template is missing. The hook script carries the line `# ai-notify-capability: handoff-events`, which the handoff side reads to decide between handoff events and the generic notice.
 
-Placeholders: `{title_suffix} {tool} {project} {time} {tag} {message} {reason} {request_tool} {delay}`. Values are escaped for Telegram legacy Markdown; a line made only of empty placeholders is removed; unknown placeholders stay as is. There is no eval, condition or loop.
+Placeholders: `{title_suffix} {tool} {model_suffix} {model_family_suffix} {project} {time} {tag} {message} {reason} {request_tool} {delay}`, plus `{agent} {change} {round} {verdict} {commit} {next} {detail}` for handoff templates. Values are escaped for Telegram legacy Markdown; a line made only of empty placeholders is removed; unknown placeholders stay as is. There is no eval, condition or loop.
+
+### Model Display on Tool Line
+
+All seven built-in non-handoff templates render the tool line as `🤖 {tool}{model_suffix}` (e.g. `🤖 Claude Code (Opus 5.5)`, `🤖 Codex (gpt-6.1-terra)`, `🤖 Pi (gpt-6.1-sol)`). When a model is unknown or omitted, only the tool name appears without empty brackets.
+
+- **Model Sources across Providers**:
+  - **Codex**: Delivered via hook payload `model` string (mandatory in Codex command schemas), and cached per session in `state/codex-<24 hex>.model.json`.
+  - **Pi**: Delivered via `ctx.model.id` in the extension payload.
+  - **Claude Code**: Native Stop payload lacks model info; the hook reads the last assistant message's `message.model` from the tail (400 lines) of `transcript_path`.
+  - **Others**: Extracted from payload `model` if present.
+- **Formatting and Aliasing**:
+  - Claude model IDs are normalized to family and version (e.g. `claude-opus-5-5` → `Opus 5.5`, `claude-sonnet-4-6` → `Sonnet 4.6`, `claude-haiku-4-5` → `Haiku 4.5`, with aliases `opus`/`sonnet`/`haiku` mapped to family only).
+  - Non-Claude IDs retain their raw string (e.g. `gpt-6.1-terra`).
+  - `{model_suffix}` includes the version with parentheses and leading space (e.g. ` (Opus 5.5)`); `{model_family_suffix}` excludes the version (e.g. ` (Opus)`). User overrides can use `{model_family_suffix}` to hide minor version numbers.
 
 ---
 

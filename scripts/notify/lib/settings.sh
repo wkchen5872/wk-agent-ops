@@ -27,7 +27,7 @@ show_notify_draft() {
   printf '           Agent 仍在等待授權 %s 秒後才通知；自動審核放行的請求不通知\n' "$(notify_authorization_delay)"
   printf '  3  [%s] 等待回應\n' "$(notify_switch_label "${NOTIFY_DRAFT[2]}")"
   printf '           Agent 提問、等待你輸入時立即通知\n'
-  printf '  4  [%s] 異常停止（目前僅 Antigravity 提供訊號）\n' "$(notify_switch_label "${NOTIFY_DRAFT[3]}")"
+  printf '  4  [%s] 異常停止（Antigravity、Pi 提供訊號）\n' "$(notify_switch_label "${NOTIFY_DRAFT[3]}")"
   printf '\n── 交接迴圈 ──────────────────────────\n'
   printf '  5  [%s] 交件單實作完成\n' "$(notify_switch_label "${NOTIFY_DRAFT[4]}")"
   printf '  6  [%s] 交件單每輪審查\n' "$(notify_switch_label "${NOTIFY_DRAFT[5]}")"
@@ -41,7 +41,7 @@ show_notify_help() {
   printf '          同一段等待只通知一次。延遲由 NOTIFY_AUTHORIZATION_DELAY_SECONDS 設定，0 為立即。\n'
   printf '          Codex 無法查詢執行狀態時，改發「Approval Status Unknown」（可能在等待授權，無法確認）的通知。\n'
   printf '等待回應：Claude 的提問與等待輸入、Codex 的結構化問題；一般文字問句不偵測。\n'
-  printf '異常停止：目前依 Antigravity 的終止原因辨識，其他工具未提供對應訊號。\n'
+  printf '異常停止：依 Antigravity 與 Pi 的錯誤／終止原因辨識，其他工具未提供對應訊號。\n'
   printf '交件單：交接迴圈的實作完成、每輪審查與收尾進度，缺少設定時為開；「需要你處理」一律送出。\n'
   printf 'Codex 的授權與同步問題由 hook 觸發的暫時檢查器判斷，輪次結束即退出；\n'
   printf '需要 Python 3 與專用環境中的 websocket-client，不修改全域 Python。\n'
