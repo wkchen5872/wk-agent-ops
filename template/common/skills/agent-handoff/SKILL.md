@@ -54,6 +54,7 @@ result belongs to the `finish` record.
 | `report` | Review only: path of the saved report, relative to the root of this worktree. |
 | `note` | One sentence for a human, such as why the record is blocked. |
 | `at` | Set by the script: local time in ISO 8601 with offset. |
+| `agent` | Set by the script inside a Pi session only: `harness: pi`, `provider`, `model`, `effort`, `billing` (`subscription`, `api` or `unknown`) and `session`. |
 
 ## Rules
 
@@ -62,6 +63,15 @@ result belongs to the `finish` record.
 - Do not edit, rename, or delete existing records; each round adds a new file.
 - Do not restate the review report in `note`; the next agent reads the report itself.
 - The `.agent-handoff/` directory is ignored by Git; never force-add it.
+
+## Pi roles
+
+In a Pi session, `handoff-write` adds an `agent` section taken from the Pi runtime
+(`PI_PROVIDER`, `PI_MODEL`, `PI_REASONING_LEVEL`, `PI_SESSION_ID`) and from
+`pi auth check` (`oauth` is `subscription`, `api_key` is `api`, anything else `unknown`).
+No argument sets it. The hook compares it with the role's template and stops the loop on any
+difference, so the role session writes its own record — never a subagent, whose values may
+differ — and does not switch model, provider or thinking level before writing it.
 
 ## Example
 
@@ -94,11 +104,12 @@ copy it.
 ```bash
 .agents/skills/agent-handoff/scripts/handoff-author --tool Codex --model gpt-5.6-luna >> body.md
 .agents/skills/agent-handoff/scripts/handoff-author --tool 'Claude Code' --model opus > /tmp/author.md
+.agents/skills/agent-handoff/scripts/handoff-author --tool Pi --model gpt-6.2-sol >> body.md
 ```
 
 It prints the four Author lines of the `github-issue`／`github-pr` frame — `Co-Authored-By`,
-`AI-Assisted-By` (omitted when `--model` is empty), `SESSION-ID` (from `CODEX_SESSION_ID` or
-`CLAUDE_CODE_SESSION_ID`, by tool), and `XIRP-SESSION-ID` (from `CHIRP_SESSION_ID`) — writing
+`AI-Assisted-By` (omitted when `--model` is empty), `SESSION-ID` (from `CODEX_SESSION_ID`,
+`CLAUDE_CODE_SESSION_ID` or `PI_SESSION_ID`, by tool), and `XIRP-SESSION-ID` (from `CHIRP_SESSION_ID`) — writing
 `null` for an ID the runtime does not expose. Append the output under `## Author`. When a
 dedicated agent posts for you, save the output to a file and pass it as `author_file`. The role
 prompts give the tool and the template model; the agent does not look up its own model.

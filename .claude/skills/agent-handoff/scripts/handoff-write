@@ -2,6 +2,8 @@
 # Write one agent-handoff record: .agent-handoff/<change>/<NN>-<role>.yaml in this worktree.
 # Usage: handoff-write --change <id> --role implement|review|finish --status done|blocked
 #                      --head <commit> [--verdict pass|changes-required|blocked] [--report <path>] [--note <text>]
+# Inside a Pi session the record also gets an agent section (provider, model, effort, billing, session)
+# read from the Pi runtime and `pi auth check`; it cannot be set by arguments.
 set -u
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=kv.sh
@@ -19,7 +21,7 @@ while [[ $# -gt 0 ]]; do
     --verdict) verdict="${2:-}"; shift 2 ;;
     --report) report="${2:-}"; shift 2 ;;
     --note) note="${2:-}"; shift 2 ;;
-    -h|--help) sed -n '2,4p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,6p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) die "unknown argument: $1" ;;
   esac
 done
@@ -91,6 +93,14 @@ tmp="$(mktemp "$dir/.write.XXXXXX")" || die "cannot create a temporary file"
   [[ "$role" == "review" ]] && printf 'report: %s\n' "$report"
   printf 'note: %s\n' "$note"
   printf 'at: %s\n' "$at"
+  if [[ "${PI_CODING_AGENT:-}" == true && -n "${PI_PROVIDER:-}" ]]; then
+    # Billing follows the credential type: oauth is a subscription, api_key is an API key.
+    auth="$(pi auth check --provider "$PI_PROVIDER" --json </dev/null 2>/dev/null \
+      | jq -r 'select(.status == "ready") | .authType // empty' 2>/dev/null)"
+    case "$auth" in oauth) billing=subscription ;; api_key) billing=api ;; *) billing=unknown ;; esac
+    printf 'agent:\n  harness: pi\n  provider: %s\n  model: %s\n  effort: %s\n  billing: %s\n  session: %s\n' \
+      "$PI_PROVIDER" "${PI_MODEL:-unknown}" "${PI_REASONING_LEVEL:-unknown}" "$billing" "${PI_SESSION_ID:-unknown}"
+  fi
 } > "$tmp" || { rm -f "$tmp"; die "cannot write the record"; }
 mv -n "$tmp" "$target"
 if [[ -e "$tmp" ]]; then rm -f "$tmp"; die "record $target appeared while writing"; fi

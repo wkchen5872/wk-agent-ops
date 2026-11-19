@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Pi trust check for the agent handoff loop, called by the Pi trigger (pi/wk-handoff.ts).
+# Usage: handoff-pi-trust <dir>
+# Exit 0 only when <dir> is in a linked worktree that an untracked .agent-handoff/<change>/loop.yaml
+# there names as a role worktree, and the user already trusts the repository's main worktree in Pi
+# (~/.pi/agent/trust.json, nearest saved decision). Anything else exits 1 and Pi decides as usual.
+# Never writes trust.json.
+set -u
+
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "$here/lib/handoff.sh" ]]; then lib="$here/lib/handoff.sh"
+else lib="$HOME/.config/wk-workflow/handoff/lib/handoff.sh"; fi
+# shellcheck source=lib/handoff.sh
+source "$lib" 2>/dev/null || exit 1
+
+[[ -n "${1:-}" ]] || exit 1
+top="$(ho_toplevel "$1")" && top="$(cd "$top" && pwd -P)" || exit 1
+main="$(ho_main_worktree "$top")" && main="$(cd "$main" && pwd -P)" || exit 1
+[[ "$top" != "$main" ]] || exit 1
+
+listed=0
+for loop in "$top"/.agent-handoff/*/loop.yaml; do
+  [[ -f "$loop" && -z "$(git -C "$top" ls-files -- "${loop#"$top"/}" 2>/dev/null)" ]] || continue
+  for k in implementer.worktree reviewer.worktree finish.worktree; do
+    wt="$(kv_get "$loop" "$k" 2>/dev/null)" || continue
+    [[ -n "$wt" && -d "$wt" && "$(cd "$wt" && pwd -P)" == "$top" ]] && listed=1
+  done
+done
+(( listed )) || exit 1
+ho_pi_repo_trusted "$main"

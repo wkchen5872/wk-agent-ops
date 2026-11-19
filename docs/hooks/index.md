@@ -10,6 +10,7 @@ runtime 啟用步驟，不複製各 CLI 的完整 hook API。
 | [Claude Code](/docs/hooks/claude-hooks.md) | `PostToolUse` | `Stop` | `Notification` | `Stop` | user-level |
 | [Codex](/docs/hooks/codex-hooks.md) | `PostToolUse` | `Stop` | `PermissionRequest`；同步問題 `PreToolUse` 檢查；非同步問題 `PostToolUse` 通知 | `Stop` | user-level；另需 trust + enable |
 | [Antigravity](/docs/hooks/antigravity-hooks.md) | 無；使用 Agent guard | named `Stop` | `statusLine` observer | 無 | user-level |
+| Pi | 無 | 無 | 無 | global extension `agent_settled`（另以 `project_trust` 信任交接 worktree） | user-level；已開啟的 Session 需 `/reload` |
 | [GitHub Copilot CLI](/docs/hooks/copilot-hooks.md) | `postToolUse` | `sessionEnd`（opt-in） | `userPromptSubmitted`（opt-in） | 無 | repository-local |
 
 ## Hook families
@@ -24,6 +25,8 @@ Agent-mediated `opsx-branch` guard 保證 branch-first。
 
 `scripts/handoff/install.sh` 部署多 Agent 交接迴圈的 `Stop` hook（`handoff-route`）。
 當支援的 Provider session 結束時，由 `handoff-route` 讀取 `.agent-handoff/` 紀錄並判定是否遞交至下一個角色（如實作轉審查、審查轉收尾）。完整流程見 [Agent Handoff](/docs/skills/agent-handoff.md)。
+
+Pi 沒有 Stop hook 設定檔；同一個 installer 安裝 global extension `~/.pi/agent/extensions/wk-handoff.ts`，在 `agent_settled`（Pi 不再自動重試或續跑）時呼叫 `handoff-route`，subagent 停下時不觸發。它也處理 `project_trust`：只對已信任 repo 的交接 worktree 回答信任，且不保存決定。
 
 ### Notifications
 

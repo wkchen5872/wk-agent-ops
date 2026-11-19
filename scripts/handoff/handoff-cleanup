@@ -6,6 +6,7 @@
 # Requirements: the newest record is finish/done (unless --abandon) and every loop worktree is clean.
 # Records and review reports move to <main worktree>/.agent-handoff/archive/<change-id>/.
 # The main worktree and the feature branch are never removed; merging stays separate.
+# A .pi/settings.json the loop wrote for a Pi role in the kept main worktree is removed.
 set -u
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -18,7 +19,7 @@ die() { printf 'handoff-cleanup: %s\n' "$1" >&2; exit 1; }
 change="" yes=0 abandon=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    -h|--help) sed -n '2,8p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,9p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     --yes) yes=1; shift ;;
     --abandon) abandon=1; shift ;;
     -*) die "unknown option: $1" ;;
@@ -92,7 +93,10 @@ fi
 # 3. Remove the loop worktrees; the main worktree keeps its files, minus the moved records.
 rc=0
 for wt in "${wts[@]}"; do
-  if [[ "$wt" == "$main" ]]; then rm -rf "$main/.agent-handoff/$change"; continue; fi
+  if [[ "$wt" == "$main" ]]; then
+    ho_pi_settings_cleanup "$main/.agent-handoff/$change/loop.yaml" "$main"
+    rm -rf "$main/.agent-handoff/$change"; continue
+  fi
   if git -C "$main" worktree remove "$wt"; then printf 'Removed worktree %s\n' "$wt"
   else printf 'Could not remove worktree %s\n' "$wt" >&2; rc=1; fi
 done

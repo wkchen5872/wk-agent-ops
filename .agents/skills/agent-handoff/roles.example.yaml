@@ -7,7 +7,7 @@
 # Placeholders: {change} {head} {round} {report} {delivery} {handoff_write} {author}
 # {author} becomes one sentence telling the agent to append the output of
 # scripts/handoff-author (tool and template model; Session IDs copied from the environment).
-# Skill syntax differs by tool: Claude Code uses /skill, Codex uses $skill.
+# Skill syntax differs by tool: Claude Code uses /skill, Codex uses $skill, Pi uses /skill:<name>.
 
 max_rounds: 3
 
@@ -40,3 +40,29 @@ finish:
   effort: medium
   name: "codex - finish - {change}"
   prompt: "$openspec-commit {change}。封存時若有待同步的 delta spec，直接同步主規格後封存，不需詢問。交付方式：{delivery}（local 只做本地封存、文件與 commit；pr 已授權 push、github-pr update、以交付後的 head 做最終版 Review，通過才發 ready-to-merge Closure）。完成或中斷時依 agent-handoff Skill 以 {handoff_write} --change {change} --role finish 記錄結果。{author}"
+
+# --- Pi role example ---
+# A role can run in Pi (harness: pi). A Pi role also sets provider and billing:
+#   provider  the Pi provider that owns the model (pi --list-models <model> lists every provider)
+#   model     the exact model ID under that provider, without "provider/" and without aliases
+#   effort    Pi thinking level: off, minimal, low, medium, high, xhigh, max
+#   billing   subscription (the provider is logged in with OAuth, e.g. openai-codex)
+#             or api (the provider uses an API key, e.g. openai)
+# handoff-start and the hook refuse a Pi role whose model is not listed under the provider, whose
+# credential is not ready, or whose credential type does not match billing. Anthropic with
+# billing: subscription is allowed, but may consume paid extra usage; handoff-start warns.
+# The role starts from .pi/settings.json written into its worktree (ignored through info/exclude),
+# so a worktree holds at most one Pi role: give a second Pi role worktree: new.
+# Pi roles need scripts/handoff/install.sh (the Pi trigger) and /trust run in Pi in the main worktree.
+# To use it, replace the review section above with:
+#
+# review:
+#   worktree: new
+#   harness: pi
+#   provider: openai-codex
+#   model: gpt-6.2-sol
+#   effort: high
+#   billing: subscription
+#   name: "pi - review - {change}"
+#   prompt: "/skill:change-review {change}：這是交接迴圈第 {round} 輪的實作審查，受審版本為 commit {head}。依 agent-handoff Skill，結束時以 {handoff_write} --change {change} --role review 記錄結果。實作者由 handoff hook 通知，你不需要也不要自己傳訊；這不是排除通知，結論照常以 --status done 記錄。{author}"
+# --- end of Pi role example ---

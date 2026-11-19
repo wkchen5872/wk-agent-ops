@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Install the agent handoff loop for the current user:
 #   ~/.local/bin/handoff-start, handoff-finish, handoff-cleanup
-#   ~/.config/wk-workflow/handoff/handoff-route (+ lib/)
+#   ~/.config/wk-workflow/handoff/handoff-route, handoff-pi-trust (+ lib/)
+#   ~/.pi/agent/extensions/wk-handoff.ts (the Pi trigger)
 # and register handoff-route as a Stop hook for Claude Code and Codex. Idempotent.
 set -euo pipefail
 
@@ -20,10 +21,15 @@ install -m 0755 "$SRC/handoff-start" "$BIN_DIR/handoff-start"
 install -m 0755 "$SRC/handoff-finish" "$BIN_DIR/handoff-finish"
 install -m 0755 "$SRC/handoff-cleanup" "$BIN_DIR/handoff-cleanup"
 install -m 0755 "$SRC/handoff-route" "$HOME_DIR/handoff-route"
+install -m 0755 "$SRC/handoff-pi-trust" "$HOME_DIR/handoff-pi-trust"
 install -m 0644 "$SRC/lib/handoff.sh" "$HOME_DIR/lib/handoff.sh"
 install -m 0644 "$REPO/template/common/skills/agent-handoff/scripts/kv.sh" "$HOME_DIR/lib/kv.sh"
 echo "  ✓ Installed handoff-start, handoff-finish and handoff-cleanup in $BIN_DIR"
 echo "  ✓ Installed handoff-route in $HOME_DIR"
+PI_EXT_DIR="$HOME/.pi/agent/extensions"
+mkdir -p "$PI_EXT_DIR"
+install -m 0644 "$SRC/pi/wk-handoff.ts" "$PI_EXT_DIR/wk-handoff.ts"
+echo "  ✓ Installed the Pi trigger $PI_EXT_DIR/wk-handoff.ts"
 
 # Codex profile for roles that must reach GitHub (finish with delivery: pr). Codex's default
 # workspace-write sandbox has no network; this profile is used only when a role names it.
@@ -51,6 +57,9 @@ Next steps:
     trust and enable it again whenever it is new or its definition changed (for example, a
     name was added). This installer does not change Codex trust or enable state.
   • Hooks load when a session starts: sessions opened before this install do not route.
+    Pi: run /reload (or restart) in Pi sessions opened before this install.
+  • Pi roles: run /trust in Pi once in the repository's main worktree; handoff worktrees of a
+    trusted repository are then trusted automatically, for that session only.
   • Each repository needs the wk-agent-ops project installer (scripts/skills/install.sh)
     for the agent-handoff skill, the /.agent-handoff/ ignore rule and roles.yaml.
 MSG

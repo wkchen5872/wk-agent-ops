@@ -163,20 +163,22 @@ ho_xirp_ids_named() {
     | jq -r --arg n "$1" '(if type == "array" then . else (.sessions // []) end)[] | select((.name // "") == $n) | .id' 2>/dev/null
 }
 
-# ho_xirp_create <project-id> <worktree> <harness> <model> <effort> <name> <prompt> [codex-profile] -> session id
+# ho_xirp_create <project-id> <worktree> <harness> <model> <effort> <name> <prompt> [codex-profile] [pi-provider] -> session id
 ho_xirp_create() {
-  local project="$1" wt="$2" harness="$3" model="$4" effort="$5" name="$6" prompt="$7" profile="${8:-}"
+  local project="$1" wt="$2" harness="$3" model="$4" effort="$5" name="$6" prompt="$7" profile="${8:-}" provider="${9:-}"
   local effort_key before json id waited=0
   case "$harness" in
     claude) effort_key="effort" ;;
     codex) effort_key="reasoning_effort" ;;
+    pi) effort_key="thinking" ;;
     *) ho_err "unsupported harness: $harness"; return 1 ;;
   esac
   before="$(ho_xirp_ids_named "$name")"
   json="$(jq -n --arg p "$project" --arg w "$wt" --arg n "$name" --arg g "$prompt" --arg h "$harness" \
-    --arg m "$model" --arg ek "$effort_key" --arg e "$effort" --arg pr "$profile" \
+    --arg m "$model" --arg ek "$effort_key" --arg e "$effort" --arg pr "$profile" --arg pv "$provider" \
     '{projectId:$p, worktreePath:$w, customName:$n, goal:$g, background:true,
-      agent:{agentName:$h, options:({model:$m} + {($ek):$e} + (if $pr == "" then {} else {profile:$pr} end))}}')"
+      agent:{agentName:$h, options:({model:$m} + {($ek):$e} + (if $pr == "" then {} else {profile:$pr} end)
+                                     + (if $pv == "" then {} else {provider:$pv} end))}}')"
   xirp api send session:create --json "$json" >/dev/null 2>&1 || { ho_err "xirp session:create failed"; return 1; }
   while :; do
     id="$(ho_xirp_ids_named "$name" | while IFS= read -r x; do grep -qxF "$x" <<<"$before" || { printf '%s\n' "$x"; break; }; done)"
@@ -192,7 +194,7 @@ ho_xirp_create() {
 # both session IDs from the agent's environment, so no model retypes them.
 ho_author() {
   local tool
-  case "$1" in claude) tool="'Claude Code'" ;; codex) tool="Codex" ;; *) tool="$1" ;; esac
+  case "$1" in claude) tool="'Claude Code'" ;; codex) tool="Codex" ;; pi) tool="Pi" ;; *) tool="$1" ;; esac
   printf 'Author 區塊（GitHub 回覆、報告，或交給專用 Agent 的 author_file）一律用 %s/handoff-author --tool %s --model %s 產生，' \
     "$(dirname "$HANDOFF_WRITE_REL")" "$tool" "$2"
   printf '把輸出原樣附加在 ## Author 標題下（例如 >> body.md），不要手抄或改寫 Session ID。'
@@ -210,14 +212,26 @@ ho_render() {
 
 # ho_template_check <file> <section>: every role needs these fields and a supported harness.
 ho_template_check() {
-  local file="$1" sec="$2" k v missing=""
-  for k in harness model effort name prompt; do
+  local file="$1" sec="$2" k v h missing=""
+  h="$(kv_get "$file" "$sec.harness" 2>/dev/null)"
+  for k in harness model effort name prompt $([[ "$h" == pi ]] && echo provider billing); do
     v="$(kv_get "$file" "$sec.$k" 2>/dev/null)"
     [[ -n "$v" ]] || missing="$missing $k"
   done
   [[ -z "$missing" ]] || { ho_err "$sec template is missing:$missing"; return 1; }
-  v="$(kv_get "$file" "$sec.harness")"
-  [[ "$v" == claude || "$v" == codex ]] || { ho_err "$sec template harness must be claude or codex, got '$v'"; return 1; }
+  [[ "$h" == claude || "$h" == codex || "$h" == pi ]] || { ho_err "$sec template harness must be claude, codex or pi, got '$h'"; return 1; }
+  if [[ "$h" == pi ]]; then
+    v="$(kv_get "$file" "$sec.billing")"
+    [[ "$v" == subscription || "$v" == api ]] || { ho_err "$sec template billing must be subscription or api, got '$v'"; return 1; }
+    v="$(kv_get "$file" "$sec.effort")"
+    [[ " $HANDOFF_PI_EFFORTS " == *" $v "* ]] || { ho_err "$sec template effort must be one of ${HANDOFF_PI_EFFORTS// /, } for Pi, got '$v'"; return 1; }
+    v="$(kv_get "$file" "$sec.model")"
+    [[ "$v" != */* ]] || { ho_err "$sec template model must be the model ID without a provider/ prefix, got '$v'"; return 1; }
+  else
+    for k in provider billing; do
+      [[ -z "$(kv_get "$file" "$sec.$k" 2>/dev/null || true)" ]] || { ho_err "$sec template sets $k, which only Pi supports"; return 1; }
+    done
+  fi
   # profile selects a Codex configuration profile (~/.codex/<profile>.config.toml).
   if [[ -n "$(kv_get "$file" "$sec.profile" 2>/dev/null || true)" && "$(kv_get "$file" "$sec.harness")" != codex ]]; then
     ho_err "$sec template sets profile, which only Codex supports"; return 1
@@ -232,9 +246,10 @@ ho_template_check() {
 # Copy one role template from a roles file into loop.yaml under <dest-section>.
 ho_copy_template() {
   local src="$1" sec="$2" loop="$3" dest="$4" k v
-  for k in worktree harness model effort name prompt profile; do
+  for k in worktree harness model effort name prompt profile provider billing; do
     v="$(kv_get "$src" "$sec.$k" 2>/dev/null)" || continue
     [[ "$k" == worktree && -z "$v" ]] && v=shared
+    [[ ( "$k" == provider || "$k" == billing ) && -z "$v" ]] && continue
     kv_set "$loop" "$dest.$k" "\"$v\""
   done
   if [[ "$sec" == review || "$sec" == finish ]] && ! kv_get "$loop" "$dest.worktree" >/dev/null 2>&1; then
@@ -251,11 +266,136 @@ ho_open_role() {
   main="$(ho_main_worktree "$wt")"
   project="$(ho_xirp_project_id "$main")"
   [[ -n "$project" ]] || { ho_err "no Xirp project registered for $main"; return 1; }
+  if [[ "$(kv_get "$loop" "$tsec.harness")" == pi ]]; then
+    ho_pi_ready "$loop" "$tsec" "${tsec%_template}" "$main" || return 1
+    ho_pi_settings "$wt" "$(kv_get "$loop" "$tsec.provider")" "$(kv_get "$loop" "$tsec.model")" "$(kv_get "$loop" "$tsec.effort")" || return 1
+  fi
   name="$(ho_render "$(kv_get "$loop" "$tsec.name")" "$change" "$head" "$round" "$report" "$delivery")"
   prompt="$(ho_render "$(kv_get "$loop" "$tsec.prompt")" "$change" "$head" "$round" "$report" "$delivery" \
     "$(kv_get "$loop" "$tsec.harness")" "$(kv_get "$loop" "$tsec.model")")"
   ho_xirp_create "$project" "$wt" "$(kv_get "$loop" "$tsec.harness")" "$(kv_get "$loop" "$tsec.model")" \
-    "$(kv_get "$loop" "$tsec.effort")" "$name" "$prompt" "$(kv_get "$loop" "$tsec.profile" 2>/dev/null || true)"
+    "$(kv_get "$loop" "$tsec.effort")" "$name" "$prompt" "$(kv_get "$loop" "$tsec.profile" 2>/dev/null || true)" \
+    "$(kv_get "$loop" "$tsec.provider" 2>/dev/null || true)"
+}
+
+# --- Pi roles ------------------------------------------------------------------------
+# A Pi role declares provider and billing; every check below fails closed (design decisions 1, 2, 8).
+HANDOFF_PI_EFFORTS="off minimal low medium high xhigh max"
+ho_pi_extension() { printf '%s\n' "$HOME/.pi/agent/extensions/wk-handoff.ts"; }
+
+# ho_pi_billing <authType>: the billing a credential type stands for, or nothing.
+ho_pi_billing() { case "$1" in oauth) echo subscription ;; api_key) echo api ;; esac; }
+
+# ho_pi_verify <role> <provider> <model> <effort> <billing> [warn]
+# The model must be listed under exactly this provider, support thinking unless effort is off, and the
+# provider's credential must be ready with the declared billing. Never prints credential values.
+ho_pi_verify() {
+  local role="$1" provider="$2" model="$3" effort="$4" billing="$5" warn="${6:-}" thinking json status auth actual
+  command -v pi >/dev/null 2>&1 || { ho_err "$role: the pi command was not found, so $provider/$model cannot be verified"; return 1; }
+  thinking="$(pi --list-models "$model" </dev/null 2>/dev/null \
+    | awk -v p="$provider" -v m="$model" 'NR > 1 && $1 == p && $2 == m { print $5; found = 1; exit } END { exit !found }')" \
+    || { ho_err "$role: model '$model' is not listed under provider '$provider' (pi --list-models $model)"; return 1; }
+  if [[ "$effort" != off && "$thinking" != yes ]]; then
+    ho_err "$role: $provider/$model does not support thinking, but effort is '$effort'"; return 1
+  fi
+  json="$(pi auth check --provider "$provider" --json </dev/null 2>/dev/null)"
+  status="$(jq -r '.status // empty' <<<"$json" 2>/dev/null)"; auth="$(jq -r '.authType // empty' <<<"$json" 2>/dev/null)"
+  [[ "$status" == ready ]] || { ho_err "$role: the credential for $provider is not ready (status: ${status:-unknown})"; return 1; }
+  actual="$(ho_pi_billing "$auth")"
+  if [[ "$actual" != "$billing" ]]; then
+    ho_err "$role: billing is declared '$billing', but $provider uses a ${auth:-unknown} credential (billing: ${actual:-unknown})"; return 1
+  fi
+  if [[ "$warn" == warn && "$provider" == anthropic && "$billing" == subscription ]]; then
+    ho_err "⚠️  $role: Anthropic subscription use through Pi may consume paid extra usage"
+  fi
+  return 0
+}
+
+# ho_pi_repo_trusted <dir>: the nearest saved Pi trust decision for <dir> or a parent is trust.
+ho_pi_repo_trusted() {
+  local dir file="$HOME/.pi/agent/trust.json" v
+  dir="$(cd "$1" 2>/dev/null && pwd -P)" || return 1
+  [[ -f "$file" ]] || return 1
+  while :; do
+    v="$(jq -r --arg d "$dir" 'if has($d) then (.[$d] | tostring) else empty end' "$file" 2>/dev/null)"
+    [[ -n "$v" ]] && { [[ "$v" == true ]]; return; }
+    [[ "$dir" == / ]] && return 1
+    dir="$(dirname "$dir")"
+  done
+}
+
+# ho_pi_ready <file> <section> <role> <main-worktree> [warn]: everything a Pi role needs before it opens.
+ho_pi_ready() {
+  local file="$1" sec="$2" role="$3" main="$4"
+  [[ -f "$(ho_pi_extension)" ]] || { ho_err "$role: the Pi handoff trigger $(ho_pi_extension) is not installed; run scripts/handoff/install.sh"; return 1; }
+  ho_pi_repo_trusted "$main" || { ho_err "$role: Pi does not trust $main yet; open Pi in that directory and run /trust"; return 1; }
+  ho_pi_verify "$role" "$(kv_get "$file" "$sec.provider")" "$(kv_get "$file" "$sec.model")" \
+    "$(kv_get "$file" "$sec.effort")" "$(kv_get "$file" "$sec.billing")" "${5:-}"
+}
+
+# ho_pi_settings_json <provider> <model> <effort>: the Pi project settings a role starts from.
+ho_pi_settings_json() {
+  jq -cnS --arg p "$1" --arg m "$2" --arg t "$3" '{defaultProvider:$p, defaultModel:$m, defaultThinkingLevel:$t}'
+}
+
+# ho_pi_settings <worktree> <provider> <model> <effort>: write .pi/settings.json, ignored through info/exclude.
+# Identical content is reused (a retry); a different or tracked file is refused and left alone.
+ho_pi_settings() {
+  local wt="$1" f="$1/.pi/settings.json" want ex
+  want="$(ho_pi_settings_json "$2" "$3" "$4")" || return 1
+  if [[ -n "$(git -C "$wt" ls-files -- .pi/settings.json 2>/dev/null)" ]]; then
+    ho_err "$f is tracked by Git; a Pi role cannot use this worktree"; return 1
+  fi
+  if [[ -e "$f" && "$(jq -cS . "$f" 2>/dev/null)" != "$want" ]]; then
+    ho_err "$f already exists with other settings; remove it or give the Pi role another worktree"; return 1
+  fi
+  ex="$(git -C "$wt" rev-parse --path-format=absolute --git-path info/exclude 2>/dev/null)" || { ho_err "$wt is not a Git worktree"; return 1; }
+  mkdir -p "$(dirname "$ex")" || return 1
+  if ! grep -qxF '/.pi/settings.json' "$ex" 2>/dev/null; then
+    [[ -s "$ex" && -n "$(tail -c1 "$ex")" ]] && printf '\n' >> "$ex"
+    printf '/.pi/settings.json\n' >> "$ex" || return 1
+  fi
+  [[ -e "$f" ]] || { mkdir -p "$wt/.pi" && printf '%s\n' "$want" > "$f"; }
+}
+
+# ho_pi_settings_cleanup <loop.yaml> <worktree>: remove the settings file this loop wrote for a Pi role.
+ho_pi_settings_cleanup() {
+  local loop="$1" f="$2/.pi/settings.json" have sec
+  [[ -f "$f" && -z "$(git -C "$2" ls-files -- .pi/settings.json 2>/dev/null)" ]] || return 0
+  have="$(jq -cS . "$f" 2>/dev/null)" || return 0
+  for sec in implement_template review_template finish_template; do
+    [[ "$(kv_get "$loop" "$sec.harness" 2>/dev/null)" == pi ]] || continue
+    if [[ "$have" == "$(ho_pi_settings_json "$(kv_get "$loop" "$sec.provider")" "$(kv_get "$loop" "$sec.model")" "$(kv_get "$loop" "$sec.effort")")" ]]; then
+      rm -f "$f"; rmdir "$2/.pi" 2>/dev/null; printf 'Removed %s\n' "$f"; return 0
+    fi
+  done
+}
+
+# ho_pi_record_check <loop.yaml> <record>: a record of a Pi role must match its template.
+# Prints each mismatch and fails; other harnesses always pass.
+ho_pi_record_check() {
+  local loop="$1" rec="$2" sec k want got out=""
+  sec="$(kv_get "$rec" role 2>/dev/null)_template"
+  [[ "$(kv_get "$loop" "$sec.harness" 2>/dev/null)" == pi ]] || return 0
+  if [[ "$(kv_get "$rec" agent.harness 2>/dev/null)" != pi ]]; then echo "交件單沒有 Pi 的 agent 區塊"; return 1; fi
+  for k in provider model effort billing; do
+    want="$(kv_get "$loop" "$sec.$k" 2>/dev/null)"; got="$(kv_get "$rec" "agent.$k" 2>/dev/null)"; got="${got:-unknown}"
+    [[ "$got" == "$want" ]] && continue
+    [[ -n "$out" ]] && out+="；"
+    out+="$k 範本為 ${want}、實際為 $got"
+  done
+  [[ -z "$out" ]] && return 0
+  printf '%s\n' "$out"; return 1
+}
+
+# ho_pi_record_label <record>: "Pi / <provider>/<model> / <effort> / 訂閱|API|unknown" for a Pi record.
+ho_pi_record_label() {
+  local rec="$1" b
+  [[ "$(kv_get "$rec" agent.harness 2>/dev/null)" == pi ]] || return 1
+  b="$(kv_get "$rec" agent.billing 2>/dev/null)"
+  case "$b" in subscription) b="訂閱" ;; api) b="API" ;; *) b="${b:-unknown}" ;; esac
+  printf 'Pi / %s/%s / %s / %s\n' "$(kv_get "$rec" agent.provider 2>/dev/null || echo unknown)" \
+    "$(kv_get "$rec" agent.model 2>/dev/null || echo unknown)" "$(kv_get "$rec" agent.effort 2>/dev/null || echo unknown)" "$b"
 }
 
 # --- finish ------------------------------------------------------------------------

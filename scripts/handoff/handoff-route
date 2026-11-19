@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Stop hook for the agent handoff loop (Claude Code and Codex).
+# Stop hook for the agent handoff loop (Claude Code and Codex; Pi through pi/wk-handoff.ts).
 # Reads the newest unprocessed handoff record in the stopping agent's worktree and
 # routes it: notify the next agent through Xirp, or notify the user, then tells the user
 # what happened (progress or attention, see lib/handoff.sh ho_notify). Never writes to
@@ -60,6 +60,10 @@ route_dir() {
     action="user:unclean-worktree"
     detail="${base}：$root 有未提交的變更，未交接。"
     next="提交或清掉變更後，請 Agent 寫新的交件單。"
+  elif ! why="$(ho_pi_record_check "$loop" "$rec")"; then
+    action="user:pi-mismatch"
+    detail="${base}：Pi 角色與 ${role} 範本不符（${why}），未交接。"
+    next="修正角色設定或 Session 的模型後，請 Agent 寫新的交件單。"
   elif [[ "$role" == finish ]]; then
     action="user:finish-$status"
     if [[ "$status" == blocked ]]; then
@@ -112,12 +116,17 @@ route_dir() {
   # One Xirp query serves the routing log and the agent label.
   sess_json="$(ho_xirp_session "${CHIRP_SESSION_ID:-}")" || sess_json=""
   [[ -n "$sess_json" ]] || sess_json='{}'
-  ho_log "$dir" "$base action=$action session=${CHIRP_SESSION_ID:-unknown} model=$(jq -r '.model // "unknown"' <<<"$sess_json" 2>/dev/null || echo unknown)"
-  # Records do not say who wrote them: only an agent's own stop on a first attempt names it.
+  # A Pi record names its own agent (written by handoff-write from the Pi runtime).
+  local label model
+  model="$(jq -r '.model // "unknown"' <<<"$sess_json" 2>/dev/null || echo unknown)"
+  if label="$(ho_pi_record_label "$rec")"; then model="$(kv_get "$rec" agent.provider)/$(kv_get "$rec" agent.model)"; fi
+  ho_log "$dir" "$base action=$action session=${CHIRP_SESSION_ID:-unknown} model=$model"
+  # Other records do not say who wrote them: only an agent's own stop on a first attempt names it.
   # A manual run or a retry may be triggered by someone else, so it names nobody.
   local agent_json="$sess_json" sid="$native_session"
   if [[ "$manual" == 1 ]] || grep -qxF "$base" "$dir/.notified" 2>/dev/null; then agent_json='{}'; sid=""; fi
-  ctx="$(jq -nc --arg c "$change" --arg r "$round" --arg h "${head:0:7}" --arg a "$(ho_agent_label "$agent_json")" \
+  [[ -n "$label" ]] || label="$(ho_agent_label "$agent_json")"
+  ctx="$(jq -nc --arg c "$change" --arg r "$round" --arg h "${head:0:7}" --arg a "$label" \
     --arg s "$sid" --arg w "$root" '{change:$c, round:$r, commit:$h, agent:$a, session_id:$s, cwd:$w}')"
   if [[ "$outcome" == retry ]]; then
     grep -qxF "$base" "$dir/.notified" 2>/dev/null && return 0
@@ -132,7 +141,7 @@ retry_next() { printf '原因排除後在 %s 執行：bash ~/.config/wk-workflow
 
 # to_reviewer and to_implementer set the caller's action, outcome, kind, next and detail.
 to_reviewer() {
-  local dir="$1" root="$2" change="$3" head="$4" round="$5" loop="$1/loop.yaml" sess wt mode id
+  local dir="$1" root="$2" change="$3" head="$4" round="$5" loop="$1/loop.yaml" sess wt mode id out
   outcome="retry"; next="$(retry_next "$root")"
   sess="$(kv_get "$loop" reviewer.session 2>/dev/null || true)"
   wt="$(kv_get "$loop" reviewer.worktree 2>/dev/null || true)"
@@ -155,12 +164,13 @@ to_reviewer() {
     else
       wt="$root"; kv_set "$loop" reviewer.worktree "$wt"
     fi
-    if id="$(ho_open_role "$dir" review_template "$wt" "$head" "$round" "" 2>/dev/null)"; then
+    if out="$(ho_open_role "$dir" review_template "$wt" "$head" "$round" "" 2>&1)"; then
+      id="${out##*$'\n'}"
       ho_loop_set "$dir" reviewer.session "$id"
       action="reviewer:opened:$id"; outcome="delivered"; kind="implement"
       next="已開啟審查者的 Session，請其審查第 ${round} 輪。"
     else
-      action="reviewer:open-failed"; detail="無法開啟審查 Session，第 $round 輪未交給審查者，迴圈已停住。"
+      action="reviewer:open-failed"; detail="無法開啟審查 Session（${out##*$'\n'}），第 $round 輪未交給審查者，迴圈已停住。"
     fi
     return
   fi

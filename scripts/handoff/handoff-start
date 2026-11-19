@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
 # Start an implement–review–finish loop for one OpenSpec change.
-# Usage: handoff-start <change-id> [--worktree new|here] [--impl tool:model:effort]
-#                      [--review tool:model:effort] [--finish ask|auto] [--reviewer-session <xirp-id>]
+# Usage: handoff-start <change-id> [--worktree new|here] [--impl <override>]
+#                      [--review <override>] [--finish ask|auto] [--reviewer-session <xirp-id>]
 #   --worktree new|here         new (default): open the implementer in ../<repo>-<change-id>;
 #                               here: use the current checkout, which must be on feature/<change-id>
-#   --impl tool:model:effort    override the implement template for this loop
-#   --review tool:model:effort  override the review template for this loop
+#   --impl <override>           override the implement template for this loop
+#   --review <override>         override the review template for this loop
+#                               <override>: claude|codex:<model>:<effort> or pi:<provider>/<model>:<effort>:<billing>
 #   --finish ask|auto           override finish.trigger for this loop
 #   --reviewer-session <id>     reuse an existing Xirp session as the reviewer
 # Role templates: <main worktree>/.agent-handoff/roles.yaml (not tracked by Git).
+# Pi roles are verified first (model, credential, billing, trust, one Pi role per worktree).
 set -u
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -17,7 +19,7 @@ else lib="$HOME/.config/wk-workflow/handoff/lib/handoff.sh"; fi
 # shellcheck source=lib/handoff.sh
 source "$lib" || { echo "handoff-start: cannot load $lib" >&2; exit 1; }
 
-usage() { sed -n '2,11p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,13p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 die() { printf 'handoff-start: %s\n' "$1" >&2; exit 1; }
 
 change="" mode="new" impl_ov="" review_ov="" finish_ov="" reviewer=""
@@ -38,7 +40,8 @@ done
 [[ "$mode" == new || "$mode" == here ]] || die "--worktree must be new or here"
 [[ -z "$finish_ov" || "$finish_ov" == ask || "$finish_ov" == auto ]] || die "--finish must be ask or auto"
 for ov in "$impl_ov" "$review_ov"; do
-  [[ -z "$ov" || "$ov" =~ ^(claude|codex):[^:]+:[^:]+$ ]] || die "override must be claude|codex:<model>:<effort>, got '$ov'"
+  [[ -z "$ov" || "$ov" =~ ^(claude|codex):[^:]+:[^:]+$ || "$ov" =~ ^pi:[^:/]+/[^:/]+:[^:]+:[^:]+$ ]] \
+    || die "override must be claude|codex:<model>:<effort> or pi:<provider>/<model>:<effort>:<billing>, got '$ov'"
 done
 command -v xirp >/dev/null 2>&1 || die "xirp is required to open sessions"
 
@@ -56,8 +59,11 @@ cp "$roles" "$scratch"
 apply_ov() {
   local sec="$1" ov="$2"
   [[ -n "$ov" ]] || return 0
-  IFS=: read -r h m e <<<"$ov"
+  local h m e b p=""
+  IFS=: read -r h m e b <<<"$ov"
+  if [[ "$h" == pi ]]; then p="${m%%/*}"; m="${m#*/}"; else b=""; fi
   kv_set "$scratch" "$sec.harness" "$h"; kv_set "$scratch" "$sec.model" "$m"; kv_set "$scratch" "$sec.effort" "$e"
+  kv_set "$scratch" "$sec.provider" "$p"; kv_set "$scratch" "$sec.billing" "$b"
 }
 apply_ov implement "$impl_ov"
 apply_ov review "$review_ov"
@@ -70,6 +76,25 @@ max="$(kv_get "$scratch" max_rounds 2>/dev/null || true)"; max="${max:-3}"
 
 if [[ -n "$reviewer" ]]; then ho_xirp_exists "$reviewer" || die "Xirp session '$reviewer' was not found"; fi
 
+# Pi roles, before any worktree or session (design decisions 1, 2 and 8).
+pi_in_impl=()
+for sec in implement review finish; do
+  [[ "$(kv_get "$scratch" "$sec.harness")" == pi ]] || continue
+  [[ "$sec" == implement || "$(kv_get "$scratch" "$sec.worktree" 2>/dev/null || true)" != new ]] && pi_in_impl+=("$sec")
+done
+if (( ${#pi_in_impl[@]} > 1 )); then
+  roles_txt="${pi_in_impl[*]}"
+  die "Pi roles ${roles_txt// / and } would share the implementer worktree; a worktree holds one Pi role, so set worktree: new for the Pi review or finish role"
+fi
+for sec in implement review finish; do
+  [[ "$(kv_get "$scratch" "$sec.harness")" == pi ]] || continue
+  ho_pi_ready "$scratch" "$sec" "$sec" "$main" warn 2>&1 | sed 's/^/handoff-start: /' >&2; [[ ${PIPESTATUS[0]} -eq 0 ]] || exit 1
+done
+impl_pi=0; [[ "$(kv_get "$scratch" implement.harness)" == pi ]] && impl_pi=1
+if (( impl_pi )) && [[ "$mode" == new ]] && git -C "$main" cat-file -e "feature/$change:.pi/settings.json" 2>/dev/null; then
+  die "feature/$change tracks .pi/settings.json; a Pi implementer cannot use this branch's worktree"
+fi
+
 # Where the branch is checked out now, if anywhere.
 in_use="$(git -C "$main" worktree list --porcelain | awk -v b="branch refs/heads/feature/$change" '/^worktree /{w=substr($0,10)} $0==b{print w}')"
 if [[ "$mode" == new ]]; then
@@ -81,6 +106,10 @@ else
   wt="$(ho_toplevel)" || die "not inside a Git worktree"
   [[ "$(git -C "$wt" branch --show-current)" == "feature/$change" ]] || die "--worktree here needs a checkout on feature/$change; $wt is on $(git -C "$wt" branch --show-current)"
 fi
+if (( impl_pi )); then
+  ho_pi_settings "$wt" "$(kv_get "$scratch" implement.provider)" "$(kv_get "$scratch" implement.model)" "$(kv_get "$scratch" implement.effort)" 2>&1 \
+    | sed 's/^/handoff-start: /' >&2; [[ ${PIPESTATUS[0]} -eq 0 ]] || exit 1
+fi
 
 dir="$wt/.agent-handoff/$change"; loop="$dir/loop.yaml"
 mkdir -p "$dir"
@@ -91,6 +120,7 @@ mkdir -p "$dir"
   printf 'reviewer:\n  session: %s\n  worktree:\n' "$reviewer"
   printf 'finish:\n  session:\n  worktree:\n  trigger: %s\n  delivery: %s\n' "$trigger" "$delivery"
 } > "$loop"
+ho_copy_template "$scratch" implement "$loop" implement_template
 ho_copy_template "$scratch" review "$loop" review_template
 ho_copy_template "$scratch" finish "$loop" finish_template
 
@@ -101,7 +131,8 @@ name="$(ho_render "$(kv_get "$scratch" implement.name)" "$change" "$head" 1 "（
 prompt="$(ho_render "$(kv_get "$scratch" implement.prompt)" "$change" "$head" 1 "（無）" "$delivery" \
   "$(kv_get "$scratch" implement.harness)" "$(kv_get "$scratch" implement.model)")"
 id="$(ho_xirp_create "$project" "$wt" "$(kv_get "$scratch" implement.harness)" "$(kv_get "$scratch" implement.model)" \
-  "$(kv_get "$scratch" implement.effort)" "$name" "$prompt" "$(kv_get "$scratch" implement.profile 2>/dev/null || true)")" || die "could not open the implementer session"
+  "$(kv_get "$scratch" implement.effort)" "$name" "$prompt" "$(kv_get "$scratch" implement.profile 2>/dev/null || true)" \
+  "$(kv_get "$scratch" implement.provider 2>/dev/null || true)")" || die "could not open the implementer session"
 kv_set "$loop" implementer.session "$id"
 
 printf 'Loop started for %s\n  implementer: %s (%s)\n  worktree:    %s\n  loop:        %s\n  reviewer:    %s\n  finish:      trigger %s, delivery %s\n' \

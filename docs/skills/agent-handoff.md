@@ -3,7 +3,7 @@ type: Playbook
 title: Agent Handoff 交接迴圈指南
 description: 使用 handoff-start、handoff-finish 與 handoff-cleanup 協調多 Agent 自動化實作、審查與收尾。
 tags: [skills, handoff, workflow, xirp, agents]
-generated: { by: "antigravity/Gemini 3.8 Flash", at: "2026-11-16T21:38:20+08:00" }
+generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-19T10:06:02+08:00" }
 sources:
   - id: handoff-scripts
     resource: /scripts/handoff/README.md
@@ -88,7 +88,7 @@ sources:
 
 迴圈運作依賴主工作區（Main Worktree）下的 `.agent-handoff/roles.yaml`（該檔案由 `.gitignore` 排除，不納入版本控制）。
 
-每個角色均需定義 `harness`（`claude` 或 `codex`）、`model`、`effort`、`name` 與 `prompt`：
+每個角色均需定義 `harness`（`claude`、`codex` 或 `pi`）、`model`、`effort`、`name` 與 `prompt`：
 
 | 欄位 | 說明與預設值 |
 |---|---|
@@ -98,6 +98,8 @@ sources:
 | `finish.trigger` | `ask`（預設）：審查通過後發送 Telegram 通知，等待人工下達 `handoff-finish`；`auto`：通過後自動開啟收尾 Session |
 | `finish.delivery` | `local`（預設）：僅執行本地封存、文件更新與 commit；`pr`：包含 push、`github-pr update` 與發布 Closure |
 | `<role>.profile` | Codex 專用：指定設定檔名稱。如需執行遠端 PR 交付，請設為 `profile: handoff-net` 啟用網路存取 |
+| `<role>.provider` | Pi 專用、必填：擁有該模型的 Pi provider，例如 `openai-codex` |
+| `<role>.billing` | Pi 專用、必填：`subscription`（OAuth 登入）或 `api`（API key） |
 
 ### Prompt 支援的動態佔位符
 
@@ -125,8 +127,8 @@ handoff-start <change-id> [選項]
 **常用選項：**
 - `--worktree new`（預設）：在 `../<repo>-<change-id>` 開立新的獨立 worktree，實作者在該目錄工作。
 - `--worktree here`：在當前目錄直接啟動（當前目錄必須已經 checkout 在 `feature/<change-id>`）。
-- `--impl tool:model:effort`：臨時覆寫實作者配置（例：`--impl claude:opus:high`）。
-- `--review tool:model:effort`：臨時覆寫審查者配置（例：`--review codex:gpt-6.1-sol:high`）。
+- `--impl <override>`：臨時覆寫實作者配置（例：`--impl claude:opus:high`）。
+- `--review <override>`：臨時覆寫審查者配置（例：`--review codex:gpt-6.1-sol:high`；Pi 為 `--review pi:openai-codex/gpt-6.2-sol:high:subscription`，與範本一樣驗證）。
 - `--finish ask|auto`：覆寫審查通過時的行為（是否自動啟動 finish）。
 - `--reviewer-session <xirp-id>`：綁定並沿用現有的 Xirp session 作為審查者。
 
@@ -210,7 +212,27 @@ author:
 .agents/skills/agent-handoff/scripts/handoff-author --tool Codex --model gpt-6.1-sol >> body.md
 ```
 
-自動讀取當前環境變數（`CLAUDE_CODE_SESSION_ID`、`CODEX_SESSION_ID`、`CHIRP_SESSION_ID`）生成符合規範的 Author 標頭。
+自動讀取當前環境變數（`CLAUDE_CODE_SESSION_ID`、`CODEX_SESSION_ID`、`PI_SESSION_ID`、`CHIRP_SESSION_ID`）生成符合規範的 Author 標頭；Pi 使用 `--tool Pi`。
+
+### 3. Pi 角色的 `agent` 區塊
+
+在 Pi Session 中，`handoff-write` 會從 Pi 執行環境（`PI_PROVIDER`、`PI_MODEL`、`PI_REASONING_LEVEL`、`PI_SESSION_ID`）與 `pi auth check` 自動加上 `agent` 區塊，記錄實際的 provider、模型、effort、計費方式與 Session ID；不能用參數指定。交件單必須由角色 Session 自己寫，不要交給 subagent。
+
+---
+
+## Pi 角色
+
+`harness: pi` 的角色在 Pi 中執行，另需 `provider` 與 `billing`；`model` 是該 provider 底下的精確模型 ID（不加 `provider/`、不用別名），`effort` 為 Pi 的 thinking 等級（`off`、`minimal`、`low`、`medium`、`high`、`xhigh`、`max`）。迴圈在三個關口確認角色跑在宣告的 provider、模型與計費方式上，對不上就停下：[^handoff-scripts]
+
+1. **`handoff-start`**：在建立 worktree 與開 Session 前，驗證所有 Pi 角色——一個 worktree 最多一個 Pi 角色、Pi 觸發器已安裝、主 worktree 已在 Pi 信任、模型列在該 provider 下、`pi auth check` 為 `ready` 且 `oauth` 對 `subscription`、`api_key` 對 `api`。
+2. **路由交件單**：交件單的 `agent` 區塊與 `loop.yaml` 的範本不同（例如中途 `/model`），或缺少、為 `unknown`，就不接棒，通知你一次。
+3. **hook 開 Pi 審查或收尾前**：重做第 1 點的驗證；失敗時通知一次、交件單保留，修正後下次觸發會重試。
+
+Xirp 目前不套用 Pi 1.x 的啟動選項，所以角色從寫入其 worktree 的 `.pi/settings.json` 啟動；這個檔案以 repo 本機的 `info/exclude` 忽略、不進 Git。因此一個 worktree 最多一個 Pi 角色：Pi 角色可以和 Claude Code、Codex 共用 worktree，第二個 Pi 角色要設 `worktree: new`。
+
+Pi 會在有 `.pi/settings.json` 或 `.agents/skills` 的資料夾詢問是否信任。Pi 觸發器（`~/.pi/agent/extensions/wk-handoff.ts`）只在「主 repo 已被你在 Pi 信任、未被追蹤的 `loop.yaml` 列出這個 worktree」時替該 Session 回答信任，不寫入 `trust.json`。第一次使用 Pi 角色前，請在主 worktree 以 Pi 執行一次 `/trust`；安裝後已開啟的 Pi Session 需 `/reload`。
+
+`anthropic` 搭配 `subscription` 且認證為 `oauth` 時照常執行，但 `handoff-start` 會提醒可能使用付費的 extra usage。角色內 subagent 會換 provider 的三種例外，見 [Pi roles](/scripts/handoff/README.md#pi-roles)。
 
 ---
 

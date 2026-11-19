@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Print this session's Author block for a GitHub post or a report, so Session IDs are
 # copied by the shell, never retyped by a model.
-# Usage: handoff-author --tool <Codex|Claude Code> --model <model>
+# Usage: handoff-author --tool <Codex|Claude Code|Pi> --model <model>
 #   An empty --model omits AI-Assisted-By. A Session ID the runtime does not expose is null.
-#   Reads only CODEX_SESSION_ID or CLAUDE_CODE_SESSION_ID (by tool) and CHIRP_SESSION_ID.
+#   Reads only CODEX_SESSION_ID, CLAUDE_CODE_SESSION_ID or PI_SESSION_ID (by tool) and CHIRP_SESSION_ID.
 set -u
 
 tool="" model="" have_model=0
@@ -20,6 +20,7 @@ done
 case "$tool" in
   Codex) native="${CODEX_SESSION_ID:-${CODEX_THREAD_ID:-}}" ;;
   "Claude Code") native="${CLAUDE_CODE_SESSION_ID:-}" ;;
+  Pi) native="${PI_SESSION_ID:-}" ;;
   *) native="" ;;
 esac
 

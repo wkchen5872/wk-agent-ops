@@ -11,8 +11,9 @@ that another person implements or reviews goes through the GitHub PR instead (`g
 `change-review`), which is where the team boundary is. See
 [本機開發四階段流程](../../docs/workflow/local-development.md) for how the two fit together.
 
-Requirements: `git`, `jq`, and the `xirp` CLI for opening and messaging sessions.
-Without Xirp the hook does nothing and the manual workflow is unchanged.
+Requirements: `git`, `jq`, and the `xirp` CLI for opening and messaging sessions; the `pi` CLI
+only for Pi roles. Without Xirp the hook does nothing and the manual workflow is unchanged.
+Supported agents: Claude Code, Codex, and Pi (see [Pi roles](#pi-roles)).
 
 ## Install
 
@@ -26,6 +27,11 @@ The first command installs `handoff-start`, `handoff-finish` and `handoff-cleanu
 Claude Code (`~/.claude/settings.json`) and Codex (`~/.codex/hooks.json`). Then open a new
 Codex session and, in `/hooks`, find the Stop hook named `Agent 交接派送`, trust it and make
 sure it is enabled. Hooks load when a session starts, so sessions opened earlier do not route.
+
+It also installs the Pi trigger `~/.pi/agent/extensions/wk-handoff.ts` and its trust check
+`~/.config/wk-workflow/handoff/handoff-pi-trust`; rerunning replaces the same file, so there is
+one copy. Pi loads global extensions at start: run `/reload` (or restart) in Pi sessions opened
+earlier. Before a loop uses a Pi role, run `/trust` once in Pi in the repository's main worktree.
 
 The Codex name is the handler's `statusMessage`. Rerunning the installer fills it on an
 existing handoff hook whose name is missing or blank and keeps a custom name; other hooks and
@@ -44,7 +50,7 @@ when it is missing.
 ## Role templates: `.agent-handoff/roles.yaml`
 
 One file per repository, in the main worktree, not tracked by Git. Lines are `key: value`,
-at most two levels. Every role sets `harness` (`claude` or `codex`), `model`, `effort`,
+at most two levels. Every role sets `harness` (`claude`, `codex` or `pi`), `model`, `effort`,
 `name`, and `prompt`; set both model and effort, because a missing value would otherwise
 fall back to whatever `/model` last saved as the tool's default.
 
@@ -55,13 +61,15 @@ fall back to whatever `/model` last saved as the tool's default.
 | `finish.trigger` | `ask` (default): notify you after a passing review; `auto`: open the finish session |
 | `finish.delivery` | `local` (default): archive, docs, commit only; `pr`: authorized PR delivery |
 | `<role>.profile` | Codex only: a Codex configuration profile for that session. Use `handoff-net` for a Codex finish role with `delivery: pr`; Codex's default sandbox has no network |
+| `<role>.provider` | Pi only, required: the Pi provider that owns the model, for example `openai-codex` |
+| `<role>.billing` | Pi only, required: `subscription` (OAuth login) or `api` (API key) |
 
 Prompt placeholders: `{change}`, `{head}`, `{round}`, `{report}`, `{delivery}`, `{handoff_write}`, `{author}`.
 `{author}` tells the agent its Author identity: the tool, the template model, and the environment
-variables holding its session IDs (`CLAUDE_CODE_SESSION_ID` or `CODEX_SESSION_ID`, and `CHIRP_SESSION_ID`).
+variables holding its session IDs (`CLAUDE_CODE_SESSION_ID`, `CODEX_SESSION_ID` or `PI_SESSION_ID`, and `CHIRP_SESSION_ID`).
 Agents cannot ask Xirp from inside a sandbox, so the model comes from the template. The agent
 appends the output of `agent-handoff/scripts/handoff-author` so the shell, not the model, copies the IDs.
-Claude Code calls skills as `/skill`, Codex as `$skill`. Session names default to
+Claude Code calls skills as `/skill`, Codex as `$skill`, Pi as `/skill:<name>`. Session names default to
 `<tool> - <impl|review|finish> - <change-id>`.
 
 ## Commands
@@ -78,12 +86,14 @@ implementer first hands over.
 | --- | --- |
 | `--worktree new` | Default. Open the implementer in `../<repo>-<change-id>` on the feature branch |
 | `--worktree here` | Use the current checkout; it must already be on `feature/<change-id>` |
-| `--impl tool:model:effort` | Override the implement template for this loop |
-| `--review tool:model:effort` | Override the review template for this loop |
+| `--impl <override>` | Override the implement template for this loop |
+| `--review <override>` | Override the review template for this loop |
 | `--finish ask\|auto` | Override `finish.trigger` for this loop |
 | `--reviewer-session <xirp-id>` | Reuse an existing Xirp session as the reviewer |
 
-Overrides are written to `loop.yaml`; `roles.yaml` is never changed.
+An override is `claude|codex:<model>:<effort>`, or `pi:<provider>/<model>:<effort>:<billing>` for
+Pi (verified like a Pi template). Overrides are written to `loop.yaml`; `roles.yaml` is never
+changed. Every Pi role in effect is verified before any worktree or session is created.
 
 ### `handoff-finish <change-id>`
 
@@ -109,7 +119,8 @@ the sessions and worktrees it would remove. With `--yes` it:
 1. copies the handoff records and the review reports they reference to
    `<main worktree>/.agent-handoff/archive/<change-id>/<worktree name>/` (still ignored by Git);
 2. deletes the loop's Xirp sessions;
-3. removes every loop worktree except the main worktree, without `--force`.
+3. removes every loop worktree except the main worktree, without `--force`. In a kept main worktree
+   it removes the `.pi/settings.json` the loop wrote for a Pi role.
 
 The branch `feature/<change-id>` is kept: the work is not merged yet. Merge and delete the
 branch separately.
@@ -137,8 +148,8 @@ Each record ends in one of three outcomes:
 | Outcome | Examples | Notice | Marked processed (`.routed`) |
 | --- | --- | --- | --- |
 | Delivered | reviewer opened or messaged, report handed to the implementer, finish opened | progress notice (if its switch is on) | yes |
-| Stops for you | `blocked`, round limit, any `finish` record, pass with `ask`, worktree not clean or not at `head`, review worktree not clean, unreadable record | one attention notice | yes |
-| Retry | Xirp message not delivered, reviewer or finish session not opened, review worktree not created or moved | one attention notice (recorded in `.notified`) | no |
+| Stops for you | `blocked`, round limit, any `finish` record, pass with `ask`, worktree not clean or not at `head`, review worktree not clean, unreadable record, a Pi record that differs from its template | one attention notice | yes |
+| Retry | Xirp message not delivered, reviewer or finish session not opened (including a Pi role that fails verification), review worktree not created or moved | one attention notice (recorded in `.notified`) | no |
 
 A retry record is tried again by the next hook run in that worktree, or right away with
 `handoff-route --foreground` run from that worktree
@@ -174,12 +185,79 @@ worktree), that stop sends one more attention notice so you learn the new cause.
   `Claude / claude-opus-5-5 / high`); parts Xirp does not report are left out. The title also
   carries the same session label as that session's other notifications. A manual
   `--foreground` run or a retry names no agent and no session label, because whoever triggers it
-  may not have written the record.
+  may not have written the record. A Pi record names its own agent instead, from its `agent`
+  section, also for manual runs and retries: `Agent Handoff (Pi / openai-codex/gpt-6.2-sol / high / 訂閱)`
+  (`API` for an API key, `unknown` when the record could not tell).
 - The ordinary completion notice of the same session is still sent.
 - Mixed versions: the hook sends handoff events only when the notifier script declares
   `# ai-notify-capability: handoff-events`. An older or rolled-back notifier gets attention as
   the previous generic notice (Action Required) and no progress notices. Without a notifier
   nothing is sent and routing is unchanged.
+
+## Pi roles
+
+A role with `harness: pi` runs in Pi. It must also set `provider` and `billing`; `model` is the
+exact model ID under that provider (no `provider/` prefix, no alias such as `opus`), and `effort`
+is a Pi thinking level: `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`.
+
+```yaml
+review:
+  worktree: new
+  harness: pi
+  provider: openai-codex
+  model: gpt-6.2-sol
+  effort: high
+  billing: subscription
+  name: "pi - review - {change}"
+  prompt: "/skill:change-review {change} commit {head} round {round} {author}"
+```
+
+The loop stops instead of running a Pi role on the wrong provider, model or billing. It checks
+at three points:
+
+1. **`handoff-start`**, for every Pi role in effect (also the review and finish roles that open
+   later), before any worktree or session: at most one Pi role per worktree, the Pi trigger is
+   installed, Pi already trusts the main worktree, the model is listed under the provider by
+   `pi --list-models <model>` (with thinking support unless effort is `off`), and
+   `pi auth check --provider <provider> --json` reports `ready` with `oauth` for `subscription`
+   or `api_key` for `api`. Any other credential type is a mismatch.
+2. **Routing a record**: a Pi session's `handoff-write` records the session's actual provider,
+   model, effort, billing and session ID in an `agent` section. If any of them differs from the
+   role's template in `loop.yaml`, or is missing or `unknown` (for example after `/model`), the
+   record is not routed and you get one attention notice naming each difference.
+3. **The hook opening a Pi reviewer or finish role** repeats the checks of point 1. A failure is a
+   retry: one attention notice, the record stays unprocessed, and the next hook run (or
+   `handoff-route --foreground`) opens the role once the cause is fixed. `handoff-finish` exits
+   non-zero instead.
+
+**Worktree settings.** Xirp currently drops launch options for Pi 1.x, so the role starts from
+`.pi/settings.json` (`defaultProvider`, `defaultModel`, `defaultThinkingLevel`) written into its
+worktree just before it opens. The file is ignored through the repository's `info/exclude`
+(the main worktree ignores that path too) and is never committed. The same values are also passed
+to Xirp. A worktree that already has a different or tracked `.pi/settings.json` cannot host a Pi
+role. Because one file serves one role, a worktree holds at most one Pi role: a Pi role may share
+a worktree with Claude Code or Codex roles, but a second Pi role needs `worktree: new`.
+
+**Trust.** Pi asks whether to trust a folder that has `.pi/settings.json` or `.agents/skills`, and
+a background session would wait at that prompt. The Pi trigger answers it for the session only
+when the folder is a linked worktree that an untracked `loop.yaml` there lists as a role
+worktree, and you already trust the main worktree in Pi (`~/.pi/agent/trust.json`, nearest saved
+decision). Otherwise Pi decides as usual. Nothing is saved to `trust.json`.
+
+**Anthropic subscription.** `provider: anthropic` with `billing: subscription` is allowed when the
+credential is `oauth`, but `handoff-start` warns that it may consume paid extra usage. A mismatch
+is refused, never warned.
+
+**Routing trigger.** The Pi trigger runs `handoff-route` on `agent_settled`, when Pi will not retry
+or continue on its own; it skips subagents (`PI_SUBAGENT_PARENT_SESSION`). The role session writes
+its own record, so `PI_*` describe that session.
+
+**Subagents inside a role are not locked.** pstack's subagents follow the role's provider when they
+resolve aliases such as `opus` or raise effort. They switch provider, and maybe billing, only when:
+a prompt names another provider's `provider/id` explicitly; `pstack-models.md` sets `pi models:`;
+or the role's provider is not `anthropic`, `openai` or `openai-codex`, so aliases fall back to
+Anthropic. Avoid these in handoff roles. Records still describe the role session, so routing is
+unaffected; only usage moves.
 
 ## Troubleshooting
 
@@ -197,3 +275,6 @@ worktree), that stop sends one more attention notice so you learn the new cause.
   write a new record.
 - **`handoff-finish` refuses**: the message names the failed condition, such as a newer
   commit than the passing review or an unfinished round.
+- **A Pi role is refused**: the message names the role and the check. Run
+  `pi --list-models <model>` and `pi auth check --provider <provider> --json` to compare, run
+  `scripts/handoff/install.sh` for a missing trigger, or `/trust` in Pi in the main worktree.
