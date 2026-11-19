@@ -170,7 +170,7 @@ handoff-cleanup <change-id> --abandon --yes
 3. **主工作區保護**：主 repo 工作區永遠保留，不執行 worktree remove。
 
 **執行清理動作：**
-1. **歷史證據歸檔**：將 `.agent-handoff/<change-id>/` 內的交件單與審查報告拷貝至主工作區 `.agent-handoff/archive/<change-id>/` 保存。
+1. **歷史證據歸檔**：將 `.agent-handoff/<change-id>/` 內的交件單與審查報告拷貝至主工作區 `.agent-handoff/archive/<change-id>/` 保存；即將移除的 worktree 中的 `work-items/WI-*` 也整個複製到 `archive/<change-id>/<worktree>/work-items/`，避免審查引用的驗收證據隨 worktree 消失。主工作區的 Work Item 留在原處；預覽（不加 `--yes`）會列出將歸檔的 Work Item。
 2. **刪除 Sessions**：呼叫 `xirp session delete` 釋放背景程序。
 3. **移除臨時 Worktrees**：安全移除額外建立的實作與收尾 worktree。
 4. **保留分支**：`feature/<change-id>` 分支與已提交 commit 永遠保留，由團隊另行授權 merge 與清理。

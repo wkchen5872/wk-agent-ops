@@ -1054,6 +1054,9 @@ if run_section cleanup; then
   hw "$B" --role review --status done --verdict pass --head HEAD --report rv/r01.md
   finish_in "$A" add-export >/dev/null 2>&1
   if [[ ! -d "$B" || ! -d "$F" ]]; then bad "cleanup fixture has review and finish worktrees"; fi
+  # A Work Item in the implementer worktree, ignored like the project's /work-items/WI-*/ rule.
+  printf '/work-items/WI-*/\n' >> "$pcommon/info/exclude"
+  mkdir -p "$A/work-items/WI-20261119-x/agents"; printf 'drill\n' > "$A/work-items/WI-20261119-x/agents/drill.md"
 
   out="$(clean_in "$A" add-export --yes 2>&1)"; rc=$?
   [[ "$rc" != 0 && -z "$(deleted)" && -d "$A" && -d "$B" && -d "$F" ]] && grep -q 'review' <<<"$out" \
@@ -1073,6 +1076,8 @@ if run_section cleanup; then
   else
     bad "without --yes it lists the sessions and worktrees and changes nothing"; printf '       %s\n' "$out"
   fi
+  grep -q "work-items/WI-20261119-x" <<<"$out" && [[ -f "$A/work-items/WI-20261119-x/agents/drill.md" ]] \
+    && ok "the preview names the Work Items it will archive" || { bad "the preview names the Work Items it will archive"; printf '       %s\n' "$out"; }
 
   out="$(clean_in "$P" add-export --yes 2>&1)"; rc=$?
   arc="$P/.agent-handoff/archive/add-export"
@@ -1082,6 +1087,8 @@ if run_section cleanup; then
   else
     bad "records and review reports are archived in the main worktree"; printf '       %s\n' "$out"
   fi
+  [[ -f "$arc/$(basename "$A")/work-items/WI-20261119-x/agents/drill.md" && ! -e "$A" ]] \
+    && ok "a Work Item in a removed worktree is archived with its files" || { bad "a Work Item in a removed worktree is archived with its files"; printf '       %s\n' "$out"; }
   [[ "$(deleted | sort | tr '\n' ' ')" == "sess-1 sess-2 sess-3 " ]] && ok "each loop session is deleted once" || bad "each loop session is deleted once ($(deleted | tr '\n' ' '))"
   if [[ ! -e "$A" && ! -e "$B" && ! -e "$F" && "$(git -C "$P" worktree list | wc -l | tr -d ' ')" == 1 ]] && git -C "$P" show-ref --verify --quiet refs/heads/feature/add-export \
     && ! grep -q -- '--force' "$FAKE_XIRP_DIR/calls" 2>/dev/null; then
@@ -1099,9 +1106,13 @@ if run_section cleanup; then
   hw "$H" --role review --status done --verdict pass --head HEAD --report .agent-handoff/r.md
   hw "$H" --role finish --status done --head HEAD
   awk '/^reviewer:/{r=1} r&&/^  session:/{print "  session: rev-2"; r=0; next} {print}' "$H/.agent-handoff/add-export/loop.yaml" > "$H/l.tmp" && mv "$H/l.tmp" "$H/.agent-handoff/add-export/loop.yaml"
+  hcommon="$(git -C "$H" rev-parse --path-format=absolute --git-common-dir)"; mkdir -p "$hcommon/info"; printf '/work-items/WI-*/\n' >> "$hcommon/info/exclude"
+  mkdir -p "$H/work-items/WI-20261119-x"; printf 'wi\n' > "$H/work-items/WI-20261119-x/README.md"
   out="$(clean_in "$H" add-export --yes 2>&1)"; rc=$?
   [[ "$rc" == 0 && -d "$H/.git" && "$(deleted | sort | tr '\n' ' ')" == "rev-2 sess-1 " && -f "$H/.agent-handoff/archive/add-export/$(basename "$H")/03-finish.yaml" ]] \
     && ok "an implementer in the main worktree keeps the main worktree" || { bad "an implementer in the main worktree keeps the main worktree"; printf '       %s\n' "$out"; }
+  [[ -f "$H/work-items/WI-20261119-x/README.md" ]] \
+    && ok "a Work Item in the kept main worktree stays in place" || bad "a Work Item in the kept main worktree stays in place"
   # Abandoned loop: no finish record; --abandon cleans it with the same safety checks.
   Q="$tmp/clean-abandon"; new_project "$Q"; use_project "$Q"; fresh_state c3
   start_in "$Q" add-export >/dev/null 2>&1; QA="$Q-add-export"

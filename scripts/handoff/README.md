@@ -114,10 +114,12 @@ finish session resumes from the stopped stage, or a new one opens if it is gone.
 
 Removes a finished loop. It acts only when the newest record is `finish`/`done` and every loop
 worktree is clean; otherwise it names the reason and changes nothing. Without `--yes` it lists
-the sessions and worktrees it would remove. With `--yes` it:
+the sessions and worktrees it would remove and the Work Items it would archive. With `--yes` it:
 
 1. copies the handoff records and the review reports they reference to
-   `<main worktree>/.agent-handoff/archive/<change-id>/<worktree name>/` (still ignored by Git);
+   `<main worktree>/.agent-handoff/archive/<change-id>/<worktree name>/` (still ignored by Git),
+   together with every `work-items/WI-*` directory of a worktree it will remove, under `work-items/`
+   there; Work Items in a kept main worktree stay where they are. If any copy fails, nothing is removed;
 2. deletes the loop's Xirp sessions;
 3. removes every loop worktree except the main worktree, without `--force`. In a kept main worktree
    it removes the `.pi/settings.json` the loop created for a Pi role (recorded in `loop.yaml` and
