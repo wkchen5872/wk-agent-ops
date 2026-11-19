@@ -69,6 +69,10 @@ else printf 'Cleanup for %s\n' "$change"; fi
 printf '  sessions to delete:\n'; for s in "${sessions[@]-}"; do [[ -n "$s" ]] && printf '    %s\n' "$s"; done
 printf '  worktrees to remove:\n'
 for wt in "${wts[@]}"; do [[ "$wt" == "$main" ]] && printf '    %s (main worktree: kept)\n' "$wt" || printf '    %s\n' "$wt"; done
+for wt in "${wts[@]}"; do
+  [[ "$wt" == "$main" ]] || continue
+  pis="$(ho_pi_settings_owned "$main/.agent-handoff/$change/loop.yaml" "$main")" && printf '  Pi settings to remove: %s\n' "$pis"
+done
 printf '  records archived to: %s/.agent-handoff/archive/%s/\n' "$main" "$change"
 if (( ${#wis[@]} )); then
   printf '  Work Items archived with them:\n'; for w in "${wis[@]}"; do printf '    %s\n' "$w"; done

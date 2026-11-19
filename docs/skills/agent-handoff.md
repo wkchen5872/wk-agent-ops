@@ -148,6 +148,7 @@ handoff-finish <change-id>
 - 檢查實作者 worktree 的 HEAD 與交件單記載之 `head` 一致且乾淨（無未暫存修改）。
 - 若設定 `finish.worktree: new`，實作者 worktree 會切換至 detached HEAD，新建立的 `../<repo>-<change-id>-finish` 接手 `feature/<change-id>` 分支進行收尾。
 - **失敗重試（Retry）**：若收尾過程因網路中斷或遠端拒絕而停下（交件單為 `finish` / `blocked`），排解問題後再次執行 `handoff-finish`，系統會直接自中斷點接續或重開收尾 Session。
+- **實作或審查 blocked 後接續**：迴圈不會自行恢復。排除原因後，請實作者在乾淨且已 commit 的 `HEAD` 寫一筆新的 `implement` / `done` 交件單，hook 會把它當成下一輪交給審查者（計入 `max_rounds`）。審查只因需要人親自做的步驟（例如真實環境驗收）而 blocked 時：由人完成該步驟、把證據記在該 change 的 Work Item（cleanup 會歸檔被移除 worktree 的 Work Item），再請實作者勾選 task、commit 並交件。
 
 ### 3. `handoff-cleanup <change-id> [--abandon] [--yes]`
 

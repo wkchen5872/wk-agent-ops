@@ -114,7 +114,8 @@ finish session resumes from the stopped stage, or a new one opens if it is gone.
 
 Removes a finished loop. It acts only when the newest record is `finish`/`done` and every loop
 worktree is clean; otherwise it names the reason and changes nothing. Without `--yes` it lists
-the sessions and worktrees it would remove and the Work Items it would archive. With `--yes` it:
+the sessions and worktrees it would remove, the Work Items it would archive, and the Pi settings
+file it would remove from a kept main worktree. With `--yes` it:
 
 1. copies the handoff records and the review reports they reference to
    `<main worktree>/.agent-handoff/archive/<change-id>/<worktree name>/` (still ignored by Git),
@@ -143,8 +144,21 @@ For a loop that will not finish (for example a blocked finish whose PR was close
 
 Before routing, the worktree holding the record must be clean at the record's `head`;
 otherwise you are notified. Each record is logged in `.agent-handoff/<change-id>/routing.log`
-with the stopping session's model. The hook never writes to GitHub and never pushes, and it
+with the stopping session's model: the model Xirp reports for Claude Code and Codex (for example
+`model=claude-opus-5-5`), and `provider/model` from the record's `agent` section for Pi (for
+example `model=openai/gpt-6.2-sol`). The hook never writes to GitHub and never pushes, and it
 always exits successfully.
+
+**Continuing after `blocked`.** A blocked record stops the loop until you act; nothing resumes it
+on its own.
+
+- Blocked `implement` or `review`: fix the cause, then have the implementer write a new
+  `implement`/`done` record at a clean, committed `HEAD`. The hook hands it to the reviewer as
+  the next round, so it counts toward `max_rounds`. Use this when a review is blocked only on a
+  step a person must do, such as a real-environment acceptance check: do that step, record the
+  evidence in the change's Work Item (cleanup archives the Work Items of removed worktrees), and
+  ask the implementer to tick the task, commit, and hand over.
+- Blocked `finish`: run `handoff-finish <change-id>` again (see [handoff-finish](#handoff-finish-change-id)).
 
 Each record ends in one of three outcomes:
 
@@ -257,6 +271,13 @@ is refused, never warned.
 or continue on its own; it skips subagents (`PI_SUBAGENT_PARENT_SESSION`). The role session writes
 its own record, so `PI_*` describe that session.
 
+**Cost and context.** A reviewer keeps one session for the whole loop, so its context grows every
+round; when it fills, Pi compacts it automatically and the role keeps working. Context size
+depends on the provider: check `pi --list-models <model>` (the same model can list a smaller
+window under `openai` than under `openai-codex`). With `billing: api` every round is paid usage,
+and Pi also loads your global Pi packages and skills into each role session, which adds tokens.
+Prefer `subscription` for long loops, and choose the provider with the larger window.
+
 **Subagents inside a role are not locked.** pstack's subagents follow the role's provider when they
 resolve aliases such as `opus` or raise effort. They switch provider, and maybe billing, only when:
 a prompt names another provider's `provider/id` explicitly; `pstack-models.md` sets `pi models:`;
@@ -275,7 +296,8 @@ unaffected; only usage moves.
   commands (for example a full test run) never appear there; an `idle` session may be waiting
   for them and is resumed automatically when they finish. The reviewer opens only after the
   implementer writes its implement record and its turn ends, so no reviewer before that is
-  expected. Check the records and `routing.log` for progress.
+  expected. A Pi role may show `finished` in Xirp while it is still working, and messages from
+  the hook still reach it. Check the records and `routing.log` for progress.
 - **"has uncommitted changes" or "HEAD … differs"**: commit or clean the worktree, then
   write a new record.
 - **`handoff-finish` refuses**: the message names the failed condition, such as a newer

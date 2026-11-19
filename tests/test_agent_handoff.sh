@@ -1559,6 +1559,9 @@ SH
   pi_project "$PI_IMPL" "$CX_REV" "$CX_FIN"; git -C "$PD" switch -q feature/add-export
   hout="$(pstart "$PD" add-export --worktree here 2>&1)"
   pclean() { (cd "$1" && HOME="$PI_HOME" PATH="$FAKES:$PATH" "$ROOT/scripts/handoff/handoff-cleanup" add-export --abandon --yes >/dev/null 2>&1); }
+  pvout="$(cd "$PD" && HOME="$PI_HOME" PATH="$FAKES:$PATH" "$ROOT/scripts/handoff/handoff-cleanup" add-export --abandon 2>&1)"
+  grep -qF "$PD/.pi/settings.json" <<<"$pvout" && [[ -f "$PD/.pi/settings.json" ]] \
+    && ok "the cleanup preview names the Pi settings it will remove" || { bad "the cleanup preview names the Pi settings it will remove"; printf '       %s\n' "$pvout"; }
   [[ -f "$PD/.pi/settings.json" ]] && pclean "$PD" && [[ ! -e "$PD/.pi/settings.json" ]] && ok "cleanup removes the Pi settings the loop wrote in the main worktree" || bad "cleanup removes the Pi settings the loop wrote in the main worktree ($hout)"
   pi_project "$PI_IMPL" "$CX_REV" "$CX_FIN"; git -C "$PD" switch -q feature/add-export
   pstart "$PD" add-export --worktree here >/dev/null 2>&1; printf '{"defaultModel":"mine"}\n' > "$PD/.pi/settings.json"

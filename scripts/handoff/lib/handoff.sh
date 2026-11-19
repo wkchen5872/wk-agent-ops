@@ -403,19 +403,27 @@ ho_pi_settings() {
 # A role that creates the settings file records it as <implementer|reviewer|finish>.pi_settings in loop.yaml.
 ho_pi_role_key() { case "$1" in implement*) echo implementer ;; review*) echo reviewer ;; finish*) echo finish ;; esac; }
 
-# ho_pi_settings_cleanup <loop.yaml> <worktree>: remove the settings file this loop recorded as written,
-# when it still holds what the loop wrote; a file that existed before the loop is never recorded.
-ho_pi_settings_cleanup() {
+# ho_pi_settings_owned <loop.yaml> <worktree>: print the worktree's settings file when this loop recorded
+# it as written and it still holds what the loop wrote; a file that existed before the loop is never recorded.
+ho_pi_settings_owned() {
   local loop="$1" f="$2/.pi/settings.json" have role sec
-  [[ -f "$f" && -z "$(git -C "$2" ls-files -- .pi/settings.json 2>/dev/null)" ]] || return 0
-  have="$(jq -cS . "$f" 2>/dev/null)" || return 0
+  [[ -f "$f" && -z "$(git -C "$2" ls-files -- .pi/settings.json 2>/dev/null)" ]] || return 1
+  have="$(jq -cS . "$f" 2>/dev/null)" || return 1
   for sec in implement_template review_template finish_template; do
     role="$(ho_pi_role_key "$sec")"
     [[ "$(kv_get "$loop" "$sec.harness" 2>/dev/null)" == pi && "$(kv_get "$loop" "$role.pi_settings" 2>/dev/null)" == "$f" ]] || continue
     if [[ "$have" == "$(ho_pi_settings_json "$(kv_get "$loop" "$sec.provider")" "$(kv_get "$loop" "$sec.model")" "$(kv_get "$loop" "$sec.effort")")" ]]; then
-      rm -f "$f"; rmdir "$2/.pi" 2>/dev/null; printf 'Removed %s\n' "$f"; return 0
+      printf '%s\n' "$f"; return 0
     fi
   done
+  return 1
+}
+
+# ho_pi_settings_cleanup <loop.yaml> <worktree>: remove the settings file ho_pi_settings_owned names.
+ho_pi_settings_cleanup() {
+  local f
+  f="$(ho_pi_settings_owned "$1" "$2")" || return 0
+  rm -f "$f"; rmdir "$2/.pi" 2>/dev/null; printf 'Removed %s\n' "$f"
 }
 
 # ho_pi_record_check <loop.yaml> <record>: a record of a Pi role must match its template.
