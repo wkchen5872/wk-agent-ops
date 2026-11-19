@@ -578,8 +578,9 @@ def start_checker(payload, record_request=True):
     lock_path, state_file = state_paths(trigger["session_id"])
     lock_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     prune_state()
-    store_model(trigger)
     if record_request:
+        # Only a hook event names a model; a checker handoff replays an older request snapshot (review r04/F-03).
+        store_model(trigger)
         atomic_json(state_file.with_suffix(".request.json"), persisted(trigger))
     fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
     try:

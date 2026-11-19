@@ -851,6 +851,38 @@ class CodexCheckerClockTests(unittest.TestCase):
                          "B is reported at its own deadline (104), not at A's (103)")
 
 
+    # Review pi-notify-review01-r04 (F-03): only a hook event writes the model; a checker handing off to the
+    # next turn replays an older request snapshot and must not overwrite the model a newer hook stored.
+    def test_checker_handoff_never_replays_an_older_model(self):
+        import fcntl as _fcntl
+        import importlib.util
+        import os as _os
+        from unittest.mock import patch
+        spec = importlib.util.spec_from_file_location("wait_under_test", ROOT / "codex/wait.py")
+        wait = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(wait)
+        config = {"TELEGRAM_ENABLED": True, "authorization": True, "user_input": True, "delay": 0}
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            env = {k: v for k, v in _os.environ.items() if k != "TELEGRAM_DRY_RUN"}
+            env["CODEX_HOME"] = str(root / ".codex")
+            event = {"session_id": SESSION, "turn_id": TURN, "cwd": "/tmp/project", "kind": "question"}
+            with patch.object(wait, "notify_root", return_value=root), \
+                    patch.object(wait, "settings", return_value=config), \
+                    patch.dict(_os.environ, env, clear=True):
+                lock_path, _ = wait.state_paths(SESSION)
+                lock_path.parent.mkdir(parents=True)
+                holder = _os.open(lock_path, _os.O_CREAT | _os.O_RDWR, 0o600)
+                _fcntl.flock(holder, _fcntl.LOCK_EX | _fcntl.LOCK_NB)  # the newer worker owns the session
+                try:
+                    wait.store_model(wait.sanitized_trigger({**event, "model": "gpt-6.2-sol"}))
+                    wait.start_checker({**event, "model": "gpt-6.1-terra"}, record_request=False)
+                    self.assertEqual("gpt-6.2-sol", wait.current_model(event), "a handoff replayed an older model")
+                    wait.start_checker({**event, "model": "gpt-6.3-luna"})  # a real hook event still writes
+                    self.assertEqual("gpt-6.3-luna", wait.current_model(event))
+                finally:
+                    _os.close(holder)
+
 
 if __name__ == "__main__":
     unittest.main()
