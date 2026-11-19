@@ -1524,6 +1524,19 @@ SH
   [[ "$(created)" == 1 && "$(kv_get "${LD}-review/.agent-handoff/add-export/loop.yaml" reviewer.worktree 2>/dev/null)" == "${LD}-review" ]] && routed "$LD" 01-implement.yaml \
     && (HOME="$PI_HOME" bash "$TRUST" "${LD}-review" >/dev/null 2>&1) \
     && ok "after the write succeeds the reviewer opens once in a trusted review worktree" || bad "after the write succeeds the reviewer opens once in a trusted review worktree ($(created))"
+  # codex-pi-handoff-r08/F-01: a finish retry never takes over a worktree the loop did not prepare
+  pf_loop; pi_finish_template "$LD"; lf="$LD/.agent-handoff/add-export/loop.yaml"; lset "$lf" finish_template.worktree new
+  pi_review_rec "$LD" "${PIENV[@]}"; git -C "$LD" checkout -q --detach HEAD; git -C "$LD" worktree add -q "${LD}-finish" feature/add-export
+  out="$(HOME="$PI_HOME" finish_in "$LD" add-export 2>&1)"; rc=$?
+  [[ "$rc" != 0 && "$(created)" == 0 && ! -e "${LD}-finish/.pi/settings.json" && ! -e "${LD}-finish/.agent-handoff" && -z "$(kv_get "$lf" finish.worktree)" ]] \
+    && ok "a hand-made worktree with the finish worktree's name is left alone and nothing opens" || bad "a hand-made worktree with the finish worktree's name is left alone and nothing opens ($out)"
+  pf_loop; pi_finish_template "$LD"; lf="$LD/.agent-handoff/add-export/loop.yaml"; lset "$lf" finish_template.worktree new
+  pi_review_rec "$LD" "${PIENV[@]}"; export CP_FAIL_MATCH="-finish/" MV_FAIL_TARGET="$lf"; touch "$FAKE_XIRP_DIR/cp-fail" "$FAKE_XIRP_DIR/mv-fail"
+  (cd "$LD" && HOME="$PI_HOME" PATH="$CPF:$FAKES:$PATH" HANDOFF_CREATE_WAIT=2 "$FINISH" add-export </dev/null) >/dev/null 2>&1
+  rm -f "$FAKE_XIRP_DIR/cp-fail" "$FAKE_XIRP_DIR/mv-fail"; out="$(HOME="$PI_HOME" finish_in "$LD" add-export 2>&1)"; rc=$?
+  [[ "$rc" != 0 && "$(created)" == 0 ]] && grep -q 'cannot reuse' <<<"$out" \
+    && ok "a finish worktree with neither the loop's record nor its loop.yaml is not reused" || bad "a finish worktree with neither the loop's record nor its loop.yaml is not reused ($out)"
+
   # Opening a Pi role checks the trust rule itself, whatever produced the worktree.
   m=$((m + 1)); LD="$tmp/pi-tg$m"; new_loop "$LD"; use_project "$LD"; fresh_state "pitg$m"; pi_state "tg$m"; pi_home "tg$m" "$LD"; pi_review_template "$LD"
   lset "$LD/.agent-handoff/add-export/loop.yaml" reviewer.worktree "$tmp/pi-elsewhere"; git -C "$LD" worktree add -q --detach "$tmp/pi-elsewhere"

@@ -158,8 +158,10 @@ A retry record is tried again by the next hook run in that worktree, or right aw
 `open-failed`. Its attention notice is sent once, however many retries fail; the progress notice
 follows once delivery succeeds.
 A retry reuses a review or finish worktree that the failed attempt already made only when it is
-clean; a finish worktree must also be the loop's recorded one, on `feature/<change-id>` at the
-passing commit. An unclean review worktree stops for you instead; nothing in either is removed.
+clean; a finish worktree must also be the loop's own (recorded in the implementer's `loop.yaml`,
+or holding the loop's untracked `loop.yaml` that names it when that record could not be written),
+on `feature/<change-id>` at the passing commit. A worktree made by hand with the same name is never
+taken over. An unclean review worktree stops for you instead; nothing in either is removed.
 
 ## Notifications
 

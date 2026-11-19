@@ -515,6 +515,29 @@ ho_finish_retry() {
   printf '%s\n' "$id"
 }
 
+# ho_finish_record <loop-dir> <finish-worktree> <change>: give the finish worktree its own loop.yaml
+# naming itself, then record it in every loop.yaml. Both are attempted; either failing fails.
+# The copy alone proves the loop prepared the worktree when the implementer's record cannot be written.
+ho_finish_record() {
+  local dir="$1" wt="$2" change="$3" copy="$2/.agent-handoff/$3/loop.yaml" rc=0
+  { mkdir -p "$wt/.agent-handoff/$change" && cp "$dir/loop.yaml" "$copy" && kv_set "$copy" finish.worktree "$wt"; } \
+    || { ho_err "cannot copy loop.yaml into the finish worktree $wt"; rc=1; }
+  ho_loop_set "$dir" finish.worktree "$wt" || { ho_err "cannot record the finish worktree $wt in loop.yaml"; rc=1; }
+  return $rc
+}
+
+# ho_finish_prepared <loop.yaml> <finish-worktree> <change> <implementer-worktree>: this loop prepared it —
+# the implementer's loop.yaml records it, or (when that record could not be written) the worktree holds
+# this loop's untracked loop.yaml naming it. A worktree made by hand has neither and is never taken over.
+ho_finish_prepared() {
+  local loop="$1" wt="$2" change="$3" impl="$4" copy="$2/.agent-handoff/$3/loop.yaml" recorded
+  recorded="$(kv_get "$loop" finish.worktree 2>/dev/null || true)"
+  [[ "$recorded" == "$wt" ]] && return 0
+  [[ -z "$recorded" && -f "$copy" && -z "$(git -C "$wt" ls-files -- ".agent-handoff/$change/loop.yaml" 2>/dev/null)" ]] || return 1
+  [[ "$(kv_get "$copy" change 2>/dev/null)" == "$change" && "$(kv_get "$copy" implementer.worktree 2>/dev/null)" == "$impl" \
+    && "$(kv_get "$copy" finish.worktree 2>/dev/null)" == "$wt" ]]
+}
+
 ho_finish_open() {
   local dir="$1" loop="$1/loop.yaml" head impl mode wt change id round
   head="$(ho_finish_check "$dir")" || { ho_err "cannot finish: $head"; return 1; }
@@ -529,24 +552,17 @@ ho_finish_open() {
     # A retry after a failed open: reuse only the clean finish worktree this loop prepared
     # on the feature branch at the passing commit; anything else is left untouched.
     wt="${impl}-finish"
-    # An empty finish.worktree means an earlier attempt could not record it after creating the worktree.
-    local recorded; recorded="$(kv_get "$loop" finish.worktree 2>/dev/null || true)"
-    [[ ( "$recorded" == "$wt" || -z "$recorded" ) && "$(git -C "$wt" branch --show-current 2>/dev/null)" == "feature/$change" \
+    ho_finish_prepared "$loop" "$wt" "$change" "$impl" && [[ "$(git -C "$wt" branch --show-current 2>/dev/null)" == "feature/$change" \
       && "$(ho_head "$wt")" == "$head" ]] && ho_clean "$wt" \
       || { ho_err "cannot reuse the finish worktree $wt"; return 1; }
-    # An earlier attempt may have left the copy incomplete: refresh it from the implementer's loop.yaml.
-    ho_loop_set "$dir" finish.worktree "$wt" || { ho_err "cannot record the finish worktree $wt in loop.yaml"; return 1; }
-    mkdir -p "$wt/.agent-handoff/$change" && cp "$loop" "$wt/.agent-handoff/$change/loop.yaml" \
-      || { ho_err "cannot copy loop.yaml into the finish worktree $wt"; return 1; }
+    # An earlier attempt may have left the record or the copy incomplete: write both again.
+    ho_finish_record "$dir" "$wt" "$change" || return 1
   elif [[ "$mode" == new ]]; then
     wt="${impl}-finish"
     git -C "$impl" checkout -q --detach "$head" || { ho_err "cannot detach the implementer worktree"; return 1; }
     git -C "$impl" worktree add -q "$wt" "feature/$change" 2>/dev/null \
       || { git -C "$impl" checkout -q "feature/$change"; ho_err "cannot create the finish worktree $wt"; return 1; }
-    # Record the worktree before copying, so the finish worktree's own loop.yaml lists it.
-    ho_loop_set "$dir" finish.worktree "$wt" || { ho_err "cannot record the finish worktree $wt in loop.yaml"; return 1; }
-    mkdir -p "$wt/.agent-handoff/$change" && cp "$loop" "$wt/.agent-handoff/$change/loop.yaml" \
-      || { ho_err "cannot copy loop.yaml into the finish worktree $wt"; return 1; }
+    ho_finish_record "$dir" "$wt" "$change" || return 1
   fi
   round="$(kv_get "$(ho_newest_in_loop "$dir")" round)"
   id="$(ho_open_role "$dir" finish_template "$wt" "$head" "$round" "")" || return 1
