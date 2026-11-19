@@ -502,7 +502,10 @@ ho_finish_open() {
     [[ "$(kv_get "$loop" finish.worktree 2>/dev/null)" == "$wt" && "$(git -C "$wt" branch --show-current 2>/dev/null)" == "feature/$change" \
       && "$(ho_head "$wt")" == "$head" ]] && ho_clean "$wt" \
       || { ho_err "cannot reuse the finish worktree $wt"; return 1; }
+    # An earlier attempt may have left the copy incomplete: refresh it from the implementer's loop.yaml.
     ho_loop_set "$dir" finish.worktree "$wt"
+    mkdir -p "$wt/.agent-handoff/$change" && cp "$loop" "$wt/.agent-handoff/$change/loop.yaml" \
+      || { ho_err "cannot copy loop.yaml into the finish worktree $wt"; return 1; }
   elif [[ "$mode" == new ]]; then
     wt="${impl}-finish"
     git -C "$impl" checkout -q --detach "$head" || { ho_err "cannot detach the implementer worktree"; return 1; }
@@ -510,7 +513,8 @@ ho_finish_open() {
       || { git -C "$impl" checkout -q "feature/$change"; ho_err "cannot create the finish worktree $wt"; return 1; }
     # Record the worktree before copying, so the finish worktree's own loop.yaml lists it.
     ho_loop_set "$dir" finish.worktree "$wt"
-    mkdir -p "$wt/.agent-handoff/$change" && cp "$loop" "$wt/.agent-handoff/$change/loop.yaml"
+    mkdir -p "$wt/.agent-handoff/$change" && cp "$loop" "$wt/.agent-handoff/$change/loop.yaml" \
+      || { ho_err "cannot copy loop.yaml into the finish worktree $wt"; return 1; }
   fi
   round="$(kv_get "$(ho_newest_in_loop "$dir")" round)"
   id="$(ho_open_role "$dir" finish_template "$wt" "$head" "$round" "")" || return 1

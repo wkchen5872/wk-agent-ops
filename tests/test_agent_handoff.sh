@@ -1485,6 +1485,27 @@ SH
   [[ "$(created)" == 2 && "$(kv_get "${LD}-finish/.agent-handoff/add-export/loop.yaml" finish.worktree 2>/dev/null)" == "${LD}-finish" ]] \
     && ok "reopening finish in the prepared worktree restores its loop.yaml entry" || bad "reopening finish in the prepared worktree restores its loop.yaml entry"
 
+  # codex-pi-handoff-r06/F-01: a failed loop.yaml copy into a new worktree opens nothing and is retried
+  CPF="$tmp/cp-fail-bin"; mkdir -p "$CPF"
+  printf '#!/usr/bin/env bash\nfor last; do :; done\nif [[ -e "$FAKE_XIRP_DIR/cp-fail" && "$last" == *"$CP_FAIL_MATCH"* ]]; then exit 1; fi\nexec /bin/cp "$@"\n' > "$CPF/cp"; chmod +x "$CPF/cp"
+  croute() { (cd "$1" && HOME="$PI_HOME" PATH="$CPF:$FAKES:$PATH" HANDOFF_NOTIFY="$FAKES/notify.sh" HANDOFF_CREATE_WAIT=2 HANDOFF_ROUTE_WAIT=1 CHIRP_SESSION_ID=chirp-1 "$ROUTE" </dev/null); }
+  pf_loop; pi_finish_template "$LD"; lf="$LD/.agent-handoff/add-export/loop.yaml"; lset "$lf" finish_template.worktree new; lset "$lf" finish.trigger auto
+  pi_review_rec "$LD" "${PIENV[@]}"; export CP_FAIL_MATCH="-finish/"; touch "$FAKE_XIRP_DIR/cp-fail"; croute "$LD"
+  [[ "$(created)" == 0 && "$(kinds)" == attention ]] && ! routed "$LD" 02-review.yaml && grep -q 'finish:open-failed' "$LD/.agent-handoff/add-export/routing.log" \
+    && ok "a failed loop.yaml copy into a new finish worktree opens no session and leaves the review unprocessed" || bad "a failed loop.yaml copy into a new finish worktree opens no session and leaves the review unprocessed ($(created); $(kinds))"
+  rm -f "$FAKE_XIRP_DIR/cp-fail"; croute "$LD"; fl="${LD}-finish/.agent-handoff/add-export/loop.yaml"
+  [[ "$(created)" == 1 && "$(kv_get "$fl" change 2>/dev/null)" == add-export && "$(kv_get "$fl" implementer.worktree 2>/dev/null)" == "$LD" \
+    && "$(kv_get "$fl" finish_template.harness 2>/dev/null)" == pi && "$(kv_get "$fl" finish.worktree 2>/dev/null)" == "${LD}-finish" ]] && routed "$LD" 02-review.yaml \
+    && (HOME="$PI_HOME" bash "$TRUST" "${LD}-finish" >/dev/null 2>&1) \
+    && ok "the retry completes the finish worktree's loop.yaml, opens one finish session and the trust check passes" || bad "the retry completes the finish worktree's loop.yaml, opens one finish session and the trust check passes ($(created))"
+  m=$((m + 1)); LD="$tmp/pi-rc$m"; new_loop "$LD" new; use_project "$LD"; fresh_state "pirc$m"; pi_state "rc$m"; pi_home "rc$m" "$LD"; pi_review_template "$LD"; hw "$LD" "${REC_ARGS[@]}"
+  export CP_FAIL_MATCH="-review/"; touch "$FAKE_XIRP_DIR/cp-fail"; croute "$LD"
+  [[ "$(created)" == 0 && "$(kinds)" == attention ]] && ! routed "$LD" 01-implement.yaml \
+    && ok "a failed loop.yaml copy into a new review worktree opens no reviewer and leaves the record unprocessed" || bad "a failed loop.yaml copy into a new review worktree opens no reviewer and leaves the record unprocessed ($(created); $(kinds))"
+  rm -f "$FAKE_XIRP_DIR/cp-fail"; croute "$LD"
+  [[ "$(created)" == 1 && "$(kv_get "${LD}-review/.agent-handoff/add-export/loop.yaml" reviewer.worktree 2>/dev/null)" == "${LD}-review" ]] && routed "$LD" 01-implement.yaml \
+    && ok "the retry copies loop.yaml into the review worktree and opens the reviewer once" || bad "the retry copies loop.yaml into the review worktree and opens the reviewer once ($(created))"
+
   # 5.4 cleanup removes the settings the loop wrote in the main worktree
   pi_state cleanup
   pi_project "$PI_IMPL" "$CX_REV" "$CX_FIN"; git -C "$PD" switch -q feature/add-export

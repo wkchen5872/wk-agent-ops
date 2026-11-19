@@ -160,7 +160,9 @@ to_reviewer() {
       else git -C "$root" worktree add -q --detach "$wt" "$head" 2>/dev/null; fi \
         || { action="user:review-worktree-failed"; detail="無法建立審查 worktree ${wt}，第 $round 輪未交給審查者，迴圈已停住。"; return; }
       kv_set "$loop" reviewer.worktree "$wt"
-      mkdir -p "$wt/.agent-handoff/$change" && cp "$loop" "$wt/.agent-handoff/$change/loop.yaml"
+      # The reviewer's own loop.yaml must list its worktree (the Pi trigger trusts nothing else).
+      mkdir -p "$wt/.agent-handoff/$change" && cp "$loop" "$wt/.agent-handoff/$change/loop.yaml" \
+        || { action="reviewer:open-failed"; detail="無法把 loop.yaml 複製到審查 worktree ${wt}，第 $round 輪未交給審查者，迴圈已停住。"; return; }
     else
       wt="$root"; kv_set "$loop" reviewer.worktree "$wt"
     fi
