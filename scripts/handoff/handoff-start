@@ -121,12 +121,15 @@ mkdir -p "$dir"
   printf 'implementer:\n  session:\n  worktree: %s\n' "$wt"
   printf 'reviewer:\n  session: %s\n  worktree:\n' "$reviewer"
   printf 'finish:\n  session:\n  worktree:\n  trigger: %s\n  delivery: %s\n' "$trigger" "$delivery"
-} > "$loop"
+} > "$loop" || die "cannot write $loop"
 (( pi_new )) && kv_set "$loop" implementer.pi_settings "$wt/.pi/settings.json"
 ho_copy_template "$scratch" implement "$loop" implement_template
 ho_copy_template "$scratch" review "$loop" review_template
 ho_copy_template "$scratch" finish "$loop" finish_template
 
+if (( impl_pi )) && ! ho_pi_worktree_ready "$wt" "$main"; then
+  die "the Pi trigger would not trust $wt (its loop.yaml does not list it); the implementer was not opened"
+fi
 project="$(ho_xirp_project_id "$main")"
 [[ -n "$project" ]] || die "no Xirp project is registered for $main (xirp project add $main)"
 head="$(ho_head "$wt")"

@@ -1506,6 +1506,30 @@ SH
   [[ "$(created)" == 1 && "$(kv_get "${LD}-review/.agent-handoff/add-export/loop.yaml" reviewer.worktree 2>/dev/null)" == "${LD}-review" ]] && routed "$LD" 01-implement.yaml \
     && ok "the retry copies loop.yaml into the review worktree and opens the reviewer once" || bad "the retry copies loop.yaml into the review worktree and opens the reviewer once ($(created))"
 
+  # codex-pi-handoff-r07/F-01: a failed write of the role worktree into the original loop.yaml opens nothing
+  printf '#!/usr/bin/env bash\nfor last; do :; done\nif [[ -e "$FAKE_XIRP_DIR/mv-fail" && "$last" == "$MV_FAIL_TARGET" ]]; then exit 1; fi\nexec /bin/mv "$@"\n' > "$CPF/mv"; chmod +x "$CPF/mv"
+  pf_loop; pi_finish_template "$LD"; lf="$LD/.agent-handoff/add-export/loop.yaml"; lset "$lf" finish_template.worktree new; lset "$lf" finish.trigger auto
+  pi_review_rec "$LD" "${PIENV[@]}"; export MV_FAIL_TARGET="$lf"; touch "$FAKE_XIRP_DIR/mv-fail"; croute "$LD"
+  [[ "$(created)" == 0 && "$(kinds)" == attention ]] && ! routed "$LD" 02-review.yaml \
+    && ok "a failed write of finish.worktree into loop.yaml opens no finish session and leaves the review unprocessed" || bad "a failed write of finish.worktree into loop.yaml opens no finish session and leaves the review unprocessed ($(created); $(kinds))"
+  rm -f "$FAKE_XIRP_DIR/mv-fail"; croute "$LD"
+  [[ "$(created)" == 1 && "$(kv_get "$lf" finish.worktree)" == "${LD}-finish" && "$(kv_get "${LD}-finish/.agent-handoff/add-export/loop.yaml" finish.worktree 2>/dev/null)" == "${LD}-finish" ]] \
+    && routed "$LD" 02-review.yaml && (HOME="$PI_HOME" bash "$TRUST" "${LD}-finish" >/dev/null 2>&1) \
+    && ok "after the write succeeds the prepared finish worktree is reused, trusted and opened once" || bad "after the write succeeds the prepared finish worktree is reused, trusted and opened once ($(created))"
+  m=$((m + 1)); LD="$tmp/pi-rw$m"; new_loop "$LD" new; use_project "$LD"; fresh_state "pirw$m"; pi_state "rw$m"; pi_home "rw$m" "$LD"; pi_review_template "$LD"; hw "$LD" "${REC_ARGS[@]}"
+  export MV_FAIL_TARGET="$LD/.agent-handoff/add-export/loop.yaml"; touch "$FAKE_XIRP_DIR/mv-fail"; croute "$LD"
+  [[ "$(created)" == 0 && "$(kinds)" == attention ]] && ! routed "$LD" 01-implement.yaml \
+    && ok "a failed write of reviewer.worktree into loop.yaml opens no reviewer and leaves the record unprocessed" || bad "a failed write of reviewer.worktree into loop.yaml opens no reviewer and leaves the record unprocessed ($(created); $(kinds))"
+  rm -f "$FAKE_XIRP_DIR/mv-fail"; croute "$LD"
+  [[ "$(created)" == 1 && "$(kv_get "${LD}-review/.agent-handoff/add-export/loop.yaml" reviewer.worktree 2>/dev/null)" == "${LD}-review" ]] && routed "$LD" 01-implement.yaml \
+    && (HOME="$PI_HOME" bash "$TRUST" "${LD}-review" >/dev/null 2>&1) \
+    && ok "after the write succeeds the reviewer opens once in a trusted review worktree" || bad "after the write succeeds the reviewer opens once in a trusted review worktree ($(created))"
+  # Opening a Pi role checks the trust rule itself, whatever produced the worktree.
+  m=$((m + 1)); LD="$tmp/pi-tg$m"; new_loop "$LD"; use_project "$LD"; fresh_state "pitg$m"; pi_state "tg$m"; pi_home "tg$m" "$LD"; pi_review_template "$LD"
+  lset "$LD/.agent-handoff/add-export/loop.yaml" reviewer.worktree "$tmp/pi-elsewhere"; git -C "$LD" worktree add -q --detach "$tmp/pi-elsewhere"
+  out="$( (cd "$LD" && source "$LIB" && HOME="$PI_HOME" PATH="$FAKES:$PATH" HANDOFF_CREATE_WAIT=2 ho_open_role "$LD/.agent-handoff/add-export" review_template "$tmp/pi-elsewhere" "$(git -C "$LD" rev-parse HEAD)" 1 "" 2>&1) )"; rc=$?
+  [[ "$rc" != 0 && "$(created)" == 0 ]] && grep -q 'trust' <<<"$out" && ok "a Pi role is not opened in a worktree the Pi trigger would not trust" || bad "a Pi role is not opened in a worktree the Pi trigger would not trust ($out)"
+
   # 5.4 cleanup removes the settings the loop wrote in the main worktree
   pi_state cleanup
   pi_project "$PI_IMPL" "$CX_REV" "$CX_FIN"; git -C "$PD" switch -q feature/add-export

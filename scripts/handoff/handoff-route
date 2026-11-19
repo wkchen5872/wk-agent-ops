@@ -159,12 +159,15 @@ to_reviewer() {
       if [[ -d "$wt" ]]; then git -C "$wt" checkout -q --detach "$head" 2>/dev/null
       else git -C "$root" worktree add -q --detach "$wt" "$head" 2>/dev/null; fi \
         || { action="user:review-worktree-failed"; detail="無法建立審查 worktree ${wt}，第 $round 輪未交給審查者，迴圈已停住。"; return; }
-      kv_set "$loop" reviewer.worktree "$wt"
+      kv_set "$loop" reviewer.worktree "$wt" \
+        || { action="reviewer:open-failed"; detail="無法把審查 worktree 記入 loop.yaml，第 $round 輪未交給審查者，迴圈已停住。"; return; }
       # The reviewer's own loop.yaml must list its worktree (the Pi trigger trusts nothing else).
       mkdir -p "$wt/.agent-handoff/$change" && cp "$loop" "$wt/.agent-handoff/$change/loop.yaml" \
         || { action="reviewer:open-failed"; detail="無法把 loop.yaml 複製到審查 worktree ${wt}，第 $round 輪未交給審查者，迴圈已停住。"; return; }
     else
-      wt="$root"; kv_set "$loop" reviewer.worktree "$wt"
+      wt="$root"
+      kv_set "$loop" reviewer.worktree "$wt" \
+        || { action="reviewer:open-failed"; detail="無法把審查 worktree 記入 loop.yaml，第 $round 輪未交給審查者，迴圈已停住。"; return; }
     fi
     if out="$(ho_open_role "$dir" review_template "$wt" "$head" "$round" "" 2>&1)"; then
       id="${out##*$'\n'}"

@@ -106,10 +106,12 @@ ho_head() { git -C "$1" rev-parse HEAD 2>/dev/null; }
 
 # Write a key to every copy of loop.yaml that exists for this loop.
 # The list is read in full first: writing while ho_loop_dirs still reads loop.yaml would race.
+# Fails when any copy could not be written; the others are still updated.
 ho_loop_set() {
-  local dir="$1" key="$2" value="$3" d dirs
+  local dir="$1" key="$2" value="$3" d dirs rc=0
   dirs="$(ho_loop_dirs "$dir")"
-  while IFS= read -r d; do kv_set "$d/loop.yaml" "$key" "$value"; done <<<"$dirs"
+  while IFS= read -r d; do kv_set "$d/loop.yaml" "$key" "$value" || rc=1; done <<<"$dirs"
+  return $rc
 }
 
 # --- user notification and logging -------------------------------------------
@@ -270,6 +272,8 @@ ho_open_role() {
   [[ -n "$project" ]] || { ho_err "no Xirp project registered for $main"; return 1; }
   if [[ "$(kv_get "$loop" "$tsec.harness")" == pi ]]; then
     ho_pi_ready "$loop" "$tsec" "${tsec%_template}" "$main" || return 1
+    ho_pi_worktree_ready "$wt" "$main" \
+      || { ho_err "${tsec%_template}: the Pi trigger would not trust $wt (its loop.yaml does not list it); not opened"; return 1; }
     local existed=0; [[ -e "$wt/.pi/settings.json" ]] && existed=1
     ho_pi_settings "$wt" "$(kv_get "$loop" "$tsec.provider")" "$(kv_get "$loop" "$tsec.model")" "$(kv_get "$loop" "$tsec.effort")" || return 1
     (( existed )) || ho_loop_set "$dir" "$(ho_pi_role_key "$tsec").pi_settings" "$wt/.pi/settings.json"
@@ -334,6 +338,32 @@ ho_pi_repo_trusted() {
     [[ "$dir" == / ]] && return 1
     dir="$(dirname "$dir")"
   done
+}
+
+# ho_pi_trusts_worktree <dir>: the rule the Pi trigger applies (design decision 8). True only for a
+# linked worktree that an untracked .agent-handoff/<change>/loop.yaml there lists as a role worktree,
+# in a repository whose main worktree the user trusts in Pi.
+ho_pi_trusts_worktree() {
+  local top main loop k wt listed=0
+  top="$(ho_toplevel "$1")" && top="$(cd "$top" && pwd -P)" || return 1
+  main="$(ho_main_worktree "$top")" && main="$(cd "$main" && pwd -P)" || return 1
+  [[ "$top" != "$main" ]] || return 1
+  for loop in "$top"/.agent-handoff/*/loop.yaml; do
+    [[ -f "$loop" && -z "$(git -C "$top" ls-files -- "${loop#"$top"/}" 2>/dev/null)" ]] || continue
+    for k in implementer.worktree reviewer.worktree finish.worktree; do
+      wt="$(kv_get "$loop" "$k" 2>/dev/null)" || continue
+      [[ -n "$wt" && -d "$wt" && "$(cd "$wt" && pwd -P)" == "$top" ]] && listed=1
+    done
+  done
+  (( listed )) && ho_pi_repo_trusted "$main"
+}
+
+# ho_pi_worktree_ready <worktree> <main-worktree>: the main worktree is trusted by the user (checked by
+# ho_pi_ready); any other worktree must pass the trigger's rule, or the session would wait at Pi's prompt.
+ho_pi_worktree_ready() {
+  local wt main
+  wt="$(cd "$1" 2>/dev/null && pwd -P)" && main="$(cd "$2" 2>/dev/null && pwd -P)" || return 1
+  [[ "$wt" == "$main" ]] || ho_pi_trusts_worktree "$wt"
 }
 
 # ho_pi_ready <file> <section> <role> <main-worktree> [warn]: everything a Pi role needs before it opens.
@@ -499,11 +529,13 @@ ho_finish_open() {
     # A retry after a failed open: reuse only the clean finish worktree this loop prepared
     # on the feature branch at the passing commit; anything else is left untouched.
     wt="${impl}-finish"
-    [[ "$(kv_get "$loop" finish.worktree 2>/dev/null)" == "$wt" && "$(git -C "$wt" branch --show-current 2>/dev/null)" == "feature/$change" \
+    # An empty finish.worktree means an earlier attempt could not record it after creating the worktree.
+    local recorded; recorded="$(kv_get "$loop" finish.worktree 2>/dev/null || true)"
+    [[ ( "$recorded" == "$wt" || -z "$recorded" ) && "$(git -C "$wt" branch --show-current 2>/dev/null)" == "feature/$change" \
       && "$(ho_head "$wt")" == "$head" ]] && ho_clean "$wt" \
       || { ho_err "cannot reuse the finish worktree $wt"; return 1; }
     # An earlier attempt may have left the copy incomplete: refresh it from the implementer's loop.yaml.
-    ho_loop_set "$dir" finish.worktree "$wt"
+    ho_loop_set "$dir" finish.worktree "$wt" || { ho_err "cannot record the finish worktree $wt in loop.yaml"; return 1; }
     mkdir -p "$wt/.agent-handoff/$change" && cp "$loop" "$wt/.agent-handoff/$change/loop.yaml" \
       || { ho_err "cannot copy loop.yaml into the finish worktree $wt"; return 1; }
   elif [[ "$mode" == new ]]; then
@@ -512,7 +544,7 @@ ho_finish_open() {
     git -C "$impl" worktree add -q "$wt" "feature/$change" 2>/dev/null \
       || { git -C "$impl" checkout -q "feature/$change"; ho_err "cannot create the finish worktree $wt"; return 1; }
     # Record the worktree before copying, so the finish worktree's own loop.yaml lists it.
-    ho_loop_set "$dir" finish.worktree "$wt"
+    ho_loop_set "$dir" finish.worktree "$wt" || { ho_err "cannot record the finish worktree $wt in loop.yaml"; return 1; }
     mkdir -p "$wt/.agent-handoff/$change" && cp "$loop" "$wt/.agent-handoff/$change/loop.yaml" \
       || { ho_err "cannot copy loop.yaml into the finish worktree $wt"; return 1; }
   fi
