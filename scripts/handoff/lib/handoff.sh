@@ -105,9 +105,11 @@ ho_clean() { [[ -z "$(git -C "$1" status --porcelain 2>/dev/null)" ]]; }
 ho_head() { git -C "$1" rev-parse HEAD 2>/dev/null; }
 
 # Write a key to every copy of loop.yaml that exists for this loop.
+# The list is read in full first: writing while ho_loop_dirs still reads loop.yaml would race.
 ho_loop_set() {
-  local dir="$1" key="$2" value="$3" d
-  while IFS= read -r d; do kv_set "$d/loop.yaml" "$key" "$value"; done < <(ho_loop_dirs "$dir")
+  local dir="$1" key="$2" value="$3" d dirs
+  dirs="$(ho_loop_dirs "$dir")"
+  while IFS= read -r d; do kv_set "$d/loop.yaml" "$key" "$value"; done <<<"$dirs"
 }
 
 # --- user notification and logging -------------------------------------------
@@ -500,13 +502,15 @@ ho_finish_open() {
     [[ "$(kv_get "$loop" finish.worktree 2>/dev/null)" == "$wt" && "$(git -C "$wt" branch --show-current 2>/dev/null)" == "feature/$change" \
       && "$(ho_head "$wt")" == "$head" ]] && ho_clean "$wt" \
       || { ho_err "cannot reuse the finish worktree $wt"; return 1; }
+    ho_loop_set "$dir" finish.worktree "$wt"
   elif [[ "$mode" == new ]]; then
     wt="${impl}-finish"
     git -C "$impl" checkout -q --detach "$head" || { ho_err "cannot detach the implementer worktree"; return 1; }
     git -C "$impl" worktree add -q "$wt" "feature/$change" 2>/dev/null \
       || { git -C "$impl" checkout -q "feature/$change"; ho_err "cannot create the finish worktree $wt"; return 1; }
-    mkdir -p "$wt/.agent-handoff/$change" && cp "$loop" "$wt/.agent-handoff/$change/loop.yaml"
+    # Record the worktree before copying, so the finish worktree's own loop.yaml lists it.
     ho_loop_set "$dir" finish.worktree "$wt"
+    mkdir -p "$wt/.agent-handoff/$change" && cp "$loop" "$wt/.agent-handoff/$change/loop.yaml"
   fi
   round="$(kv_get "$(ho_newest_in_loop "$dir")" round)"
   id="$(ho_open_role "$dir" finish_template "$wt" "$head" "$round" "")" || return 1

@@ -1474,6 +1474,17 @@ SH
   out="$(HOME="$PI_HOME" finish_in "$LD" add-export 2>&1)"; rc=$?
   [[ "$rc" != 0 && "$(created)" == 0 && -z "$(msgs)" ]] && grep -q 'passing review' <<<"$out" && ok "a finish retry ignores a passing Pi review that differs from its template" || bad "a finish retry ignores a passing Pi review that differs from its template ($out)"
 
+  # 7.2 drill: a new finish worktree's own loop.yaml must list it, or the Pi trigger cannot trust it
+  pf_loop; pi_finish_template "$LD"; lset "$LD/.agent-handoff/add-export/loop.yaml" finish_template.worktree new; pi_review_rec "$LD" "${PIENV[@]}"
+  HOME="$PI_HOME" finish_in "$LD" add-export >/dev/null 2>&1
+  [[ "$(created)" == 1 && "$(kv_get "${LD}-finish/.agent-handoff/add-export/loop.yaml" finish.worktree 2>/dev/null)" == "${LD}-finish" ]] \
+    && (HOME="$PI_HOME" bash "$TRUST" "${LD}-finish" >/dev/null 2>&1) \
+    && ok "a new finish worktree's loop.yaml lists it, so the Pi trigger trusts it" || bad "a new finish worktree's loop.yaml lists it, so the Pi trigger trusts it"
+  lset "${LD}-finish/.agent-handoff/add-export/loop.yaml" finish.worktree ""; lset "$LD/.agent-handoff/add-export/loop.yaml" finish.session missing-f
+  HOME="$PI_HOME" finish_in "$LD" add-export >/dev/null 2>&1
+  [[ "$(created)" == 2 && "$(kv_get "${LD}-finish/.agent-handoff/add-export/loop.yaml" finish.worktree 2>/dev/null)" == "${LD}-finish" ]] \
+    && ok "reopening finish in the prepared worktree restores its loop.yaml entry" || bad "reopening finish in the prepared worktree restores its loop.yaml entry"
+
   # 5.4 cleanup removes the settings the loop wrote in the main worktree
   pi_state cleanup
   pi_project "$PI_IMPL" "$CX_REV" "$CX_FIN"; git -C "$PD" switch -q feature/add-export
