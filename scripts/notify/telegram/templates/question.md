@@ -1,6 +1,6 @@
 🟡 **Waiting for Your Response**{title_suffix}
 
-🤖 {tool}
+🤖 {tool}{model_suffix}
 📂 {project}
 ⏰ {time}
 

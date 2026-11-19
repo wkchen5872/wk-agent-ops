@@ -10,7 +10,7 @@ runtime 啟用步驟，不複製各 CLI 的完整 hook API。
 | [Claude Code](/docs/hooks/claude-hooks.md) | `PostToolUse` | `Stop` | `Notification` | `Stop` | user-level |
 | [Codex](/docs/hooks/codex-hooks.md) | `PostToolUse` | `Stop` | `PermissionRequest`；同步問題 `PreToolUse` 檢查；非同步問題 `PostToolUse` 通知 | `Stop` | user-level；另需 trust + enable |
 | [Antigravity](/docs/hooks/antigravity-hooks.md) | 無；使用 Agent guard | named `Stop` | `statusLine` observer | 無 | user-level |
-| Pi | 無 | 無 | 無 | global extension `agent_settled`（另以 `project_trust` 信任交接 worktree） | user-level；已開啟的 Session 需 `/reload` |
+| [Pi](/docs/hooks/pi-hooks.md) | 無 | global extension `agent_settled`（completion、failure） | `ui_prompt_start`（等待回應；無授權） | global extension `agent_settled`（另以 `project_trust` 信任交接 worktree） | user-level；已開啟的 Session 需 `/reload` |
 | [GitHub Copilot CLI](/docs/hooks/copilot-hooks.md) | `postToolUse` | `sessionEnd`（opt-in） | `userPromptSubmitted`（opt-in） | 無 | repository-local |
 
 ## Hook families
@@ -31,7 +31,7 @@ Pi 沒有 Stop hook 設定檔；同一個 installer 安裝 global extension `~/.
 ### Notifications
 
 `scripts/notify/telegram/install.sh` 部署單一 destination hook，再針對各 host runtime
-註冊對應事件。所有 notification handlers 都是 fail-soft，不會批准、拒絕或阻擋
+註冊對應事件；Pi 改由 global extension `~/.pi/agent/extensions/ai-notify.ts` 轉送事件（見 [Pi Extension Integration](/docs/hooks/pi-hooks.md)）。所有 notification handlers 都是 fail-soft，不會批准、拒絕或阻擋
 Provider action。完整事件分類與安裝方式見 [Telegram Notify](/docs/notify/telegram.md)。
 
 ## Ownership 原則
@@ -40,4 +40,5 @@ Provider action。完整事件分類與安裝方式見 [Telegram Notify](/docs/n
 - Copilot files 位於 repository，安裝前需考慮是否提交給團隊。
 - Codex 的 configured、trusted、enabled 是三個不同狀態。
 - Antigravity approval observer 不覆蓋既有 `statusLine.command`。
+- Pi extension 只覆寫或刪除第一行帶擁有標記的 `ai-notify.ts`。
 - Hooks 是 compatibility／observation 層，不取代 portable Agent protocol。

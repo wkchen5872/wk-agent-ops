@@ -32,6 +32,12 @@ antigravity-stop:injected_response	failure	stopped	injected response
 antigravity-stop:error	failure	stopped	error
 antigravity-stop:max_steps_exceeded	failure	stopped	max steps exceeded
 antigravity-stop:*	failure	stopped	execution stopped
+# Pi extension events; the extension sends only these stop_reason values, never raw errors.
+pi-stop:completed	completion	completion
+pi-stop:error	failure	stopped	error
+pi-stop:aborted	none	-
+pi-stop:*	none	-
+pi-question	user_input	question
 # Handoff loop events from handoff-route; the kind field selects the row.
 # Attention needs the user and is always sent, even without its row or template.
 handoff:implement	handoff_implement	handoff-implement

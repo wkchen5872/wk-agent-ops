@@ -5,6 +5,8 @@
 # Exit 0 if all tests pass; exit 1 if any fail.
 
 set -uo pipefail
+# Registry tests install the Pi extension under a temporary HOME; never the caller's Pi directory.
+unset PI_CODING_AGENT_DIR
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HOOK="${SCRIPT_DIR}/hook.sh"
@@ -1277,6 +1279,238 @@ rm -f "${HO_PART}/telegram/templates/handoff-attention.md"
 HO_OUT="$(printf '%s' "$(handoff_payload attention '' '' 'push rejected')" | env -i PATH="${PATH}" HOME="${TEST_TMP_ROOT}/default-home" TELEGRAM_DRY_RUN=true bash "${HO_PART}/telegram/hook.sh" handoff 2>/dev/null)"
 assert_equal "HO-FB-01: attention without its row or template uses the built-in text with change, detail and next step" \
   "true true true" "$(has "${HO_OUT}" 'add-export') $(has "${HO_OUT}" 'push rejected') $(has "${HO_OUT}" '已請審查者審查第 2 輪')"
+
+# ── Pi events (add-pi-notify-hook) ─────────────────────────────────────────────
+
+echo ""
+echo "── Pi event Tests ──"
+echo ""
+
+# pi_payload <hook_event_name> [stop_reason] [model] → an event as the Pi extension sends it,
+# plus private fields the extension never sends, to prove they cannot leak.
+pi_payload() {
+  jq -nc --arg e "$1" --arg r "${2:-}" --arg m "${3:-}" \
+    '{hook_event_name:$e, session_id:"c0ffee12-3456-7890-abcd-ef1234567890", cwd:"/tmp/pi-project",
+      message:"PRIVATE-PI-MESSAGE", errorMessage:"PRIVATE-PI-ERROR at /secret/path: 500 upstream"}
+     + (if $r == "" then {} else {stop_reason:$r} end) + (if $m == "" then {} else {model:$m} end)'
+}
+pi_out() {  # <event> <payload> [VAR=value...] → dry-run output for tool Pi
+  local event="$1" payload="$2"; shift 2
+  printf '%s' "${payload}" | env -i PATH="${PATH}" HOME="${TEST_TMP_ROOT}/default-home" TELEGRAM_DRY_RUN=true "$@" bash "${HOOK}" "${event}" Pi 2>/dev/null
+}
+PI_DONE="$(pi_payload Stop completed)"
+PI_ERROR="$(pi_payload Stop error)"
+PI_QUESTION="$(pi_payload UserInputWaiting)"
+
+PI_OUT="$(pi_out pi-stop "${PI_DONE}")"
+assert_equal "PI-EVT-01: completed is Task Complete for Pi with the session label" \
+  "true true true" \
+  "$(has "${PI_OUT}" 'Task Complete') $(has "${PI_OUT}" '(#c0ffee12)') $(has "${PI_OUT}" '🤖 Pi')"
+PI_OUT="$(pi_out pi-stop "${PI_ERROR}")"
+assert_equal "PI-EVT-02: error is Task Stopped with reason error and no private text" \
+  "true true false false false" \
+  "$(has "${PI_OUT}" 'Task Stopped') $(has "${PI_OUT}" 'Execution ended: error #Stop') $(has "${PI_OUT}" 'Task Complete') $(has "${PI_OUT}" 'PRIVATE-PI') $(has "${PI_OUT}" '/secret/path')"
+assert_equal "PI-EVT-03: aborted sends nothing" "" "$(pi_out pi-stop "$(pi_payload Stop aborted)")"
+assert_equal "PI-EVT-03: an unknown stop reason sends nothing" "" "$(pi_out pi-stop "$(pi_payload Stop length)")"
+assert_equal "PI-EVT-03: a missing stop reason sends nothing" "" "$(pi_out pi-stop "$(pi_payload Stop)")"
+PI_OUT="$(pi_out pi-question "${PI_QUESTION}")"
+assert_equal "PI-EVT-04: question is Waiting for Your Response for Pi with the session label" \
+  "true true false" \
+  "$(has "${PI_OUT}" 'Waiting for Your Response') $(has "${PI_OUT}" '(#c0ffee12)') $(has "${PI_OUT}" 'PRIVATE-PI')"
+assert_equal "PI-EVT-05: completion carries no private text" "false" "$(has "$(pi_out pi-stop "${PI_DONE}")" 'PRIVATE-PI')"
+
+# Switches and level act on Pi events like on every other tool.
+assert_equal "PI-SW-01: NOTIFY_COMPLETION=false silences completed" "" "$(pi_out pi-stop "${PI_DONE}" NOTIFY_COMPLETION=false)"
+assert_equal "PI-SW-02: NOTIFY_FAILURE=false silences error" "" "$(pi_out pi-stop "${PI_ERROR}" NOTIFY_FAILURE=false)"
+assert_equal "PI-SW-03: NOTIFY_USER_INPUT=false silences question" "" "$(pi_out pi-question "${PI_QUESTION}" NOTIFY_USER_INPUT=false)"
+assert_equal "PI-SW-04: attention_required silences completed" "" "$(pi_out pi-stop "${PI_DONE}" NOTIFY_LEVEL=attention_required)"
+assert_equal "PI-SW-04: attention_required keeps error and question" "true true" \
+  "$(has "$(pi_out pi-stop "${PI_ERROR}" NOTIFY_LEVEL=attention_required)" 'Task Stopped') $(has "$(pi_out pi-question "${PI_QUESTION}" NOTIFY_LEVEL=attention_required)" 'Waiting for Your Response')"
+pi_telegram() {  # <enabled> <event> <payload> → whether curl was called
+  rm -f "${HO_TG_HOME}/curl-called"
+  printf '%s\n' "TELEGRAM_ENABLED=$1" 'TELEGRAM_BOT_TOKEN="t"' 'TELEGRAM_CHAT_ID="1"' > "${HO_TG_HOME}/.config/ai-notify/config"
+  printf '%s' "$3" | env -i PATH="${HO_TG_BIN}:${PATH}" HOME="${HO_TG_HOME}" bash "${HOOK}" "$2" Pi >/dev/null 2>&1
+  [[ -e "${HO_TG_HOME}/curl-called" ]] && echo sent || echo none
+}
+assert_equal "PI-SW-05: TELEGRAM_ENABLED=false sends nothing for any Pi event" "none none none" \
+  "$(pi_telegram false pi-stop "${PI_DONE}") $(pi_telegram false pi-stop "${PI_ERROR}") $(pi_telegram false pi-question "${PI_QUESTION}")"
+assert_equal "PI-SW-05: an enabled Telegram delivers a Pi completion" "sent" "$(pi_telegram true pi-stop "${PI_DONE}")"
+
+# ── Model on the tool line (design decision 6) ─────────────────────────────────
+
+echo ""
+echo "── model label Tests ──"
+echo ""
+
+# tool_line <event> <tool> <payload> [VAR=value...] → the message's tool line (line 3)
+tool_line() {
+  local event="$1" tool="$2" payload="$3"; shift 3
+  printf '%s' "${payload}" | env -i PATH="${PATH}" HOME="${TEST_TMP_ROOT}/default-home" TELEGRAM_DRY_RUN=true "$@" \
+    bash "${HOOK}" "${event}" "${tool}" 2>/dev/null | sed -n 3p
+}
+codex_model() { jq -nc --arg m "$1" '{hook_event_name:"Stop", session_id:"s", cwd:"/tmp/p", model:$m}'; }
+MODEL_DIR="${TEST_TMP_ROOT}/model-records"
+mkdir -p "${MODEL_DIR}"
+# claude_record <file> <model...> → a session record whose assistant entries use these models in order
+claude_record() {
+  local file="${MODEL_DIR}/$1" m; shift
+  : > "${file}"
+  for m in "$@"; do
+    jq -nc --arg m "${m}" '{type:"assistant", message:{role:"assistant", model:$m, content:[{type:"text", text:"hi"}]}}' >> "${file}"
+    jq -nc '{type:"user", message:{role:"user", content:"next"}}' >> "${file}"
+  done
+  printf '%s' "${file}"
+}
+claude_stop() { jq -nc --arg t "$1" '{hook_event_name:"Stop", session_id:"s", cwd:"/tmp/p", transcript_path:$t}'; }
+
+assert_equal "MODEL-01: Codex payload model is shown as is" \
+  "🤖 Codex (gpt-6.1-terra)" "$(tool_line codex-stop Codex "$(codex_model gpt-6.1-terra)")"
+assert_equal "MODEL-02: Pi on a GPT model" \
+  "🤖 Pi (gpt-6.1-sol)" "$(tool_line pi-stop Pi "$(pi_payload Stop completed gpt-6.1-sol)")"
+assert_equal "MODEL-02: Pi on a Claude model" \
+  "🤖 Pi (Opus 5.5)" "$(tool_line pi-stop Pi "$(pi_payload Stop completed claude-opus-5-5)")"
+assert_equal "MODEL-02: Pi question carries the model too" \
+  "🤖 Pi (gpt-6.1-sol)" "$(tool_line pi-question Pi "$(pi_payload UserInputWaiting '' gpt-6.1-sol)")"
+assert_equal "MODEL-03: Claude Code model comes from the session record" \
+  "🤖 Claude Code (Opus 5.5)" "$(tool_line stop 'Claude Code' "$(claude_stop "$(claude_record plain.jsonl claude-sonnet-4-5 claude-opus-5-5)")")"
+assert_equal "MODEL-04: a synthetic newest entry is skipped" \
+  "🤖 Claude Code (Fable 5.2)" "$(tool_line stop 'Claude Code' "$(claude_stop "$(claude_record synthetic.jsonl claude-fable-5-2 '<synthetic>')")")"
+assert_equal "MODEL-05: payload model wins over the session record" \
+  "🤖 Claude Code (Sonnet 4.5)" \
+  "$(tool_line stop 'Claude Code' "$(jq -nc --arg t "${MODEL_DIR}/plain.jsonl" '{hook_event_name:"Stop", cwd:"/tmp/p", transcript_path:$t, model:"claude-sonnet-4-5"}')")"
+assert_equal "MODEL-06: only Claude Code reads the session record" \
+  "🤖 Codex" "$(tool_line codex-stop Codex "$(claude_stop "${MODEL_DIR}/plain.jsonl")")"
+assert_equal "MODEL-07: no model shows the tool name alone" \
+  "🤖 Claude Code" "$(tool_line stop 'Claude Code' '{"hook_event_name":"Stop","cwd":"/tmp/p"}')"
+assert_equal "MODEL-07: an unreadable session record shows the tool name alone" \
+  "🤖 Claude Code" "$(tool_line stop 'Claude Code' "$(claude_stop "${MODEL_DIR}/missing.jsonl")")"
+assert_equal "MODEL-07: a non-string model is ignored" \
+  "🤖 Codex" "$(tool_line codex-stop Codex '{"hook_event_name":"Stop","cwd":"/tmp/p","model":{"id":"x"}}')"
+assert_equal "MODEL-08: context-size suffix is removed" \
+  "🤖 Claude Code (Opus 5.5)" "$(tool_line stop 'Claude Code' "$(codex_model 'claude-opus-5-5[1m]')")"
+assert_equal "MODEL-08: backticks and spaces are dropped" \
+  "🤖 Codex (gpt-6x)" "$(tool_line codex-stop Codex "$(codex_model 'gpt-6 `x`')")"
+assert_equal "MODEL-08: a model made only of unsafe characters counts as none" \
+  "🤖 Codex" "$(tool_line codex-stop Codex "$(codex_model '` `')")"
+for MODEL_CASE in "claude-sonnet-4-5-20250929|Sonnet 4.5" "claude-opus-4-20250514|Opus 4" \
+                  "claude-3-5-sonnet-20241022|Sonnet 3.5" "opus|Opus" "claude-haiku-4-5|Haiku 4.5" \
+                  "gemini-3.1-pro|gemini-3.1-pro" "us.anthropic.claude-opus-5-5|us.anthropic.claude-opus-5-5"; do
+  assert_equal "MODEL-09: ${MODEL_CASE%%|*} is shown as ${MODEL_CASE#*|}" \
+    "🤖 Codex (${MODEL_CASE#*|})" "$(tool_line codex-stop Codex "$(codex_model "${MODEL_CASE%%|*}")")"
+done
+assert_equal "MODEL-10: a long model is cut to 64 characters" \
+  "🤖 Codex ($(printf 'a%.0s' $(seq 1 64)))" "$(tool_line codex-stop Codex "$(codex_model "$(printf 'a%.0s' $(seq 1 80))")")"
+
+# Every built-in template with a tool line shows the model after the tool name.
+for TPL_NAME in completion question stopped action-required authorization authorization-unconfirmed generic; do
+  TPL_TEXT="$(cat "${SCRIPT_DIR}/templates/${TPL_NAME}.md")"
+  assert_equal "MODEL-TPL-01: ${TPL_NAME} shows the model on the tool line" \
+    "🤖 Codex (Opus 5.5)" "$(render_text "${TPL_TEXT}" tool=Codex 'model_suffix= (Opus 5.5)' | sed -n 3p)"
+  assert_equal "MODEL-TPL-01: ${TPL_NAME} without a model keeps the plain tool line" \
+    "🤖 Codex" "$(render_text "${TPL_TEXT}" tool=Codex | sed -n 3p)"
+done
+assert_equal "MODEL-TPL-02: handoff templates do not show the tool model" \
+  "0" "$(cat "${SCRIPT_DIR}"/templates/handoff-*.md | grep -c 'model_')"
+MODEL_USER_HOME="${TEST_TMP_ROOT}/model-user-home"
+mkdir -p "${MODEL_USER_HOME}/.config/ai-notify/templates"
+printf '%s\n' '🟢 done{title_suffix}' '' '🤖 {tool}{model_family_suffix}' > "${MODEL_USER_HOME}/.config/ai-notify/templates/completion.md"
+assert_equal "MODEL-TPL-03: a user template can drop the version" \
+  "🤖 Claude Code (Opus)" \
+  "$(printf '%s' "$(codex_model claude-opus-5-5)" | env -i PATH="${PATH}" HOME="${MODEL_USER_HOME}" TELEGRAM_DRY_RUN=true bash "${HOOK}" stop 'Claude Code' 2>/dev/null | sed -n 3p)"
+assert_equal "MODEL-TPL-03: the family label of a GPT model is the model itself" \
+  "🤖 Codex (gpt-6.1-terra)" \
+  "$(printf '%s' "$(codex_model gpt-6.1-terra)" | env -i PATH="${PATH}" HOME="${MODEL_USER_HOME}" TELEGRAM_DRY_RUN=true bash "${HOOK}" codex-stop Codex 2>/dev/null | sed -n 3p)"
+
+# ── Pi extension install (registry.sh) ─────────────────────────────────────────
+
+echo ""
+echo "── Pi extension registry Tests ──"
+echo ""
+
+PI_SOURCE="${SCRIPT_DIR}/../pi/ai-notify.ts"
+PI_MARKER="// managed by wk-agent-ops ai-notify"
+# pi_registry <home> <commands> [no-pi] — run registry functions; "no-pi" hides the pi command.
+pi_registry() {
+  local home="$1" commands="$2" hide="${3:-}"
+  HOME="${home}" PI_HIDE="${hide}" bash -c '
+    command() {
+      if [[ -n "${PI_HIDE}" && "$1" == "-v" && "$2" == "pi" ]]; then return 1; fi
+      builtin command "$@"
+    }
+    source "$1"; hook="$2"; eval "$3"' _ "${REGISTRY}" "${home}/.config/ai-notify/hooks/telegram-notify.sh" "${commands}"
+}
+pi_home() {  # <name> [with-agent-dir] → a fresh HOME with a deployed hook
+  local home="${TEST_TMP_ROOT}/pi-reg-$1"
+  mkdir -p "${home}/.config/ai-notify/hooks"
+  touch "${home}/.config/ai-notify/hooks/telegram-notify.sh"
+  [[ -n "${2:-}" ]] && mkdir -p "${home}/.pi/agent"
+  printf '%s' "${home}"
+}
+same_file() { cmp -s "$1" "$2" && echo true || echo false; }
+
+assert_equal "PI-REG-00: the extension source starts with the ownership marker" \
+  "${PI_MARKER}" "$(head -n 1 "${PI_SOURCE}" 2>/dev/null)"
+
+PI_HOME_A="$(pi_home installed agent)"
+pi_registry "${PI_HOME_A}" 'register_hook "$hook"; register_hook "$hook"' no-pi >/dev/null 2>&1
+PI_EXT_A="${PI_HOME_A}/.pi/agent/extensions/ai-notify.ts"
+assert_equal "PI-REG-01: Pi agent directory alone triggers one installed copy identical to the source" \
+  "true 1" "$(same_file "${PI_SOURCE}" "${PI_EXT_A}") $(ls "${PI_HOME_A}/.pi/agent/extensions" 2>/dev/null | grep -c 'ai-notify')"
+PI_STATUS="$(pi_registry "${PI_HOME_A}" 'show_hook_status "$hook"' 2>&1)"
+assert_equal "PI-STATUS-01: an installed extension is reported registered" "Pi: registered" "$(grep '^Pi:' <<<"${PI_STATUS}")"
+
+PI_HOME_CMD="$(pi_home command-only)"
+if command -v pi >/dev/null 2>&1; then
+  pi_registry "${PI_HOME_CMD}" 'register_hook "$hook"' >/dev/null 2>&1
+  assert_equal "PI-REG-02: the pi command alone installs into the default directory" \
+    "true" "$(same_file "${PI_SOURCE}" "${PI_HOME_CMD}/.pi/agent/extensions/ai-notify.ts")"
+fi
+
+PI_HOME_NONE="$(pi_home none)"
+pi_registry "${PI_HOME_NONE}" 'register_hook "$hook"' no-pi >/dev/null 2>&1
+assert_equal "PI-REG-03: without Pi no Pi directory or file is created" \
+  "false" "$([[ -e "${PI_HOME_NONE}/.pi" ]] && echo true || echo false)"
+PI_STATUS="$(pi_registry "${PI_HOME_NONE}" 'show_hook_status "$hook"' no-pi 2>&1)"
+assert_equal "PI-STATUS-02: status says Pi is not detected" "Pi: not detected" "$(grep '^Pi:' <<<"${PI_STATUS}")"
+
+PI_HOME_CONFLICT="$(pi_home conflict agent)"
+mkdir -p "${PI_HOME_CONFLICT}/.pi/agent/extensions"
+printf '%s\n' '// my own notifier' > "${PI_HOME_CONFLICT}/.pi/agent/extensions/ai-notify.ts"
+PI_CONFLICT_ERR="$(pi_registry "${PI_HOME_CONFLICT}" 'register_hook "$hook"' no-pi 2>&1 >/dev/null)"
+assert_equal "PI-REG-04: a same-named file without the marker is left unchanged" \
+  "// my own notifier" "$(cat "${PI_HOME_CONFLICT}/.pi/agent/extensions/ai-notify.ts")"
+assert_equal "PI-REG-04: the conflict is reported on stderr" \
+  "true" "$(grep -q 'Pi' <<<"${PI_CONFLICT_ERR}" && grep -q 'ai-notify.ts' <<<"${PI_CONFLICT_ERR}" && echo true || echo false)"
+pi_registry "${PI_HOME_CONFLICT}" 'unregister_hook "$hook"' no-pi >/dev/null 2>&1
+assert_equal "PI-REG-04: unregister keeps a file without the marker" \
+  "// my own notifier" "$(cat "${PI_HOME_CONFLICT}/.pi/agent/extensions/ai-notify.ts")"
+
+printf '%s\n' 'TELEGRAM_ENABLED=true' 'TELEGRAM_BOT_TOKEN="never-print-pi-token"' 'TELEGRAM_CHAT_ID="98765"' > "${PI_HOME_CONFLICT}/.config/ai-notify/config"
+PI_STATUS="$(bash -c 'cd "$1"; HOME="$2" bash "$3" status' _ "${FIX_REPO}" "${PI_HOME_CONFLICT}" "${UPDATE_SCRIPT}" 2>&1 || true)"
+assert_equal "PI-STATUS-03: update.sh status reports the conflict without credentials" \
+  "true false false" \
+  "$(grep -q '^Pi: unavailable' <<<"${PI_STATUS}" && echo true || echo false) $(grep -q 'never-print-pi-token' <<<"${PI_STATUS}" && echo true || echo false) $(grep -q '98765' <<<"${PI_STATUS}" && echo true || echo false)"
+
+printf '%s\n' 'export default function () {}' > "${PI_HOME_A}/.pi/agent/extensions/other.ts"
+pi_registry "${PI_HOME_A}" 'unregister_hook "$hook"' no-pi >/dev/null 2>&1
+assert_equal "PI-REG-05: unregister removes the owned file and keeps other extensions" \
+  "false true" "$([[ -e "${PI_EXT_A}" ]] && echo true || echo false) $([[ -e "${PI_HOME_A}/.pi/agent/extensions/other.ts" ]] && echo true || echo false)"
+
+PI_HOME_CUSTOM="$(pi_home custom)"
+mkdir -p "${PI_HOME_CUSTOM}/custom-agent"
+PI_CODING_AGENT_DIR="${PI_HOME_CUSTOM}/custom-agent" pi_registry "${PI_HOME_CUSTOM}" 'register_hook "$hook"' no-pi >/dev/null 2>&1
+assert_equal "PI-REG-06: PI_CODING_AGENT_DIR chooses the extension directory" \
+  "true false" \
+  "$(same_file "${PI_SOURCE}" "${PI_HOME_CUSTOM}/custom-agent/extensions/ai-notify.ts") $([[ -e "${PI_HOME_CUSTOM}/.pi" ]] && echo true || echo false)"
+
+PI_FIX_HOME="$(pi_home fix agent)"
+bash -c 'cd "$1"; HOME="$2" bash "$3" fix-hooks' _ "${FIX_REPO}" "${PI_FIX_HOME}" "${UPDATE_SCRIPT}" >/dev/null 2>&1 || true
+assert_equal "PI-REG-07: fix-hooks installs the extension" \
+  "true" "$(same_file "${PI_SOURCE}" "${PI_FIX_HOME}/.pi/agent/extensions/ai-notify.ts")"
+PI_FIX_OUT="$(bash -c 'cd "$1"; HOME="$2" bash "$3" fix-hooks' _ "${FIX_REPO}" "${PI_FIX_HOME}" "${UPDATE_SCRIPT}" 2>&1 || true)"
+assert_equal "PI-REG-07: setup tells open Pi sessions to /reload" "true" "$(grep -q '/reload' <<<"${PI_FIX_OUT}" && echo true || echo false)"
+assert_equal "PI-REG-07: fix-hooks twice leaves one copy" \
+  "1" "$(ls "${PI_FIX_HOME}/.pi/agent/extensions" | grep -c 'ai-notify')"
 
 # ── Summary ────────────────────────────────────────────────────────────────────
 

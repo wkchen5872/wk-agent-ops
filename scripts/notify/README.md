@@ -1,7 +1,7 @@
 # Provider Extension Guide — scripts/notify/
 
 This directory contains the shared infrastructure for notification destinations.
-Telegram is a destination provider; Claude Code, Codex, Antigravity CLI, and
+Telegram is a destination provider; Claude Code, Codex, Antigravity CLI, Pi, and
 Copilot CLI are host runtimes registered by `lib/registry.sh`.
 
 ---
@@ -104,7 +104,10 @@ register_hook "${HOME}/.config/ai-notify/hooks/<provider-name>.sh"
 For Antigravity it also attempts approval observation automatically, but never
 overwrites a different custom `statusLine.command`. Notification-owned legacy
 Gemini entries are removed when found; no new Gemini hooks are registered.
-Copilot remains repository-local and opt-in.
+Copilot remains repository-local and opt-in. When Pi is detected (`pi` on PATH or
+`${PI_CODING_AGENT_DIR:-~/.pi/agent}` exists), it also copies `pi/ai-notify.ts` into Pi's global
+extension directory; that file starts with an ownership marker and is the only Pi file registry
+functions overwrite or remove (see [Pi Extension Integration](../../docs/hooks/pi-hooks.md)).
 
 Codex registration only writes `~/.codex/hooks.json`. Users must also open
 `/hooks`, trust all four owned definitions, and enable their checkboxes before the

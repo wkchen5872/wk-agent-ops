@@ -1,6 +1,6 @@
 🔴 **Waiting for Your Approval**{title_suffix}
 
-🤖 {tool}
+🤖 {tool}{model_suffix}
 📂 {project}
 ⏰ {time}
 

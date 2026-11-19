@@ -8,6 +8,8 @@ GEMINI_SETTINGS="${HOME}/.gemini/settings.json"
 CODEX_HOOKS="${HOME}/.codex/hooks.json"
 ANTIGRAVITY_HOOKS="${HOME}/.gemini/config/hooks.json"
 ANTIGRAVITY_SETTINGS="${HOME}/.gemini/antigravity-cli/settings.json"
+_REGISTRY_SOURCE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PI_EXTENSION_MARKER="// managed by wk-agent-ops ai-notify"
 
 # Write jq output back to a file atomically; cleans up on failure.
 _jq_write() {
@@ -357,6 +359,42 @@ clear_antigravity_notify_state() {
   done
 }
 
+# Pi has no hook settings file; notifications come from an owned extension file.
+# Read the agent directory at call time so PI_CODING_AGENT_DIR is honored.
+_pi_extension_file() {
+  printf '%s/extensions/ai-notify.ts' "${PI_CODING_AGENT_DIR:-${HOME}/.pi/agent}"
+}
+
+_pi_detected() {
+  [[ -d "${PI_CODING_AGENT_DIR:-${HOME}/.pi/agent}" ]] || command -v pi &>/dev/null
+}
+
+_pi_extension_owned() {
+  [[ -f "$1" ]] && [[ "$(head -n 1 "$1" 2>/dev/null)" == "${PI_EXTENSION_MARKER}" ]]
+}
+
+# Public: install the owned Pi extension; a same-named file without the marker is never touched.
+register_pi_extension() {
+  local target
+  target="$(_pi_extension_file)"
+  if [[ -e "${target}" ]] && ! _pi_extension_owned "${target}"; then
+    echo "  ⚠ Pi notifications not installed: ${target} exists without the wk-agent-ops ownership marker; left unchanged." >&2
+    return 0
+  fi
+  mkdir -p "$(dirname "${target}")"
+  cp "${NOTIFY_SOURCE_ROOT:-${_REGISTRY_SOURCE_ROOT}}/pi/ai-notify.ts" "${target}"
+  echo "  ✓ Installed Pi extension at ${target} (run /reload in open Pi sessions)"
+}
+
+# Public: remove the Pi extension only when it carries the ownership marker.
+unregister_pi_extension() {
+  local target
+  target="$(_pi_extension_file)"
+  _pi_extension_owned "${target}" || return 0
+  rm -f -- "${target}"
+  echo "  ✓ Removed Pi extension ${target}"
+}
+
 # Return success when a JSON file contains an owned command prefix.
 _has_command_prefix() {
   local file="$1"
@@ -418,6 +456,18 @@ show_hook_status() {
   else
     echo "Copilot CLI: not registered"
   fi
+
+  local pi_file
+  pi_file="$(_pi_extension_file)"
+  if _pi_extension_owned "${pi_file}"; then
+    echo "Pi: registered"
+  elif [[ -e "${pi_file}" ]]; then
+    echo "Pi: unavailable (existing ai-notify.ts without the ownership marker)"
+  elif _pi_detected; then
+    echo "Pi: not registered"
+  else
+    echo "Pi: not detected"
+  fi
 }
 
 # Public: register the telegram-notify hook in all supported AI CLI settings files.
@@ -444,6 +494,10 @@ register_hook() {
     if ! register_hook_antigravity_statusline "${hook_path}"; then
       echo "  ⚠ Antigravity approval observation unavailable; existing statusLine was preserved." >&2
     fi
+  fi
+
+  if _pi_detected; then
+    register_pi_extension
   fi
 }
 
@@ -556,4 +610,5 @@ unregister_hook() {
   unregister_hook_codex "${hook_path}"
   unregister_hook_antigravity "${hook_path}"
   unregister_hook_antigravity_statusline "${hook_path}"
+  unregister_pi_extension
 }

@@ -187,6 +187,8 @@ esac
 EVENT_KEY="${EVENT_TYPE}"
 # Handoff loop events: the kind selects the table row.
 [[ "${EVENT_TYPE}" == "handoff" ]] && EVENT_KEY="handoff:$(_json_str "${STDIN_JSON}" kind | tr -cd 'a-z')"
+# Pi extension: the stop_reason it computed selects the table row.
+[[ "${EVENT_TYPE}" == "pi-stop" ]] && EVENT_KEY="pi-stop:$(_json_str "${STDIN_JSON}" stop_reason | tr -cd 'a-z')"
 if [[ "${EVENT_TYPE}" == "antigravity-stop" ]]; then
   AGY_FULLY_IDLE="$(_json_query "${STDIN_JSON}" 'if .fullyIdle == true then "true" else "false" end')"
   [[ "${AGY_FULLY_IDLE}" != "true" ]] && finish_hook
@@ -276,6 +278,39 @@ AUTH_DELAY="$(auth_seconds "${NOTIFY_AUTHORIZATION_DELAY_SECONDS:-}" 30)"
 AUTH_REARM="$(auth_seconds "${NOTIFY_AUTHORIZATION_REARM_SECONDS:-}" 600)"
 tpl_title_suffix="${TITLE_SUFFIX}"
 tpl_tool="${TOOL_NAME}"
+
+# Model on the tool line: the payload's model string, else (Claude Code only) the
+# newest real assistant model in the session record. Unknown → both suffixes empty.
+claude_last_model() {
+  [[ -r "$1" ]] && command -v jq >/dev/null 2>&1 || return 0
+  tail -n 400 "$1" | jq -Rrn '
+    [inputs | fromjson? | select(.type? == "assistant") | .message.model? | strings
+     | select(startswith("<") | not)] | last // empty' 2>/dev/null
+}
+MODEL_ID="$(_json_query "${STDIN_JSON}" '.model | strings')"
+if [[ -z "${MODEL_ID}" && "${TOOL_NAME}" == "Claude Code" ]]; then
+  MODEL_ID="$(claude_last_model "$(_json_str "${STDIN_JSON}" "transcript_path")")"
+fi
+[[ "${MODEL_ID}" =~ ^(.*)\[[^]]*\]$ ]] && MODEL_ID="${BASH_REMATCH[1]}"
+MODEL_ID="$(printf '%s' "${MODEL_ID}" | tr -cd '[:alnum:]._:/-' | cut -c1-64)"
+# Claude IDs read as "<Family> <major>[.<minor>]"; anything else is shown unchanged.
+MODEL_FAMILY="" MODEL_VERSION=""
+if [[ "${MODEL_ID}" =~ ^claude-([a-z]+)-([0-9]+)(-([0-9]{1,2}))?(-[0-9]{8})?$ ]]; then
+  MODEL_FAMILY="${BASH_REMATCH[1]}" MODEL_VERSION="${BASH_REMATCH[2]}${BASH_REMATCH[4]:+.${BASH_REMATCH[4]}}"
+elif [[ "${MODEL_ID}" =~ ^claude-([0-9]+)(-([0-9]{1,2}))?-([a-z]+)(-[0-9]{8})?$ ]]; then
+  MODEL_FAMILY="${BASH_REMATCH[4]}" MODEL_VERSION="${BASH_REMATCH[1]}${BASH_REMATCH[3]:+.${BASH_REMATCH[3]}}"
+elif [[ "${MODEL_ID}" =~ ^(opus|sonnet|haiku|fable)$ ]]; then
+  MODEL_FAMILY="${MODEL_ID}"
+fi
+tpl_model_suffix="" tpl_model_family_suffix=""
+if [[ -n "${MODEL_FAMILY}" ]]; then
+  MODEL_FAMILY="$(printf '%s' "${MODEL_FAMILY:0:1}" | tr '[:lower:]' '[:upper:]')${MODEL_FAMILY:1}"
+  tpl_model_suffix=" (${MODEL_FAMILY}${MODEL_VERSION:+ ${MODEL_VERSION}})"
+  tpl_model_family_suffix=" (${MODEL_FAMILY})"
+elif [[ -n "${MODEL_ID}" ]]; then
+  tpl_model_suffix=" (${MODEL_ID})"
+  tpl_model_family_suffix="${tpl_model_suffix}"
+fi
 tpl_project="${PROJECT_NAME}"
 tpl_time="${TIMESTAMP}"
 tpl_tag="#${HOOK_EVENT_NAME:-${EVENT_TYPE:-unknown}}"

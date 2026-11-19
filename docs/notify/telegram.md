@@ -2,13 +2,13 @@
 type: Playbook
 title: Telegram Notify Hook Setup
 description: Install and operate Telegram notifications across supported AI CLIs.
-tags: [telegram, notifications, hooks, codex, antigravity]
-generated: { by: claude-code/claude-sonnet-5-5, at: 2026-11-18T14:17:55+08:00 }
+tags: [telegram, notifications, hooks, codex, antigravity, pi]
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-19T17:44:06+08:00 }
 ---
 
 # Telegram Notify Hook — Quick Setup
 
-Get Telegram notifications when Claude Code, Codex, Antigravity CLI, or
+Get Telegram notifications when Claude Code, Codex, Antigravity CLI, Pi, or
 Copilot CLI finishes a turn, needs your attention, or stops abnormally.
 
 ---
@@ -36,7 +36,8 @@ The wizard guides you through:
 4. 在繁體中文分組選單選擇通知類型，確認摘要後儲存
 5. Deploying the hook and registering detected AI CLIs
 6. Observing Antigravity approval prompts when its status-line slot is available
-7. Optionally registering repository-local Copilot hooks
+7. Installing the Pi extension when Pi is detected (open Pi sessions need `/reload`)
+8. Optionally registering repository-local Copilot hooks
 
 ---
 
@@ -56,6 +57,7 @@ The wizard guides you through:
 | Optional isolated Python runtime | `~/.config/ai-notify/runtime/codex-wait/` |
 | Antigravity completion | `~/.gemini/config/hooks.json` → `telegram-notify.Stop` |
 | Antigravity approval (automatic when available) | `~/.gemini/antigravity-cli/settings.json` → `statusLine` |
+| Pi extension (when Pi is detected) | `${PI_CODING_AGENT_DIR:-~/.pi/agent}/extensions/ai-notify.ts`（first line is the ownership marker; see [Pi](/docs/hooks/pi-hooks.md)） |
 | Copilot CLI hooks (opt-in) | `.github/hooks/hooks.json` → `sessionEnd`, `userPromptSubmitted` |
 
 Setup and `fix-hooks` remove only notification-owned legacy Gemini hook
@@ -191,13 +193,33 @@ Codex 細節：
 
 只在 `fullyIdle` 為 true 時處理 `terminationReason`（不分大小寫）：`NO_TOOL_CALL` 與舊值 `model_stop` → Task Complete；`USER_CANCELED` → 不通知；其餘為 Task Stopped，原因標籤：`ERROR`「error」、`MAX_INVOCATIONS`「max invocations reached」、`MAX_FORCED_INVOCATIONS`「max forced invocations reached」、`MAX_TOKEN_BUDGET_EXCEEDED`「token budget exceeded」、`TERMINAL_STEP_TYPE`「terminal step」、`TERMINAL_CUSTOM_HOOK`「stopped by a custom hook」、`INJECTED_RESPONSE`「injected response」、舊值 `max_steps_exceeded`「max steps exceeded」，其他「execution stopped」。不附原始錯誤文字；對應表在 `scripts/notify/telegram/events.tsv`。
 
+### Pi 結束原因與等待回應
+
+Pi extension 只送自己算出的 `stop_reason`：`pi-stop:completed` → Task Complete；`pi-stop:error` → Task Stopped，原因標籤「error」；`pi-stop:aborted` 與未列出的值 → 不通知；`pi-question`（執行中開啟 UI 提示）→ Waiting for Your Response。三個分類開關與 `NOTIFY_LEVEL` 照常作用；不附錯誤原文或提示內容。事件來源與通知範圍見 [Pi Extension Integration](/docs/hooks/pi-hooks.md)。
+
 ### 範本與事件表
 
 `events.tsv` 欄位為 key、category、template、reason label；`<prefix>:*` 為後備；category `none` 表示不送。表中沒有的事件維持通用的「AI CLI Event」訊息。
 
 內建範本（`scripts/notify/telegram/templates/`）：completion、stopped、question、action-required、generic、authorization、authorization-unconfirmed、handoff-implement、handoff-review、handoff-finish、handoff-attention，部署到 `~/.config/ai-notify/hooks/templates/`，每次更新覆寫。要自訂，在 `~/.config/ai-notify/templates/<name>.md` 放同名檔；檔案不存在、為空或不可讀時退回內建範本。
 
-可用佔位符：`{title_suffix} {tool} {project} {time} {tag} {message} {reason} {request_tool} {delay}`；交件單範本另有 `{agent} {change} {round} {verdict} {commit} {next} {detail}`（`{verdict}` 顯示為「🔁 審查退回」或「🟢 審查通過」）。值會依 Telegram legacy Markdown 跳脫（`_ * \` [`）；整行只有佔位符且全部為空時，該行移除；未知佔位符原樣保留。不支援 eval、條件或迴圈。
+可用佔位符：`{title_suffix} {tool} {model_suffix} {model_family_suffix} {project} {time} {tag} {message} {reason} {request_tool} {delay}`；交件單範本另有 `{agent} {change} {round} {verdict} {commit} {next} {detail}`（`{verdict}` 顯示為「🔁 審查退回」或「🟢 審查通過」）。值會依 Telegram legacy Markdown 跳脫（`_ * \` [`）；整行只有佔位符且全部為空時，該行移除；未知佔位符原樣保留。不支援 eval、條件或迴圈。
+
+#### 工具行的 model
+
+含 `{tool}` 的 7 個內建範本（completion、question、stopped、action-required、authorization、authorization-unconfirmed、generic）工具行為 `🤖 {tool}{model_suffix}`；交件單範本不顯示。拿得到 model 時例如 `🤖 Claude Code (Opus 5.5)`、`🤖 Codex (gpt-6.1-terra)`、`🤖 Pi (gpt-6.1-sol)`；拿不到時只顯示工具名稱，沒有空括號。
+
+- 來源：hook payload 的 `model` 字串優先（Codex hook 輸入必填；Pi 由 extension 帶入 `ctx.model.id`；其他工具有就用）。沒有且工具為 Claude Code 時，讀 `transcript_path` 最後 400 行中最後一則 assistant 紀錄的 `message.model`，略過 `<` 開頭的值（例如 `<synthetic>`）。這個紀錄格式未載於 Claude Code 官方文件，且可能落後一輪：剛用 `/model` 切換後的第一則通知可能顯示前一個 model。
+- 清理：去掉結尾的 `[...]`（例如 `[1m]`），只保留英數與 `._:/-`，最多 64 字元；清理後為空視同沒有 model。
+- 顯示：Claude ID 顯示為家族名加版本（`claude-opus-5-5` → `Opus 5.5`、`claude-sonnet-4-5-20250929` → `Sonnet 4.5`、`claude-opus-4-20250514` → `Opus 4`、`claude-3-5-sonnet-20241022` → `Sonnet 3.5`），別名 `opus`／`sonnet`／`haiku`／`fable` 只顯示家族名；其他 ID 原樣顯示。
+- `{model_suffix}` 含版本（` (Opus 5.5)`），`{model_family_suffix}` 不含版本（` (Opus)`；非 Claude ID 與 `{model_suffix}` 相同）；沒有 model 時兩者都是空字串。
+- 使用者自訂範本不會自動加上 model，要自己加入。不想顯示版本時，在 `~/.config/ai-notify/templates/completion.md` 等檔案把工具行寫成：
+
+  ```text
+  🤖 {tool}{model_family_suffix}
+  ```
+
+  Claude Code 用 `claude-opus-5-5` 時顯示 `🤖 Claude Code (Opus)`。
 
 工作結束、停止與等待訊息的內建文字不變。新增文字：授權為「🔴 **Waiting for Your Approval** … `{tool} has been waiting for your approval for over {delay} seconds ({request_tool})`」；無法確認為「🟡 **Approval Status Unknown** … `{tool} may be waiting for approval, but this could not be confirmed (no result after {delay} seconds, {request_tool})`」。兩個授權範本於 2026-11-18 改為英文。
 
@@ -244,7 +266,7 @@ Telegram 通知訊息採用統一的 Markdown 排版，結構如下：
 ```
 {STATUS_ICON} **{TITLE}** ({SESSION})
 
-🤖 {TOOL_NAME}
+🤖 {TOOL_NAME}{MODEL}
 📂 {PROJECT_NAME}
 ⏰ {TIMESTAMP}
 
@@ -253,6 +275,7 @@ Telegram 通知訊息採用統一的 Markdown 排版，結構如下：
 
 - **STATUS_ICON**: `🟢` (Task Complete) | `🟡` (Action Required / Waiting for Your Response / Approval Status Unknown) | `🔴` (Task Stopped / Waiting for Your Approval) | `🤖` (Generic Event)
 - **TITLE**: `Task Complete` | `Action Required` | `Task Stopped`
+- **MODEL** *(optional)*: ` (<model>)` when the model is known, e.g. ` (Opus 5.5)`; see 工具行的 model above
 - **SESSION** *(optional)*: shown when session info is available
   - UUID `session_id` (Claude) → `#<first 8 chars>` e.g. `(#a1b2c3d4)`
   - Non-UUID `sessionId` (Copilot) → used as-is e.g. `(copilot-xyz)`
@@ -263,7 +286,7 @@ Telegram 通知訊息採用統一的 Markdown 排版，結構如下：
   - Action Required: `Waiting for user interaction...`
 
 Authorization notices include only a generic tool label (the requesting tool name). Raw commands,
-arguments, prompts, transcript paths, and Antigravity raw error text are never
+arguments, prompts, transcript paths, Antigravity raw error text, and Pi prompt or error text are never
 included.
 
 ---

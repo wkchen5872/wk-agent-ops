@@ -1,6 +1,6 @@
 🤖 **AI CLI Event**
 
-🤖 {tool}
+🤖 {tool}{model_suffix}
 📂 {project}
 ⏰ {time}
 
