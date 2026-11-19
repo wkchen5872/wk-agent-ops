@@ -127,7 +127,9 @@ known model rather than stale attribution. Only an unknown current model
 SHALL cause omission of the model trailer and a reported omission,
 not a user question or commit blocker. The writer MUST NOT infer identity from
 documentation, email domains, environment variables, session logs, Git history,
-or a commit-only agent's identity.
+or a commit-only agent's identity. The only exception is the Pi runtime model
+state of a Pi root session, as defined by "Pi root sessions read the current
+model from Pi's runtime state".
 
 #### Scenario: Orchestrated commit supplies attribution
 - **WHEN** `openspec-commit` invokes `git-commit-writer` with an exact tool name and root-session model
@@ -177,6 +179,10 @@ or a commit-only agent's identity.
 - **WHEN** `git-commit-writer-agent` receives `assisting_model=gpt-5.6-sol` as task input
 - **THEN** it retains its provider-native configured runtime model and reasoning effort
 - **AND** records `gpt-5.6-sol` only in the `AI-Assisted-By` trailer
+
+#### Scenario: Claude Code environment happens to contain a Pi model variable
+- **WHEN** the writer runs in Claude Code and the environment contains `PI_MODEL`
+- **THEN** it does not use that value as the model
 
 ### Requirement: Emit tool attribution and model metadata
 The commit writer SHALL end each generated commit message with a
@@ -260,3 +266,42 @@ The writer SHALL apply reference requirements only when making an already author
 #### Scenario: PR number becomes known after commit
 - **WHEN** a PR is created after a commit that correctly referenced its known Issue
 - **THEN** the existing commit remains unchanged and the PR association can appear in a future independently needed commit
+
+### Requirement: Pi root sessions read the current model from Pi's runtime state
+When the writer runs in a Pi root session, identified by `PI_CODING_AGENT=true` with no `PI_SUBAGENT_PARENT_SESSION`, and no user-supplied or caller-supplied model is given, it SHALL use the value of `PI_MODEL` read at commit time as the current root-session model, recorded verbatim as the model ID without the provider. An empty `PI_MODEL` SHALL count as an unknown model.
+
+#### Scenario: Standalone commit in a Pi root session
+- **WHEN** a Pi root session with `PI_MODEL=claude-opus-5-5` invokes `git-commit-writer` without `assisting_model`
+- **THEN** the trailers are `Co-Authored-By: Pi` and `AI-Assisted-By: claude-opus-5-5`
+- **AND** the writer does not ask the user for the model
+
+#### Scenario: Model switched in Pi before commit
+- **WHEN** the Pi root session switched from `claude-opus-5-5` to `gpt-6.2-sol` with `/model` before the commit
+- **THEN** the trailer is `AI-Assisted-By: gpt-6.2-sol`
+
+#### Scenario: User-supplied name wins
+- **WHEN** the user supplied `Claude Opus 5.5` for the current collaboration and `PI_MODEL` is `claude-opus-5-5`
+- **THEN** the trailer is `AI-Assisted-By: Claude Opus 5.5`
+
+#### Scenario: Pi model variable is empty
+- **WHEN** a Pi root session has an empty `PI_MODEL` and no supplied model
+- **THEN** the writer omits `AI-Assisted-By` and reports the omission
+
+### Requirement: Pi subagents do not attribute their own model
+When the writer runs in a Pi subagent, identified by `PI_SUBAGENT_PARENT_SESSION`, it MUST NOT use its own `PI_MODEL` as the root-session model. It SHALL use the caller-supplied `assisting_model`, and otherwise SHALL omit `AI-Assisted-By` and report the omission.
+
+#### Scenario: Subagent without a supplied model
+- **WHEN** a Pi subagent with `PI_MODEL=gpt-6-luna` runs the writer and the caller supplied no `assisting_model`
+- **THEN** the commit has `Co-Authored-By: Pi` and no `AI-Assisted-By`
+- **AND** the omission is reported
+
+#### Scenario: Subagent with a supplied model
+- **WHEN** a Pi subagent runs the writer with `assisting_model=claude-opus-5-5`
+- **THEN** the trailer is `AI-Assisted-By: claude-opus-5-5`, not the subagent's own model
+
+### Requirement: Pi is named without an email
+In Pi the writer SHALL use `Pi` as `tool_name` and SHALL write `Co-Authored-By: Pi` without an email address.
+
+#### Scenario: Pi trailer has no email
+- **WHEN** a commit is made from a Pi session
+- **THEN** the co-author trailer is exactly `Co-Authored-By: Pi`

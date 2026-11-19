@@ -117,6 +117,11 @@ model from delegation and report the omitted trailer without blocking commit.
 Tool names are not model names. Environment inference, documentation lookup,
 session-log parsing, Git history, or commit-only agent identity MUST NOT be used
 to guess a model name unavailable in the current context.
+In a Pi root session (`PI_CODING_AGENT=true` with no `PI_SUBAGENT_PARENT_SESSION`)
+the tool name SHALL be `Pi`, and the value of `PI_MODEL` read at the commit step
+SHALL count as the model name available in the current context, recorded as the
+model ID without the provider; this exception MUST NOT apply in any other tool
+or in a Pi subagent.
 
 In Claude Code and Codex the coordinator SHALL invoke the provider-native
 `git-commit-writer-agent` by its exact agent name without supplying a spawn
@@ -186,6 +191,15 @@ the workflow MUST stop without falling back to the portable skill.
 - **WHEN** the root-session model is `gpt-5.6-sol` and the configured commit writer uses another model
 - **THEN** `assisting_model=gpt-5.6-sol` is passed only as commit task metadata
 - **AND** no subagent spawn model or reasoning effort is derived from that value
+
+#### Scenario: Pi root session
+- **WHEN** `openspec-commit` reaches the commit step in a Pi root session with `PI_MODEL=gpt-6.2-sol` and no user-supplied model
+- **THEN** it invokes the portable `git-commit-writer` skill with `tool_name=Pi` and `assisting_model=gpt-6.2-sol`
+- **AND** it does not ask the user for the model
+
+#### Scenario: Pi model variable outside Pi
+- **WHEN** `openspec-commit` runs in Codex and the environment contains `PI_MODEL`
+- **THEN** it does not use that value as `assisting_model`
 
 ### Requirement: Route documentation updates by provider capability
 `openspec-commit` SHALL invoke `doc-updater-agent` as a provider-native
