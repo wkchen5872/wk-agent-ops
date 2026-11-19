@@ -2,8 +2,8 @@
 type: Architecture
 title: AI CLI Notification Hooks Architecture
 description: Native host hook registration and Telegram notification data flow.
-tags: [notifications, hooks, codex, antigravity, telegram]
-generated: { by: claude-code/claude-sonnet-5-5, at: 2026-11-18T14:17:55+08:00 }
+tags: [notifications, hooks, codex, antigravity, pi, telegram]
+generated: { by: codex/GPT-5, at: 2026-11-19T19:49:03+08:00 }
 ---
 
 # Notify Hooks — Architecture
@@ -14,9 +14,11 @@ This document describes the architecture of the AI CLI notification hook system.
 
 ## Overview
 
-The notification system allows Claude Code, Codex, Antigravity CLI, and Copilot
-CLI to send Telegram notifications when an agent turn finishes, requires user
-attention, or stops abnormally.
+The notification system allows Claude Code, Codex, Antigravity CLI, Pi, and
+Copilot CLI to send Telegram notifications when an agent turn finishes,
+requires user attention, or stops abnormally. Pi uses a managed global
+extension rather than a native hook registration; its interactive main sessions
+can report completion, failure, and UI prompts, but not authorization.
 
 **Design principle:** The repository contains only scripts. All machine state (config files, deployed hooks, settings.json entries) is created exclusively by running the install/update entrypoints — never at repository checkout time.
 
@@ -44,6 +46,8 @@ scripts/
     codex/
       wait.py          # Hook-triggered daemon metadata checker
       requirements.txt # Optional isolated dependency
+    pi/
+      ai-notify.ts     # Managed Pi extension source
     telegram/
       hook.sh          # Notification hook (called by AI CLI at runtime)
       events.tsv       # Event table: key, category, template, reason label
@@ -88,6 +92,7 @@ template/common/.claude/
 ~/.codex/hooks.json                         # Codex Stop + PermissionRequest + question Pre/PostToolUse
 ~/.gemini/config/hooks.json                 # Antigravity named Stop hook
 ~/.gemini/antigravity-cli/settings.json     # Approval observer when statusLine is free
+${PI_CODING_AGENT_DIR:-~/.pi/agent}/extensions/ai-notify.ts  # Pi extension when detected
 ```
 
 `~/.gemini/settings.json` is cleanup-only: setup, repair, and uninstall remove
@@ -142,7 +147,7 @@ Step 3  Auto-detect Chat ID (getUpdates API call)
 Step 4  Edit grouped category switches and confirm summary
 Step 5  Write ~/.config/ai-notify/config (chmod 600)
 Step 6  Deploy hook + common config library + checker; provision isolated dependency only if selected
-Step 7  Register Claude plus detected Codex and Antigravity hooks; attempt approval observation safely
+Step 7  Register Claude plus detected Codex and Antigravity hooks; attempt approval observation safely; install the Pi extension when Pi is detected
 Step 8  Optionally register Copilot CLI hooks in .github/hooks/hooks.json [y/N]
 Step 9  Send test notification to confirm end-to-end
 ```
@@ -157,7 +162,7 @@ Step 9  Send test notification to confirm end-to-end
 AI CLI event fires (e.g., task complete)
         │
         ▼
-Native AI CLI hook or Antigravity status state
+Native AI CLI hook, Antigravity status state, or Pi global extension
         │
         ▼
 bash ~/.config/ai-notify/hooks/telegram-notify.sh <event-type> [tool-name]
@@ -203,6 +208,10 @@ AI CLI 工具透過 `stdin` 將 JSON payload 傳遞給 Hook 腳本。
 *   **Antigravity CLI**: `Stop` 提供 `fullyIdle` 與
     `terminationReason`（見下方 Antigravity 一節）；managed status line 提供
     `tool_confirmation_pending`。
+*   **Pi**: global extension sends `pi-stop` after `agent_settled` and
+    `pi-question` for an in-run `ui_prompt_start`; it includes only the session
+    ID, working directory, computed stop reason, and active model ID. It does
+    not forward prompts or raw errors. Only TUI main sessions notify.
 *   **Copilot CLI**: 傳送 `sessionEnd` 與 `userPromptSubmitted` 事件。
 
 ---
@@ -225,14 +234,14 @@ AI CLI 工具透過 `stdin` 將 JSON payload 傳遞給 Hook 腳本。
 
 | Function | Description |
 |----------|-------------|
-| `register_hook <hook_path>` | Register Claude plus detected Codex and Antigravity hooks; clean owned legacy Gemini entries |
-| `unregister_hook <hook_path>` | Remove owned global hook entries without affecting other hooks |
+| `register_hook <hook_path>` | Register Claude plus detected Codex and Antigravity hooks, install the owned Pi extension when Pi is detected, and clean owned legacy Gemini entries |
+| `unregister_hook <hook_path>` | Remove owned global hook entries and the owned Pi extension without affecting other hooks |
 | `register_hook_copilot <hook_path>` | Write `sessionEnd` + `userPromptSubmitted` entries to `.github/hooks/hooks.json` (idempotent) |
 | `unregister_hook_copilot <hook_path>` | Remove Copilot hook entries from `.github/hooks/hooks.json` |
 | `register_hook_codex <hook_path>` | Add neutral `Stop`, `PermissionRequest`, question `PreToolUse` / `PostToolUse` hooks |
 | `register_hook_antigravity <hook_path>` | Add the named global Antigravity `Stop` hook |
 | `register_hook_antigravity_statusline <hook_path>` | Add approval-state observation without overwriting another command |
-| `show_hook_status <hook_path>` | Report provider registration without reading credentials |
+| `show_hook_status <hook_path>` | Report provider registration, including Pi extension ownership/conflicts, without reading credentials |
 
 All functions require `jq`.
 
@@ -438,6 +447,7 @@ Copilot CLI uses a repository-local hook file rather than global host settings.
 | Claude Code | `stop` / `notification` | `"Claude Code"` |
 | Codex | `codex-stop` / `codex-permission` | `"Codex"` |
 | Antigravity CLI | `antigravity-stop` / `antigravity-statusline` | `"Antigravity CLI"` |
+| Pi | `pi-stop` / `pi-question` | `"Pi"` |
 | Copilot CLI | `sessionEnd` / `userPromptSubmitted` | `"Copilot CLI"` |
 
 When `$2` is absent (old-format registered hooks), `TOOL_NAME` defaults to `"AI CLI"`. Run `fix-hooks` to upgrade:
@@ -445,6 +455,32 @@ When `$2` is absent (old-format registered hooks), `TOOL_NAME` defaults to `"AI 
 ```bash
 bash scripts/notify/telegram/update.sh fix-hooks
 ```
+
+---
+
+## Pi Extension Integration
+
+Pi has no hook configuration file. When Pi is detected, the shared registry
+installs `scripts/notify/pi/ai-notify.ts` as
+`${PI_CODING_AGENT_DIR:-~/.pi/agent}/extensions/ai-notify.ts`. The extension
+runs the deployed notification hook in a detached process and swallows all
+startup and delivery errors, so notifications never delay or change the Pi
+session.
+
+It sends one `pi-stop` event after Pi has settled: normal completion maps to
+completion, an error maps to failure, and a user abort is silent. An in-run UI
+prompt maps to `pi-question`; an idle prompt is silent. The payload includes
+only the session ID, working directory, stop reason, and active model ID.
+Interactive TUI main sessions notify; print, JSON, RPC, and subagent sessions
+do not. Pi has no authorization-notification integration.
+
+The registry updates or removes only a regular `ai-notify.ts` whose first line
+has the ownership marker. A same-name user file or symlink remains untouched
+and status reports Pi as unavailable. Open Pi sessions need `/reload` or a
+restart after installation or removal. See [Pi Extension Integration](/docs/hooks/pi-hooks.md)
+for setup, status values, and troubleshooting.
+
+---
 
 ### Setup
 
@@ -480,8 +516,8 @@ bash scripts/notify/telegram/uninstall.sh
 /notify-setup → uninstall
 ```
 
-Uninstall removes owned Claude, Codex, and Antigravity hook entries, any
-notification-owned legacy Gemini commands, Antigravity notification state,
+Uninstall removes owned Claude, Codex, and Antigravity hook entries, the owned
+Pi extension, any notification-owned legacy Gemini commands, Antigravity notification state,
 `TELEGRAM_*` keys, the deployed hook, built-in templates and the event table (user templates stay). It cooperatively stops owned Codex checkers and removes their isolated runtime/state. It removes repository-local Copilot
 entries only after separate confirmation. Unrelated hooks and settings remain
 unchanged.

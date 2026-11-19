@@ -3,7 +3,7 @@ type: Reference
 title: wk-agent-ops 文件導覽首頁
 description: wk-agent-ops 專案文件導航、功能目錄索引與新人起步手冊。
 tags: [docs, index, navigation, getting-started]
-timestamp: 2026-11-14T00:00:00+08:00
+generated: { by: codex/GPT-5, at: 2026-11-19T19:49:03+08:00 }
 ---
 
 # 📚 wk-agent-ops 文件中心
@@ -43,6 +43,7 @@ docs/
 │   ├── claude-hooks.md     ← Claude Code Hook 整合
 │   ├── codex-hooks.md      ← Codex Hook 信任與雙階段啟用
 │   ├── antigravity-hooks.md← Antigravity Hook 與狀態列整合
+│   ├── pi-hooks.md         ← Pi global extension 與通知範圍
 │   └── copilot-hooks.md    ← GitHub Copilot CLI 專案級 Hook
 │
 ├── 📂 notify/              ← 自動化通知系統

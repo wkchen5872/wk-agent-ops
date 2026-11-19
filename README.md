@@ -288,8 +288,9 @@ wk-agent-ops/
 
 ## Telegram 通知
 
-支援 Claude Code、Codex、Antigravity CLI 與 Copilot CLI，在 AI 任務完成、
-等待授權或異常停止時透過 Telegram 通知。
+支援 Claude Code、Codex、Antigravity CLI、Pi 與 Copilot CLI，在 AI 任務完成、
+等待授權或回應、或異常停止時透過 Telegram 通知。Pi 由 installer 管理的 global
+extension 轉送事件；已開啟的 Pi session 要執行 `/reload`（詳見下方連結）。
 
 ### 快速安裝
 
@@ -318,7 +319,7 @@ Codex 顯示 `registered` 只代表設定已寫入；還需要在 `/hooks` 將 `
 `PermissionRequest`、同步問題的 `PreToolUse` 與非同步問題的 `PostToolUse` owned hooks 設為 `Trusted`
 並勾選 `[x]` 啟用。daemon 可連線不代表人工等待端到端流程已實測。
 
-詳細說明：[Provider hooks](docs/hooks/index.md) · [Telegram setup](docs/notify/telegram.md) · [Notification architecture](docs/notify/architecture.md)
+詳細說明：[Provider hooks](docs/hooks/index.md) · [Pi extension](docs/hooks/pi-hooks.md) · [Telegram setup](docs/notify/telegram.md) · [Notification architecture](docs/notify/architecture.md)
 
 ---
 

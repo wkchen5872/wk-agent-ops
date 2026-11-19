@@ -3,7 +3,7 @@ type: Reference
 title: 架構與流程圖索引
 description: 現行開發、Review 與 GitHub 協作圖稿的閱讀順序、來源與維護位置；圖稿只保留 SVG。
 tags: [architecture, workflow, diagrams]
-generated: { by: Codex/GPT-6.1-Sol, at: 2026-11-14T13:48:40+08:00 }
+generated: { by: codex/GPT-5, at: 2026-11-19T19:49:03+08:00 }
 sources:
   - id: review-source
     resource: /template/common/skills/change-review/SKILL.md
@@ -37,7 +37,7 @@ sources:
 | 交接迴圈：[SVG](agent-handoff-loop.svg) | [交接迴圈手冊](../skills/agent-handoff.md)；實作者、Stop hook、審查者三欄與收尾；審查 worktree shared／new、pass 後 ask／auto | 本 repo 的 `docs/`；依 `add-agent-handoff-loop` 實作，真實多 Agent 演練已通過 |
 | 啟動交接迴圈：[SVG](agent-handoff-start.svg) | [啟動交接](../skills/agent-handoff.md#1-handoff-start-change-id-options)；三份角色範本、`handoff-start` 選項，以及誰在何時開哪個 worktree 與 Session | 本 repo 的 `docs/`；同上 |
 | 收尾與清理：[SVG](agent-handoff-cleanup.svg) | [交接迴圈收尾](../skills/agent-handoff.md#3-handoff-cleanup-change-id---abandon---yes)；三道安全防護、歷史證據歸檔、Session 與臨時 worktree 清理、保留 feature 分支 | 本 repo 的 `docs/`；依 `scripts/handoff/handoff-cleanup` 實作 |
-| 通知架構與延遲授權：[SVG](notify-architecture.svg) | [通知架構手冊](../notify/architecture.md)；多 AI Provider 事件接入、30 秒授權防誤報狀態機、範本替換引擎與 Telegram 派送 | 本 repo 的 `docs/`；依 `refine-notify-core` 與 `add-handoff-notifications` 實作 |
+| 通知架構與延遲授權：[SVG](notify-architecture.svg) | [通知架構手冊](../notify/architecture.md)；Claude、Codex、Antigravity、Pi、Copilot 與交接事件接入、30 秒授權防誤報狀態機、範本替換引擎與 Telegram 派送 | 本 repo 的 `docs/`；依 `refine-notify-core`、`add-handoff-notifications` 與 `add-pi-notify-hook` 實作 |
 | GitHub 協作整合（組合示例）：[SVG](github-handoff.svg) | [GitHub 協作整合](../github-handoff.md)；Issue-first／Change-first 兩個入口、版本審查、Closure 回讀及 Issue 獨立結案 | managed；修改 `template/common/docs/diagrams/github-handoff.svg`，再跑 installer |
 
 本機四階段及開發全貌是本 repo 的操作文件，不隨 common installer 散布。
