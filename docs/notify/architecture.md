@@ -303,12 +303,11 @@ All functions require `jq`.
 
 - **專屬事件與獨立開關**：
   - 實作完成（`handoff-implement`，開關 `NOTIFY_HANDOFF_IMPLEMENT`）
-  - 審查通過（`handoff-review-pass`，開關 `NOTIFY_HANDOFF_REVIEW`）
-  - 審查退回（`handoff-review-changes-required`，開關 `NOTIFY_HANDOFF_REVIEW`）
+  - 審查結果（`handoff-review`，依 verdict 呈現審查通過或退回修正，開關 `NOTIFY_HANDOFF_REVIEW`）
   - 收尾完成（`handoff-finish`，開關 `NOTIFY_HANDOFF_FINISH`）
-  - 需要你處理（`handoff-action-required`，**不可關閉**）
+  - 需要你處理（`handoff-attention`，**不可關閉**）
 - **停點不可關閉保護 (Safety Anchor)**：
-  - 當迴圈遇到 blocked、達輪數上限、工作區不乾淨、或審查通過等待使用者執行 `handoff-finish` 時，`handoff-action-required` 永遠強制發送，不受一般開關影響，防止迴圈靜默掛起。
+  - 當迴圈遇到 blocked、達輪數上限、工作區不乾淨、或審查通過等待使用者執行 `handoff-finish` 時，`handoff-attention` 永遠強制發送，不受一般開關影響，防止迴圈靜默掛起。
 - **Agent 資訊提取**：
   - 透過 `xirp session get <id> --json` 提取停下 Session 的工具（`.currentAgent`）、當下模型（`.model`）與推理強度（`.agentLaunchOptions.options.effort` 或 `reasoning_effort`），組合為 `Agent Handoff (Claude / claude-opus-5-5 / high)`。
 - **傳訊失敗重試保障**：

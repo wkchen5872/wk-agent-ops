@@ -125,6 +125,6 @@
 <text x="40" y="1532" font-size="17" fill="#42556d" font-weight="400" text-anchor="start">• 達 3 輪上限時 hook 停止自動修正並通知你；新 Session 靠交件單與報告路徑接手。</text>
 <text x="40" y="1560" font-size="17" fill="#42556d" font-weight="400" text-anchor="start">• 交件單由 handoff-write 寫入 .agent-handoff/&lt;change&gt;/，每輪一個檔案；hook 在 Agent 自己的工作目錄執行，直接讀得到。</text>
 <text x="40" y="1588" font-size="17" fill="#42556d" font-weight="400" text-anchor="start">• hook 只在新開的 Session 生效；Codex 的新 hook 要你信任一次。所有 GitHub 寫入都在有回讀規則的 Skill 裡。</text>
-<text x="40" y="1616" font-size="17" fill="#42556d" font-weight="400" text-anchor="start">• hook 失敗不阻斷主流程，鏈條可能無聲中斷；現有的 Telegram「Agent 停下」通知是你這端的保險。</text>
+<text x="40" y="1616" font-size="17" fill="#42556d" font-weight="400" text-anchor="start">• hook 具備獨立進度通知；傳訊或開 Session 失敗時發送不可關閉的 attention 通知並保留交件單供重試。</text>
 <text x="40" y="1660" font-size="15" fill="#5f7186" font-weight="400" text-anchor="start">handoff-write、hook、handoff-start 與 handoff-finish 已實作並通過自動測試；真實多 Agent 演練已通過。用法見 scripts/handoff/README.md。</text>
 </g></svg>

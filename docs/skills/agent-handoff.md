@@ -2,7 +2,7 @@
 type: Playbook
 title: Agent Handoff 交接迴圈指南
 description: 使用 handoff-start、handoff-finish 與 handoff-cleanup 協調多 Agent 自動化實作、審查與收尾。
-tags: [skills, handoff, workflow, xirp, agents]
+tags: [skills, handoff, workflow, xirp, agents, notify]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-19T10:06:02+08:00" }
 sources:
   - id: handoff-scripts
@@ -11,13 +11,16 @@ sources:
   - id: handoff-skill
     resource: /template/common/skills/agent-handoff/SKILL.md
     title: Agent Handoff Skill
+  - id: notify-telegram
+    resource: /docs/notify/telegram.md
+    title: Telegram Notify Guide
 ---
 
 # Agent Handoff 交接迴圈指南
 
 `agent-handoff` 是一套自動化的多 Agent 協作迴圈系統。它讓負責實作（implementer）、審查（reviewer）與收尾（finish）的各個 Agent 能在無需人工反覆傳話的情況下，自動接力完成功能開發、審查驗收與最終提交。
 
-每個 Agent 在當前輪次結束時，透過 `agent-handoff` Skill 寫入標準化的「交件單」；當 Agent 停下時，系統內建的 `Stop` 鉤子（`handoff-route`）會讀取該交件單，透過 `xirp` CLI 自動向下一位 Agent 發送訊息，或在需要人工介入時透過 Telegram 發送即時通知。[^handoff-scripts]
+每個 Agent 在當前輪次結束時，透過 `agent-handoff` Skill 寫入標準化的「交件單」；當 Agent 停下時，系統內建的 `Stop` 鉤子（`handoff-route`）會讀取該交件單，透過 `xirp` CLI 自動向下一位 Agent 發送訊息，並發送 Telegram 即時進度通知或在需要人工介入時發送停點警報。[^handoff-scripts]
 
 相關流程圖稿：
 - [啟動流程圖（SVG）](/docs/diagrams/agent-handoff-start.svg)
@@ -236,6 +239,50 @@ Pi 會在有 `.pi/settings.json` 或 `.agents/skills` 的資料夾詢問是否�
 
 ---
 
+## 交接迴圈即時通知 (Notifications)
+
+交接迴圈內建 Telegram 結構化事件通知，由 Stop 鉤子（`scripts/handoff/handoff-route`）在每次路由交件單時自動送出。通知具備專屬的進度回報、不可關閉的停點安全保護、Agent 身分標記與失敗重試保障。[^notify-telegram]
+
+### 1. 四大通知事件與對應範本
+
+| 事件代碼 | 訊息標題 | 對應範本 | 觸發時機與內容 |
+|---|---|---|---|
+| `handoff:implement` | `✅ 實作完成` | `handoff-implement` | 實作者完成實作與本地 commit 並提交交件單，轉交給審查者 |
+| `handoff:review` | `🔁 審查退回` 或 `🟢 審查通過` | `handoff-review` | 審查者提交結果；退回修正時通知實作者接手，審查通過且設為 `auto` 時通知啟動收尾 |
+| `handoff:finish` | `📦 收尾完成` | `handoff-finish` | 收尾角色完成規格封存、文件同步與 commit |
+| `handoff:attention` | `🔴 需要你處理` | `handoff-attention` | 迴圈停下等待人工介入（如 blocked、達輪數上限、工作區 dirty、等候手動執行 `handoff-finish`，或傳訊失敗等） |
+
+### 2. 進度開關與停點安全保護
+
+交接迴圈在 `~/.config/ai-notify/config` 提供三個獨立的進度通知開關，可隨時透過 `bash scripts/notify/telegram/update.sh types` 調整：
+
+| 設定鍵 | 選單名稱 | 預設值 | 說明 |
+|---|---|---|---|
+| `NOTIFY_HANDOFF_IMPLEMENT` | 交件單實作完成 | `true` | 實作者交付交件單時的進度通知 |
+| `NOTIFY_HANDOFF_REVIEW` | 交件單每輪審查 | `true` | 審查退回修正或通過並自動收尾時的進度通知 |
+| `NOTIFY_HANDOFF_FINISH` | 交件單收尾 | `true` | 收尾角色完成交付時的進度通知 |
+
+> **🚨 停點安全保護 (Safety Anchor Guarantee，不可關閉)**：
+> 當迴圈因任何原因停下需要人類處理時（如 `blocked`、達 `max_rounds` 上限、工作區未提交或 HEAD 不符、或審查通過等候手動執行 `handoff-finish`），系統會強制發送 `handoff-attention` 通知。**此類停點訊號不可被關閉**，確保迴圈絕不靜默掛起。
+
+### 3. Agent 身分標記格式
+
+交件單通知會自動從 Xirp session 提取當前停下 Agent 的工具名稱、模型與推理強度，標註格式如下：
+```text
+Agent Handoff (Claude / claude-opus-5-5 / high) (#6ec9b3e2)
+Agent Handoff (Codex / gpt-6.1-sol / medium) (#9a8b7c6d)
+```
+通知內容並附帶 7 碼短 commit SHA 以及清晰的「下一步」指引（如：下一位 Agent 誰接手，或提示你執行 `handoff-finish <change>`）。
+
+### 4. 傳訊失敗重試保障 (Retry)
+
+當 Stop 鉤子向審查者或實作者傳遞訊息（Xirp send）失敗，或開啟新 Session 失敗時：
+1. **交件單保留未處理**：交件單不會被標記為 `.routed`。
+2. **發送 Attention 警報**：發送一次 `🔴 需要你處理` 通知，指明傳訊或開啟失敗原因。
+3. **安全重試**：排解原因（如重啟 Xirp 服務）後，下次 hook 觸發或手動執行 `~/.config/wk-workflow/handoff/handoff-route --foreground` 即可立即重試，傳送成功後隨即補發進度通知。
+
+---
+
 ## 常見問題與排錯 Q&A
 
 ### Q1: Agent 停止後，為什麼完全沒有觸發下一位 Agent？
@@ -257,3 +304,4 @@ Codex 預設的 `workspace-write` 沙盒禁止對外網路存取。若收尾角�
 
 [^handoff-scripts]: [Agent Handoff Loop Scripts](/scripts/handoff/README.md)
 [^handoff-skill]: [Agent Handoff Skill](/template/common/skills/agent-handoff/SKILL.md)
+[^notify-telegram]: [Telegram Notify Guide](/docs/notify/telegram.md)

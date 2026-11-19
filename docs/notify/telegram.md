@@ -131,7 +131,7 @@ bash scripts/notify/telegram/update.sh types
 | `NOTIFY_HANDOFF_FINISH` | 收尾完成 | 收尾角色完成封存、更新文件與 commit；缺省開啟 |
 
 > **🚨 停點安全保護（不可關閉）**：
-> 當交接迴圈因任何原因停下需要人類處理時（如 blocked、達輪數上限、worktree 不乾淨、或審查通過等候手動執行 `handoff-finish`），系統會強制發送 `handoff-action-required` 通知，**此類停點訊號不可被關閉**，確保迴圈絕不靜默掛起。
+> 當交接迴圈因任何原因停下需要人類處理時（如 blocked、達輪數上限、worktree 不乾淨、或審查通過等候手動執行 `handoff-finish`），系統會強制發送 `handoff-attention` 通知，**此類停點訊號不可被關閉**，確保迴圈絕不靜默掛起。
 > 交件單通知會自動標記 Agent 身分，格式如：`Agent Handoff (Claude / claude-opus-5-5 / high)`。
 
 ### 交接迴圈通知
