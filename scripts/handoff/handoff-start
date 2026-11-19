@@ -106,7 +106,9 @@ else
   wt="$(ho_toplevel)" || die "not inside a Git worktree"
   [[ "$(git -C "$wt" branch --show-current)" == "feature/$change" ]] || die "--worktree here needs a checkout on feature/$change; $wt is on $(git -C "$wt" branch --show-current)"
 fi
+pi_new=0
 if (( impl_pi )); then
+  [[ -e "$wt/.pi/settings.json" ]] || pi_new=1
   ho_pi_settings "$wt" "$(kv_get "$scratch" implement.provider)" "$(kv_get "$scratch" implement.model)" "$(kv_get "$scratch" implement.effort)" 2>&1 \
     | sed 's/^/handoff-start: /' >&2; [[ ${PIPESTATUS[0]} -eq 0 ]] || exit 1
 fi
@@ -120,6 +122,7 @@ mkdir -p "$dir"
   printf 'reviewer:\n  session: %s\n  worktree:\n' "$reviewer"
   printf 'finish:\n  session:\n  worktree:\n  trigger: %s\n  delivery: %s\n' "$trigger" "$delivery"
 } > "$loop"
+(( pi_new )) && kv_set "$loop" implementer.pi_settings "$wt/.pi/settings.json"
 ho_copy_template "$scratch" implement "$loop" implement_template
 ho_copy_template "$scratch" review "$loop" review_template
 ho_copy_template "$scratch" finish "$loop" finish_template

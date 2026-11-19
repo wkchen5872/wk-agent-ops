@@ -104,7 +104,8 @@ Pi agent_settled --> wk-handoff extension --> handoff-route
 - 這個檔案不能讓 worktree 變髒（路由前的乾淨檢查會擋下）：寫入前把 `/.pi/settings.json` 加進 repo 的 `info/exclude`
   （`git rev-parse --git-path info/exclude`，每個 repo 只加一次），不改專案的 `.gitignore`。
 - 已有 `.pi/settings.json` 時：內容與要寫的完全相同就沿用（開啟失敗後的重試）；不同或被 Git 追蹤就拒絕開啟，說明該檔案，
-  不覆蓋。repo 自帶 Pi 專案設定時不能用 Pi 角色，列為已知限制。
+  不覆蓋。檔案由迴圈新建時，在 `loop.yaml` 記為 `<implementer|reviewer|finish>.pi_settings`；`handoff-cleanup` 只刪除有此紀錄、
+  且內容仍與範本相同的檔案，迴圈開始前就存在的同內容檔案不會被刪。repo 自帶 Pi 專案設定時不能用 Pi 角色，列為已知限制。
 - 一個 worktree 最多一個 Pi 角色（使用者決定）：實作 worktree 由實作角色使用；審查、收尾角色 `worktree: shared` 時與實作者同一個
   worktree，`new` 時各自是 `<impl>-review`、`<impl>-finish`。`handoff-start` 依此計算每個 worktree 的 Pi 角色數，超過一個即拒絕，
   指出角色並要求把其中的 Pi 審查或收尾改成 `worktree: new`。一個 Pi 角色與 Claude Code、Codex 角色共用 worktree 不受限。

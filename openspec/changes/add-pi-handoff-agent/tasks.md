@@ -29,7 +29,7 @@
 - [x] 5.1 路由前比對：交件單角色對應的 `loop.yaml` 範本為 Pi 時，比對 provider、model、effort、billing，並要求 `agent` 區塊存在且無 `unknown`；不符時發 attention（列出每一項）並寫入 `.routed`，不傳訊、不開 Session；Claude／Codex 範本跳過。測試要求：先寫失敗測試，四項各自不符、缺 `agent` 區塊、`unknown` 各一案——恰一則 attention、假 `xirp` 沒有 `session message` 或 `session:create`、交件單在 `.routed`、第二次執行沒有任何動作；相符時照常路由；既有的 claude／codex 路由測試維持通過。
 - [x] 5.2 開啟 Pi 審查或收尾 Session 前再執行 `ho_pi_verify`、extension 與信任檢查，並在該角色的 worktree 寫入 `.pi/settings.json`（`worktree: new` 時寫入新建的 worktree）；任一失敗失敗時歸為可重試的開啟失敗（attention 一次、不寫入 `.routed`、`routing.log` 記 `open-failed`）。`handoff-finish` 開 Pi 收尾前也驗證，失敗即非零結束。測試要求：先寫失敗測試——首次實作交件時審查角色 billing 不符、或審查 worktree 已有不同內容的 `.pi/settings.json`：沒有 `session:create`、一則 attention、交件單不在 `.routed`；修正假 `pi` 後再執行：審查 Session 開啟、交件單寫入 `.routed`、沒有第二則 attention；`handoff-finish` 驗證失敗時非零結束且沒有新 Session。
 - [x] 5.3 交件單通知的 Agent 資訊：Pi 交件單從 `agent` 區塊產生 `Pi / <provider>/<model> / <effort> / 訂閱|API`，手動執行與重試也顯示。測試要求：先寫失敗測試，以假通知腳本記錄的 JSON 斷言 agent 欄位；涵蓋訂閱、API、`unknown`、`--foreground` 重試；以通知腳本 dry-run 確認標題顯示正確。
-- [x] 5.4 `handoff-cleanup --yes` 保留主 worktree 時，移除其中由迴圈為 Pi 角色寫入的 `.pi/settings.json`（未被追蹤、內容等於 `loop.yaml` 某個 Pi 範本產生的設定）。測試要求：先寫失敗測試——`--worktree here` 於主 worktree 的 Pi 迴圈清理後檔案不存在；內容不同的檔案保留；沒有 Pi 範本的迴圈不動任何 `.pi` 檔案。
+- [x] 5.4 `handoff-cleanup --yes` 保留主 worktree 時，移除其中由迴圈為 Pi 角色寫入的 `.pi/settings.json`（`loop.yaml` 的 `<角色>.pi_settings` 記錄為迴圈建立、未被追蹤、內容仍等於該 Pi 範本產生的設定）。測試要求：先寫失敗測試——`--worktree here` 於主 worktree 的 Pi 迴圈清理後檔案不存在；內容不同的檔案保留；沒有 Pi 範本的迴圈不動任何 `.pi` 檔案。
 
 ## 6. Pi 停止觸發
 

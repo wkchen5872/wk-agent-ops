@@ -268,7 +268,9 @@ ho_open_role() {
   [[ -n "$project" ]] || { ho_err "no Xirp project registered for $main"; return 1; }
   if [[ "$(kv_get "$loop" "$tsec.harness")" == pi ]]; then
     ho_pi_ready "$loop" "$tsec" "${tsec%_template}" "$main" || return 1
+    local existed=0; [[ -e "$wt/.pi/settings.json" ]] && existed=1
     ho_pi_settings "$wt" "$(kv_get "$loop" "$tsec.provider")" "$(kv_get "$loop" "$tsec.model")" "$(kv_get "$loop" "$tsec.effort")" || return 1
+    (( existed )) || ho_loop_set "$dir" "$(ho_pi_role_key "$tsec").pi_settings" "$wt/.pi/settings.json"
   fi
   name="$(ho_render "$(kv_get "$loop" "$tsec.name")" "$change" "$head" "$round" "$report" "$delivery")"
   prompt="$(ho_render "$(kv_get "$loop" "$tsec.prompt")" "$change" "$head" "$round" "$report" "$delivery" \
@@ -290,15 +292,16 @@ ho_pi_billing() { case "$1" in oauth) echo subscription ;; api_key) echo api ;; 
 # The model must be listed under exactly this provider, support thinking unless effort is off, and the
 # provider's credential must be ready with the declared billing. Never prints credential values.
 ho_pi_verify() {
-  local role="$1" provider="$2" model="$3" effort="$4" billing="$5" warn="${6:-}" thinking json status auth actual
+  local role="$1" provider="$2" model="$3" effort="$4" billing="$5" warn="${6:-}" list thinking json status auth actual
   command -v pi >/dev/null 2>&1 || { ho_err "$role: the pi command was not found, so $provider/$model cannot be verified"; return 1; }
-  thinking="$(pi --list-models "$model" </dev/null 2>/dev/null \
-    | awk -v p="$provider" -v m="$model" 'NR > 1 && $1 == p && $2 == m { print $5; found = 1; exit } END { exit !found }')" \
+  list="$(pi --list-models "$model" </dev/null 2>/dev/null)" || { ho_err "$role: pi --list-models $model failed"; return 1; }
+  thinking="$(awk -v p="$provider" -v m="$model" 'NR > 1 && $1 == p && $2 == m { print $5; found = 1; exit } END { exit !found }' <<<"$list")" \
     || { ho_err "$role: model '$model' is not listed under provider '$provider' (pi --list-models $model)"; return 1; }
   if [[ "$effort" != off && "$thinking" != yes ]]; then
     ho_err "$role: $provider/$model does not support thinking, but effort is '$effort'"; return 1
   fi
-  json="$(pi auth check --provider "$provider" --json </dev/null 2>/dev/null)"
+  json="$(pi auth check --provider "$provider" --json </dev/null 2>/dev/null)" \
+    || { ho_err "$role: the credential check for $provider failed (pi auth check --provider $provider --json)"; return 1; }
   status="$(jq -r '.status // empty' <<<"$json" 2>/dev/null)"; auth="$(jq -r '.authType // empty' <<<"$json" 2>/dev/null)"
   [[ "$status" == ready ]] || { ho_err "$role: the credential for $provider is not ready (status: ${status:-unknown})"; return 1; }
   actual="$(ho_pi_billing "$auth")"
@@ -358,13 +361,18 @@ ho_pi_settings() {
   [[ -e "$f" ]] || { mkdir -p "$wt/.pi" && printf '%s\n' "$want" > "$f"; }
 }
 
-# ho_pi_settings_cleanup <loop.yaml> <worktree>: remove the settings file this loop wrote for a Pi role.
+# A role that creates the settings file records it as <implementer|reviewer|finish>.pi_settings in loop.yaml.
+ho_pi_role_key() { case "$1" in implement*) echo implementer ;; review*) echo reviewer ;; finish*) echo finish ;; esac; }
+
+# ho_pi_settings_cleanup <loop.yaml> <worktree>: remove the settings file this loop recorded as written,
+# when it still holds what the loop wrote; a file that existed before the loop is never recorded.
 ho_pi_settings_cleanup() {
-  local loop="$1" f="$2/.pi/settings.json" have sec
+  local loop="$1" f="$2/.pi/settings.json" have role sec
   [[ -f "$f" && -z "$(git -C "$2" ls-files -- .pi/settings.json 2>/dev/null)" ]] || return 0
   have="$(jq -cS . "$f" 2>/dev/null)" || return 0
   for sec in implement_template review_template finish_template; do
-    [[ "$(kv_get "$loop" "$sec.harness" 2>/dev/null)" == pi ]] || continue
+    role="$(ho_pi_role_key "$sec")"
+    [[ "$(kv_get "$loop" "$sec.harness" 2>/dev/null)" == pi && "$(kv_get "$loop" "$role.pi_settings" 2>/dev/null)" == "$f" ]] || continue
     if [[ "$have" == "$(ho_pi_settings_json "$(kv_get "$loop" "$sec.provider")" "$(kv_get "$loop" "$sec.model")" "$(kv_get "$loop" "$sec.effort")")" ]]; then
       rm -f "$f"; rmdir "$2/.pi" 2>/dev/null; printf 'Removed %s\n' "$f"; return 0
     fi
@@ -384,6 +392,8 @@ ho_pi_record_check() {
     [[ -n "$out" ]] && out+="；"
     out+="$k 範本為 ${want}、實際為 $got"
   done
+  got="$(kv_get "$rec" agent.session 2>/dev/null)"
+  if [[ -z "$got" || "$got" == unknown ]]; then [[ -n "$out" ]] && out+="；"; out+="session 為 unknown"; fi
   [[ -z "$out" ]] && return 0
   printf '%s\n' "$out"; return 1
 }
@@ -401,13 +411,16 @@ ho_pi_record_label() {
 # --- finish ------------------------------------------------------------------------
 # ho_finish_check <dir>: prints the passing head, or the reason it cannot finish (exit 1).
 ho_finish_check() {
-  local dir="$1" loop="$1/loop.yaml" rec impl head
+  local dir="$1" loop="$1/loop.yaml" rec impl head why
   impl="$(kv_get "$loop" implementer.worktree)"
   if ho_has_finish_record "$dir"; then echo "the loop already has a finish record (a blocked one is retried with handoff-finish)"; return 1; fi
   rec="$(ho_newest_in_loop "$dir")" || { echo "the loop has no records"; return 1; }
   if [[ "$(kv_get "$rec" role)" != review ]]; then echo "the newest record is $(basename "$rec"), not a passing review"; return 1; fi
   if [[ "$(kv_get "$rec" status)" != done || "$(kv_get "$rec" verdict)" != pass ]]; then
     echo "the newest review is status $(kv_get "$rec" status), verdict $(kv_get "$rec" verdict)"; return 1
+  fi
+  if ! why="$(ho_pi_record_check "$loop" "$rec")"; then
+    echo "the passing review $(basename "$rec") does not match the Pi review template: $why"; return 1
   fi
   head="$(kv_get "$rec" head)"
   if [[ "$(ho_head "$impl")" != "$head" ]]; then
@@ -439,6 +452,7 @@ ho_finish_retry() {
   while IFS= read -r d; do
     for f in "$d"/[0-9][0-9]-review.yaml; do
       [[ -e "$f" && "$(kv_get "$f" status)" == done && "$(kv_get "$f" verdict)" == pass ]] || continue
+      ho_pi_record_check "$loop" "$f" >/dev/null || continue
       n=$((10#$(basename "$f" | cut -c1-2))); (( n > pn )) && { pn=$n; pass="$(kv_get "$f" head)"; }
     done
   done < <(ho_loop_dirs "$dir")

@@ -120,7 +120,8 @@ the sessions and worktrees it would remove. With `--yes` it:
    `<main worktree>/.agent-handoff/archive/<change-id>/<worktree name>/` (still ignored by Git);
 2. deletes the loop's Xirp sessions;
 3. removes every loop worktree except the main worktree, without `--force`. In a kept main worktree
-   it removes the `.pi/settings.json` the loop wrote for a Pi role.
+   it removes the `.pi/settings.json` the loop created for a Pi role (recorded in `loop.yaml` and
+   unchanged); a file that existed before the loop is kept.
 
 The branch `feature/<change-id>` is kept: the work is not merged yet. Merge and delete the
 branch separately.

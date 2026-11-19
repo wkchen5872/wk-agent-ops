@@ -1137,7 +1137,7 @@ if [[ "$1" == --list-models ]]; then
   awk -v q="$2" 'index($2, q) {printf "%s  %s  200K  64K  %s  yes\n", $1, $2, $3}' "$D/models"; exit 0
 fi
 if [[ "$1 $2" == "auth check" ]]; then
-  if [[ -f "$D/auth-$4.json" ]]; then cat "$D/auth-$4.json"; exit 0; fi
+  if [[ -f "$D/auth-$4.json" ]]; then cat "$D/auth-$4.json"; exit "$(cat "$D/auth-rc" 2>/dev/null || echo 0)"; fi
   printf '{"status":"not_ready","provider":"%s","reason":"provider_not_found"}\n' "$4"; exit 1
 fi
 exit 2
@@ -1231,6 +1231,8 @@ SH
   ! grep -q 'extra usage' <<<"$out" && ok "Anthropic API keys and other subscriptions get no warning" || bad "Anthropic API keys and other subscriptions get no warning ($out)"
   out="$(v implement anthropic claude-opus-4-7 high subscription warn)"; rc=$?; all+="$out"
   [[ "$rc" != 0 ]] && ! grep -q 'extra usage' <<<"$out" && ok "a mismatched Anthropic subscription is refused without the warning" || bad "a mismatched Anthropic subscription is refused without the warning ($out)"
+  printf '9\n' > "$FAKE_PI_DIR/auth-rc"; out="$(v implement openai-codex gpt-6.2-sol high subscription)"; rc=$?; all+="$out"; rm -f "$FAKE_PI_DIR/auth-rc"
+  [[ "$rc" != 0 ]] && grep -q 'credential check' <<<"$out" && ok "a failing credential check is refused even when it prints ready (codex-pi-handoff-r03/F-04)" || bad "a failing credential check is refused even when it prints ready (codex-pi-handoff-r03/F-04) ($out)"
   ! grep -q 'SECRET' <<<"$all" && ok "verification output never contains credential values" || bad "verification output never contains credential values"
 
   # 2.3 handoff-pi-trust
@@ -1307,6 +1309,9 @@ SH
   [[ "$rc" == 0 ]] && grep -q 'extra usage' <<<"$err" && ok "a matching Anthropic subscription starts with the warning on stderr" || bad "a matching Anthropic subscription starts with the warning on stderr ($err)"
   pi_auth anthropic ready api_key
 
+  pi_project "$PI_IMPL" "$CX_REV" "$CX_FIN"; printf '9\n' > "$FAKE_PI_DIR/auth-rc"; out="$(pstart "$PD" add-export 2>&1)"; rc=$?; rm -f "$FAKE_PI_DIR/auth-rc"
+  [[ "$rc" != 0 && "$(created)" == 0 && ! -d "$PW" ]] && ok "handoff-start opens nothing when the credential check fails (codex-pi-handoff-r03/F-04)" || { bad "handoff-start opens nothing when the credential check fails (codex-pi-handoff-r03/F-04)"; printf '       %s\n' "$out"; }
+
   # 3.3 overrides
   pi_project "$CX_IMPL" "$CX_REV" "$CX_FIN"; out="$(pstart "$PD" add-export --review pi:openai-codex/gpt-6.2-sol:high 2>&1)"; rc=$?
   [[ "$rc" != 0 && "$(created)" == 0 ]] && grep -qF 'pi:<provider>/<model>:<effort>:<billing>' <<<"$out" && ok "a Pi override without billing shows the expected form" || bad "a Pi override without billing shows the expected form ($out)"
@@ -1347,8 +1352,13 @@ SH
   [[ "$(kv_get "$W1/.agent-handoff/add-export/02-implement.yaml" agent.billing 2>/dev/null)" == unknown ]] \
     && ok "a failed credential check writes billing unknown and still writes the record" || bad "a failed credential check writes billing unknown and still writes the record"
   pi_auth openai-codex ready oauth
+  printf '9\n' > "$FAKE_PI_DIR/auth-rc"
+  (cd "$W1" && env PATH="$FAKES:$PATH" "${PIENV[@]}" "$WRITE" --change add-export --role implement --status done --head HEAD) >/dev/null 2>&1
+  rm -f "$FAKE_PI_DIR/auth-rc"; w4="$(ls "$W1/.agent-handoff/add-export"/[0-9][0-9]-implement.yaml | tail -1)"
+  [[ "$(kv_get "$w4" agent.billing 2>/dev/null)" == unknown ]] && ok "a failing credential check writes billing unknown even when it prints ready (codex-pi-handoff-r03/F-04)" || bad "a failing credential check writes billing unknown even when it prints ready (codex-pi-handoff-r03/F-04)"
   (cd "$W1" && env -u PI_CODING_AGENT -u PI_PROVIDER -u PI_MODEL -u PI_REASONING_LEVEL -u PI_SESSION_ID PATH="$FAKES:$PATH" "$WRITE" --change add-export --role implement --status done --head HEAD) >/dev/null 2>&1
-  [[ -f "$W1/.agent-handoff/add-export/03-implement.yaml" ]] && ! grep -q '^agent:' "$W1/.agent-handoff/add-export/03-implement.yaml" \
+  w5="$(ls "$W1/.agent-handoff/add-export"/[0-9][0-9]-implement.yaml | tail -1)"
+  [[ "$w5" != "$w4" ]] && ! grep -q '^agent:' "$w5" \
     && ok "a record written outside Pi has no agent section" || bad "a record written outside Pi has no agent section"
   (cd "$W1" && env PATH="$FAKES:$PATH" "${PIENV[@]}" "$WRITE" --change add-export --role implement --status done --head HEAD --provider openai) >/dev/null 2>&1 \
     && bad "handoff-write takes no agent arguments" || ok "handoff-write takes no agent arguments"
@@ -1389,6 +1399,9 @@ SH
   mismatch_case "a Pi role's record without an agent section stops with one notice" "agent"
   pi_loop; rm -f "$FAKE_PI_DIR/auth-openai-codex.json"; pi_rec "$LD" "${PIENV[@]}"
   mismatch_case "a record with an unknown value stops with one notice showing unknown" "unknown"
+  pi_loop; (cd "$LD" && env -u PI_SESSION_ID PATH="$FAKES:$PATH" PI_CODING_AGENT=true PI_PROVIDER=openai-codex PI_MODEL=gpt-6.2-sol PI_REASONING_LEVEL=high \
+    "$WRITE" --change add-export "${REC_ARGS[@]}") >/dev/null 2>&1
+  mismatch_case "a record without a Pi session ID stops with one notice (codex-pi-handoff-r03/F-03)" "session"
   pi_loop; pi_rec "$LD" "${PIENV[@]}"; proute "$LD"
   [[ "$(created)" == 1 && "$(kinds)" == implement ]] && routed "$LD" 01-implement.yaml && ok "a matching Pi record is routed as usual" || bad "a matching Pi record is routed as usual ($(kinds))"
   [[ "$(jl | tail -1 | jq -r .agent)" == "Pi / openai-codex/gpt-6.2-sol / high / 訂閱" ]] && ok "the notice shows Pi's provider, model, effort and subscription from the record" || bad "the notice shows Pi's provider, model, effort and subscription from the record ($(jl | tail -1))"
@@ -1433,6 +1446,19 @@ SH
   out="$(HOME="$PI_HOME" finish_in "$LD" add-export 2>&1)"; rc=$?
   [[ "$rc" != 0 && "$(created)" == 0 ]] && grep -q billing <<<"$out" && ok "handoff-finish refuses a Pi finish role that fails verification" || bad "handoff-finish refuses a Pi finish role that fails verification ($out)"
 
+  # codex-pi-handoff-r03/F-02: manual finish and its retry use the same Pi record check
+  pf_loop() { m=$((m + 1)); LD="$tmp/pi-pf$m"; new_loop "$LD"; use_project "$LD"; fresh_state "pipf$m"; pi_state "pf$m"; pi_home "pf$m" "$LD"; pi_review_template "$LD"; rpt "$LD"; hw "$LD" "${REC_ARGS[@]}"; }
+  pi_review_rec() { local d="$1"; shift; (cd "$d" && env PATH="$FAKES:$PATH" "$@" "$WRITE" --change add-export --role review --status done --verdict pass --head HEAD --report r.md) >/dev/null 2>&1; }
+  pf_loop; pi_review_rec "$LD" "${PIENV[@]}" PI_MODEL=gpt-6.1-terra
+  out="$(HOME="$PI_HOME" finish_in "$LD" add-export 2>&1)"; rc=$?
+  [[ "$rc" != 0 && "$(created)" == 0 ]] && grep -q 'gpt-6.1-terra' <<<"$out" && ok "handoff-finish refuses a passing Pi review that differs from its template" || bad "handoff-finish refuses a passing Pi review that differs from its template ($out)"
+  pf_loop; pi_review_rec "$LD" "${PIENV[@]}"
+  out="$(HOME="$PI_HOME" finish_in "$LD" add-export 2>&1)"; rc=$?
+  [[ "$rc" == 0 && "$(created)" == 1 ]] && ok "handoff-finish accepts a matching passing Pi review" || bad "handoff-finish accepts a matching passing Pi review ($out)"
+  pf_loop; pi_review_rec "$LD" "${PIENV[@]}" PI_MODEL=gpt-6.1-terra; hw "$LD" --role finish --status blocked --head HEAD --note stopped
+  out="$(HOME="$PI_HOME" finish_in "$LD" add-export 2>&1)"; rc=$?
+  [[ "$rc" != 0 && "$(created)" == 0 && -z "$(msgs)" ]] && grep -q 'passing review' <<<"$out" && ok "a finish retry ignores a passing Pi review that differs from its template" || bad "a finish retry ignores a passing Pi review that differs from its template ($out)"
+
   # 5.4 cleanup removes the settings the loop wrote in the main worktree
   pi_state cleanup
   pi_project "$PI_IMPL" "$CX_REV" "$CX_FIN"; git -C "$PD" switch -q feature/add-export
@@ -1442,6 +1468,11 @@ SH
   pi_project "$PI_IMPL" "$CX_REV" "$CX_FIN"; git -C "$PD" switch -q feature/add-export
   pstart "$PD" add-export --worktree here >/dev/null 2>&1; printf '{"defaultModel":"mine"}\n' > "$PD/.pi/settings.json"
   pclean "$PD"; [[ "$(cat "$PD/.pi/settings.json" 2>/dev/null)" == '{"defaultModel":"mine"}' ]] && ok "cleanup keeps Pi settings it did not write" || bad "cleanup keeps Pi settings it did not write"
+  pi_project "$PI_IMPL" "$CX_REV" "$CX_FIN"; git -C "$PD" switch -q feature/add-export
+  ex4="$(git -C "$PD" rev-parse --path-format=absolute --git-path info/exclude)"; mkdir -p "$(dirname "$ex4")"; printf '/.pi/settings.json\n' >> "$ex4"
+  mkdir -p "$PD/.pi"; printf '{"defaultModel":"gpt-6.2-sol","defaultProvider":"openai-codex","defaultThinkingLevel":"high"}\n' > "$PD/.pi/settings.json"; cp "$PD/.pi/settings.json" "$tmp/pi-own-settings"
+  pstart "$PD" add-export --worktree here >/dev/null 2>&1; pclean "$PD"
+  cmp -s "$PD/.pi/settings.json" "$tmp/pi-own-settings" && ok "cleanup keeps identical Pi settings that existed before the loop (codex-pi-handoff-r03/F-01)" || bad "cleanup keeps identical Pi settings that existed before the loop (codex-pi-handoff-r03/F-01)"
   pi_project "$CX_IMPL" "$CX_REV" "$CX_FIN"; git -C "$PD" switch -q feature/add-export
   ex3="$(git -C "$PD" rev-parse --path-format=absolute --git-path info/exclude)"; mkdir -p "$(dirname "$ex3")"; printf '/.pi/settings.json\n' >> "$ex3"
   mkdir -p "$PD/.pi"; printf '{"defaultModel":"gpt-6.2-sol","defaultProvider":"openai-codex","defaultThinkingLevel":"high"}\n' > "$PD/.pi/settings.json"
