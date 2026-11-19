@@ -24,7 +24,7 @@
 ## 5. 整合驗收
 
 - [x] 5.1 執行 `bash scripts/notify/telegram/test.sh`、`python3 -m unittest discover -s scripts/notify/tests -v`、`openspec validate add-pi-notify-hook --strict`。測試要求：全數通過，結果記入 Work Item。
-- [ ] 5.2 真實演練（使用訂閱登入的 provider）：在 Pi TUI 完成一輪對話、讓 pstack `ask_user_question` 開選單、按 Esc 中止一次、執行一次 `pi -p`、讓一個 subagent 結束；比對收到的通知恰為一則工作結束與一則等待回應，其餘沒有通知；兩則通知的工具行都帶當下 Pi 使用的 model。另在 Claude Code 與 Codex 各完成一輪，確認工具行分別顯示 `Claude Code (<家族> <版本>)` 與 `Codex (<model ID>)`。錯誤路徑以中斷網路或無效模型觸發一次，確認收到異常停止且沒有錯誤原文。測試要求：Work Item 記錄每一步的預期與實際通知。
+- [x] 5.2 真實演練（使用訂閱登入的 provider）：在 Pi TUI 完成一輪對話、讓 pstack `ask_user_question` 開選單、按 Esc 中止一次、執行一次 `pi -p`、讓一個 subagent 結束；比對收到的通知恰為一則工作結束與一則等待回應，其餘沒有通知；兩則通知的工具行都帶當下 Pi 使用的 model。另在 Claude Code 與 Codex 各完成一輪，確認工具行分別顯示 `Claude Code (<家族> <版本>)` 與 `Codex (<model ID>)`。錯誤路徑以中斷網路或無效模型觸發一次，確認收到異常停止且沒有錯誤原文。測試要求：Work Item 記錄每一步的預期與實際通知。
 
 ## Workflow follow-up
 
