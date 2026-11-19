@@ -48,7 +48,7 @@
 ### 1. 事件流
 
 ```
-Pi 主 session（ctx.hasUI 為真，且沒有 PI_SUBAGENT_PARENT_SESSION）
+Pi 主 session（ctx.mode 為 tui，且沒有 PI_SUBAGENT_PARENT_SESSION）
   |
   +-- agent_start ----------------> running = true
   +-- agent_end(messages) --------> lastStop = 最後一則 assistant 的 stopReason
@@ -74,13 +74,14 @@ Pi 主 session（ctx.hasUI 為真，且沒有 PI_SUBAGENT_PARENT_SESSION）
 
 ### 2. 通知範圍
 
-- 用 `ctx.hasUI` 判斷是否互動：print、JSON 模式沒有 UI；pstack subagent 另以 `PI_SUBAGENT_PARENT_SESSION` 排除（它是 RPC
+- 用 `ctx.mode === "tui"` 判斷是否互動：print、JSON 模式沒有 UI；RPC 模式的 `ctx.hasUI` 也是真，但驅動它的客戶端可能沒有畫面，
+  所以不用 `hasUI`（審查 `pi-notify-review01-r01/F-01`）；pstack subagent 另以 `PI_SUBAGENT_PARENT_SESSION` 排除（它是 RPC
   子程序，且父 session 會取消子 agent 的 UI 提示）。
 - 等待回應只在執行中送出（`agent_start` 到 `agent_settled` 之間）：使用者閒置時自己打開的選單（例如 `/pstack-agents`）
   人就在畫面前，不需要通知。
 - 同一段等待只送一次：依靠 Pi 已把重疊提示合併成一段 `ui_prompt_start`。
 - Xirp 前景開啟的 Pi session 已確認是 TUI：程序鏈為 `tmux new-session -d -s xirp-<id>` → Xirp node（`@chirp/squab`）→ `pi`，
-  沒有 `-p` 或 `--mode` 參數，所以 `hasUI` 為真、會通知（2026-11-18 於本 change 規劃 session 查證）。交接迴圈以
+  沒有 `-p` 或 `--mode` 參數，所以 `ctx.mode` 為 `tui`、會通知（2026-11-18 於本 change 規劃 session 查證）。交接迴圈以
   `session:create` 且 `background: true` 開啟的 Pi session 推測相同但尚未查證，列為 task；若不是 TUI，依規則不通知，屆時再議。
 
 ### 3. 事件表與通知腳本
@@ -99,8 +100,9 @@ Pi 主 session（ctx.hasUI 為真，且沒有 PI_SUBAGENT_PARENT_SESSION）
 
 - 來源 `scripts/notify/pi/ai-notify.ts`；第一行為固定的擁有標記（例如 `// managed by wk-agent-ops ai-notify`）。
 - 偵測：`command -v pi` 或 Pi agent 目錄（`${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}`）存在。
-- `register_hook` 加入 `register_pi_extension`：目標不存在或帶標記時複製覆蓋；存在但沒有標記時不動並在 stderr 警告。
-  `fix-hooks` 走同一個函式。`unregister_hook` 加入 `unregister_pi_extension`：只刪帶標記的檔案。
+- `register_hook` 加入 `register_pi_extension`：目標不存在或為帶標記的一般檔案時複製覆蓋；存在但沒有標記，或是符號連結（含斷鏈）時不動並在 stderr 警告
+  （審查 `pi-notify-review01-r01/F-02`）。
+  `fix-hooks` 走同一個函式。`unregister_hook` 加入 `unregister_pi_extension`：只刪帶標記的一般檔案，符號連結不動。
 - `update.sh status` 列出 Pi：已安裝、未偵測到 Pi、或被同名檔案擋住。
 - 安裝提示：已開啟的 Pi session 需 `/reload` 或重開。
 - extension 內以 `${HOME}/.config/ai-notify/hooks/telegram-notify.sh` 為通知腳本路徑，不存在時直接返回。

@@ -40,12 +40,12 @@ extension（來源 `scripts/notify/pi/ai-notify.ts`）只做事件轉接，以�
 
 ## 哪些 session 會通知
 
-只有互動的主 session：`ctx.hasUI` 為真，且環境沒有 `PI_SUBAGENT_PARENT_SESSION`。
+只有互動的主 session：`ctx.mode` 為 `tui`，且環境沒有 `PI_SUBAGENT_PARENT_SESSION`。不用 `ctx.hasUI`，因為 RPC 模式的 `hasUI` 也是真，即使驅動它的客戶端沒有任何畫面。
 
 | 執行方式 | 通知 |
 |---|---|
 | Pi TUI（包含 Xirp 前景與背景開啟的 session，皆為不帶模式參數的 `pi`） | 會 |
-| `pi -p`（print）、`--mode json` | 不會（`hasUI` 為假） |
+| `pi -p`（print）、`--mode json`、`--mode rpc` | 不會（`ctx.mode` 不是 `tui`） |
 | pstack subagent（`pi --mode rpc`，帶 `PI_SUBAGENT_PARENT_SESSION`） | 不會 |
 
 通知在 detached 子程序中執行，Pi 不等待；通知腳本不存在、啟動失敗或 Telegram 失敗都被吞掉，不影響 Pi。
@@ -70,10 +70,11 @@ extension（來源 `scripts/notify/pi/ai-notify.ts`）只做事件轉接，以�
    ```
 
    `Pi:` 一行為下列之一：`registered`、`not registered`（偵測到 Pi 但尚未安裝）、`not detected`、
-   `unavailable (existing ai-notify.ts without the ownership marker)`。
+   `unavailable (existing ai-notify.ts is a link or lacks the ownership marker)`。
 
-擁有標記是檔案第一行 `// managed by wk-agent-ops ai-notify`。installer 只覆寫或刪除帶標記的檔案；
-同名但沒有標記的檔案保留不動，安裝時在 stderr 警告，`status` 顯示 `unavailable`。
+擁有標記是檔案第一行 `// managed by wk-agent-ops ai-notify`。installer 只覆寫或刪除帶標記的一般檔案；
+同名但沒有標記的檔案，以及任何符號連結（包含斷鏈與指向帶標記檔案的連結），都保留不動，連結的目的檔也不會被寫入，
+安裝時在 stderr 警告，`status` 顯示 `unavailable`。
 
 移除：`bash scripts/notify/telegram/uninstall.sh` 會刪除帶標記的 `ai-notify.ts`，同目錄其他 extension 不動。
 也可以手動刪除該檔案後在 Pi 執行 `/reload`。
@@ -89,4 +90,4 @@ extension（來源 `scripts/notify/pi/ai-notify.ts`）只做事件轉接，以�
 
 **`status` 顯示 `unavailable`**
 
-`~/.pi/agent/extensions/ai-notify.ts` 是你自己的檔案。改名或移走後重跑 `fix-hooks`。
+`~/.pi/agent/extensions/ai-notify.ts` 是你自己的檔案或符號連結。改名或移走後重跑 `fix-hooks`。

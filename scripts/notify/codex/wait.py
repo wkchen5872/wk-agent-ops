@@ -135,6 +135,9 @@ def sanitized_trigger(payload):
     # Only a generic tool label may reach a message; never the tool input.
     tool = payload.get("tool_name")
     trigger["tool_name"] = tool if isinstance(tool, str) and re.fullmatch(r"[A-Za-z0-9_.:-]{1,64}", tool) else ""
+    # The model labels the tool line of a delayed notice; the hook cleans it again before display.
+    model = payload.get("model")
+    trigger["model"] = model if isinstance(model, str) and re.fullmatch(r"[A-Za-z0-9._:/\[\]-]{1,128}", model) else ""
     trigger["kind"] = "permission" if payload.get("kind") == "permission" else "question"
     requested = payload.get("requested_at")
     trigger["requested_at"] = requested if isinstance(requested, (int, float)) else time.time()
@@ -307,6 +310,8 @@ def send(trigger, event, tag):
     payload = {"session_id": trigger["session_id"], "cwd": trigger["cwd"], "hook_event_name": tag}
     if trigger.get("tool_name"):
         payload["tool_name"] = trigger["tool_name"]
+    if trigger.get("model"):
+        payload["model"] = trigger["model"]
     subprocess.run(["bash", str(hook), event, "Codex"], input=json.dumps(payload).encode(),
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5, check=False)
 

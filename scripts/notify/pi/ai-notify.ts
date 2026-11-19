@@ -14,8 +14,9 @@ import { join } from "node:path";
 
 const HOOK = join(homedir(), ".config", "ai-notify", "hooks", "telegram-notify.sh");
 
+// hasUI is also true in RPC mode, where a client may drive Pi without any screen; only the TUI counts.
 function interactiveMain(ctx: ExtensionContext): boolean {
-  return ctx.hasUI && !process.env.PI_SUBAGENT_PARENT_SESSION;
+  return ctx.mode === "tui" && !process.env.PI_SUBAGENT_PARENT_SESSION;
 }
 
 function notify(event: string, hookEventName: string, ctx: ExtensionContext, stopReason?: string): void {

@@ -369,16 +369,21 @@ _pi_detected() {
   [[ -d "${PI_CODING_AGENT_DIR:-${HOME}/.pi/agent}" ]] || command -v pi &>/dev/null
 }
 
+# A symbolic link (even a broken one) is never ours: its target may live anywhere.
 _pi_extension_owned() {
-  [[ -f "$1" ]] && [[ "$(head -n 1 "$1" 2>/dev/null)" == "${PI_EXTENSION_MARKER}" ]]
+  [[ -f "$1" && ! -L "$1" ]] && [[ "$(head -n 1 "$1" 2>/dev/null)" == "${PI_EXTENSION_MARKER}" ]]
+}
+
+_pi_extension_present() {
+  [[ -e "$1" || -L "$1" ]]
 }
 
 # Public: install the owned Pi extension; a same-named file without the marker is never touched.
 register_pi_extension() {
   local target
   target="$(_pi_extension_file)"
-  if [[ -e "${target}" ]] && ! _pi_extension_owned "${target}"; then
-    echo "  ⚠ Pi notifications not installed: ${target} exists without the wk-agent-ops ownership marker; left unchanged." >&2
+  if _pi_extension_present "${target}" && ! _pi_extension_owned "${target}"; then
+    echo "  ⚠ Pi notifications not installed: ${target} is a link or lacks the wk-agent-ops ownership marker; left unchanged." >&2
     return 0
   fi
   mkdir -p "$(dirname "${target}")"
@@ -461,8 +466,8 @@ show_hook_status() {
   pi_file="$(_pi_extension_file)"
   if _pi_extension_owned "${pi_file}"; then
     echo "Pi: registered"
-  elif [[ -e "${pi_file}" ]]; then
-    echo "Pi: unavailable (existing ai-notify.ts without the ownership marker)"
+  elif _pi_extension_present "${pi_file}"; then
+    echo "Pi: unavailable (existing ai-notify.ts is a link or lacks the ownership marker)"
   elif _pi_detected; then
     echo "Pi: not registered"
   else

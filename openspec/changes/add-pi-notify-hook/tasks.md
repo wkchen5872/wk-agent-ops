@@ -13,7 +13,7 @@
 
 ## 3. Pi extension
 
-- [x] 3.1 新增 `scripts/notify/pi/ai-notify.ts`：首行為擁有標記；只在 `ctx.hasUI` 為真且沒有 `PI_SUBAGENT_PARENT_SESSION` 時運作；依 design.md 決策 1 追蹤 `agent_start`、`agent_end`、`agent_settled`、`ui_prompt_start`；以 detached 的 `bash <hook> <event> Pi` 傳送 `{hook_event_name, session_id, cwd, stop_reason, model}`（`model` 取 `ctx.model?.id`，沒有時省略），不等待結果、吞掉所有錯誤；通知腳本不存在時直接返回；不轉送提示標題、訊息或錯誤內容。測試要求：以不呼叫模型的方式做載入檢查（例如 `pi -e scripts/notify/pi/ai-notify.ts --list-models` 結束碼為 0 且沒有 extension 錯誤）；以 `rg` 確認檔案中沒有讀取提示 `title` 或 `errorMessage` 後送出的程式碼；行為由 5.2 真實演練確認。
+- [x] 3.1 新增 `scripts/notify/pi/ai-notify.ts`：首行為擁有標記；只在 `ctx.mode === "tui"` 且沒有 `PI_SUBAGENT_PARENT_SESSION` 時運作（RPC 的 `hasUI` 也為真，不能用來判斷）；依 design.md 決策 1 追蹤 `agent_start`、`agent_end`、`agent_settled`、`ui_prompt_start`；以 detached 的 `bash <hook> <event> Pi` 傳送 `{hook_event_name, session_id, cwd, stop_reason, model}`（`model` 取 `ctx.model?.id`，沒有時省略），不等待結果、吞掉所有錯誤；通知腳本不存在時直接返回；不轉送提示標題、訊息或錯誤內容。測試要求：以不呼叫模型的方式做載入檢查（例如 `pi -e scripts/notify/pi/ai-notify.ts --list-models` 結束碼為 0 且沒有 extension 錯誤）；以 `rg` 確認檔案中沒有讀取提示 `title` 或 `errorMessage` 後送出的程式碼；行為由 5.2 真實演練確認。
 
 ## 4. 安裝、移除與狀態
 

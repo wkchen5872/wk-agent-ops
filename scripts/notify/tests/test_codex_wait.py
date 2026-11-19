@@ -117,11 +117,14 @@ class CodexWaitTests(unittest.TestCase):
         return [p for p in (self.notify / "state").glob("codex-*.json")
                 if re.fullmatch(r"codex-[0-9a-f]{24}\.json", p.name)]
 
-    def trigger(self, event="codex-question", session=SESSION, turn=TURN, transcript="/private/PRIVATE-TRANSCRIPT"):
+    def trigger(self, event="codex-question", session=SESSION, turn=TURN, transcript="/private/PRIVATE-TRANSCRIPT",
+                model=None):
         payload = {"hook_event_name": "PermissionRequest" if event == "codex-permission" else "PreToolUse",
                    "session_id": session, "turn_id": turn, "cwd": "/tmp/project", "tool_name": "Bash",
                    "tool_input": {"command": "PRIVATE-COMMAND --secret-arg", "questions": ["PRIVATE-QUESTION"]},
                    "transcript_path": transcript}
+        if model is not None:
+            payload["model"] = model
         before = time.monotonic()
         result = subprocess.run(["bash", str(self.hooks / "telegram-notify.sh"), event, "Codex"],
                                 input=json.dumps(payload), text=True, capture_output=True,
@@ -168,6 +171,37 @@ class CodexWaitTests(unittest.TestCase):
         self.wait_done()
         self.assertEqual(1, len(self.messages()))
         self.assertIn("Waiting for Your Approval", self.messages()[0])
+
+    # Review pi-notify-review01-r01/F-03: delayed notices keep the model the hook payload named.
+    def test_authorization_wait_shows_the_payload_model(self):
+        self.settings(approval=True, questions=False, extra="NOTIFY_AUTHORIZATION_DELAY_SECONDS=0\n")
+        self.scenario([snapshot(), snapshot("waitingOnApproval"), snapshot(turn_status="completed")])
+        self.trigger("codex-permission", model="gpt-6.1-terra")
+        self.wait_done()
+        self.assertEqual(1, len(self.messages()))
+        self.assertIn("\n🤖 Codex (gpt-6.1-terra)\n", self.messages()[0])
+
+    def test_question_wait_shows_the_payload_model(self):
+        self.scenario([snapshot(), snapshot("waitingOnUserInput"), snapshot("waitingOnUserInput"),
+                       snapshot(turn_status="completed")])
+        self.trigger(model="gpt-6.1-terra")
+        self.wait_done()
+        self.assertEqual(1, len(self.messages()))
+        self.assertIn("\n🤖 Codex (gpt-6.1-terra)\n", self.messages()[0])
+
+    def test_wait_without_or_with_an_unsafe_model_shows_the_tool_alone(self):
+        self.settings(approval=True, questions=False, extra="NOTIFY_AUTHORIZATION_DELAY_SECONDS=0\n")
+        for model in (None, "PRIVATE model `x`"):
+            with self.subTest(model=model):
+                (self.home / "messages").unlink(missing_ok=True)
+                for state in self.state_files():
+                    state.unlink()
+                self.scenario([snapshot(), snapshot("waitingOnApproval"), snapshot(turn_status="completed")])
+                self.trigger("codex-permission", model=model)
+                self.wait_done()
+                self.assertEqual(1, len(self.messages()))
+                self.assertIn("\n🤖 Codex\n", self.messages()[0])
+                self.assertNotIn("PRIVATE", self.messages()[0])
 
     def test_repeated_hooks_share_one_worker(self):
         self.scenario([snapshot("waitingOnUserInput")] * 3 + [snapshot(turn_status="completed")])

@@ -147,7 +147,7 @@ start_codex_inspection() {
   [[ -x "${python}" && -f "${checker}" ]] || return 0
   command -v jq >/dev/null 2>&1 || return 0
   trigger="$(printf '%s' "${STDIN_JSON}" | jq -c --arg kind "$2" \
-    '{session_id,turn_id,cwd,tool_name,transcript_path,kind:$kind}' 2>/dev/null)" || return 0
+    '{session_id,turn_id,cwd,tool_name,transcript_path,model,kind:$kind}' 2>/dev/null)" || return 0
   printf '%s' "${trigger}" | "${python}" "${checker}" start >/dev/null 2>&1 || true
 }
 

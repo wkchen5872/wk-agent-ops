@@ -1512,6 +1512,100 @@ assert_equal "PI-REG-07: setup tells open Pi sessions to /reload" "true" "$(grep
 assert_equal "PI-REG-07: fix-hooks twice leaves one copy" \
   "1" "$(ls "${PI_FIX_HOME}/.pi/agent/extensions" | grep -c 'ai-notify')"
 
+# [PI-REG-08] An owned regular file with stale content is refreshed (review pi-notify-review01-r01/F-02).
+PI_HOME_STALE="$(pi_home stale agent)"
+mkdir -p "${PI_HOME_STALE}/.pi/agent/extensions"
+printf '%s\n' "${PI_MARKER}" '// old version' > "${PI_HOME_STALE}/.pi/agent/extensions/ai-notify.ts"
+pi_registry "${PI_HOME_STALE}" 'register_hook "$hook"' no-pi >/dev/null 2>&1
+assert_equal "PI-REG-08: an owned file is updated to the source" \
+  "true" "$(same_file "${PI_SOURCE}" "${PI_HOME_STALE}/.pi/agent/extensions/ai-notify.ts")"
+
+# [PI-REG-09] A symbolic link, broken or not, is never managed (review pi-notify-review01-r01/F-02).
+PI_HOME_LINK="$(pi_home broken-link agent)"
+mkdir -p "${PI_HOME_LINK}/.pi/agent/extensions"
+ln -s "${PI_HOME_LINK}/outside/target.ts" "${PI_HOME_LINK}/.pi/agent/extensions/ai-notify.ts"
+PI_LINK_ERR="$(pi_registry "${PI_HOME_LINK}" 'register_hook "$hook"' no-pi 2>&1 >/dev/null)"
+assert_equal "PI-REG-09: a broken link is reported and nothing is written through it" \
+  "true ${PI_HOME_LINK}/outside/target.ts false" \
+  "$(grep -q 'ai-notify.ts' <<<"${PI_LINK_ERR}" && echo true || echo false) $(readlink "${PI_HOME_LINK}/.pi/agent/extensions/ai-notify.ts") $([[ -e "${PI_HOME_LINK}/outside/target.ts" ]] && echo true || echo false)"
+assert_equal "PI-STATUS-04: status reports a broken link as unavailable" \
+  "true" "$(grep -q '^Pi: unavailable' <<<"$(pi_registry "${PI_HOME_LINK}" 'show_hook_status "$hook"' no-pi 2>&1)" && echo true || echo false)"
+
+PI_HOME_MLINK="$(pi_home marker-link agent)"
+mkdir -p "${PI_HOME_MLINK}/.pi/agent/extensions" "${PI_HOME_MLINK}/mine"
+printf '%s\n' "${PI_MARKER}" '// a file the user keeps elsewhere' > "${PI_HOME_MLINK}/mine/notify.ts"
+ln -s "${PI_HOME_MLINK}/mine/notify.ts" "${PI_HOME_MLINK}/.pi/agent/extensions/ai-notify.ts"
+PI_MLINK_ERR="$(pi_registry "${PI_HOME_MLINK}" 'register_hook "$hook"' no-pi 2>&1 >/dev/null)"
+assert_equal "PI-REG-09: a link to a marker file is reported and its target is not overwritten" \
+  "true // a file the user keeps elsewhere" \
+  "$(grep -q 'ai-notify.ts' <<<"${PI_MLINK_ERR}" && echo true || echo false) $(sed -n 2p "${PI_HOME_MLINK}/mine/notify.ts")"
+assert_equal "PI-STATUS-04: status reports a link to a marker file as unavailable" \
+  "true" "$(grep -q '^Pi: unavailable' <<<"$(pi_registry "${PI_HOME_MLINK}" 'show_hook_status "$hook"' no-pi 2>&1)" && echo true || echo false)"
+pi_registry "${PI_HOME_MLINK}" 'unregister_hook "$hook"' no-pi >/dev/null 2>&1
+assert_equal "PI-REG-09: unregister keeps the link and its target" \
+  "true true" \
+  "$([[ -L "${PI_HOME_MLINK}/.pi/agent/extensions/ai-notify.ts" ]] && echo true || echo false) $([[ -f "${PI_HOME_MLINK}/mine/notify.ts" ]] && echo true || echo false)"
+
+# ── Pi extension behavior (driven under Node with a fake Pi API) ──────────────
+
+echo ""
+echo "── Pi extension behavior Tests ──"
+echo ""
+
+# The real extension file runs under Node's type stripping with a recorded fake hook in a temporary HOME.
+if command -v node >/dev/null 2>&1; then
+  PI_DRIVER="${TEST_TMP_ROOT}/pi-driver.mjs"
+  cat > "${PI_DRIVER}" <<'JS'
+const [ext, mode, scenario] = process.argv.slice(2);
+const { default: register } = await import(ext);
+const on = {};
+register({ on: (name, fn) => { on[name] = fn; } });
+const ctx = {
+  mode, hasUI: mode === "tui" || mode === "rpc", cwd: "/tmp/pi-project",
+  model: { id: "gpt-6.1-sol", provider: "openai-codex" },
+  sessionManager: { getSessionId: () => "c0ffee12-3456-7890-abcd-ef1234567890" },
+};
+const prompt = { reason: "ui_prompt", kind: "select", title: "PRIVATE-PROMPT-TITLE" };
+const reply = (stopReason) => ({ messages: [{ role: "user" }, { role: "assistant", stopReason, errorMessage: "PRIVATE-ERROR" }] });
+if (scenario === "idle-prompt") { await on.ui_prompt_start(prompt, ctx); process.exit(0); }
+await on.agent_start({}, ctx);
+if (scenario === "turn") await on.ui_prompt_start(prompt, ctx);
+if (scenario === "retry-ok") { await on.agent_end(reply("error"), ctx); await on.agent_start({}, ctx); }
+await on.agent_end(reply(scenario === "error" ? "error" : "stop"), ctx);
+await on.agent_settled({ aborted: scenario === "abort" }, ctx);
+JS
+  # pi_drive <mode> <scenario> [subagent] → recorded hook calls, one per line: "<event> <tool> <stdin>"
+  pi_drive() {
+    local home="${TEST_TMP_ROOT}/pi-drive-$1-$2-${3:-main}" log
+    log="${home}/calls"
+    mkdir -p "${home}/.config/ai-notify/hooks"
+    printf '#!/usr/bin/env bash\nprintf "%%s %%s %%s\\n" "$1" "$2" "$(cat)" >> "%s"\n' "${log}" > "${home}/.config/ai-notify/hooks/telegram-notify.sh"
+    env -u PI_SUBAGENT_PARENT_SESSION HOME="${home}" ${3:+PI_SUBAGENT_PARENT_SESSION=parent} \
+      node "${PI_DRIVER}" "$(cd "${SCRIPT_DIR}/../pi" && pwd)/ai-notify.ts" "$1" "$2" >/dev/null 2>&1
+    sleep 1  # the hook runs detached; give it time to record
+    cat "${log}" 2>/dev/null
+  }
+  PI_CALLS="$(pi_drive tui turn)"
+  assert_equal "PI-EXT-01: a TUI turn sends one question and one completion with the model" \
+    "2 true true true" \
+    "$(grep -c . <<<"${PI_CALLS}") $(grep -q '^pi-question Pi .*"hook_event_name":"UserInputWaiting"' <<<"${PI_CALLS}" && echo true || echo false) $(grep -q '^pi-stop Pi .*"stop_reason":"completed"' <<<"${PI_CALLS}" && echo true || echo false) $(grep -q '"model":"gpt-6.1-sol"' <<<"${PI_CALLS}" && echo true || echo false)"
+  assert_equal "PI-EXT-01: the prompt title and error text never reach the hook" \
+    "false" "$(grep -q 'PRIVATE-' <<<"${PI_CALLS}" && echo true || echo false)"
+  for PI_MODE in rpc print json; do
+    assert_equal "PI-EXT-02: ${PI_MODE} mode sends nothing" "" "$(pi_drive "${PI_MODE}" turn)"
+  done
+  assert_equal "PI-EXT-02: a subagent TUI sends nothing" "" "$(pi_drive tui turn subagent)"
+  assert_equal "PI-EXT-03: an error settles as stop_reason error" \
+    "true" "$(grep -q '^pi-stop Pi .*"stop_reason":"error"' <<<"$(pi_drive tui error)" && echo true || echo false)"
+  assert_equal "PI-EXT-03: a retry that succeeds settles as completed only" \
+    "1 true" "$(PI_CALLS="$(pi_drive tui retry-ok)"; printf '%s %s' "$(grep -c . <<<"${PI_CALLS}")" "$(grep -q '"stop_reason":"completed"' <<<"${PI_CALLS}" && echo true || echo false)")"
+  assert_equal "PI-EXT-03: an abort settles as stop_reason aborted" \
+    "true" "$(grep -q '"stop_reason":"aborted"' <<<"$(pi_drive tui abort)" && echo true || echo false)"
+  assert_equal "PI-EXT-04: a prompt opened while idle sends nothing" "" "$(pi_drive tui idle-prompt)"
+else
+  echo "  - SKIP: Pi extension behavior tests need node"
+fi
+
 # ── Summary ────────────────────────────────────────────────────────────────────
 
 echo ""
