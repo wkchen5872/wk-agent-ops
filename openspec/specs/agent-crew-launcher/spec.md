@@ -18,7 +18,7 @@ Role templates SHALL be read from `.agent-handoff/roles.yaml` in the repository'
 - **THEN** the command exits non-zero without opening any session and names the expected path
 
 ### Requirement: Templates define how each role is opened
-Each of the `implement`, `review`, and `finish` templates SHALL define the harness, model, effort, session name pattern, and prompt. The `review` and `finish` templates SHALL also define `worktree` as `shared` (the implementer's worktree) or `new` (a separate worktree), defaulting to `shared`; any other value SHALL be refused. The `finish` template SHALL define `trigger` (`ask` or `auto`, default `ask`) and `delivery` (`local` or `pr`, default `local`).
+Each of the `implement`, `review`, and `finish` templates SHALL define the harness (`claude`, `codex`, or `pi`), model, effort, session name pattern, and prompt; a `pi` template SHALL also define `provider` and `billing` as specified by `agent-handoff-pi`. The `review` and `finish` templates SHALL also define `worktree` as `shared` (the implementer's worktree) or `new` (a separate worktree), defaulting to `shared`; any other value SHALL be refused. The `finish` template SHALL define `trigger` (`ask` or `auto`, default `ask`) and `delivery` (`local` or `pr`, default `local`).
 
 #### Scenario: Template omits model or effort
 - **WHEN** a template does not set both model and effort
@@ -27,6 +27,10 @@ Each of the `implement`, `review`, and `finish` templates SHALL define the harne
 #### Scenario: Unknown worktree mode
 - **WHEN** the review template sets `worktree: separate`
 - **THEN** `handoff-start` exits non-zero, names the allowed values `shared` and `new`, and opens nothing
+
+#### Scenario: Unknown harness
+- **WHEN** a template sets `harness: gemini`
+- **THEN** `handoff-start` exits non-zero, names the allowed values `claude`, `codex`, and `pi`, and opens nothing
 
 ### Requirement: A Codex template may name a Codex profile
 A Codex template MAY set `profile` to a Codex configuration profile, which SHALL be passed to the new session; a Claude template that sets `profile` SHALL be refused before any session opens.
@@ -40,7 +44,7 @@ A Codex template MAY set `profile` to a Codex configuration profile, which SHALL
 - **THEN** the command refuses and opens no session
 
 ### Requirement: Sessions are opened with explicit model, effort, and name
-Every session the core opens SHALL be created through Xirp with the template's harness, model, and effort set explicitly and with a pinned custom name, so that provider defaults saved by `/model` or `/effort` do not apply. The default name pattern SHALL be `<tool> - <label> - <change-id>`, with labels `impl`, `review`, and `finish`.
+Every session the core opens SHALL be created through Xirp with the template's harness, model, and effort set explicitly, with the template's provider set explicitly for a Pi role (through Xirp and through the Pi settings written into the role's worktree, as specified by `agent-handoff-pi`), and with a pinned custom name, so that provider defaults saved by `/model` or `/effort` do not apply. The default name pattern SHALL be `<tool> - <label> - <change-id>`, with labels `impl`, `review`, and `finish`.
 
 #### Scenario: Provider default differs from the template
 - **WHEN** the user's saved Claude Code default model is Fable and the implement template sets Opus
@@ -49,6 +53,10 @@ Every session the core opens SHALL be created through Xirp with the template's h
 #### Scenario: Name stays as configured
 - **WHEN** the implementer session for `add-export` is opened
 - **THEN** its name is `claude - impl - add-export` and is not replaced by an automatic title
+
+#### Scenario: Pi session runs on the declared provider
+- **WHEN** Pi's saved default is `openai/gpt-6.2-sol` and the implement template declares `provider: openai-codex`, `model: gpt-6.2-sol`
+- **THEN** the implementer session runs `openai-codex/gpt-6.2-sol`
 
 ### Requirement: Start verifies the change and its branch
 `handoff-start <change-id>` SHALL verify that the OpenSpec change exists and that `feature/<change-id>` exists before opening anything. It MUST NOT create OpenSpec artifacts or branches.
@@ -76,11 +84,15 @@ By default `handoff-start` SHALL prepare a new worktree checked out on `feature/
 - **THEN** exactly one session exists for the loop and `loop.yaml` names it as the implementer
 
 ### Requirement: Start options override templates for one loop
-`handoff-start` SHALL accept per-loop overrides for the implement and review tool, model, and effort, the implementer worktree mode, the finish trigger, and an existing reviewer session to reuse. Overrides SHALL be recorded in `loop.yaml` and MUST NOT modify `roles.yaml`.
+`handoff-start` SHALL accept per-loop overrides for the implement and review tool, model, and effort, the implementer worktree mode, the finish trigger, and an existing reviewer session to reuse. A Pi override SHALL also give the provider and billing, in the form `pi:<provider>/<model>:<effort>:<billing>`, and SHALL be verified like a Pi template. Overrides SHALL be recorded in `loop.yaml` and MUST NOT modify `roles.yaml`.
 
 #### Scenario: Reuse an existing reviewer
 - **WHEN** `handoff-start add-export --reviewer-session <id>` runs and Xirp confirms the session exists
 - **THEN** `loop.yaml` records that session as the reviewer and no new reviewer session is opened later
+
+#### Scenario: Pi override without billing
+- **WHEN** `handoff-start add-export --review pi:openai-codex/gpt-6.2-sol:high` runs
+- **THEN** it exits non-zero, shows the expected override form, and opens nothing
 
 ### Requirement: Finish requires a current passing review
 `handoff-finish <change-id>` SHALL open the finish session only when the newest record across the loop's worktrees is a `review` record with `status: done` and `verdict: pass`, its `head` equals the implementer worktree's current `HEAD`, the implementer worktree has no uncommitted non-ignored changes, and no `finish` record exists. Otherwise it SHALL exit non-zero, state the failed condition, and open nothing.
@@ -144,7 +156,7 @@ When the finish template sets `worktree: new`, the finish entry SHALL first conf
 - **THEN** cleanup archives the records, deletes the sessions and loop worktrees, and keeps the branch
 
 ### Requirement: Cleanup archives records, then removes sessions and worktrees
-With `--yes`, cleanup SHALL copy each worktree's handoff records and the review reports they reference to `<main worktree>/.agent-handoff/archive/<change-id>/<worktree name>/`, delete the loop's Xirp sessions, and remove each loop worktree except the main worktree once. It MUST NOT delete the feature branch or force-remove a worktree.
+With `--yes`, cleanup SHALL copy each worktree's handoff records and the review reports they reference to `<main worktree>/.agent-handoff/archive/<change-id>/<worktree name>/`, delete the loop's Xirp sessions, and remove each loop worktree except the main worktree once. When the main worktree is kept and holds a `.pi/settings.json` that the loop wrote for a Pi role, cleanup SHALL remove that file. It MUST NOT delete the feature branch or force-remove a worktree.
 
 #### Scenario: Finished loop is cleaned up
 - **WHEN** the loop is finished and clean and `handoff-cleanup <change-id> --yes` runs
@@ -153,6 +165,10 @@ With `--yes`, cleanup SHALL copy each worktree's handoff records and the review 
 #### Scenario: Implementer used the main worktree
 - **WHEN** the loop was started with `--worktree here` in the main worktree
 - **THEN** cleanup deletes the sessions and other worktrees but keeps the main worktree
+
+#### Scenario: Pi implementer used the main worktree
+- **WHEN** a Pi implementer worked in the main worktree and the loop is cleaned up
+- **THEN** the main worktree no longer has the `.pi/settings.json` the loop wrote
 
 ### Requirement: A blocked finish can be retried
 When the newest record is `finish` with `status: blocked`, `handoff-finish <change-id>` SHALL retry instead of refusing, provided the finish worktree is clean and its `HEAD` contains the head of the newest passing review. It SHALL message the existing finish session to resume from the stopped stage and write a new finish record, or open a new finish session when that session no longer exists. Otherwise it SHALL refuse and change nothing.
@@ -168,3 +184,14 @@ When the newest record is `finish` with `status: blocked`, `handoff-finish <chan
 #### Scenario: Retry is not safe
 - **WHEN** the finish worktree has uncommitted changes or its `HEAD` does not contain the passing review's head
 - **THEN** `handoff-finish` refuses and names the reason
+
+### Requirement: Start verifies every Pi role before opening any session
+`handoff-start` SHALL verify the model, credential, and billing of every Pi role in effect for the loop, including the review and finish roles that open later, before opening the implementer session. When any Pi role fails, it SHALL exit non-zero, name the role and the failed check, and open no session and create no worktree.
+
+#### Scenario: Finish role fails while implement role passes
+- **WHEN** the implement role passes verification and the Pi finish role declares `billing: subscription` while its provider uses an API key
+- **THEN** `handoff-start` exits non-zero naming the finish role, and no session or worktree is created
+
+#### Scenario: Every Pi role passes
+- **WHEN** all Pi roles pass verification
+- **THEN** `handoff-start` opens only the implementer session, as before

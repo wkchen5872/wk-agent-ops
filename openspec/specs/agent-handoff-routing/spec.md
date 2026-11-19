@@ -7,7 +7,7 @@ Route work between the implementer, reviewer, and finish agents when an agent st
 ## Requirements
 
 ### Requirement: Routing runs when an agent stops
-A Stop hook SHALL run when a Claude Code or Codex agent stops. It SHALL act only on the newest handoff record in the stopping agent's worktree that it has not processed, and SHALL exit without any action when there is no such record or no `loop.yaml` for that change.
+A Stop hook SHALL run when a Claude Code or Codex agent stops, and the Pi trigger defined by `agent-handoff-pi` SHALL run when a Pi agent settles. It SHALL act only on the newest handoff record in the stopping agent's worktree that it has not processed, and SHALL exit without any action when there is no such record or no `loop.yaml` for that change.
 
 #### Scenario: Agent stops after an ordinary question
 - **WHEN** an agent stops after answering a question and wrote no new handoff record
@@ -16,6 +16,10 @@ A Stop hook SHALL run when a Claude Code or Codex agent stops. It SHALL act only
 #### Scenario: Agent stops after recording a handoff
 - **WHEN** an agent stops and a new handoff record exists for a change with a `loop.yaml`
 - **THEN** the hook routes that record exactly once
+
+#### Scenario: Pi agent settles after recording a handoff
+- **WHEN** a Pi role settles and a new handoff record exists for a change with a `loop.yaml`
+- **THEN** the record is routed exactly once, as for Claude Code and Codex
 
 ### Requirement: Records are routed by role, status, and verdict
 The hook SHALL route an `implement`/`done` record to the reviewer, a `review`/`done`/`changes-required` record within the round limit to the implementer, a `review`/`done`/`pass` record according to the finish trigger, and every `finish` record to the user. Any `blocked` status or verdict SHALL be sent to the user only, whatever the technical verdict.
@@ -125,11 +129,12 @@ When the hook processes a record, it SHALL append to a routing log in the change
 - **THEN** the routing log shows the model in use when that record was processed
 
 ### Requirement: The hook is installed for supported providers
-An installer SHALL register the Stop hook for Claude Code and Codex idempotently, and SHALL tell the user that Codex requires trusting the new hook once. It MUST NOT mark the hook as trusted on the user's behalf.
+An installer SHALL register the Stop hook for Claude Code and Codex idempotently, SHALL install the Pi trigger in Pi's global extension directory idempotently, and SHALL tell the user that Codex requires trusting the new hook once and that Pi sessions opened before installation do not route until they reload. It MUST NOT mark the hook as trusted on the user's behalf.
 
 #### Scenario: Installer runs twice
 - **WHEN** the installer is run a second time
 - **THEN** each provider has exactly one registration of the Stop hook
+- **AND** Pi's extension directory contains exactly one handoff trigger
 
 #### Scenario: Codex trust is left to the user
 - **WHEN** the installer registers the Codex hook
@@ -168,7 +173,6 @@ Adding a Codex handoff display name SHALL leave the Claude Code Stop registratio
 - **THEN** only the Codex handler receives the new default naming field
 - **AND** the Claude Code handler retains its existing configuration fields and behavior
 
-
 ### Requirement: An undelivered handoff stays unprocessed
 When the hook cannot deliver the message that hands a record to the reviewer or the implementer, it SHALL NOT mark the record as processed and SHALL NOT report the handoff as delivered in the routing log. A later hook run in that worktree, or a manual foreground run of the hook, SHALL retry the delivery. The hook SHALL still exit successfully.
 
@@ -202,3 +206,33 @@ A record whose outcome is a stop for the user — a `blocked` status or verdict,
 #### Scenario: Reviewer session cannot be opened
 - **WHEN** the first review session cannot be opened for an `implement`/`done` record
 - **THEN** the record stays unprocessed and a later run tries to open the reviewer again
+
+### Requirement: A Pi record must match its role template before it is routed
+Before routing a record whose role template in `loop.yaml` has `harness: pi`, the hook SHALL compare the record's `agent` section with that template. When the section is missing, any value is `unknown`, or the provider, model, effort, or billing differs, the hook SHALL notify the user naming each mismatch, MUST NOT message or open any session, and SHALL mark the record as processed. Records of Claude Code and Codex roles SHALL be routed as before.
+
+#### Scenario: Implementer switched model mid-session
+- **WHEN** the implement template declares `openai-codex/gpt-6.2-sol` and the record's `agent` section shows `openai-codex/gpt-6.1-terra`
+- **THEN** the user is notified of the model mismatch, the reviewer is not asked to review, and a later stop does not notify again
+
+#### Scenario: Billing differs
+- **WHEN** the template declares `billing: subscription` and the record shows `billing: api`
+- **THEN** the user is notified and the record is not routed
+
+#### Scenario: Record has no agent identity
+- **WHEN** the role template is Pi and the record has no `agent` section
+- **THEN** the user is notified and the record is not routed
+
+#### Scenario: Matching record
+- **WHEN** every value in the record's `agent` section equals the role template
+- **THEN** the record is routed as usual
+
+### Requirement: The hook verifies a Pi role before opening it
+Before the hook opens a Pi reviewer or finish session, it SHALL repeat the model, credential, and billing verification, the trigger and trust check, and the settings file step of `agent-handoff-pi` for that role's worktree. When any of them fails, it SHALL open no session, notify the user naming the failed check, and leave the record unprocessed so that a later hook run, after the user fixes the cause, retries the opening.
+
+#### Scenario: Credential changed after start
+- **WHEN** the review template declares `billing: subscription` and, by the first implement handoff, the provider's credential has become an API key
+- **THEN** no reviewer session opens, the user is notified, and the record stays unprocessed
+
+#### Scenario: Retry after the fix
+- **WHEN** the user restores the subscription credential and the hook runs again for that record
+- **THEN** the reviewer session opens and the record is marked as processed
