@@ -60,6 +60,16 @@ The wizard guides you through:
 | Pi extension (when Pi is detected) | `${PI_CODING_AGENT_DIR:-~/.pi/agent}/extensions/ai-notify.ts`（first line is the ownership marker; see [Pi](/docs/hooks/pi-hooks.md)） |
 | Copilot CLI hooks (opt-in) | `.github/hooks/hooks.json` → `sessionEnd`, `userPromptSubmitted` |
 
+### Credentials stay off the process list
+
+The hook and the setup wizard hand the bot token and chat ID to curl on standard input
+(`curl --config -`), so they never appear in a command line that other users can read with `ps`.
+Only the Telegram character sets are accepted: the token may hold letters, digits, `:`, `_` and `-`,
+and the chat ID letters, digits, `-`, `_` and `@`. A configured value with any other character is
+not sent; the hook stays silent and the wizard reports the token as invalid. If a token was ever
+exposed (an older version passed it on curl's command line), revoke it in @BotFather and save the
+new one with `bash scripts/notify/telegram/update.sh token`.
+
 Setup and `fix-hooks` remove only notification-owned legacy Gemini hook
 commands if they still exist. Gemini CLI is not an active notification host.
 

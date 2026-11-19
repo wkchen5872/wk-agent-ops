@@ -51,10 +51,22 @@ prompt() {
   printf -v "${var_name}" '%s' "${value}"
 }
 
+# telegram_call <token> <method> <chat-id or ""> [curl args...]: the token and chat ID reach curl on
+# stdin, never in argv where `ps` shows them; values outside the Telegram character sets are refused.
+telegram_call() {
+  local token="$1" method="$2" chat="$3"; shift 3
+  [[ "${token}" =~ ^[A-Za-z0-9:_-]+$ ]] || return 1
+  [[ -z "${chat}" || "${chat}" =~ ^[A-Za-z0-9_@-]+$ ]] || return 1
+  {
+    printf 'url = "%s%s/%s"\n' "${TELEGRAM_API}" "${token}" "${method}"
+    [[ -z "${chat}" ]] || printf 'data = "chat_id=%s"\n' "${chat}"
+  } | curl --config - "$@"
+}
+
 validate_token() {
   local token="$1"
   local response
-  response="$(curl --silent --max-time 10 "${TELEGRAM_API}${token}/getMe" 2>/dev/null || true)"
+  response="$(telegram_call "${token}" getMe "" --silent --max-time 10 2>/dev/null || true)"
   if echo "${response}" | grep -q '"ok":true'; then
     echo "${response}"
     return 0
@@ -65,7 +77,7 @@ validate_token() {
 get_chat_id() {
   local token="$1"
   local response
-  response="$(curl --silent --max-time 10 "${TELEGRAM_API}${token}/getUpdates" 2>/dev/null || true)"
+  response="$(telegram_call "${token}" getUpdates "" --silent --max-time 10 2>/dev/null || true)"
   if command -v jq &>/dev/null; then
     echo "${response}" | jq -r '.result[-1].message.chat.id // empty' 2>/dev/null || true
   else
@@ -202,11 +214,10 @@ fi
 print_step 9 "Send Test Notification"
 
 echo -n "  Sending test message to Telegram... "
-TEST_RESPONSE="$(curl \
+TEST_RESPONSE="$(telegram_call "${NEW_TOKEN}" sendMessage "${NEW_CHAT_ID}" \
   --silent \
   --max-time 10 \
-  -X POST "https://api.telegram.org/bot${NEW_TOKEN}/sendMessage" \
-  -d "chat_id=${NEW_CHAT_ID}" \
+  -X POST \
   -d "parse_mode=Markdown" \
   --data-urlencode "text=✅ *Telegram Notify Installed!*
 

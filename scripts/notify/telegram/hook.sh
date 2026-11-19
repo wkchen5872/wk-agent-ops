@@ -366,14 +366,19 @@ deliver() {
     printf '%s\n' "${text}"
     return 0
   fi
-  curl \
-    --silent \
-    --max-time 4 \
-    --output /dev/null \
-    -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-    -d "chat_id=${TELEGRAM_CHAT_ID}" \
-    -d "parse_mode=Markdown" \
-    --data-urlencode "text=${text}" \
+  # The token and chat ID reach curl on stdin, never in argv where `ps` shows them. Only the
+  # Telegram character sets are accepted, so neither value can inject another curl option.
+  [[ "${TELEGRAM_BOT_TOKEN:-}" =~ ^[A-Za-z0-9:_-]+$ && "${TELEGRAM_CHAT_ID:-}" =~ ^[A-Za-z0-9_@-]+$ ]] || return 0
+  printf 'url = "https://api.telegram.org/bot%s/sendMessage"\ndata = "chat_id=%s"\n' \
+    "${TELEGRAM_BOT_TOKEN}" "${TELEGRAM_CHAT_ID}" \
+    | curl \
+      --silent \
+      --max-time 4 \
+      --output /dev/null \
+      -X POST \
+      --config - \
+      -d "parse_mode=Markdown" \
+      --data-urlencode "text=${text}" \
     || true
 }
 

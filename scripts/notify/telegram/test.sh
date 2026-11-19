@@ -1621,6 +1621,51 @@ else
   echo "  - SKIP: ${PI_EXT_SKIPPED}"
 fi
 
+# [SEC-ARGV] Telegram credentials never reach curl's command line (other users can read it with ps).
+# The fake curl logs its arguments and, only when told to read its config from stdin, that config.
+SEC_HOME="${TEST_TMP_ROOT}/sec-argv-home"
+SEC_BIN="${TEST_TMP_ROOT}/sec-argv-bin"
+mkdir -p "${SEC_HOME}/.config/ai-notify" "${SEC_BIN}"
+cat > "${SEC_BIN}/curl" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$@" >> "${SEC_HOME}/curl-args"
+for a in "\$@"; do [[ "\$a" == - ]] && cat >> "${SEC_HOME}/curl-stdin"; done
+echo '{"ok":true,"result":[{"message":{"chat":{"id":12345}}}]}'
+EOF
+chmod +x "${SEC_BIN}/curl"
+sec_reset() { rm -f "${SEC_HOME}/curl-args" "${SEC_HOME}/curl-stdin"; }
+sec_args() {  # → not-called | leaked | clean, for token 123:abcDEF and chat 12345
+  [[ -s "${SEC_HOME}/curl-args" ]] || { echo not-called; return; }
+  grep -q -e '123:abcDEF' -e '12345' "${SEC_HOME}/curl-args" && echo leaked || echo clean
+}
+sec_deliver() {  # <token> → the hook's exit code for one Claude Code completion
+  sec_reset
+  printf '%s\n' 'TELEGRAM_ENABLED=true' "TELEGRAM_BOT_TOKEN='$1'" 'TELEGRAM_CHAT_ID="12345"' 'NOTIFY_LEVEL=all' \
+    > "${SEC_HOME}/.config/ai-notify/config"
+  printf '%s' '{"hook_event_name":"Stop","session_id":"abc","cwd":"/tmp/sec"}' \
+    | env -i PATH="${SEC_BIN}:${PATH}" HOME="${SEC_HOME}" bash "${HOOK}" stop "Claude Code" >/dev/null 2>&1
+  echo $?
+}
+sec_deliver '123:abcDEF' >/dev/null
+assert_equal "SEC-ARGV-01: delivery keeps the token and chat ID off curl's arguments" "clean" "$(sec_args)"
+assert_equal "SEC-ARGV-01: curl reads the sendMessage URL and chat ID from stdin" \
+  'url = "https://api.telegram.org/bot123:abcDEF/sendMessage"|data = "chat_id=12345"' \
+  "$(grep -E '^(url|data) = ' "${SEC_HOME}/curl-stdin" 2>/dev/null | paste -sd'|' -)"
+assert_equal "SEC-ARGV-01: the rest of the request is unchanged" "yes" \
+  "$(grep -qx 'parse_mode=Markdown' "${SEC_HOME}/curl-args" 2>/dev/null && grep -q '^text=.*Task Complete' "${SEC_HOME}/curl-args" && echo yes || echo no)"
+assert_equal "SEC-ARGV-02: a token holding a quote is not sent and the hook still succeeds" "0 not-called" \
+  "$(sec_deliver '123:ab"c') $(sec_args)"
+
+# [SEC-ARGV-03] The setup wizard's getMe, getUpdates and test message keep the token off the command line.
+SEC_INSTALL_HOME="${TEST_TMP_ROOT}/sec-install-home"
+mkdir -p "${SEC_INSTALL_HOME}/.gemini/antigravity-cli"
+sec_reset
+printf '%s\n' '123:abcDEF' '' 'attention_required' 'all' 'n' 'n' \
+  | HOME="${SEC_INSTALL_HOME}" PATH="${SEC_BIN}:${PATH}" bash "${INSTALL_SCRIPT}" >/dev/null 2>&1 || true
+assert_equal "SEC-ARGV-03: the setup wizard keeps the token and chat ID off curl's arguments" "clean" "$(sec_args)"
+assert_equal "SEC-ARGV-03: the setup wizard still saves the token" "123:abcDEF" \
+  "$(bash -c 'source "$1" 2>/dev/null; printf "%s" "${TELEGRAM_BOT_TOKEN:-}"' _ "${SEC_INSTALL_HOME}/.config/ai-notify/config")"
+
 # ── Summary ────────────────────────────────────────────────────────────────────
 
 echo ""

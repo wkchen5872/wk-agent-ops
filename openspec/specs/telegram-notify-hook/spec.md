@@ -183,6 +183,7 @@ suppressed or unavailable.
 #### Scenario: Explicit shared switch controls Codex permissions
 - **WHEN** `NOTIFY_AUTHORIZATION=false` and a PermissionRequest arrives
 - **THEN** no authorization message is sent now or later
+
 ### Requirement: 工具偵測以 CLI 參數為主、環境變數為輔
 The hook SHALL use its second argument as the canonical host name. When absent,
 it SHALL use `"AI CLI"` rather than infer Gemini CLI from
@@ -332,6 +333,7 @@ nothing, and any other reason is a stopped execution with a fixed label.
 #### Scenario: Unknown termination reason
 - **WHEN** Antigravity sends `fullyIdle=true` with a reason the hook does not know
 - **THEN** the hook reports a stopped execution with a generic label
+
 ### Requirement: Automatic Antigravity approval observer
 When Antigravity is detected, global registration SHALL attempt to install the
 notification-owned custom status-line observer. It SHALL preserve a different
@@ -356,6 +358,7 @@ existing command, track pending confirmations by conversation, and hand a pendin
 #### Scenario: Observer remains a valid status line
 - **WHEN** Antigravity invokes the installed observer
 - **THEN** it always returns a compact agent-state value without Telegram delivery details
+
 ### Requirement: Cross-provider lifecycle preservation
 Setup, repair, status, and uninstall SHALL manage only notification-owned
 entries for Claude Code, Codex, Antigravity, Copilot, Pi, and legacy Gemini
@@ -528,7 +531,6 @@ The category menu SHALL list 工作結束, 授權要求, 等待回應, and 異�
 - **WHEN** the user opens the category menu
 - **THEN** the menu shows 授權要求 and no entry named 既有操作提醒
 
-
 ### Requirement: Handoff events are delivered through the notification hook
 The notification hook SHALL accept handoff events from the handoff routing hook, render each kind from its own template, and apply the handoff switches itself. Attention events SHALL be delivered whenever Telegram delivery is enabled, independent of the category switches and of `NOTIFY_LEVEL`. The sender MUST NOT need an environment override to have a handoff event delivered.
 
@@ -603,3 +605,18 @@ model is known. Built-in templates SHALL show the tool name followed by
 #### Scenario: User template drops the version
 - **WHEN** a user template's tool line is `🤖 {tool}{model_family_suffix}` and the model is `claude-opus-5-5`
 - **THEN** the message's tool line is `🤖 Claude Code (Opus)`
+
+### Requirement: Telegram credentials stay off process command lines
+Every Telegram Bot API call made by the notification hook or the setup wizard SHALL pass the bot token and the chat ID to curl through its standard input, never as command-line arguments, so other users cannot read them from the process list. The request sent to Telegram SHALL stay the same. A token or chat ID with characters outside the Telegram formats SHALL not be sent.
+
+#### Scenario: Notification is delivered
+- **WHEN** the hook delivers a completion notification with token `123:abcDEF` and chat ID `12345`
+- **THEN** curl's arguments contain neither value, and the configuration curl reads from standard input contains the `sendMessage` URL with the token and `chat_id=12345`
+
+#### Scenario: Setup wizard checks the token
+- **WHEN** the setup wizard validates a token, looks up the chat ID, and sends its test message
+- **THEN** none of those curl calls has the token or chat ID in its arguments
+
+#### Scenario: Token in the config holds a quote
+- **WHEN** the configured token contains a double quote or a line break
+- **THEN** the hook does not call curl and still returns the provider's neutral control response
