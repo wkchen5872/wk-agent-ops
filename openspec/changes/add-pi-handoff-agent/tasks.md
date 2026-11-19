@@ -40,7 +40,7 @@
 ## 7. 整合驗收
 
 - [x] 7.1 執行完整檢查：`bash tests/test_agent_handoff.sh`、`bash tests/test_acceptance_bank.sh`、`bash scripts/notify/telegram/test.sh`、`openspec validate add-pi-handoff-agent --strict`。測試要求：全數通過，結果記入 Work Item。
-- [ ] 7.2 真實演練（演練用 repo，`openai-codex` 訂閱）：Pi 實作 → 審查退回 → 修正 → 通過 → 收尾一輪；過程中確認角色內 subagent 停下不觸發路由；另演練一次把實作 Session 中途 `/model` 到 `openai/gpt-6.2-sol` 後交件，確認不接棒且收到 attention。測試要求：Work Item 記錄每一步的 `routing.log`、交件單 `agent` 區塊與收到的通知；演練結束後以 `handoff-cleanup --yes` 清理。
+- [x] 7.2 真實演練（演練用 repo，`openai-codex` 訂閱）：Pi 實作 → 審查退回 → 修正 → 通過 → 收尾一輪；過程中確認角色內 subagent 停下不觸發路由；另演練一次把實作 Session 中途 `/model` 到 `openai/gpt-6.2-sol` 後交件，確認不接棒且收到 attention。測試要求：Work Item 記錄每一步的 `routing.log`、交件單 `agent` 區塊與收到的通知；演練結束後以 `handoff-cleanup --yes` 清理。
 
 ## Workflow follow-up
 
