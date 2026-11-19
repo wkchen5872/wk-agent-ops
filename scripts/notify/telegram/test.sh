@@ -1553,7 +1553,15 @@ echo "── Pi extension behavior Tests ──"
 echo ""
 
 # The real extension file runs under Node's type stripping with a recorded fake hook in a temporary HOME.
-if command -v node >/dev/null 2>&1; then
+# A Node without type stripping cannot run them: they are reported as not run, never as passing.
+PI_EXT_SKIPPED=""
+pi_node_imports_ts() {
+  command -v node >/dev/null 2>&1 || return 1
+  printf 'const value: number = 1;\nexport default value;\n' > "${TEST_TMP_ROOT}/ts-probe.ts"
+  printf 'const m = await import(process.argv[2]);\nif (m.default !== 1) process.exit(1);\n' > "${TEST_TMP_ROOT}/ts-probe.mjs"
+  node "${TEST_TMP_ROOT}/ts-probe.mjs" "${TEST_TMP_ROOT}/ts-probe.ts" >/dev/null 2>&1
+}
+if pi_node_imports_ts; then
   PI_DRIVER="${TEST_TMP_ROOT}/pi-driver.mjs"
   cat > "${PI_DRIVER}" <<'JS'
 const [ext, mode, scenario] = process.argv.slice(2);
@@ -1574,14 +1582,20 @@ if (scenario === "retry-ok") { await on.agent_end(reply("error"), ctx); await on
 await on.agent_end(reply(scenario === "error" ? "error" : "stop"), ctx);
 await on.agent_settled({ aborted: scenario === "abort" }, ctx);
 JS
-  # pi_drive <mode> <scenario> [subagent] → recorded hook calls, one per line: "<event> <tool> <stdin>"
+  # pi_drive <mode> <scenario> [subagent] → recorded hook calls, one per line: "<event> <tool> <stdin>".
+  # A driver that fails prints DRIVER-FAILED, so no assertion (not even an expected silence) can pass.
   pi_drive() {
-    local home="${TEST_TMP_ROOT}/pi-drive-$1-$2-${3:-main}" log
+    local home="${TEST_TMP_ROOT}/pi-drive-$1-$2-${3:-main}" log rc
     log="${home}/calls"
     mkdir -p "${home}/.config/ai-notify/hooks"
     printf '#!/usr/bin/env bash\nprintf "%%s %%s %%s\\n" "$1" "$2" "$(cat)" >> "%s"\n' "${log}" > "${home}/.config/ai-notify/hooks/telegram-notify.sh"
     env -u PI_SUBAGENT_PARENT_SESSION HOME="${home}" ${3:+PI_SUBAGENT_PARENT_SESSION=parent} \
-      node "${PI_DRIVER}" "$(cd "${SCRIPT_DIR}/../pi" && pwd)/ai-notify.ts" "$1" "$2" >/dev/null 2>&1
+      node "${PI_DRIVER}" "$(cd "${SCRIPT_DIR}/../pi" && pwd)/ai-notify.ts" "$1" "$2" >/dev/null 2>"${home}/driver.err"
+    rc=$?
+    if [[ ${rc} -ne 0 ]]; then
+      printf 'DRIVER-FAILED exit=%s: %s\n' "${rc}" "$(head -n 1 "${home}/driver.err")"
+      return 0
+    fi
     sleep 1  # the hook runs detached; give it time to record
     cat "${log}" 2>/dev/null
   }
@@ -1590,7 +1604,7 @@ JS
     "2 true true true" \
     "$(grep -c . <<<"${PI_CALLS}") $(grep -q '^pi-question Pi .*"hook_event_name":"UserInputWaiting"' <<<"${PI_CALLS}" && echo true || echo false) $(grep -q '^pi-stop Pi .*"stop_reason":"completed"' <<<"${PI_CALLS}" && echo true || echo false) $(grep -q '"model":"gpt-6.1-sol"' <<<"${PI_CALLS}" && echo true || echo false)"
   assert_equal "PI-EXT-01: the prompt title and error text never reach the hook" \
-    "false" "$(grep -q 'PRIVATE-' <<<"${PI_CALLS}" && echo true || echo false)"
+    "false false" "$(grep -q 'DRIVER-FAILED' <<<"${PI_CALLS}" && echo true || echo false) $(grep -q 'PRIVATE-' <<<"${PI_CALLS}" && echo true || echo false)"
   for PI_MODE in rpc print json; do
     assert_equal "PI-EXT-02: ${PI_MODE} mode sends nothing" "" "$(pi_drive "${PI_MODE}" turn)"
   done
@@ -1603,7 +1617,8 @@ JS
     "true" "$(grep -q '"stop_reason":"aborted"' <<<"$(pi_drive tui abort)" && echo true || echo false)"
   assert_equal "PI-EXT-04: a prompt opened while idle sends nothing" "" "$(pi_drive tui idle-prompt)"
 else
-  echo "  - SKIP: Pi extension behavior tests need node"
+  PI_EXT_SKIPPED="Pi extension behavior tests (PI-EXT-*) NOT RUN: $(node --version 2>/dev/null || echo 'node not found') cannot import TypeScript; use Node 22.18+ or 23.6+ (type stripping)"
+  echo "  - SKIP: ${PI_EXT_SKIPPED}"
 fi
 
 # ── Summary ────────────────────────────────────────────────────────────────────
@@ -1611,6 +1626,7 @@ fi
 echo ""
 TOTAL=$((PASS_COUNT + FAIL_COUNT))
 echo "── Results: ${PASS_COUNT}/${TOTAL} passed ──"
+[[ -n "${PI_EXT_SKIPPED}" ]] && echo "── Skipped: ${PI_EXT_SKIPPED} ──"
 echo ""
 
 if [[ "${FAIL_COUNT}" -gt 0 ]]; then

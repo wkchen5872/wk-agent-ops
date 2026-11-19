@@ -165,3 +165,6 @@ Run both suites before delivery:
 bash scripts/notify/telegram/test.sh
 python3 -m unittest discover -s scripts/notify/tests -v
 ```
+
+The `PI-EXT-*` tests load `pi/ai-notify.ts` with Node and need TypeScript type stripping (Node 22.18+ or
+23.6+). On an older Node they are reported as `Skipped: ... NOT RUN`, never as passing.

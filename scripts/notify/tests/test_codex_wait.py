@@ -189,6 +189,40 @@ class CodexWaitTests(unittest.TestCase):
         self.assertEqual(1, len(self.messages()))
         self.assertIn("\n🤖 Codex (gpt-6.1-terra)\n", self.messages()[0])
 
+    # Review pi-notify-review01-r02 (F-03 follow-up): a checker reused in the same turn takes the model
+    # of a later event, and a later event without a valid model does not clear it.
+    def test_reused_checker_takes_the_model_of_a_later_event(self):
+        self.settings(approval=True, questions=True, extra="NOTIFY_AUTHORIZATION_DELAY_SECONDS=0\n")
+        self.scenario([snapshot(), snapshot(), snapshot("waitingOnApproval"), snapshot("waitingOnApproval"),
+                       snapshot(turn_status="completed")])
+        self.trigger("codex-question")
+        self.trigger("codex-permission", model="gpt-6.1-terra")
+        self.trigger("codex-question", model="PRIVATE model `x`")
+        self.trigger("codex-question")
+        self.wait_done(timeout=12)
+        self.assertEqual(1, len((self.home / "connections").read_text().splitlines()))
+        self.assertEqual(1, len(self.messages()))
+        self.assertIn("Waiting for Your Approval", self.messages()[0])
+        self.assertIn("\n🤖 Codex (gpt-6.1-terra)\n", self.messages()[0])
+        self.assertNotIn("PRIVATE", self.messages()[0])
+
+    def test_new_turn_does_not_reuse_the_previous_model(self):
+        self.settings(approval=True, questions=False, extra="NOTIFY_AUTHORIZATION_DELAY_SECONDS=0\n")
+        other = "99999999-abcd-abcd-abcd-123456789abc"
+        self.scenario([snapshot(), snapshot("waitingOnApproval", turn_id=other),
+                       snapshot(turn_status="completed", turn_id=other)])
+        self.trigger("codex-permission", model="gpt-6.1-terra")
+        deadline = time.monotonic() + 3
+        while time.monotonic() < deadline:
+            methods = self.home / "methods"
+            if methods.exists() and 'thread/turns/list' in methods.read_text():
+                break
+            time.sleep(.02)
+        self.trigger("codex-permission", turn=other)
+        self.wait_done(timeout=12)
+        self.assertEqual(1, len(self.messages()))
+        self.assertIn("\n🤖 Codex\n", self.messages()[0])
+
     def test_wait_without_or_with_an_unsafe_model_shows_the_tool_alone(self):
         self.settings(approval=True, questions=False, extra="NOTIFY_AUTHORIZATION_DELAY_SECONDS=0\n")
         for model in (None, "PRIVATE model `x`"):

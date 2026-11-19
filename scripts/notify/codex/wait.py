@@ -125,6 +125,11 @@ def state_paths(session_id):
     return folder / f"codex-{key}.lock", folder / f"codex-{key}.json"
 
 
+def valid_model(value):
+    """The model labels the tool line of a notice; anything else is dropped (the hook cleans it again)."""
+    return value if isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9._:/\[\]-]{1,128}", value) else ""
+
+
 def sanitized_trigger(payload):
     trigger = {key: payload.get(key) for key in ("session_id", "turn_id", "cwd")}
     if not all(isinstance(trigger[key], str) and 0 < len(trigger[key]) <= 128
@@ -135,9 +140,7 @@ def sanitized_trigger(payload):
     # Only a generic tool label may reach a message; never the tool input.
     tool = payload.get("tool_name")
     trigger["tool_name"] = tool if isinstance(tool, str) and re.fullmatch(r"[A-Za-z0-9_.:-]{1,64}", tool) else ""
-    # The model labels the tool line of a delayed notice; the hook cleans it again before display.
-    model = payload.get("model")
-    trigger["model"] = model if isinstance(model, str) and re.fullmatch(r"[A-Za-z0-9._:/\[\]-]{1,128}", model) else ""
+    trigger["model"] = valid_model(payload.get("model"))
     trigger["kind"] = "permission" if payload.get("kind") == "permission" else "question"
     requested = payload.get("requested_at")
     trigger["requested_at"] = requested if isinstance(requested, (int, float)) else time.time()
@@ -413,6 +416,11 @@ def run_checker(trigger, state_file, lock_fd):
             elif latest.get("kind") == "permission" and request is None:
                 request, request_call = own({**trigger, **sanitized_trigger(latest),
                                              "transcript_path": trigger.get("transcript_path", "")})
+            # A later event of this turn may name the model; a missing or invalid one never clears it.
+            if valid_model(latest.get("model")) and latest.get("turn_id") == trigger["turn_id"]:
+                trigger = {**trigger, "model": latest["model"]}
+            if request is not None and not request.get("model") and trigger.get("model"):
+                request = {**request, "model": trigger["model"]}
             config = settings()
             if shutdown_marker().exists() or not inspection_enabled(config):
                 code = "disabled"
@@ -553,7 +561,13 @@ def start_checker(payload, record_request=True):
     lock_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     prune_state()
     if record_request:
-        atomic_json(state_file.with_suffix(".request.json"), persisted(trigger))
+        request_file = state_file.with_suffix(".request.json")
+        if not trigger["model"]:
+            # Only the newest event is kept; a same-turn event without a valid model keeps the known one.
+            previous = read_json(request_file, {})
+            if previous.get("turn_id") == trigger["turn_id"]:
+                trigger["model"] = valid_model(previous.get("model"))
+        atomic_json(request_file, persisted(trigger))
     fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
     try:
         try:
