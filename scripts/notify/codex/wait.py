@@ -130,6 +130,28 @@ def valid_model(value):
     return value if isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9._:/\[\]-]{1,128}", value) else ""
 
 
+def model_file(session_id):
+    return state_paths(session_id)[1].with_suffix(".model.json")
+
+
+def store_model(trigger):
+    """Only events with a valid model write this file, so no stale copy can clear it (review r03/F-03)."""
+    if not trigger.get("model"):
+        return
+    try:
+        atomic_json(model_file(trigger["session_id"]), {"turn_id": trigger["turn_id"], "model": trigger["model"]})
+    except OSError:
+        pass  # the notice falls back to the model its own trigger carried
+
+
+def current_model(trigger):
+    """Read at send time: a model stored after the checker last read its request still counts."""
+    stored = read_json(model_file(trigger["session_id"]), {})
+    if stored.get("turn_id") == trigger["turn_id"] and valid_model(stored.get("model")):
+        return stored["model"]
+    return trigger.get("model", "")
+
+
 def sanitized_trigger(payload):
     trigger = {key: payload.get(key) for key in ("session_id", "turn_id", "cwd")}
     if not all(isinstance(trigger[key], str) and 0 < len(trigger[key]) <= 128
@@ -313,8 +335,9 @@ def send(trigger, event, tag):
     payload = {"session_id": trigger["session_id"], "cwd": trigger["cwd"], "hook_event_name": tag}
     if trigger.get("tool_name"):
         payload["tool_name"] = trigger["tool_name"]
-    if trigger.get("model"):
-        payload["model"] = trigger["model"]
+    model = current_model(trigger)
+    if model:
+        payload["model"] = model
     subprocess.run(["bash", str(hook), event, "Codex"], input=json.dumps(payload).encode(),
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5, check=False)
 
@@ -416,11 +439,6 @@ def run_checker(trigger, state_file, lock_fd):
             elif latest.get("kind") == "permission" and request is None:
                 request, request_call = own({**trigger, **sanitized_trigger(latest),
                                              "transcript_path": trigger.get("transcript_path", "")})
-            # A later event of this turn may name the model; a missing or invalid one never clears it.
-            if valid_model(latest.get("model")) and latest.get("turn_id") == trigger["turn_id"]:
-                trigger = {**trigger, "model": latest["model"]}
-            if request is not None and not request.get("model") and trigger.get("model"):
-                request = {**request, "model": trigger["model"]}
             config = settings()
             if shutdown_marker().exists() or not inspection_enabled(config):
                 code = "disabled"
@@ -505,10 +523,10 @@ def prune_state():
             return now - max(path.stat().st_mtime for path in paths)
         except OSError:
             return 0
-    # Codex keeps three files per session; they go together, only when the checker lock is free.
+    # Codex keeps up to four files per session; they go together, only when the checker lock is free.
     groups = {}
     for path in entries:
-        match = re.fullmatch(r"(codex-[0-9a-f]{24})\.(json|request\.json|lock)", path.name)
+        match = re.fullmatch(r"(codex-[0-9a-f]{24})\.(json|request\.json|model\.json|lock)", path.name)
         if match:
             groups.setdefault(match.group(1), []).append(path)
     for key, paths in groups.items():
@@ -560,14 +578,9 @@ def start_checker(payload, record_request=True):
     lock_path, state_file = state_paths(trigger["session_id"])
     lock_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     prune_state()
+    store_model(trigger)
     if record_request:
-        request_file = state_file.with_suffix(".request.json")
-        if not trigger["model"]:
-            # Only the newest event is kept; a same-turn event without a valid model keeps the known one.
-            previous = read_json(request_file, {})
-            if previous.get("turn_id") == trigger["turn_id"]:
-                trigger["model"] = valid_model(previous.get("model"))
-        atomic_json(request_file, persisted(trigger))
+        atomic_json(state_file.with_suffix(".request.json"), persisted(trigger))
     fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
     try:
         try:
@@ -616,7 +629,7 @@ def stop_checkers():
                     busy = True
         if not busy:
             for path in marker.parent.iterdir():
-                if re.fullmatch(r"codex-[0-9a-f]{24}\.(json|request\.json|lock)", path.name):
+                if re.fullmatch(r"codex-[0-9a-f]{24}\.(json|request\.json|model\.json|lock)", path.name):
                     path.unlink(missing_ok=True)
             return True
         if time.monotonic() >= deadline:

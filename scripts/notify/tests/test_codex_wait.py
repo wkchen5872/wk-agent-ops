@@ -16,7 +16,7 @@ SESSION = "12345678-abcd-abcd-abcd-123456789abc"
 TURN = "87654321-abcd-abcd-abcd-123456789abc"
 
 FAKE_CODEX = r'''
-import base64,hashlib,json,os,socket
+import base64,hashlib,json,os,socket,time
 import websocket
 from pathlib import Path
 folder=Path(os.environ['FIXTURE_DIR'])
@@ -46,6 +46,9 @@ try:
         if params.get('itemsView')!='notLoaded':
             ws.send_frame(websocket.ABNF(opcode=1,fin=1,mask_value=0,data=json.dumps({'id':message['id'],'error':{'code':-32602}}).encode()))
             continue
+        if snapshots[max(index,0)].get('hold') and not (folder/'release').exists():
+            (folder/'held').write_text('1')
+            while not (folder/'release').exists():time.sleep(.02)
         result={'data':[{'id':snapshots[max(index,0)].get('turn_id',os.environ['FIXTURE_TURN']),'status':snapshots[max(index,0)].get('turn_status','inProgress'),'items':[]}],'nextCursor':None}
     else:raise RuntimeError('mutating or unexpected method')
     ws.send_frame(websocket.ABNF(opcode=websocket.ABNF.OPCODE_TEXT,fin=1,mask_value=0,data=json.dumps({'id':message['id'],'result':result}).encode()))
@@ -53,9 +56,10 @@ except (Exception,SystemExit):pass
 '''
 
 
-def snapshot(*flags, turn_status="inProgress", turn_id=TURN):
+def snapshot(*flags, turn_status="inProgress", turn_id=TURN, hold=False):
+    """hold=True pauses the daemon's turn reply for this sample until the test creates "release"."""
     return {"status": {"type": "active", "activeFlags": list(flags)},
-            "turn_status": turn_status, "turn_id": turn_id}
+            "turn_status": turn_status, "turn_id": turn_id, "hold": hold}
 
 
 class CodexWaitTests(unittest.TestCase):
@@ -205,6 +209,44 @@ class CodexWaitTests(unittest.TestCase):
         self.assertIn("Waiting for Your Approval", self.messages()[0])
         self.assertIn("\n🤖 Codex (gpt-6.1-terra)\n", self.messages()[0])
         self.assertNotIn("PRIVATE", self.messages()[0])
+
+    def wait_for(self, path, timeout=5):
+        deadline = time.monotonic() + timeout
+        while not path.exists():
+            if time.monotonic() > deadline:
+                self.fail(f"{path.name} never appeared")
+            time.sleep(.02)
+
+    def assert_one_approval_with_model(self):
+        self.wait_done(timeout=12)
+        self.assertEqual(1, len((self.home / "connections").read_text().splitlines()))
+        self.assertEqual(1, len(self.messages()))
+        self.assertIn("Waiting for Your Approval", self.messages()[0])
+        self.assertIn("\n🤖 Codex (gpt-6.1-terra)\n", self.messages()[0])
+
+    # Review pi-notify-review01-r03 (F-03): two legal interleavings of one turn.
+    def test_model_stored_while_the_daemon_answers_is_used(self):
+        self.settings(approval=True, questions=True, extra="NOTIFY_AUTHORIZATION_DELAY_SECONDS=0\n")
+        self.scenario([snapshot(), snapshot("waitingOnApproval", hold=True), snapshot(turn_status="completed")])
+        self.trigger("codex-question")
+        self.wait_for(self.home / "held")  # the checker already read its request and sees the wait
+        self.trigger("codex-permission", model="gpt-6.1-terra")
+        (self.home / "release").write_text("1")
+        self.assert_one_approval_with_model()
+
+    def test_a_stale_request_write_does_not_clear_a_stored_model(self):
+        self.settings(approval=True, questions=True, extra="NOTIFY_AUTHORIZATION_DELAY_SECONDS=0\n")
+        self.scenario([snapshot(hold=True), snapshot("waitingOnApproval"), snapshot(turn_status="completed")])
+        self.trigger("codex-question")
+        self.wait_for(self.home / "held")
+        self.trigger("codex-permission", model="gpt-6.1-terra")
+        # A question hook that read the request before the model arrived writes its stale copy last.
+        request = next((self.notify / "state").glob("codex-*.request.json"))
+        stale = json.loads(request.read_text())
+        stale.update(model="", kind="question")
+        request.write_text(json.dumps(stale))
+        (self.home / "release").write_text("1")
+        self.assert_one_approval_with_model()
 
     def test_new_turn_does_not_reuse_the_previous_model(self):
         self.settings(approval=True, questions=False, extra="NOTIFY_AUTHORIZATION_DELAY_SECONDS=0\n")
@@ -662,9 +704,9 @@ class CodexWaitTests(unittest.TestCase):
                 path.write_text("{}")
                 os.utime(path, (moment, moment))
             return paths
-        stale = files([f"codex-{'a' * 24}.{s}" for s in ("lock", "json", "request.json")], old)
-        held = files([f"codex-{'b' * 24}.{s}" for s in ("lock", "json", "request.json")], old)
-        fresh = files([f"codex-{'c' * 24}.{s}" for s in ("lock", "json", "request.json")], recent)
+        stale = files([f"codex-{'a' * 24}.{s}" for s in ("lock", "json", "request.json", "model.json")], old)
+        held = files([f"codex-{'b' * 24}.{s}" for s in ("lock", "json", "request.json", "model.json")], old)
+        fresh = files([f"codex-{'c' * 24}.{s}" for s in ("lock", "json", "request.json", "model.json")], recent)
         unrelated = files(["other-notifier.json", "codex-not-ours.json"], old)
         stale_marker = files(["claude-old-session.pending"], old)
         live_marker = files(["antigravity-live.pending"], old)
@@ -679,7 +721,7 @@ class CodexWaitTests(unittest.TestCase):
             self.wait_done()
         finally:
             os.close(holder)
-        self.assertEqual([False] * 4, [p.exists() for p in stale + stale_marker])
+        self.assertEqual([False] * 5, [p.exists() for p in stale + stale_marker])
         self.assertTrue(all(p.exists() for p in held + fresh + unrelated + live_marker))
 
     def test_fake_proxy_fixture_supports_real_websocket_handshake(self):

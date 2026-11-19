@@ -209,7 +209,7 @@ Pi extension 只送自己算出的 `stop_reason`：`pi-stop:completed` → Task 
 
 含 `{tool}` 的 7 個內建範本（completion、question、stopped、action-required、authorization、authorization-unconfirmed、generic）工具行為 `🤖 {tool}{model_suffix}`；交件單範本不顯示。拿得到 model 時例如 `🤖 Claude Code (Opus 5.5)`、`🤖 Codex (gpt-6.1-terra)`、`🤖 Pi (gpt-6.1-sol)`；拿不到時只顯示工具名稱，沒有空括號。
 
-- 來源：hook payload 的 `model` 字串優先（Codex hook 輸入必填，延遲送出的授權與同步問題通知由 `codex-wait.py` 一併轉交；同一輪重用檢查器時採用後到事件的合法值，缺少或不合格式的值不會清掉已知的 model，換輪則不沿用，只接受英數與 `._:/[]-` 組成、最多 128 字元的值；Pi 由 extension 帶入 `ctx.model.id`；其他工具有就用）。沒有且工具為 Claude Code 時，讀 `transcript_path` 最後 400 行中最後一則 assistant 紀錄的 `message.model`，略過 `<` 開頭的值（例如 `<synthetic>`）。這個紀錄格式未載於 Claude Code 官方文件，且可能落後一輪：剛用 `/model` 切換後的第一則通知可能顯示前一個 model。
+- 來源：hook payload 的 `model` 字串優先（Codex hook 輸入必填，延遲送出的授權與同步問題通知由 `codex-wait.py` 一併轉交；帶合法 model 的事件另存於 `codex-<24 hex>.model.json`（只有帶合法值的事件會寫入），通知送出當下才讀取：同一輪後到的合法值會被採用，缺少或不合格式的值不會清掉已知的 model，換輪則不沿用，只接受英數與 `._:/[]-` 組成、最多 128 字元的值；Pi 由 extension 帶入 `ctx.model.id`；其他工具有就用）。沒有且工具為 Claude Code 時，讀 `transcript_path` 最後 400 行中最後一則 assistant 紀錄的 `message.model`，略過 `<` 開頭的值（例如 `<synthetic>`）。這個紀錄格式未載於 Claude Code 官方文件，且可能落後一輪：剛用 `/model` 切換後的第一則通知可能顯示前一個 model。
 - 清理：去掉結尾的 `[...]`（例如 `[1m]`），只保留英數與 `._:/-`，最多 64 字元；清理後為空視同沒有 model。
 - 顯示：Claude ID 顯示為家族名加版本（`claude-opus-5-5` → `Opus 5.5`、`claude-sonnet-4-5-20250929` → `Sonnet 4.5`、`claude-opus-4-20250514` → `Opus 4`、`claude-3-5-sonnet-20241022` → `Sonnet 3.5`），別名 `opus`／`sonnet`／`haiku`／`fable` 只顯示家族名；其他 ID 原樣顯示。
 - `{model_suffix}` 含版本（` (Opus 5.5)`），`{model_family_suffix}` 不含版本（` (Opus)`；非 Claude ID 與 `{model_suffix}` 相同）；沒有 model 時兩者都是空字串。
@@ -225,7 +225,7 @@ Pi extension 只送自己算出的 `stop_reason`：`pi-stop:completed` → Task 
 
 ### 狀態清理
 
-每次 Codex 檢查啟動時，會移除超過 7 天且鎖已釋放的通知自有狀態：`codex-<24 hex>.{lock,json,request.json}`（一起移除，且僅在沒有檢查器持有 flock 時）、以及鎖目錄沒有存活 PID 的 `claude-*.pending`／`antigravity-*.pending`。其他檔案不動。
+每次 Codex 檢查啟動時，會移除超過 7 天且鎖已釋放的通知自有狀態：`codex-<24 hex>.{lock,json,request.json,model.json}`（一起移除，且僅在沒有檢查器持有 flock 時）、以及鎖目錄沒有存活 PID 的 `claude-*.pending`／`antigravity-*.pending`。其他檔案不動。
 
 ### Codex 按需檢查
 
