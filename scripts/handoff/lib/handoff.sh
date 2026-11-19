@@ -285,6 +285,12 @@ ho_open_role() {
 HANDOFF_PI_EFFORTS="off minimal low medium high xhigh max"
 ho_pi_extension() { printf '%s\n' "$HOME/.pi/agent/extensions/wk-handoff.ts"; }
 
+# ho_pi_auth_fields <json>: "<status> <authType>" from exactly one JSON object, or fail.
+ho_pi_auth_fields() {
+  jq -rs 'if length == 1 and (.[0] | type) == "object" then "\(.[0].status // "") \(.[0].authType // "")"
+          else error("not one JSON object") end' <<<"$1" 2>/dev/null
+}
+
 # ho_pi_billing <authType>: the billing a credential type stands for, or nothing.
 ho_pi_billing() { case "$1" in oauth) echo subscription ;; api_key) echo api ;; esac; }
 
@@ -292,7 +298,7 @@ ho_pi_billing() { case "$1" in oauth) echo subscription ;; api_key) echo api ;; 
 # The model must be listed under exactly this provider, support thinking unless effort is off, and the
 # provider's credential must be ready with the declared billing. Never prints credential values.
 ho_pi_verify() {
-  local role="$1" provider="$2" model="$3" effort="$4" billing="$5" warn="${6:-}" list thinking json status auth actual
+  local role="$1" provider="$2" model="$3" effort="$4" billing="$5" warn="${6:-}" list thinking json fields status auth actual
   command -v pi >/dev/null 2>&1 || { ho_err "$role: the pi command was not found, so $provider/$model cannot be verified"; return 1; }
   list="$(pi --list-models "$model" </dev/null 2>/dev/null)" || { ho_err "$role: pi --list-models $model failed"; return 1; }
   thinking="$(awk -v p="$provider" -v m="$model" 'NR > 1 && $1 == p && $2 == m { print $5; found = 1; exit } END { exit !found }' <<<"$list")" \
@@ -302,7 +308,8 @@ ho_pi_verify() {
   fi
   json="$(pi auth check --provider "$provider" --json </dev/null 2>/dev/null)" \
     || { ho_err "$role: the credential check for $provider failed (pi auth check --provider $provider --json)"; return 1; }
-  status="$(jq -r '.status // empty' <<<"$json" 2>/dev/null)"; auth="$(jq -r '.authType // empty' <<<"$json" 2>/dev/null)"
+  fields="$(ho_pi_auth_fields "$json")" || { ho_err "$role: the credential check for $provider returned an unreadable answer"; return 1; }
+  status="${fields%% *}"; auth="${fields#* }"
   [[ "$status" == ready ]] || { ho_err "$role: the credential for $provider is not ready (status: ${status:-unknown})"; return 1; }
   actual="$(ho_pi_billing "$auth")"
   if [[ "$actual" != "$billing" ]]; then

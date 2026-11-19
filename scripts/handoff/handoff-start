@@ -106,6 +106,8 @@ else
   wt="$(ho_toplevel)" || die "not inside a Git worktree"
   [[ "$(git -C "$wt" branch --show-current)" == "feature/$change" ]] || die "--worktree here needs a checkout on feature/$change; $wt is on $(git -C "$wt" branch --show-current)"
 fi
+dir="$wt/.agent-handoff/$change"; loop="$dir/loop.yaml"
+[[ ! -e "$loop" ]] || die "a loop already exists: $loop"
 pi_new=0
 if (( impl_pi )); then
   [[ -e "$wt/.pi/settings.json" ]] || pi_new=1
@@ -113,9 +115,7 @@ if (( impl_pi )); then
     | sed 's/^/handoff-start: /' >&2; [[ ${PIPESTATUS[0]} -eq 0 ]] || exit 1
 fi
 
-dir="$wt/.agent-handoff/$change"; loop="$dir/loop.yaml"
 mkdir -p "$dir"
-[[ ! -e "$loop" ]] || die "a loop already exists: $loop"
 {
   printf 'change: %s\nmax_rounds: %s\n' "$change" "$max"
   printf 'implementer:\n  session:\n  worktree: %s\n' "$wt"

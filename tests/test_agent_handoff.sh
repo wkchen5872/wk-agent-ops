@@ -1137,7 +1137,7 @@ if [[ "$1" == --list-models ]]; then
   awk -v q="$2" 'index($2, q) {printf "%s  %s  200K  64K  %s  yes\n", $1, $2, $3}' "$D/models"; exit 0
 fi
 if [[ "$1 $2" == "auth check" ]]; then
-  if [[ -f "$D/auth-$4.json" ]]; then cat "$D/auth-$4.json"; exit "$(cat "$D/auth-rc" 2>/dev/null || echo 0)"; fi
+  if [[ -f "$D/auth-$4.json" ]]; then cat "$D/auth-$4.json"; cat "$D/auth-tail" 2>/dev/null; exit "$(cat "$D/auth-rc" 2>/dev/null || echo 0)"; fi
   printf '{"status":"not_ready","provider":"%s","reason":"provider_not_found"}\n' "$4"; exit 1
 fi
 exit 2
@@ -1233,6 +1233,8 @@ SH
   [[ "$rc" != 0 ]] && ! grep -q 'extra usage' <<<"$out" && ok "a mismatched Anthropic subscription is refused without the warning" || bad "a mismatched Anthropic subscription is refused without the warning ($out)"
   printf '9\n' > "$FAKE_PI_DIR/auth-rc"; out="$(v implement openai-codex gpt-6.2-sol high subscription)"; rc=$?; all+="$out"; rm -f "$FAKE_PI_DIR/auth-rc"
   [[ "$rc" != 0 ]] && grep -q 'credential check' <<<"$out" && ok "a failing credential check is refused even when it prints ready (codex-pi-handoff-r03/F-04)" || bad "a failing credential check is refused even when it prints ready (codex-pi-handoff-r03/F-04) ($out)"
+  printf '{"status":' > "$FAKE_PI_DIR/auth-tail"; out="$(v implement openai-codex gpt-6.2-sol high subscription)"; rc=$?; all+="$out"; rm -f "$FAKE_PI_DIR/auth-tail"
+  [[ "$rc" != 0 ]] && grep -q 'unreadable' <<<"$out" && ok "a credential answer that is not one complete JSON object is refused (codex-pi-handoff-r04/F-02)" || bad "a credential answer that is not one complete JSON object is refused (codex-pi-handoff-r04/F-02) ($out)"
   ! grep -q 'SECRET' <<<"$all" && ok "verification output never contains credential values" || bad "verification output never contains credential values"
 
   # 2.3 handoff-pi-trust
@@ -1312,6 +1314,14 @@ SH
   pi_project "$PI_IMPL" "$CX_REV" "$CX_FIN"; printf '9\n' > "$FAKE_PI_DIR/auth-rc"; out="$(pstart "$PD" add-export 2>&1)"; rc=$?; rm -f "$FAKE_PI_DIR/auth-rc"
   [[ "$rc" != 0 && "$(created)" == 0 && ! -d "$PW" ]] && ok "handoff-start opens nothing when the credential check fails (codex-pi-handoff-r03/F-04)" || { bad "handoff-start opens nothing when the credential check fails (codex-pi-handoff-r03/F-04)"; printf '       %s\n' "$out"; }
 
+  pi_project "$PI_IMPL" "$CX_REV" "$CX_FIN"; printf '{"status":' > "$FAKE_PI_DIR/auth-tail"; out="$(pstart "$PD" add-export 2>&1)"; rc=$?; rm -f "$FAKE_PI_DIR/auth-tail"
+  [[ "$rc" != 0 && "$(created)" == 0 && ! -d "$PW" ]] && ok "handoff-start opens nothing when the credential answer cannot be parsed (codex-pi-handoff-r04/F-02)" || { bad "handoff-start opens nothing when the credential answer cannot be parsed (codex-pi-handoff-r04/F-02)"; printf '       %s\n' "$out"; }
+  pi_project "$CX_IMPL" "$CX_REV" "$CX_FIN"; git -C "$PD" switch -q feature/add-export; pstart "$PD" add-export --worktree here >/dev/null 2>&1
+  lb="$(cat "$PD/.agent-handoff/add-export/loop.yaml")"; exr="$(git -C "$PD" rev-parse --path-format=absolute --git-path info/exclude)"; exb="$(cat "$exr" 2>/dev/null)"
+  out="$(pstart "$PD" add-export --worktree here --impl pi:openai-codex/gpt-6.2-sol:high:subscription 2>&1)"; rc=$?
+  [[ "$rc" != 0 && "$(created)" == 1 && ! -e "$PD/.pi/settings.json" && "$(cat "$PD/.agent-handoff/add-export/loop.yaml")" == "$lb" && "$(cat "$exr" 2>/dev/null)" == "$exb" ]] && grep -q 'loop already exists' <<<"$out" \
+    && ok "a refused second start writes no Pi settings or exclude rule (codex-pi-handoff-r04/F-01)" || { bad "a refused second start writes no Pi settings or exclude rule (codex-pi-handoff-r04/F-01)"; printf '       %s\n' "$out"; }
+
   # 3.3 overrides
   pi_project "$CX_IMPL" "$CX_REV" "$CX_FIN"; out="$(pstart "$PD" add-export --review pi:openai-codex/gpt-6.2-sol:high 2>&1)"; rc=$?
   [[ "$rc" != 0 && "$(created)" == 0 ]] && grep -qF 'pi:<provider>/<model>:<effort>:<billing>' <<<"$out" && ok "a Pi override without billing shows the expected form" || bad "a Pi override without billing shows the expected form ($out)"
@@ -1356,6 +1366,11 @@ SH
   (cd "$W1" && env PATH="$FAKES:$PATH" "${PIENV[@]}" "$WRITE" --change add-export --role implement --status done --head HEAD) >/dev/null 2>&1
   rm -f "$FAKE_PI_DIR/auth-rc"; w4="$(ls "$W1/.agent-handoff/add-export"/[0-9][0-9]-implement.yaml | tail -1)"
   [[ "$(kv_get "$w4" agent.billing 2>/dev/null)" == unknown ]] && ok "a failing credential check writes billing unknown even when it prints ready (codex-pi-handoff-r03/F-04)" || bad "a failing credential check writes billing unknown even when it prints ready (codex-pi-handoff-r03/F-04)"
+  printf '{"status":' > "$FAKE_PI_DIR/auth-tail"
+  (cd "$W1" && env PATH="$FAKES:$PATH" "${PIENV[@]}" "$WRITE" --change add-export --role implement --status done --head HEAD) >/dev/null 2>&1
+  rm -f "$FAKE_PI_DIR/auth-tail"; w6="$(ls "$W1/.agent-handoff/add-export"/[0-9][0-9]-implement.yaml | tail -1)"
+  [[ "$w6" != "$w4" && "$(kv_get "$w6" agent.billing 2>/dev/null)" == unknown ]] && ok "an unparsable credential answer writes billing unknown (codex-pi-handoff-r04/F-02)" || bad "an unparsable credential answer writes billing unknown (codex-pi-handoff-r04/F-02)"
+  w4="$w6"
   (cd "$W1" && env -u PI_CODING_AGENT -u PI_PROVIDER -u PI_MODEL -u PI_REASONING_LEVEL -u PI_SESSION_ID PATH="$FAKES:$PATH" "$WRITE" --change add-export --role implement --status done --head HEAD) >/dev/null 2>&1
   w5="$(ls "$W1/.agent-handoff/add-export"/[0-9][0-9]-implement.yaml | tail -1)"
   [[ "$w5" != "$w4" ]] && ! grep -q '^agent:' "$w5" \

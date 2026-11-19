@@ -96,7 +96,8 @@ tmp="$(mktemp "$dir/.write.XXXXXX")" || die "cannot create a temporary file"
   if [[ "${PI_CODING_AGENT:-}" == true && -n "${PI_PROVIDER:-}" ]]; then
     auth=""
     if json="$(pi auth check --provider "$PI_PROVIDER" --json </dev/null 2>/dev/null)"; then
-      auth="$(jq -r 'select(.status == "ready") | .authType // empty' <<<"$json" 2>/dev/null)"
+      auth="$(jq -rs 'if length == 1 and (.[0] | type) == "object" and .[0].status == "ready" then .[0].authType // "" else "" end' \
+        <<<"$json" 2>/dev/null)" || auth=""
     fi
     case "$auth" in oauth) billing=subscription ;; api_key) billing=api ;; *) billing=unknown ;; esac
     printf 'agent:\n  harness: pi\n  provider: %s\n  model: %s\n  effort: %s\n  billing: %s\n  session: %s\n' \
