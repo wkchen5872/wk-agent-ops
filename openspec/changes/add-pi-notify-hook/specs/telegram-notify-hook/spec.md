@@ -96,8 +96,9 @@ supported host or exposing credentials.
 - **THEN** status reports Pi notifications as unavailable because of the existing file
 
 ### Requirement: Notification privacy and bounded failure
-Codex, Antigravity, and Pi notifications SHALL include only the CLI name, project,
-session label, event type, and a generic tool or termination label. They SHALL
+Codex, Antigravity, and Pi notifications SHALL include only the CLI name, the
+model label, project, session label, event type, and a generic tool or
+termination label. They SHALL
 exclude raw commands, prompts, transcripts, tool arguments, and raw error text.
 Telegram delivery failure SHALL not block the invoking CLI beyond the configured
 short timeout.
@@ -113,3 +114,54 @@ short timeout.
 #### Scenario: Pi failure carries an error message
 - **WHEN** a Pi run settles with an error whose message contains a file path and an API response
 - **THEN** the Telegram message reports a failure for `Pi` without that text
+
+## ADDED Requirements
+
+### Requirement: The hook finds the model of the session
+The hook SHALL take the model from the payload's `model` string when present.
+When the payload has none and the host is Claude Code, it SHALL take the model of
+the most recent assistant entry in the session record named by
+`transcript_path`, skipping values that start with `<`. The model SHALL be
+reduced to a value without a trailing bracketed suffix, made of letters, digits,
+and `._:/-`, at most 64 characters; an empty result means no model is known.
+
+#### Scenario: Codex payload names the model
+- **WHEN** a Codex Stop payload contains `"model": "gpt-6.1-terra"`
+- **THEN** the message's tool line is `🤖 Codex (gpt-6.1-terra)`
+
+#### Scenario: Claude Code model comes from the session record
+- **WHEN** a Claude Code Stop payload has no model and the last assistant entry of its session record has model `claude-opus-5-5`
+- **THEN** the message's tool line is `🤖 Claude Code (Opus 5.5)`
+
+#### Scenario: Synthetic entries are skipped
+- **WHEN** the newest assistant entry of a Claude Code session record has model `<synthetic>` and the one before it has `claude-fable-5-2`
+- **THEN** the message's tool line is `🤖 Claude Code (Fable 5.2)`
+
+#### Scenario: Model unknown
+- **WHEN** a payload has no model and no model can be read from a session record
+- **THEN** the message's tool line is the tool name alone, without empty parentheses
+
+#### Scenario: Context-size suffix and unsafe characters
+- **WHEN** a payload's model is `claude-opus-5-5[1m]` or contains backticks or spaces
+- **THEN** the suffix is removed, the unsafe characters are dropped, and the message shows `Opus 5.5` for the first case
+
+### Requirement: The tool line shows the model name
+A Claude model ID SHALL be shown as its capitalized family name followed by its
+version (`claude-opus-5-5` as `Opus 5.5`), and a family-only alias as the family
+name alone; any other ID SHALL be shown unchanged. Templates SHALL receive
+`model_suffix`, the shown name with its version in parentheses after a space, and
+`model_family_suffix`, the same without the version; both SHALL be empty when no
+model is known. Built-in templates SHALL show the tool name followed by
+`model_suffix`.
+
+#### Scenario: Pi on a GPT model
+- **WHEN** a Pi event payload contains `"model": "gpt-6.1-sol"`
+- **THEN** the message's tool line is `🤖 Pi (gpt-6.1-sol)`
+
+#### Scenario: Dated and legacy Claude IDs
+- **WHEN** the model is `claude-sonnet-4-5-20250929`, `claude-opus-4-20250514`, or `claude-3-5-sonnet-20241022`
+- **THEN** the shown name is `Sonnet 4.5`, `Opus 4`, or `Sonnet 3.5` respectively
+
+#### Scenario: User template drops the version
+- **WHEN** a user template's tool line is `🤖 {tool}{model_family_suffix}` and the model is `claude-opus-5-5`
+- **THEN** the message's tool line is `🤖 Claude Code (Opus)`

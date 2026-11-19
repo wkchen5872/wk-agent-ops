@@ -26,6 +26,17 @@ When a Pi main session settles and will not continue on its own, the extension S
 - **WHEN** the user aborts a Pi run, for example with Escape
 - **THEN** no notification is sent
 
+### Requirement: Pi events carry the active model
+Every event the extension sends SHALL include the ID of the session's active model when Pi reports one, and SHALL omit the field otherwise.
+
+#### Scenario: Completion names the active model
+- **WHEN** a Pi main session using `claude-opus-5-5` finishes a run and settles without error
+- **THEN** the completion notification's tool line is `🤖 Pi (Opus 5.5)`
+
+#### Scenario: Model switched during the session
+- **WHEN** the user switches a Pi session from `claude-opus-5-5` to `gpt-6.1-sol` and the next run completes
+- **THEN** the completion notification's tool line is `🤖 Pi (gpt-6.1-sol)`
+
 ### Requirement: A Pi prompt waiting for the user is reported at once
 When a Pi main session starts waiting on an extension UI prompt while a run is in progress, such as the selection shown by pstack `ask_user_question`, the extension SHALL send one user-input event immediately. A prompt opened while the session is idle, such as by a command the user typed, SHALL send nothing. Overlapping or nested prompts that Pi reports as one waiting span SHALL produce one notification. The notification MUST NOT contain the prompt title, options, or answer.
 

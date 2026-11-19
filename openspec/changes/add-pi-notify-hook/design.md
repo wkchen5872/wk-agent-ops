@@ -18,6 +18,16 @@
   - assistant 訊息的 `stopReason` 有 `stop`、`length`、`toolUse`、`error`、`aborted` 等值。
   - `pi.exec` 不能傳 stdin；extension 可直接使用 Node 的 `child_process`。
 - pstack 的 subagent 是 `pi --mode rpc` 子程序，環境帶 `PI_SUBAGENT_PARENT_SESSION`。
+- 範本只做 `{name}` 取代（`scripts/notify/lib/template.sh`），沒有條件判斷；整行都是空 placeholder 才會被刪。`{title_suffix}` 的值
+  自帶前導空白與括號，空值時整段消失。工具行目前是 `🤖 {tool}`，只有工具名稱。
+- model 的取得方式（2026-11-19 查證）：
+  - Codex：hook 輸入的 `model` 在 Stop、PermissionRequest、UserPromptSubmit 的 schema 都列為必填
+    （openai/codex `codex-rs/hooks/schema/generated/*.command.input.schema.json`）。
+  - Pi：extension 可讀 `ctx.model`（目前使用的 model，含 `id`、`provider`），換 model 時觸發 `model_select`（Pi 1.5.2 `docs/extensions.md`）。
+  - Claude Code：官方文件寫明只有 SessionStart 可能帶 `model`，且 `/clear` 或還原 Session 後可能省略；換 model 由
+    PostModelSwitch 的 `to_model` 通知；沒有 `$CLAUDE_MODEL`；`transcript_path` 可能落後最新一輪
+    （https://code.claude.com/docs/en/hooks）。Session 紀錄中每則 assistant 訊息帶 `message.model`（例如 `claude-opus-5-5`），
+    會隨 `/model` 切換而變；此格式未記載於官方文件。`hook.sh` 已以 `claude_pending_call` 讀同一份紀錄。
 
 ## Goals / Non-Goals
 
@@ -51,7 +61,7 @@ Pi 主 session（ctx.hasUI 為真，且沒有 PI_SUBAGENT_PARENT_SESSION）
                  |
                  v
   spawn("bash", [hook, event, "Pi"])，stdin 寫入 JSON 後關閉，detached + unref
-  JSON：{hook_event_name, session_id, cwd, stop_reason}
+  JSON：{hook_event_name, session_id, cwd, stop_reason, model}（model 取 ctx.model?.id，沒有時省略）
                  |
                  v
   telegram-notify.sh --> events.tsv --> 開關 --> 範本 --> Telegram
@@ -101,11 +111,41 @@ Pi 主 session（ctx.hasUI 為真，且沒有 PI_SUBAGENT_PARENT_SESSION）
   互不依賴，與 Claude Code 上 notify 與 handoff 各登記一個 Stop hook 相同。交接角色交件時會同時收到工作結束與交接進度兩則通知，
   與 Claude、Codex 現況一致（使用者先前已接受）。
 
-### 6. TDD 策略與測試邊界
+### 6. 工具行顯示 model
+
+```
+payload 的 model（字串）──有──┐
+          │ 沒有              │
+          v                   v
+Claude Code？── 是 ──> Session 紀錄最後一則 assistant 的 message.model
+          │ 否                │
+          v                   v
+       無 model          清理 → 顯示名稱 → model_suffix / model_family_suffix
+```
+
+- 來源優先序：payload 的 `model` 字串（Codex 必填、Pi 由 extension 帶入、其他工具有就用）；沒有且工具為 Claude Code 時，讀
+  `transcript_path` 最後 400 行中最後一則帶 `message.model` 的 assistant 紀錄，略過 `<` 開頭的值（例如合成訊息的 `<synthetic>`）。
+  其餘情況沒有 model。
+- 清理：去掉結尾的 `[...]`（例如 `[1m]`），只留 `[:alnum:]._:/-`，最多 64 字元；清理後為空視同沒有 model。
+- 顯示名稱：
+  - Claude ID `claude-<家族>-<主>-<次>[-日期]` → `<家族首字大寫> <主>.<次>`；`claude-<家族>-<主>[-日期]` → `<家族> <主>`；
+    舊式 `claude-<主>-<次>-<家族>[-日期]` 同樣處理；只有家族名的別名（`opus`、`sonnet` 等）→ `Opus`，沒有版本。
+  - 其他 ID 原樣顯示，含版本與不含版本相同（例如 `gpt-6.1-terra`）。
+- 範本參數：`model_suffix` = ` (<家族> <版本>)`、`model_family_suffix` = ` (<家族>)`，沒有 model 時兩者皆為空字串，
+  寫法同 `title_suffix`。7 個含 `{tool}` 的內建範本把工具行改為 `🤖 {tool}{model_suffix}`；交接範本不變（由 `handoff-route`
+  另外帶 agent 資訊）。值照常經過 `notify_escape`。
+- 替代方案：Claude Code 改登記 SessionStart 與 PostModelSwitch，把 model 記到狀態檔。不採用——要多登記兩個 hook 與一份狀態，
+  SessionStart 在 `/clear` 後仍可能沒有 model；讀紀錄只多一個 jq 查詢，且與既有 `claude_pending_call` 同一份資料。
+- 替代方案：範本用 `({model})` 加條件判斷。不採用——範本引擎刻意不支援條件；空括號會出現在拿不到 model 的通知。
+
+### 7. TDD 策略與測試邊界
 
 - 先在 `scripts/notify/telegram/test.sh` 寫失敗的 dry-run 測試：`pi-stop` 的 completed／error／aborted／未知值、`pi-question`；
   標題的工具名稱 `Pi` 與 Session 標籤；四個分類開關與 `NOTIFY_LEVEL=attention_required` 對 Pi 事件的效果；error 的 payload
   夾帶額外文字時訊息中不出現。
+- model 顯示的失敗測試（同一支 `test.sh`，dry-run）：Codex payload `model` → `Codex (gpt-6.1-terra)`；Pi payload → `Pi (Opus 5.5)`；
+  Claude Code 由紀錄取得 → `Claude Code (Opus 5.5)`，紀錄最後是 `<synthetic>` 時取前一則真實 model；沒有 model → 工具行沒有括號；
+  使用者範本用 `{model_family_suffix}` → `(Opus)`；`[1m]` 後綴與非法字元被清掉；Claude ID 的三種格式與別名各一案。
 - registry 測試在暫時 HOME：有 Pi 時安裝一份且與來源相同、安裝兩次仍一份、同名無標記檔案不被覆寫且有警告、移除只刪帶標記檔案、
   沒有 Pi 時不建立檔案、status 三種狀態；既有 Claude、Codex、Antigravity、Copilot 測試維持通過。
 - extension 本身：以 `pi -e scripts/notify/pi/ai-notify.ts --help` 之類不呼叫模型的方式做載入檢查；事件行為以真實演練確認
@@ -119,9 +159,13 @@ Pi 主 session（ctx.hasUI 為真，且沒有 PI_SUBAGENT_PARENT_SESSION）
 - [其他 extension 在執行中開提示（例如授權確認）也會被當成等待回應] → 目前沒有安裝授權 extension；日後需要時可依提示種類改分類。
 - [同名檔案衝突] → 只認擁有標記，衝突時不安裝並在 status 顯示。
 - [Telegram 很慢] → detached 子程序，Pi 不等待；通知腳本既有的短 timeout 限制執行時間。
+- [Claude Code 紀錄格式未記載、可能落後一輪] → 讀不到就不顯示 model，不影響通知；剛用 `/model` 切換後的第一則通知可能顯示前一個
+  model。日後 Stop payload 提供 model 時改用 payload（來源優先序已先看 payload）。
+- [Claude 命名規則改變] → 不符合已知格式的 ID 原樣顯示，不會錯誤縮寫。
 
 ## Migration Plan
 
 1. 合併後執行 `bash scripts/notify/telegram/update.sh fix-hooks`（或重跑 install）安裝 Pi extension；已開啟的 Pi session `/reload`。
 2. 不影響其他工具的既有登記；`events.tsv` 新增的列對舊版腳本無作用。
+   重跑 install 或 `fix-hooks` 部署新的通知腳本與範本後，所有工具的工具行開始顯示 model；使用者自訂範本要自己加入 `{model_suffix}`。
 3. 回退：執行 uninstall，或刪除帶標記的 `~/.pi/agent/extensions/ai-notify.ts`；通知腳本中的 Pi 事件列不會被其他工具觸發。
