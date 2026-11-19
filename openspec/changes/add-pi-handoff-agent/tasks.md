@@ -2,7 +2,7 @@
 
 ## 1. 前置與實測
 
-- [ ] 1.1 確認 `add-handoff-notifications` 已封存並合併到 `main`，本分支已同步（rebase 或 merge）。測試要求：查證任務；完成條件是 `openspec/specs/agent-handoff-notifications/spec.md` 存在、`openspec validate add-pi-handoff-agent --strict` 通過，且 `bash tests/test_agent_handoff.sh` 在同步後全數通過。
+- [x] 1.1 確認 `add-handoff-notifications` 已封存並合併到 `main`，本分支已同步（rebase 或 merge）。測試要求：查證任務；完成條件是 `openspec/specs/agent-handoff-notifications/spec.md` 存在、`openspec validate add-pi-handoff-agent --strict` 通過，且 `bash tests/test_agent_handoff.sh` 在同步後全數通過。
 - [ ] 1.2 實測 Xirp 開 Pi Session 的參數：以 `xirp api send session:create` 帶 `agent:{agentName:"pi", options:{model, provider, thinking}}` 開一個演練 Session，在其中執行 `printf '%s/%s %s\n' "$PI_PROVIDER" "$PI_MODEL" "$PI_REASONING_LEVEL"`，並確認 `CHIRP_SESSION_ID` 有值；演練後刪除該 Session。測試要求：查證任務；完成條件是 Work Item 記下實際生效的選項鍵與輸出。鍵名與設計不同時，先更新 design.md 決策 2 再繼續。
 
 ## 2. Pi 角色驗證（`handoff.sh`）
