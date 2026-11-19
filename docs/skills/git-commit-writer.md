@@ -88,10 +88,20 @@ Co-Authored-By: Codex <noreply@openai.com>
 AI-Assisted-By: GPT-6
 ```
 
+### 3. 在 Pi root session 中提交
+```text
+<type>: <subject>
+
+<body>
+
+Co-Authored-By: Pi
+AI-Assisted-By: claude-opus-5-5
+```
+
 ### Trailer 標籤說明
 - **Refs**：直接處理的 Issue 或 PR 編號（同 repo 寫 `#N`，跨 repo 寫完整網址）。
-- **Co-Authored-By**：目前已驗證支援 `Claude Code <noreply@anthropic.com>` 與 `Codex <noreply@openai.com>`。
-- **AI-Assisted-By**：記錄本次協作的核心模型名稱（如 `GPT-6` 或 `Claude 3.7 Sonnet`）。
+- **Co-Authored-By**：目前已驗證支援 `Claude Code <noreply@anthropic.com>` 與 `Codex <noreply@openai.com>`；Pi 寫成 `Co-Authored-By: Pi`，不附 email。
+- **AI-Assisted-By**：記錄本次協作的核心模型名稱（如 `GPT-6` 或 `Claude 3.7 Sonnet`）。模型名稱不從環境變數推定，唯一例外是 Pi root session（`PI_CODING_AGENT=true` 且沒有 `PI_SUBAGENT_PARENT_SESSION`）：Pi 不在 prompt 中寫出模型，而是在每個 shell 指令注入 `PI_MODEL`，所以沒有使用者或呼叫端提供的名稱時，writer 讀 commit 當下的 `PI_MODEL`，原樣記錄模型 ID、不加 provider；`/model` 換模型後記錄新模型，空值視為未知。Pi subagent 的 `PI_MODEL` 是 subagent 自己的模型，不使用；Claude Code、Codex 等其他工具即使環境中有 `PI_MODEL` 也不使用。
 
 ---
 

@@ -359,3 +359,13 @@
 - 預期呼叫：直接選 Sync now → 同步並驗證 → 封存 → 文件 → commit → `handoff-write --role finish --status done`。
 - 禁止：停下來詢問使用者；為了這個選擇寫 `status: blocked`。
 - 判定：不需人為輸入即完成同步與封存；若有 capability 無法同步，才寫 `status: blocked` 並在 note 說明。
+
+## Pi 模型身分（add-git-commit-writer-pi-attribution）
+
+### OC-40 Pi root session
+
+- Fixture：同 OC-01，但執行工具為 Pi root session（`PI_CODING_AGENT=true`，沒有 `PI_SUBAGENT_PARENT_SESSION`），使用者沒提供模型名稱；commit 步驟當下 `PI_PROVIDER=openai`、`PI_MODEL=gpt-6.2-sol`。
+- 模擬回覆：本地三步成功。
+- 預期呼叫：封存 → 文件 → 讀 `PI_MODEL` → 以可攜 `git-commit-writer` skill commit，傳入 `tool_name=Pi`、`assisting_model=gpt-6.2-sol`；訊息尾端為 `Co-Authored-By: Pi`、`AI-Assisted-By: gpt-6.2-sol`。
+- 禁止：共同禁止；詢問使用者模型名稱；在封存或文件步驟前讀取或要求模型；傳入 `openai/gpt-6.2-sol`；改用 provider-native 的 `git-commit-writer-agent`。
+- 判定：commit 完成，attribution 為 Pi 與 commit 步驟當下的 `PI_MODEL`。

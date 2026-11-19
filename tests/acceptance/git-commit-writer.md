@@ -147,3 +147,48 @@ commit 或讀過 GitHub。出現任何「禁止」項目即失敗。
 - 預期呼叫：訊息尾端為 `Refs: #12, #19`。
 - 禁止：共同禁止；因為 #12 也出現在 `depends-on` 就丟掉它；只依 Handoff 的 `depends-on` 行、沒有獨立確認就列入。
 - 判定：有獨立的直接處理證據，#12 與 #19 都保留並排序。
+
+## Pi 模型身分（add-git-commit-writer-pi-attribution）
+
+以下案例改寫共同 fixture 的執行工具與模型；引用相關的共同禁止仍然適用。Pi root session 指
+`PI_CODING_AGENT=true` 且沒有 `PI_SUBAGENT_PARENT_SESSION`。
+
+### WC-17 Pi root session standalone commit
+
+- Fixture：在 Pi root session 中以 standalone 方式呼叫 writer，沒有 `assisting_model`，使用者也沒提供模型名稱；commit 當下 `PI_PROVIDER=anthropic`、`PI_MODEL=claude-opus-5-5`；沒有確認的引用。
+- 模擬回覆：commit 成功。
+- 預期呼叫：`git add -A` → 讀取 staged diff → 讀 `PI_MODEL` → `git commit`，訊息尾端為 `Co-Authored-By: Pi`、`AI-Assisted-By: claude-opus-5-5`。
+- 禁止：共同禁止；詢問使用者模型名稱；寫成 `anthropic/claude-opus-5-5` 或轉成顯示名稱；替 `Pi` 加 email；省略可確認的模型。
+- 判定：兩行 trailer 與 `PI_MODEL` 的值完全一致。
+
+### WC-18 Pi 換模型後 commit
+
+- Fixture：同 WC-17，但 Pi root session 先以 `/model` 從 `claude-opus-5-5` 換成 `gpt-6.2-sol`，之後才 commit；commit 當下 `PI_MODEL=gpt-6.2-sol`。
+- 模擬回覆：commit 成功。
+- 預期呼叫：commit 當下讀 `PI_MODEL`，訊息尾端為 `Co-Authored-By: Pi`、`AI-Assisted-By: gpt-6.2-sol`。
+- 禁止：共同禁止；沿用換模型前的 `claude-opus-5-5`；沿用較早 commit 的 trailer。
+- 判定：記錄的是 commit 當下的模型。
+
+### WC-19 Pi 使用者提供名稱優先
+
+- Fixture：Pi root session，`PI_MODEL=claude-opus-5-5`；使用者本輪說「這次協作的模型記為 Claude Opus 5.5」。
+- 模擬回覆：commit 成功。
+- 預期呼叫：訊息尾端為 `Co-Authored-By: Pi`、`AI-Assisted-By: Claude Opus 5.5`。
+- 禁止：共同禁止；以 `PI_MODEL` 覆蓋使用者提供的名稱；要求使用者再確認。
+- 判定：使用者提供的名稱原樣保留。
+
+### WC-20 Pi subagent 沒有傳入 `assisting_model`
+
+- Fixture：writer 在 Pi subagent 中執行（設有 `PI_SUBAGENT_PARENT_SESSION`），subagent 的 `PI_MODEL=gpt-6-luna`；呼叫端只傳了 `tool_name=Pi`，沒有 `assisting_model`。
+- 模擬回覆：commit 成功。
+- 預期呼叫：訊息尾端只有 `Co-Authored-By: Pi`；結果回報省略了 `AI-Assisted-By`。
+- 禁止：共同禁止；寫入 `AI-Assisted-By: gpt-6-luna`；寫空值或佔位字；因此停止 commit。
+- 判定：沒有模型 trailer，且有回報省略。
+
+### WC-21 Claude Code 環境中有 `PI_MODEL`
+
+- Fixture：writer 在 Claude Code 中執行（例如從 Pi 的 shell 啟動 Claude Code，繼承了 `PI_CODING_AGENT=true` 與 `PI_MODEL=gpt-6.2-sol`）；目前 root-session 模型無法確認，也沒有 `assisting_model`。
+- 模擬回覆：commit 成功。
+- 預期呼叫：訊息尾端只有 `Co-Authored-By: Claude Code <noreply@anthropic.com>`；結果回報省略了 `AI-Assisted-By`。
+- 禁止：共同禁止；寫入 `AI-Assisted-By: gpt-6.2-sol`；把工具寫成 `Pi`。
+- 判定：Pi 例外沒有套用到 Claude Code。

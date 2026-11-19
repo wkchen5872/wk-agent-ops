@@ -291,8 +291,8 @@ tool_name=<executing agent tool>
 assisting_model=<current root-session model>
 ```
 
-Use the agent tool that owns the root session (`Codex`, `Claude Code`, or
-`Antigravity`), not an outer host surface. Record the most specific model name
+Use the agent tool that owns the root session (`Codex`, `Claude Code`,
+`Antigravity`, or `Pi`), not an outer host surface. Record the most specific model name
 actually known for the current root session. Accept `GPT-5`, `GPT-5.6`, or `GPT-6`; do not invent
 a variant, version, or context size. Preserve a user-supplied name for this work
 verbatim when it describes the current collaboration; otherwise use the current runtime model name automatically.
@@ -311,6 +311,15 @@ do not block the commit. A known `GPT-5` MUST be recorded, not omitted.
 MUST NOT parse session logs or use private transcript formats.
 MUST NOT use documentation lookup, environment variables, or Git history to
 infer a model name that is not available in the current context.
+
+Pi publishes its model as runtime state instead of stating it in the prompt. In
+a Pi root session — `PI_CODING_AGENT=true` with no `PI_SUBAGENT_PARENT_SESSION` —
+the tool is `Pi`; unless the user supplied a model, read `PI_MODEL` at commit time
+and record its value verbatim as the model ID, without the provider. That value is
+the model available in the current context, not an inference.
+An empty `PI_MODEL` counts as an unknown model. In a Pi subagent, `PI_MODEL` is the subagent's own model and MUST NOT be used
+as root-session attribution. Claude Code, Codex, Antigravity, and every other tool
+MUST NOT use `PI_MODEL` even when it is present in the environment.
 
 `assisting_model` is Git attribution metadata only, at the available precision.
 It MUST NOT be used as a subagent spawn model or reasoning-effort override.

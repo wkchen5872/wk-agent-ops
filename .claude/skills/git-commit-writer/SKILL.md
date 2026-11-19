@@ -33,7 +33,7 @@ github_references=<list of: url=<Issue or PR URL> evidence=<how it was confirmed
 When archive_path and change_id are provided, use them directly. They are a
 pair: if only one is provided, stop and report the invalid input.
 
-`tool_name` identifies the collaborating tool, such as `Codex` or `Claude Code`.
+`tool_name` identifies the collaborating tool, such as `Codex`, `Claude Code`, or `Pi`.
 `assisting_model` is optional. Record the most specific model name actually
 known for the current collaborating root session. Accept `GPT-5`, `GPT-5.6`, or `GPT-6`;
 do not invent a variant, version, or context size to make the name more precise.
@@ -53,6 +53,20 @@ is known for the current root session, omit `AI-Assisted-By` and report the omis
 do not block the commit. A known `GPT-5` MUST be recorded, not omitted.
 You MUST NOT guess attribution from environment variables, documentation,
 session logs, Git history, or the commit-only agent's identity.
+
+**Pi root-session exception.** In any Pi session, `tool_name` is `Pi` even when no
+caller supplied it, so the commit always carries `Co-Authored-By: Pi`.
+Pi does not state its model in the prompt; it
+publishes it as runtime state in each shell command. When this writer itself
+runs in a Pi root session — `PI_CODING_AGENT=true` with no `PI_SUBAGENT_PARENT_SESSION` —
+and neither the user nor the caller supplied a model, read `PI_MODEL` at commit time
+and record its value verbatim as the model ID, without the provider (for example
+`claude-opus-5-5`). This is not a guess, and it follows `/model` switches.
+An empty `PI_MODEL` counts as an unknown model. In a Pi subagent
+(`PI_SUBAGENT_PARENT_SESSION` is set), `PI_MODEL` is the subagent's own model and MUST NOT be used
+as root-session attribution: use the caller-supplied `assisting_model`, or omit
+and report. The exception belongs to Pi alone; Claude Code, Codex, Antigravity,
+and every other tool MUST NOT use `PI_MODEL` even when it is present in the environment.
 
 `assisting_model` is Git attribution metadata only. It identifies the known
 current root-session collaboration model, at the available precision.
@@ -232,6 +246,7 @@ Build the co-author trailer from this strict verified mapping:
 |---|---|
 | `Codex` | `Co-Authored-By: Codex <noreply@openai.com>` |
 | `Claude Code` | `Co-Authored-By: Claude Code <noreply@anthropic.com>` |
+| `Pi` | `Co-Authored-By: Pi` (no email) |
 
 Unmapped tools use `Co-Authored-By: <tool_name>` without an email. Preserve the
 tool name and MUST NOT guess an address. When the current root-session model is known,

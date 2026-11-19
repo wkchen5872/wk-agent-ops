@@ -526,5 +526,34 @@ for id in OC-32 OC-33 OC-34 OC-35 OC-36 OC-37 OC-39; do
   grep -q "^### $id " "$OC_CASES" && ok "acceptance case $id exists" || bad "acceptance case $id exists"
 done
 
+# ── add-git-commit-writer-pi-attribution ─────────────────────────────────────
+# Maps to openspec/changes/add-git-commit-writer-pi-attribution specs.
+if run_section pi; then
+printf '\nPi root-session attribution\n'
+for f in "$COMMIT_SKILL" "$ORCHESTRATOR"; do
+  b="${f#"$ROOT"/template/common/skills/}"
+  require_text "$f" '`PI_CODING_AGENT=true` with no `PI_SUBAGENT_PARENT_SESSION`' "$b identifies a Pi root session"
+  require_text "$f" 'read `PI_MODEL` at commit time' "$b reads PI_MODEL at commit time"
+  require_text "$f" 'verbatim as the model ID, without the provider' "$b records the model ID verbatim"
+  require_text "$f" 'An empty `PI_MODEL` counts as an unknown model' "$b treats empty PI_MODEL as unknown"
+  require_text "$f" "\`PI_MODEL\` is the subagent's own model and MUST NOT be used" "$b forbids a Pi subagent's own model"
+  require_text "$f" 'MUST NOT use `PI_MODEL` even when it is present' "$b keeps the exception out of other tools"
+done
+require_text "$COMMIT_SKILL" 'You MUST NOT guess attribution from environment variables' "writer keeps the environment-variable prohibition"
+require_text "$ORCHESTRATOR" 'MUST NOT use documentation lookup, environment variables, or Git history' "coordinator keeps the environment-variable prohibition"
+require_text "$COMMIT_SKILL" 'such as `Codex`, `Claude Code`, or `Pi`' "writer names Pi as a tool_name"
+require_text "$COMMIT_SKILL" '| `Pi` | `Co-Authored-By: Pi` (no email) |' "writer maps Pi without an email"
+require_text "$COMMIT_SKILL" 'In any Pi session, `tool_name` is `Pi`' "standalone writer in Pi resolves tool_name itself"
+require_text "$ORCHESTRATOR" '`Antigravity`, or `Pi`' "coordinator lists Pi as a root-session tool"
+forbid_text "$COMMIT_AGENT" 'PI_MODEL' "Claude commit agent does not read PI_MODEL"
+forbid_text "$CODEX_COMMIT_AGENT" 'PI_MODEL' "Codex commit agent does not read PI_MODEL"
+for t in 'Pi root session' 'Pi 換模型' 'Pi 使用者提供名稱' 'Pi subagent' 'Claude Code 環境中有 `PI_MODEL`'; do
+  grep -E '^### WC-[0-9]+' "$ROOT/tests/acceptance/git-commit-writer.md" 2>/dev/null | grep -qF -- "$t" \
+    && ok "writer case for '$t'" || bad "writer case for '$t'"
+done
+grep -E '^### OC-[0-9]+' "$ROOT/tests/acceptance/openspec-commit.md" 2>/dev/null | grep -qF -- 'Pi root session' \
+  && ok "openspec-commit case for 'Pi root session'" || bad "openspec-commit case for 'Pi root session'"
+fi
+
 printf '\n'
 [[ $fail -eq 0 ]] && { echo "PASS"; exit 0; } || { echo "FAIL"; exit 1; }

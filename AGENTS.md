@@ -192,6 +192,9 @@ Codex 版本：`.codex/agents/git-commit-writer-agent.toml`（`gpt-5.6-luna`、m
 - 不需要確認，直接執行
 - 自動以當下可確認的協作模型作為 `AI-Assisted-By`；接受 `GPT-5`、`GPT-5.6`、`GPT-6`
   等名稱，不補猜變體。完全未知時省略該 trailer 並回報，不阻擋 commit
+- Pi：在 Pi root session（`PI_CODING_AGENT=true` 且沒有 `PI_SUBAGENT_PARENT_SESSION`）中，可攜 Skill
+  讀 commit 當下的 `PI_MODEL` 原樣記錄模型 ID，trailer 為 `Co-Authored-By: Pi`（無 email）；
+  Pi subagent 與其他工具不使用 `PI_MODEL`，provider-native agent 定義不變
 - Archive guard：若傳入 `archive_path`，在 commit 前驗證目錄存在；archive 未完成則停止
 - GitHub 引用：caller（openspec-commit、github-pr create）傳入已確認的直接 Issue／PR，寫成 attribution 前的
   `Refs: #N`；背景與 `depends-on` 只在另被確認為直接處理時列入；跨 repo 用完整 URL，不猜編號、不用 `Closes`，也不為補引用 amend 或另外 commit
