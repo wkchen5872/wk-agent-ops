@@ -22,7 +22,7 @@ bash scripts/handoff/install.sh                              # once per machine
 bash scripts/skills/install.sh --target /path/to/repo        # once per repository
 ```
 
-The first command installs `handoff-start`, `handoff-finish` and `handoff-cleanup` in `~/.local/bin`, installs
+The first command installs `handoff-start`, `handoff-finish`, `handoff-cleanup` and `handoff-role` in `~/.local/bin`, installs
 `handoff-route` in `~/.config/wk-workflow/handoff/`, and registers it as a Stop hook for
 Claude Code (`~/.claude/settings.json`) and Codex (`~/.codex/hooks.json`). Then open a new
 Codex session and, in `/hooks`, find the Stop hook named `Agent 交接派送`, trust it and make
@@ -94,6 +94,24 @@ implementer first hands over.
 An override is `claude|codex:<model>:<effort>`, or `pi:<provider>/<model>:<effort>:<billing>` for
 Pi (verified like a Pi template). Overrides are written to `loop.yaml`; `roles.yaml` is never
 changed. Every Pi role in effect is verified before any worktree or session is created.
+When an override changes the tool, the prompt's leading skill call follows it (`$change-review`
+becomes `/skill:change-review` for Pi or `/change-review` for Claude Code), and a session name
+that starts with the old tool's name starts with the new one; anything else stays as written.
+
+### `handoff-role <change-id> <review|finish> <override>`
+
+Changes the review or finish role of a running loop before its session opens, for example to
+run the reviewer in Pi after `handoff-start`:
+
+```bash
+handoff-role add-export review pi:openai/gpt-6.2-sol:high:api
+```
+
+The override takes the same form as `handoff-start`'s and rewrites the skill call and session
+name the same way. It runs the same checks first (template fields, one Pi role per worktree, and
+for Pi the model, credential, billing and trust) and writes the implementer's `loop.yaml` only when
+all of them pass. It refuses a role whose session is already recorded, and never changes
+`roles.yaml` or the implementer.
 
 ### `handoff-finish <change-id>`
 

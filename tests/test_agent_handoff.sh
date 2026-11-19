@@ -850,6 +850,17 @@ if run_section start; then
   else
     bad "per-loop overrides are recorded in loop.yaml and roles.yaml is unchanged"; printf '       %s\n' "$out"
   fi
+  # The overrides above change both tools: Codex review → Claude, Claude implement → Codex.
+  [[ "$(kv_get "$ol" review_template.prompt)" == '/change-review {change}'* && "$(kv_get "$ol" review_template.name)" == 'claude - review - {change}' ]] \
+    && jq -e '.customName=="codex - impl - add-export" and (.goal|startswith("$openspec-apply-change add-export"))' "$FAKE_XIRP_DIR/create-1.json" >/dev/null \
+    && ok "an override that changes the tool rewrites the skill call and session name" \
+    || { bad "an override that changes the tool rewrites the skill call and session name"; printf '       %s | %s\n' "$(kv_get "$ol" review_template.name)" "$(kv_get "$ol" review_template.prompt | cut -c1-40)"; }
+  OS="$tmp/start-same-tool"; new_project "$OS"; use_project "$OS"; fresh_state s6s
+  start_in "$OS" add-export --review codex:gpt-6.1-terra:high >/dev/null 2>&1
+  osl="$OS-add-export/.agent-handoff/add-export/loop.yaml"
+  [[ "$(kv_get "$osl" review_template.model)" == gpt-6.1-terra && "$(kv_get "$osl" review_template.prompt)" == '$change-review {change}'* \
+    && "$(kv_get "$osl" review_template.name)" == 'codex - review - {change}' ]] \
+    && ok "an override that keeps the tool keeps the prompt and session name" || bad "an override that keeps the tool keeps the prompt and session name"
   R="$tmp/start-reuse"; new_project "$R"; use_project "$R"; fresh_state s7
   out="$(start_in "$R" add-export --reviewer-session rev-9 2>&1)"; rc=$?
   [[ "$rc" == 0 && "$(kv_get "$R-add-export/.agent-handoff/add-export/loop.yaml" reviewer.session)" == rev-9 && "$(created)" == 1 ]] \
@@ -983,7 +994,7 @@ if run_section hookinstall; then
   HH="$tmp/home"; mkdir -p "$HH/.codex"; printf 'keep = true\n' > "$HH/.codex/config.toml"
   out="$(HOME="$HH" bash "$ROOT/scripts/handoff/install.sh" 2>&1)"; rc=$?
   HOME="$HH" bash "$ROOT/scripts/handoff/install.sh" >/dev/null 2>&1
-  [[ "$rc" == 0 && -x "$HH/.local/bin/handoff-start" && -x "$HH/.local/bin/handoff-finish" && -x "$HH/.local/bin/handoff-cleanup" && -x "$HH/.config/wk-workflow/handoff/handoff-route" \
+  [[ "$rc" == 0 && -x "$HH/.local/bin/handoff-start" && -x "$HH/.local/bin/handoff-finish" && -x "$HH/.local/bin/handoff-cleanup" && -x "$HH/.local/bin/handoff-role" && -x "$HH/.config/wk-workflow/handoff/handoff-route" \
     && -f "$HH/.config/wk-workflow/handoff/lib/handoff.sh" && -f "$HH/.config/wk-workflow/handoff/lib/kv.sh" ]] \
     && ok "installs the commands, the hook and its libraries" || { bad "installs the commands, the hook and its libraries"; printf '       %s\n' "$out"; }
   n_claude="$(jq '[.hooks.Stop[]?.hooks[]? | select(.command | test("handoff-route"))] | length' "$HH/.claude/settings.json" 2>/dev/null)"
@@ -1029,10 +1040,10 @@ if run_section hookinstall; then
 
   readme="$ROOT/scripts/handoff/README.md"
   missing=""
-  for opt in $( { "$START" --help; "$FINISH" --help; "$ROOT/scripts/handoff/handoff-cleanup" --help; } 2>/dev/null | grep -oE -- '--[a-z][a-z-]+' | sort -u); do
+  for opt in $( { "$START" --help; "$FINISH" --help; "$ROOT/scripts/handoff/handoff-cleanup" --help; "$ROOT/scripts/handoff/handoff-role" --help; } 2>/dev/null | grep -oE -- '--[a-z][a-z-]+' | sort -u); do
     grep -q -- "$opt" "$readme" 2>/dev/null || missing="$missing $opt"
   done
-  [[ -f "$readme" && -z "$missing" ]] && grep -q 'handoff-finish' "$readme" && grep -q 'roles.yaml' "$readme" \
+  [[ -f "$readme" && -z "$missing" ]] && grep -q 'handoff-finish' "$readme" && grep -q 'handoff-role' "$readme" && grep -q 'roles.yaml' "$readme" \
     && ok "README documents every command option" || bad "README documents every command option (missing:$missing)"
 fi
 
@@ -1341,6 +1352,9 @@ SH
   [[ "$rc" == 0 && "$(kv_get "$pl" review_template.harness)" == pi && "$(kv_get "$pl" review_template.provider)" == openai-codex && "$(kv_get "$pl" review_template.model)" == gpt-6.2-sol \
     && "$(kv_get "$pl" review_template.effort)" == high && "$(kv_get "$pl" review_template.billing)" == subscription && "$(cat "$PD/.agent-handoff/roles.yaml")" == "$before" ]] \
     && ok "a Pi override is recorded in loop.yaml and roles.yaml is unchanged" || { bad "a Pi override is recorded in loop.yaml and roles.yaml is unchanged"; printf '       %s\n' "$out"; }
+  [[ "$(kv_get "$pl" review_template.name)" == 'pi - review - {change}' && "$(kv_get "$pl" review_template.prompt)" == 'do {change} {author}' ]] \
+    && ok "a Pi override renames the session and keeps a prompt that starts with no skill call" \
+    || bad "a Pi override renames the session and keeps a prompt that starts with no skill call ($(kv_get "$pl" review_template.name))"
   pi_project "$PI_IMPL" "$CX_REV" "$CX_FIN"; out="$(pstart "$PD" add-export --impl codex:gpt-x:low 2>&1)"; rc=$?
   [[ "$rc" == 0 ]] && jq -e '.agent.agentName=="codex" and (.agent.options|has("provider")|not)' "$FAKE_XIRP_DIR/create-1.json" >/dev/null && [[ ! -e "$PW/.pi/settings.json" ]] \
     && ok "a Codex override replaces a Pi template without its provider and billing" || { bad "a Codex override replaces a Pi template without its provider and billing"; printf '       %s\n' "$out"; }
@@ -1590,6 +1604,39 @@ SH
   ext="$ROOT/scripts/handoff/pi/wk-handoff.ts"
   grep -q '"agent_settled"' "$ext" && grep -q '"project_trust"' "$ext" && grep -q 'PI_SUBAGENT_PARENT_SESSION' "$ext" && ! grep -q '"tool_call"' "$ext" && ! grep -q 'remember' "$ext" \
     && ok "the Pi trigger handles agent_settled and project_trust only, skips subagents and saves no trust" || bad "the Pi trigger handles agent_settled and project_trust only, skips subagents and saves no trust"
+
+  # handoff-role: change a role that has not opened, with the checks handoff-start runs.
+  ROLE="$ROOT/scripts/handoff/handoff-role"
+  prole() { local d="$1"; shift; (cd "$d" && HOME="$PI_HOME" PATH="$FAKES:$PATH" "$ROLE" "$@" </dev/null); }
+  sum() { cksum < "$1"; }
+  pi_project "$CX_IMPL" "$CX_REV" "$CX_FIN"; pstart "$PD" add-export >/dev/null 2>&1; rl="$PW/.agent-handoff/add-export/loop.yaml"
+  rbefore="$(cat "$PD/.agent-handoff/roles.yaml")"
+  out="$(prole "$PW" add-export review pi:openai/gpt-6.2-sol:high:api 2>&1)"; rc=$?
+  [[ "$rc" == 0 && "$(kv_get "$rl" review_template.harness)" == pi && "$(kv_get "$rl" review_template.provider)" == openai \
+    && "$(kv_get "$rl" review_template.model)" == gpt-6.2-sol && "$(kv_get "$rl" review_template.effort)" == high \
+    && "$(kv_get "$rl" review_template.billing)" == api && "$(kv_get "$rl" review_template.name)" == 'pi - review - {change}' \
+    && "$(cat "$PD/.agent-handoff/roles.yaml")" == "$rbefore" ]] \
+    && ok "handoff-role changes a review role that has not opened, and roles.yaml is unchanged" || { bad "handoff-role changes a review role that has not opened, and roles.yaml is unchanged"; printf '       %s\n' "$out"; }
+  commit_in "$PW" impl; hw "$PW" --role implement --status done --head HEAD; HOME="$PI_HOME" route_in "$PW" >/dev/null 2>&1
+  jq -e '.agent.agentName=="pi" and .customName=="pi - review - add-export"' "$FAKE_XIRP_DIR/create-2.json" >/dev/null 2>&1 \
+    && ok "the hook opens the reviewer from the changed role" || bad "the hook opens the reviewer from the changed role ($(cat "$FAKE_XIRP_DIR/create-2.json" 2>/dev/null | jq -c '{n: .customName, a: .agent.agentName}'))"
+  s0="$(sum "$rl")"; out="$(prole "$PW" add-export review codex:gpt-6.2-sol:high 2>&1)"; rc=$?
+  [[ "$rc" != 0 && "$(sum "$rl")" == "$s0" ]] && grep -q "$(kv_get "$rl" reviewer.session)" <<<"$out" \
+    && ok "handoff-role refuses a role whose session is open and names it" || { bad "handoff-role refuses a role whose session is open and names it"; printf '       %s\n' "$out"; }
+  pi_project "$CX_IMPL" "$CX_REV" "$CX_FIN"; pstart "$PD" add-export >/dev/null 2>&1; rl="$PW/.agent-handoff/add-export/loop.yaml"; s0="$(sum "$rl")"
+  out="$(prole "$PW" add-export review pi:openai/not-a-model:high:api 2>&1)"; rc=$?
+  [[ "$rc" != 0 && "$(sum "$rl")" == "$s0" ]] && grep -q 'not-a-model' <<<"$out" \
+    && ok "handoff-role refuses a Pi role that fails verification and keeps loop.yaml" || { bad "handoff-role refuses a Pi role that fails verification and keeps loop.yaml"; printf '       %s\n' "$out"; }
+  out="$(prole "$PW" add-export review pi:openai/gpt-6.2-sol:high 2>&1)"; rc=$?
+  [[ "$rc" != 0 && "$(sum "$rl")" == "$s0" ]] && grep -qF 'pi:<provider>/<model>:<effort>:<billing>' <<<"$out" \
+    && ok "handoff-role refuses a malformed override and shows the form" || { bad "handoff-role refuses a malformed override and shows the form"; printf '       %s\n' "$out"; }
+  out="$(prole "$PW" add-export finish claude:sonnet:high 2>&1)"; rc=$?
+  [[ "$rc" == 0 && "$(kv_get "$rl" finish_template.harness)" == claude && "$(kv_get "$rl" finish_template.name)" == 'claude - finish - {change}' ]] \
+    && ok "handoff-role changes a finish role that has not opened" || { bad "handoff-role changes a finish role that has not opened"; printf '       %s\n' "$out"; }
+  pi_project "$PI_IMPL" "$CX_REV" "$CX_FIN"; pstart "$PD" add-export >/dev/null 2>&1; rl="$PW/.agent-handoff/add-export/loop.yaml"; s0="$(sum "$rl")"
+  out="$(prole "$PW" add-export review pi:openai/gpt-6.2-sol:high:api 2>&1)"; rc=$?
+  [[ "$rc" != 0 && "$(sum "$rl")" == "$s0" ]] && grep -q 'one Pi role' <<<"$out" \
+    && ok "handoff-role refuses a second Pi role in the implementer worktree" || { bad "handoff-role refuses a second Pi role in the implementer worktree"; printf '       %s\n' "$out"; }
 fi
 
 if [[ "$fail" -ne 0 ]]; then

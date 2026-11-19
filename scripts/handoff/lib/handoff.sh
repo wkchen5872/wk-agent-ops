@@ -261,6 +261,41 @@ ho_copy_template() {
   fi
 }
 
+# ho_retool <old-tool> <new-tool> <name|prompt> <text>: a session name that starts with "<old-tool> - "
+# and a prompt that starts with a skill call (/x Claude Code, $x Codex, /skill:x Pi) follow the new tool.
+ho_retool() {
+  local old="$1" new="$2" kind="$3" text="$4" skill=""
+  if [[ "$kind" == name ]]; then
+    [[ "$text" == "$old - "* ]] && text="$new - ${text#"$old - "}"
+    printf '%s' "$text"; return 0
+  fi
+  case "$text" in
+    /skill:*) skill="${text#/skill:}" ;;
+    \$*) skill="${text#\$}" ;;
+    /*) skill="${text#/}" ;;
+  esac
+  if [[ "$skill" =~ ^[a-z0-9] ]]; then
+    case "$new" in claude) text="/$skill" ;; codex) text="\$$skill" ;; pi) text="/skill:$skill" ;; esac
+  fi
+  printf '%s' "$text"
+}
+
+# ho_apply_override <file> <section> <override>: set a role's tool, model, effort, provider and billing from
+# claude|codex:<model>:<effort> or pi:<provider>/<model>:<effort>:<billing> (the caller checks the form).
+ho_apply_override() {
+  local file="$1" sec="$2" ov="$3" h m e b="" p="" old k v
+  IFS=: read -r h m e b <<<"$ov"
+  if [[ "$h" == pi ]]; then p="${m%%/*}"; m="${m#*/}"; else b=""; fi
+  old="$(kv_get "$file" "$sec.harness" 2>/dev/null || true)"
+  kv_set "$file" "$sec.harness" "\"$h\""; kv_set "$file" "$sec.model" "\"$m\""; kv_set "$file" "$sec.effort" "\"$e\""
+  kv_set "$file" "$sec.provider" "${p:+\"$p\"}"; kv_set "$file" "$sec.billing" "${b:+\"$b\"}"
+  [[ -n "$old" && "$old" != "$h" ]] || return 0
+  for k in name prompt; do
+    v="$(kv_get "$file" "$sec.$k" 2>/dev/null)" || continue
+    kv_set "$file" "$sec.$k" "\"$(ho_retool "$old" "$h" "$k" "$v")\""
+  done
+}
+
 # Open a role session from the template stored in loop.yaml. Prints the session id.
 ho_open_role() {
   local dir="$1" tsec="$2" wt="$3" head="$4" round="$5" report="$6"

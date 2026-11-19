@@ -56,17 +56,8 @@ git -C "$main" cat-file -e "feature/$change:openspec/changes/$change" 2>/dev/nul
 # Work on a scratch copy so overrides never touch roles.yaml.
 scratch="$(mktemp)"; trap 'rm -f "$scratch"' EXIT
 cp "$roles" "$scratch"
-apply_ov() {
-  local sec="$1" ov="$2"
-  [[ -n "$ov" ]] || return 0
-  local h m e b p=""
-  IFS=: read -r h m e b <<<"$ov"
-  if [[ "$h" == pi ]]; then p="${m%%/*}"; m="${m#*/}"; else b=""; fi
-  kv_set "$scratch" "$sec.harness" "$h"; kv_set "$scratch" "$sec.model" "$m"; kv_set "$scratch" "$sec.effort" "$e"
-  kv_set "$scratch" "$sec.provider" "$p"; kv_set "$scratch" "$sec.billing" "$b"
-}
-apply_ov implement "$impl_ov"
-apply_ov review "$review_ov"
+[[ -z "$impl_ov" ]] || ho_apply_override "$scratch" implement "$impl_ov"
+[[ -z "$review_ov" ]] || ho_apply_override "$scratch" review "$review_ov"
 for sec in implement review finish; do ho_template_check "$scratch" "$sec" 2>&1 | sed 's/^/handoff-start: /' >&2; [[ ${PIPESTATUS[0]} -eq 0 ]] || exit 1; done
 trigger="${finish_ov:-$(kv_get "$scratch" finish.trigger 2>/dev/null || true)}"; trigger="${trigger:-ask}"
 delivery="$(kv_get "$scratch" finish.delivery 2>/dev/null || true)"; delivery="${delivery:-local}"

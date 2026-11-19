@@ -135,6 +135,10 @@ handoff-start <change-id> [選項]
 - `--finish ask|auto`：覆寫審查通過時的行為（是否自動啟動 finish）。
 - `--reviewer-session <xirp-id>`：綁定並沿用現有的 Xirp session 作為審查者。
 
+override 換了工具時，prompt 開頭的 skill 呼叫會改成新工具的寫法（例如 `$change-review` 換成 Pi 的 `/skill:change-review`），以舊工具名稱開頭的 session 名稱也會改成新工具名稱。
+
+**迴圈中更換角色：** 審查或收尾的 session 尚未開啟時，可用 `handoff-role <change-id> <review|finish> <override>` 更換（例：`handoff-role add-export review pi:openai/gpt-6.2-sol:high:api`）。它會先跑與 `handoff-start` 相同的檢查（範本欄位、一個 worktree 最多一個 Pi 角色、Pi 的模型、憑證、計費與信任），全部通過才寫入實作者的 `loop.yaml`；角色 session 已開啟時拒絕，永不修改 `roles.yaml` 與實作者。
+
 ### 2. `handoff-finish <change-id>`
 
 當審查通過後，啟動收尾階段：

@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# Change a review or finish role of a running loop before its session opens.
+# Usage: handoff-role <change-id> <review|finish> <override>
+#   <override>: claude|codex:<model>:<effort> or pi:<provider>/<model>:<effort>:<billing>
+# Runs the checks handoff-start runs (template fields, one Pi role per worktree, Pi model, credential,
+# billing and trust) and writes loop.yaml only when all pass. An open role and roles.yaml are never changed.
+set -u
+
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "$here/lib/handoff.sh" ]]; then lib="$here/lib/handoff.sh"
+else lib="$HOME/.config/wk-workflow/handoff/lib/handoff.sh"; fi
+# shellcheck source=lib/handoff.sh
+source "$lib" || { echo "handoff-role: cannot load $lib" >&2; exit 1; }
+
+die() { printf 'handoff-role: %s\n' "$1" >&2; exit 1; }
+[[ "${1:-}" == -h || "${1:-}" == --help ]] && { sed -n '2,6p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0; }
+[[ $# -eq 3 ]] || die "usage: handoff-role <change-id> <review|finish> <override>"
+change="$1" role="$2" ov="$3"
+[[ "$change" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]] || die "change must be a kebab-case id"
+case "$role" in review) key=reviewer ;; finish) key=finish ;; *) die "role must be review or finish, got '$role'" ;; esac
+[[ "$ov" =~ ^(claude|codex):[^:]+:[^:]+$ || "$ov" =~ ^pi:[^:/]+/[^:/]+:[^:]+:[^:]+$ ]] \
+  || die "override must be claude|codex:<model>:<effort> or pi:<provider>/<model>:<effort>:<billing>, got '$ov'"
+
+dir="$(ho_find_loop_dir "$change")" || die "no loop for '$change' in this repository's worktrees"
+loop="$dir/loop.yaml"
+open="$(kv_get "$loop" "$key.session" 2>/dev/null || true)"
+[[ -z "$open" ]] || die "the $role session is already open ($open); a role can change only before it opens"
+main="$(cd "$(ho_main_worktree "$dir")" && pwd -P)" || die "cannot find the main worktree"
+
+scratch="$(mktemp)"; trap 'rm -f "$scratch"' EXIT
+cp "$loop" "$scratch"
+ho_apply_override "$scratch" "${role}_template" "$ov"
+ho_template_check "$scratch" "${role}_template" 2>&1 | sed 's/^/handoff-role: /' >&2; [[ ${PIPESTATUS[0]} -eq 0 ]] || exit 1
+
+# One Pi role per worktree: the implementer, plus every review or finish role not in a worktree of its own.
+pi_in_impl=()
+for sec in implement review finish; do
+  [[ "$(kv_get "$scratch" "${sec}_template.harness" 2>/dev/null)" == pi ]] || continue
+  [[ "$sec" == implement || "$(kv_get "$scratch" "${sec}_template.worktree" 2>/dev/null || true)" != new ]] && pi_in_impl+=("$sec")
+done
+if (( ${#pi_in_impl[@]} > 1 )); then
+  roles_txt="${pi_in_impl[*]}"
+  die "Pi roles ${roles_txt// / and } would share the implementer worktree; a worktree holds one Pi role, so set worktree: new for the Pi review or finish role"
+fi
+if [[ "$(kv_get "$scratch" "${role}_template.harness")" == pi ]]; then
+  ho_pi_ready "$scratch" "${role}_template" "$role" "$main" warn 2>&1 | sed 's/^/handoff-role: /' >&2; [[ ${PIPESTATUS[0]} -eq 0 ]] || exit 1
+fi
+
+cat "$scratch" > "$loop" || die "could not write $loop"
+printf '%s role for %s: %s / %s / %s\n' "$role" "$change" "$(kv_get "$loop" "${role}_template.harness")" \
+  "$(kv_get "$loop" "${role}_template.model")" "$(kv_get "$loop" "${role}_template.effort")"
