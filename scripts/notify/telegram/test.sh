@@ -1666,6 +1666,49 @@ assert_equal "SEC-ARGV-03: the setup wizard keeps the token and chat ID off curl
 assert_equal "SEC-ARGV-03: the setup wizard still saves the token" "123:abcDEF" \
   "$(bash -c 'source "$1" 2>/dev/null; printf "%s" "${TELEGRAM_BOT_TOKEN:-}"' _ "${SEC_INSTALL_HOME}/.config/ai-notify/config")"
 
+# [DELIVERY-LOG] With NOTIFY_DELIVERY_LOG=true each Telegram call leaves one line: Telegram's answer,
+# never the message text or credentials.
+DL_HOME="${TEST_TMP_ROOT}/delivery-log-home"
+DL_BIN="${TEST_TMP_ROOT}/delivery-log-bin"
+DLOG="${DL_HOME}/.config/ai-notify/state/deliveries.log"
+mkdir -p "${DL_HOME}/.config/ai-notify" "${DL_BIN}"
+cat > "${DL_BIN}/curl" <<EOF
+#!/usr/bin/env bash
+cat >/dev/null
+[[ -f "${DL_HOME}/curl-rc" ]] && exit "\$(cat "${DL_HOME}/curl-rc")"
+cat "${DL_HOME}/curl-reply"
+EOF
+chmod +x "${DL_BIN}/curl"
+dl_send() {  # <NOTIFY_DELIVERY_LOG value or ""> [dry] — one Claude Code completion
+  printf '%s\n' 'TELEGRAM_ENABLED=true' 'TELEGRAM_BOT_TOKEN="123:abcDEF"' 'TELEGRAM_CHAT_ID="12345"' 'NOTIFY_LEVEL=all' \
+    ${1:+"NOTIFY_DELIVERY_LOG=$1"} > "${DL_HOME}/.config/ai-notify/config"
+  printf '%s' '{"hook_event_name":"Stop","session_id":"abc","cwd":"/tmp/dl"}' \
+    | env -i PATH="${DL_BIN}:${PATH}" HOME="${DL_HOME}" ${2:+TELEGRAM_DRY_RUN=true} bash "${HOOK}" stop "Claude Code" >/dev/null 2>&1
+}
+printf '%s' '{"ok":true,"result":{"message_id":42}}' > "${DL_HOME}/curl-reply"
+dl_send true
+assert_equal "DELIVERY-LOG-01: an accepted delivery adds one line with Telegram's answer" \
+  "1 yes" \
+  "$(wc -l < "${DLOG}" 2>/dev/null | tr -d ' ') $(grep -q 'event=stop template=completion ok=true message_id=42$' "${DLOG}" 2>/dev/null && echo yes || echo no)"
+assert_equal "DELIVERY-LOG-01: the line holds no message text, token or chat ID" "clean" \
+  "$([[ -s "${DLOG}" ]] || { echo missing; exit; }; grep -q -F -e '123:abcDEF' -e '12345' -e 'Task Complete' "${DLOG}" && echo leaked || echo clean)"
+printf '%s' '{"ok":false,"description":"Bad Request"}' > "${DL_HOME}/curl-reply"
+dl_send true
+assert_equal "DELIVERY-LOG-02: a rejected delivery is logged as ok=false" "ok=false message_id=-" \
+  "$(tail -n 1 "${DLOG}" 2>/dev/null | grep -oE 'ok=[a-z]+ message_id=[0-9-]+')"
+printf '7\n' > "${DL_HOME}/curl-rc"; dl_send true; rm -f "${DL_HOME}/curl-rc"
+assert_equal "DELIVERY-LOG-02: a failed curl call is logged as ok=false" "3 ok=false message_id=-" \
+  "$(wc -l < "${DLOG}" 2>/dev/null | tr -d ' ') $(tail -n 1 "${DLOG}" 2>/dev/null | grep -oE 'ok=[a-z]+ message_id=[0-9-]+')"
+rm -f "${DLOG}"; printf '%s' '{"ok":true,"result":{"message_id":43}}' > "${DL_HOME}/curl-reply"
+dl_send ""
+assert_equal "DELIVERY-LOG-03: no log without NOTIFY_DELIVERY_LOG" "absent" "$([[ -e "${DLOG}" ]] && echo present || echo absent)"
+dl_send true dry
+assert_equal "DELIVERY-LOG-03: no log in dry-run" "absent" "$([[ -e "${DLOG}" ]] && echo present || echo absent)"
+mkdir -p "$(dirname "${DLOG}")"; seq 1 500 | sed 's/^/old /' > "${DLOG}"
+dl_send true
+assert_equal "DELIVERY-LOG-04: the log keeps its newest 500 lines" "500 old 2 yes" \
+  "$(wc -l < "${DLOG}" | tr -d ' ') $(head -n 1 "${DLOG}") $(tail -n 1 "${DLOG}" | grep -q 'message_id=43$' && echo yes || echo no)"
+
 # ── Summary ────────────────────────────────────────────────────────────────────
 
 echo ""

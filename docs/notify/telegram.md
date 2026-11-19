@@ -446,8 +446,22 @@ recognize the canonical replacement.
 1. Check registration: `bash scripts/notify/telegram/update.sh status`
 2. Check `TELEGRAM_ENABLED=true`
 3. 用 `update.sh types` 檢查該類型開關；缺省時工作結束才沿用 `NOTIFY_LEVEL`。授權通知有延遲（預設 30 秒），先等過 `NOTIFY_AUTHORIZATION_DELAY_SECONDS`
-4. Test manually with the curl command above
-5. Verify Bot Token: `curl https://api.telegram.org/bot<TOKEN>/getMe`
+4. Turn on the delivery log (below) and finish one turn: no new line means the hook sent nothing
+   (switches, level or registration); `ok=false` means Telegram refused it or the call failed
+5. Test manually with the curl command above
+6. Verify Bot Token: `curl https://api.telegram.org/bot<TOKEN>/getMe`
+
+**Delivery log (optional).** Add `NOTIFY_DELIVERY_LOG=true` to `~/.config/ai-notify/config`. Each
+Telegram call then appends one line to `~/.config/ai-notify/state/deliveries.log`:
+
+```text
+2026-11-19T22:10:04+0800 event=stop template=completion ok=true message_id=12987
+```
+
+`ok=true` means Telegram accepted the message; `message_id` is its ID in the chat. A refused message
+or a failed call is `ok=false message_id=-`. Lines never hold the message text, token or chat ID,
+and the file keeps its newest 500 lines. Dry-run and suppressed events write nothing. Remove the
+setting to stop logging; deleting the file is safe.
 
 **Hook not firing in Claude Code?**
 

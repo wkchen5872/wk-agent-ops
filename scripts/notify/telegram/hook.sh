@@ -369,17 +369,37 @@ deliver() {
   # The token and chat ID reach curl on stdin, never in argv where `ps` shows them. Only the
   # Telegram character sets are accepted, so neither value can inject another curl option.
   [[ "${TELEGRAM_BOT_TOKEN:-}" =~ ^[A-Za-z0-9:_-]+$ && "${TELEGRAM_CHAT_ID:-}" =~ ^[A-Za-z0-9_@-]+$ ]] || return 0
-  printf 'url = "https://api.telegram.org/bot%s/sendMessage"\ndata = "chat_id=%s"\n' \
+  local reply rc
+  reply="$(printf 'url = "https://api.telegram.org/bot%s/sendMessage"\ndata = "chat_id=%s"\n' \
     "${TELEGRAM_BOT_TOKEN}" "${TELEGRAM_CHAT_ID}" \
     | curl \
       --silent \
       --max-time 4 \
-      --output /dev/null \
       -X POST \
       --config - \
       -d "parse_mode=Markdown" \
       --data-urlencode "text=${text}" \
-    || true
+      2>/dev/null)"; rc=$?
+  [[ "${NOTIFY_DELIVERY_LOG:-}" == true ]] && log_delivery "$1" "${rc}" "${reply}"
+  return 0
+}
+
+# log_delivery <template> <curl exit code> <Telegram reply>: one line per call with Telegram's answer,
+# never the message text or credentials. A failure here never affects delivery.
+log_delivery() {
+  local dir="${NOTIFY_STATE_DIR:-${HOME}/.config/ai-notify/state}" ok=false id=-
+  if [[ "$2" == 0 && "$3" =~ \"ok\"[[:space:]]*:[[:space:]]*true ]]; then
+    ok=true
+    [[ "$3" =~ \"message_id\"[[:space:]]*:[[:space:]]*([0-9]+) ]] && id="${BASH_REMATCH[1]}"
+  fi
+  (
+    umask 077; mkdir -p "${dir}" && chmod 700 "${dir}" || exit 0
+    log="${dir}/deliveries.log"
+    printf '%s event=%s template=%s ok=%s message_id=%s\n' "$(date +%Y-%m-%dT%H:%M:%S%z)" \
+      "$(printf '%s' "${EVENT_KEY:-}" | tr -cd 'A-Za-z0-9:_-')" "$(printf '%s' "$1" | tr -cd 'a-z0-9-')" "${ok}" "${id}" >> "${log}"
+    # ponytail: counts lines on every write; switch to periodic rotation if the log ever grows hot.
+    if (( $(wc -l < "${log}") > 500 )); then tail -n 500 "${log}" > "${log}.tmp" && mv "${log}.tmp" "${log}"; fi
+  ) 2>/dev/null || true
 }
 
 # ── Delayed authorization confirmation (notify-authorization-wait) ─────────────
