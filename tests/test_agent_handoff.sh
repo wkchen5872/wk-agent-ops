@@ -282,7 +282,7 @@ printf '#!/usr/bin/env bash\necho "codex-cli 0.130.0"\n' > "$FAKES/codex"
 # as the real CLI. Switches (files in the state dir): server-down, busy (count of agent_pane_busy answers),
 # not-ready (agent start stops at a dialog), blocked (agent prompt refused), no-native, shell-<pane>
 # (the pane runs a shell), no-integration-<kind> (panes: pane->tab; tablabels: tab->label), prompt-timeout (a prompt is taken, then the answer
-# times out), native-<pane> (the native session ID now in that pane), gone-<id> (a closed workspace/tab).
+# times out), prompt-delay (seconds before a prompt is taken), native-<pane> (the native session ID now in that pane), gone-<id> (a closed workspace/tab).
 # As herdr 0.9.5, agent prompt refuses --timeout without --wait (exit 2).
 cat > "$FAKES/herdr" <<'SH'
 #!/usr/bin/env bash
@@ -346,6 +346,7 @@ case "$1 ${2:-}" in
     if [[ " $* " == *" --timeout "* && " $* " != *" --wait "* ]]; then echo "--timeout requires --wait" >&2; exit 2; fi
     p="$3"; [[ -f "$S/pane-$p" && ! -e "$S/shell-$p" ]] || err agent_not_found
     [[ -e "$S/blocked" || -e "$S/not-ready" ]] && err agent_blocked  # an agent at a startup dialog stays blocked
+    [[ -s "$S/prompt-delay" ]] && sleep "$(cat "$S/prompt-delay")"  # a slow answer, to overlap two callers
     printf '%s\t%s\n' "$p" "$4" >> "$S/prompts"; [[ -e "$S/prompt-timeout" ]] && err timeout
     jq -nc --arg p "$p" '{type:"agent_prompted", agent:{pane_id:$p}}' | ok ;;
   "workspace close"|"tab close"|"pane close")
@@ -1435,6 +1436,20 @@ if run_section herdr; then
   commit_in "$HL" again; hw "$HL" --role finish --status blocked --head HEAD --note "push rejected again"; finish_in "$HL" add-export >/dev/null 2>&1
   [[ "$(herdr_prompts | grep '^w2:p3' | grep -c '重試收尾')" == 2 ]] \
     && ok "a delivered finish retry is sent once per blocked record" || { bad "a delivered finish retry is sent once per blocked record"; herdr_prompts | grep '^w2:p3' | cut -c1-60; }
+  # codex-herdr-r05 (r01/F-03): two overlapping handoff-finish runs submit the retry for one blocked record once
+  herdr_loop "$tmp/herdr-r5a" h41; hw "$HL" --role review --status done --verdict pass --head HEAD --report r.md
+  finish_in "$HL" add-export >/dev/null 2>&1; commit_in "$HL" archive; hw "$HL" --role finish --status blocked --head HEAD --note "push rejected"
+  echo 2 > "$(HS)/prompt-delay"
+  finish_in "$HL" add-export > "$tmp/r5-1.out" 2>&1 & p1=$!; sleep 0.5
+  finish_in "$HL" add-export > "$tmp/r5-2.out" 2>&1 & p2=$!; wait "$p1"; r1=$?; wait "$p2"; r2=$?; rm -f "$(HS)/prompt-delay"
+  [[ "$(herdr_prompts | grep '^w2:p3' | grep -c '重試收尾')" == 1 && "$r1" == 0 && "$r2" == 0 ]] && grep -q 'already sent' "$tmp/r5-2.out" \
+    && ok "two overlapping handoff-finish runs submit the retry for one blocked record once (codex-herdr-r05, r01/F-03)" \
+    || { bad "two overlapping handoff-finish runs submit the retry for one blocked record once (codex-herdr-r05, r01/F-03)"; cat "$tmp/r5-1.out" "$tmp/r5-2.out" | grep -v warn; }
+  herdr_loop "$tmp/herdr-r5b" h42; hw "$HL" --role review --status done --verdict pass --head HEAD --report r.md
+  finish_in "$HL" add-export >/dev/null 2>&1; commit_in "$HL" archive; hw "$HL" --role finish --status blocked --head HEAD --note "push rejected"
+  touch "$(HS)/blocked"; finish_in "$HL" add-export >/dev/null 2>&1; rc1=$?; rm -f "$(HS)/blocked"; finish_in "$HL" add-export >/dev/null 2>&1; rc2=$?
+  [[ "$rc1" != 0 && "$rc2" == 0 && "$(herdr_prompts | grep '^w2:p3' | grep -c '重試收尾')" == 1 ]] \
+    && ok "a finish retry herdr did not send (a dialog) can be retried once the dialog is answered" || bad "a finish retry herdr did not send (a dialog) can be retried once the dialog is answered"
   # r03/F-01: a manual run does not name whoever ran it as the stopping session
   herdr_loop "$tmp/herdr-r4c" h33; commit_in "$HL" two; hw "$HL" --role implement --status done --head HEAD
   (cd "$HL" && PATH="$FAKES:$PATH" HANDOFF_NOTIFY="$FAKES/notify.sh" HANDOFF_CREATE_WAIT=2 HERDR_ENV=1 HERDR_PANE_ID=w1:p9 CHIRP_SESSION_ID=chirp-inherited "$ROUTE" --foreground </dev/null)

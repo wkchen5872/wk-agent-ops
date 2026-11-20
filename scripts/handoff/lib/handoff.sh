@@ -959,10 +959,12 @@ ho_delivery_text() {
 # ho_finish_retry <loop-dir>: retry a finish whose newest record is finish/blocked.
 # The finish worktree must be clean and build on the newest passing review; then the existing
 # finish session resumes, or a new one opens when it is gone. Prints the session id.
-# The retry for one blocked record is submitted once (finish.retried_for), confirmed or not: running
-# handoff-finish again for the same record reports it (status 3) and sends nothing (codex-herdr-r04).
+# The retry for one blocked record is submitted once, confirmed or not: running handoff-finish again for
+# the same record, even at the same time, reports it (status 3) and sends nothing (codex-herdr-r04, r05).
+# The gate is a claim directory, created atomically before anything is sent; it is removed only when the
+# host reports that nothing was sent, so that case can be retried. finish.retried_for records the result.
 ho_finish_retry() {
-  local dir="$1" loop="$1/loop.yaml" rec d f pass="" pn=-1 n wt change id msg note base rc
+  local dir="$1" loop="$1/loop.yaml" rec d f pass="" pn=-1 n wt change id msg note base rc claim existing
   rec="$(ho_newest_in_loop "$dir")" || { echo "the loop has no records"; return 1; }
   if [[ "$(kv_get "$rec" role)" != finish || "$(kv_get "$rec" status)" != blocked ]]; then
     echo "the newest record is $(basename "$rec"), not a blocked finish"; return 1
@@ -981,21 +983,24 @@ ho_finish_retry() {
   fi
   ho_clean "$wt" || { echo "$wt has uncommitted changes"; return 1; }
   change="$(kv_get "$loop" change)"; note="$(kv_get "$rec" note 2>/dev/null)"
-  id="$(kv_get "$loop" finish.session 2>/dev/null)"; base="$(basename "$rec")"
+  id="$(kv_get "$loop" finish.session 2>/dev/null)"; base="$(basename "$rec")"; claim="$dir/.finish-retry-$base"
+  existing=0
   if [[ -n "$id" ]] && ! ho_role_pending "$dir" finish && ho_host_exists "$(ho_role_host "$loop" finish)" "$dir" finish "$id"; then
-    ho_herdr_hold_error "$dir" finish "$id" || return 1
-    if [[ "$(kv_get "$loop" finish.retried_for 2>/dev/null)" == "$base" ]]; then
-      echo "Finish retry already sent for $base to session $id; nothing was sent again. Wait for its new record"; return 3
-    fi
+    existing=1; ho_herdr_hold_error "$dir" finish "$id" || return 1
+  fi
+  if [[ "$(kv_get "$loop" finish.retried_for 2>/dev/null)" == "$base" ]] || ! mkdir "$claim" 2>/dev/null; then
+    echo "Finish retry already sent (or being sent) for $base${id:+ to session $id}; nothing was sent again. Wait for its new record"; return 3
+  fi
+  if (( existing )); then
     msg="[$change] 重試收尾。上次停在：${note}。使用者已處理並要求重試：依 openspec-commit 的中斷恢復規則，從停下的階段接續，不重複已完成的步驟。"
     msg+="封存時若有待同步的 delta spec，直接同步主規格後封存，不需詢問。$(ho_delivery_text "$(kv_get "$loop" finish.delivery 2>/dev/null || echo local)")；"
     msg+="結束時以 $HANDOFF_WRITE_REL --change $change --role finish 寫新的交件單，不要改舊的交件單。"
     ho_host_message "$(ho_role_host "$loop" finish)" "$dir" finish "$id" "$msg"; rc=$?
-    (( rc == 0 || rc == 2 )) && ho_loop_set "$dir" finish.retried_for "$base"
+    if (( rc == 0 || rc == 2 )); then ho_loop_set "$dir" finish.retried_for "$base"; else rmdir "$claim"; fi
     (( rc == 0 )) || { echo "could not message finish session $id"; return 1; }
   else
     id="$(ho_open_role "$dir" finish_template "$wt" "$(ho_head "$wt")" "$(kv_get "$rec" round)" "")"; rc=$?
-    (( rc == 0 || rc == 2 )) && ho_loop_set "$dir" finish.retried_for "$base"
+    if (( rc == 0 || rc == 2 )); then ho_loop_set "$dir" finish.retried_for "$base"; else rmdir "$claim"; fi
     (( rc == 0 )) || { echo "could not open a finish session"; return 1; }
     ho_loop_set "$dir" finish.session "$id"
   fi

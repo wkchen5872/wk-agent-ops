@@ -206,8 +206,9 @@ After a blocked finish (for example a rejected push), fix the cause and run `han
 again. It retries when the finish worktree is clean and builds on the passing review: the
 finish session resumes from the stopped stage, or a new one opens if it is gone. The retry is sent
 once per blocked record (recorded as `finish.retried_for` in `loop.yaml`), whether or not herdr
-confirmed it: running `handoff-finish` again before the finish session writes a new record reports
-that the retry was already sent and sends nothing.
+confirmed it: running `handoff-finish` again before the finish session writes a new record — even
+while the first run is still sending — reports that the retry was already sent and sends nothing.
+Only a retry the host reports as not sent (for example a dialog in the way) can be run again.
 
 ### `handoff-cleanup <change-id> [--abandon] [--yes]`
 
