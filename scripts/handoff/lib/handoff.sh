@@ -640,8 +640,9 @@ ho_herdr_open() {
     # herdr starts the program itself (--kind), so only the arguments after it; none holds a newline.
     # Decoded in full before anything starts: a decoder that stops part-way must not start the agent with some of them.
     argv="$(ho_harness_argv "$tf" "$sec" "$name")" || return 1
-    argv="$(jq -r '.[1:][]' <<<"$argv")" || { ho_err "cannot read the $role's agent arguments; pane $pane is kept for a retry"; return 1; }
-    while IFS= read -r a; do args+=("$a"); done <<<"$argv"
+    # One line per argument, then "."; $(...) strips only the newlines after it, so a trailing empty argument stays.
+    argv="$(jq -r '.[1:][], "."' <<<"$argv")" || { ho_err "cannot read the $role's agent arguments; pane $pane is kept for a retry"; return 1; }
+    while IFS= read -r a; do args+=("$a"); done < <(printf '%s' "${argv%.}")
     # herdr agent names must match [a-z][a-z0-9_-]{0,31}; they are labels only, the pane identifies the role.
     case "$role" in implementer) aname=impl ;; reviewer) aname=review ;; *) aname="$role" ;; esac
     aname="$aname-$(printf '%s' "$pane$$$RANDOM" | shasum | cut -c1-6)"

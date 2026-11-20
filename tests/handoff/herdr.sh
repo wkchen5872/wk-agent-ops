@@ -267,9 +267,19 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
   Q13="$tmp/herdr-argv-fail"; herdr_project "$Q13"; fresh_state h-argv-fail; q13l="$Q13-add-export/.agent-handoff/add-export/loop.yaml"
   JQS="$tmp/jq-cut"; mkdir -p "$JQS"
   # jq that stops part-way through decoding the arguments (two lines, then exit 42); every other call is the real jq.
-  printf '#!/usr/bin/env bash\nif [[ "$*" == "-r .[1:][]" ]]; then printf "%%s\\n" --model opus; exit 42; fi\nexec %q "$@"\n' "$(command -v jq)" > "$JQS/jq"; chmod +x "$JQS/jq"
+  printf '#!/usr/bin/env bash\nif [[ "$*" == *".[1:]"* ]]; then printf "%%s\\n" --model opus; exit 42; fi\nexec %q "$@"\n' "$(command -v jq)" > "$JQS/jq"; chmod +x "$JQS/jq"
   out="$(PF_PATH="$JQS:$FAKES:$PATH" start_in "$Q13" add-export 2>&1)"; rc=$?
   [[ "$rc" != 0 && "$(kv_get "$q13l" implementer.pending_prompt 2>/dev/null)" == true ]] && grep -q 'pane is kept' <<<"$out" \
     && ! herdr_calls | grep -q 'agent start\|agent prompt'; check "arguments that cannot be decoded in full start no agent and keep the pane for a retry (codex-extract-handoff-r01/F-02)" || { printf '       %s\n' "$out"; herdr_calls | sed 's/^/       /'; }
+  # codex-extract-handoff-r02/F-01: the retry in the same pane, and a trailing empty argument, survive decoding
+  out="$(start_in "$Q13" add-export 2>&1)"; rc=$?
+  [[ "$rc" == 0 && "$(herdr_calls | grep -c 'agent start')" == 1 && "$(herdr_calls | grep -c 'agent prompt')" == 1 && "$(herdr_calls | grep -c 'worktree open')" == 1 \
+    && "$(cat "$(HS)/argv-w2:p1" 2>/dev/null)" == '["--model","opus","--effort","high","--name","claude - impl - add-export"]' \
+    && "$(kv_get "$q13l" implementer.pending_prompt 2>/dev/null)" != true ]]; check "after a failed decode the retry starts the agent once in the same pane with all its arguments (codex-extract-handoff-r02/F-01)" || { printf '       %s\n' "$out"; herdr_calls | sed 's/^/       /'; }
+  Q14="$tmp/herdr-argv-empty"; herdr_project "$Q14"; fresh_state h-argv-empty; Q14W="$Q14-add-export"
+  # A reviewer name that renders empty: the route opens the first reviewer with no report.
+  sed -i.bak '/^review:/,/^$/{s/harness: codex/harness: claude/;s/model: gpt-6.1-sol/model: opus/;s/name: .*/name: "{report}"/;}' "$Q14/.agent-handoff/roles.yaml"
+  start_in "$Q14" add-export >/dev/null 2>&1; commit_in "$Q14W" impl; hw "$Q14W" --role implement --status done --head HEAD; route_in "$Q14W"
+  [[ "$(cat "$(HS)/argv-w2:p2" 2>/dev/null)" == '["--model","opus","--effort","high","--name",""]' ]]; check "an empty name reaches herdr as the empty value of --name (codex-extract-handoff-r02/F-01)" || { cat "$(HS)/argv-w2:p2"; herdr_calls | grep 'agent start' | sed 's/^/       /'; }
 
 finish_section herdr

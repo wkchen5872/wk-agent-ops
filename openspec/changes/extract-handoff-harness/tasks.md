@@ -27,6 +27,7 @@
   - 測試要求：斷言名稱清單同上；herdr 與 herdr-app 區段中檢查完整參數的斷言（含 `--name` 的空白）都通過；用 `/bin/bash` 3.2 執行 herdr 區段一次，確認通過。
   - 結果：同上；`ho_happ_argv` 已刪除，herdr 以逐行讀取取 `.[1:]`；`/bin/bash tests/handoff/herdr.sh`（GNU bash 3.2.57）結束代碼 0、60 ok。
   - 修正 codex-extract-handoff-r01/F-02：`ho_herdr_open` 先以命令替換完整解碼 argv，jq 失敗就回報 `cannot read the <role>'s agent arguments; pane <pane> is kept for a retry` 並回傳 1，不呼叫 `agent start`。假 herdr 新增 `argv-<pane>` 紀錄（以 NUL 分隔交給 jq）。Red：只截斷解碼的 jq 替身讓 `handoff-start` 帶 `--model opus` 啟動並送出 prompt（FAIL）；修正後兩個新斷言都通過，含空白的名稱仍是單一參數。
+  - 修正 codex-extract-handoff-r02/F-01：`$(...)` 會去掉尾端換行，渲染成空字串的最後一個參數（如 `--name` 的值）因此消失。改為在解碼結果後加哨兵 `.`，去掉哨兵後以 `printf '%s'` 讀入陣列，jq 失敗仍回傳 1。Red：reviewer 名稱為 `{report}` 的首次路由，Herdr 收到 `["--model","opus","--effort","high","--name"]`（FAIL）；修正後收到含空字串的六個參數。另加「解碼失敗後在同一 pane 重試，只啟動與 prompt 各一次、參數完整」的斷言。
 
 ## 3. Pi 掛勾
 
@@ -54,3 +55,4 @@
   - `grep -rnE 'ho_herdr_unconfirmed|ho_herdr_held|ho_herdr_hold_error|HO_HERDR_CODE|ho_pi_role_key|ho_happ_argv' scripts tests`：沒有結果。
   - `/skill:` 在 harness 區塊外只出現在註解。lib 內部仍有 Pi 的 `[[ … == pi ]]` 檢查（`ho_template_check` 的 provider／billing、`ho_open_role`、`ho_check_role`），第 1 輪因為它們不是 `case` 分派、也不在指令內而沒有處理；審查 r01/F-01 要求一併移出，修正輪已移入 harness 層（見下）。
   - 修正輪 r01：`bash tests/test_agent_handoff.sh` 結束代碼 0、178 秒、537 ok／0 FAIL；基線 495 個名稱全部保留，新增 42 個 = harness 區段 40 個 + herdr 的 F-02 2 個。harness 區段新增結構檢查：harness 區塊與 `# --- Pi roles` 區塊以外（排除 Pi 觸發器自己的 `handoff-pi-trust`），沒有與 harness 名稱比較（`==`／`!=`，涵蓋 `if`／`[[ … ]]`／jq）、以它分派 `case` 或呼叫 `ho_pi_*`／`HANDOFF_PI_*` 的程式。
+  - 修正輪 r02：完整測試結束代碼 0、196 秒、539 ok／0 FAIL；基線 495 個名稱全部保留，比 r01 多 herdr 的 2 個 r02/F-01 斷言。
