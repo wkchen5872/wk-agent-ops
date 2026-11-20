@@ -495,6 +495,10 @@ unaffected; only usage moves.
   the hook still reach it. Check the records and `routing.log` for progress.
 - **"has uncommitted changes" or "HEAD … differs"**: commit or clean the worktree, then
   write a new record.
+- **A removed loop worktree comes back as a nearly empty directory** (only `.codex/config.toml`
+  or `.claude/settings.local.json`): TokenEconomizer remembers the checkout and writes its settings
+  back. Run `python3 -I scripts/user/te-prune-stale-checkouts.py --dry-run` from wk-agent-ops, then
+  without `--dry-run`, and delete the directory.
 - **`handoff-finish` refuses**: the message names the failed condition, such as a newer
   commit than the passing review or an unfinished round.
 - **The reviewer ran out of quota mid-loop**: stop it (or wait until it is idle), then replace it.
