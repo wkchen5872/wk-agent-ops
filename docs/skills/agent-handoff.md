@@ -121,10 +121,10 @@ sources:
 
 ## Session 宿主（host）
 
-host 決定角色的 Session 執行與顯示位置：`xirp`（預設）或 `herdr`。此設定為本機屬性，定義於主工作區不進 Git 的 `roles.yaml`（頂層套用全域，角色可個別覆寫）：
+host 決定角色的 Session 執行與顯示位置：`xirp`（預設）、`herdr`（Herdr 終端機版）或 `herdr-app`（Herdr 桌面 app），其他值在開任何 session 前就被拒絕。此設定為本機屬性，定義於主工作區不進 Git 的 `roles.yaml`（頂層套用全域，角色可個別覆寫）：
 
 ```yaml
-host: herdr            # 全域預設宿主：xirp 或 herdr
+host: herdr            # 全域預設宿主：xirp、herdr 或 herdr-app
 herdr_session: work    # 於 herdr 外部執行時使用的 herdr session 名稱（預設為 default）
 ```
 
@@ -162,18 +162,39 @@ herdr agent prompt (--wait --until working/blocked)
                    └─► [仍無動靜] 產生 <role>-unconfirmed.txt 鎖定防護，發送通知
 ```
 
+### Herdr App 空間與 Tab 拓撲（`host: herdr-app`）
+
+Herdr 桌面 app 的 terminal 跑在 herdr-core（`hc`），和 Herdr TUI 是不同的 runtime：TUI server 的 session 不會出現在 app 裡，所以是獨立的 host 值，可以和其他 host 混用。
+
+```text
+┌────────────────────────────────────────────────────────────────────────┐
+│ Herdr 桌面 App（herdr-core 執行 terminal）                             │
+│  └─ Space: <change-id>   (資料夾 = 迴圈 worktree)                      │
+│      ├─ Tab 1: claude - impl - <change-id>   (實作者 terminal t1t)     │
+│      ├─ Tab 2: codex - review - <change-id>  (審查者 terminal)         │
+│      └─ Tab 3: codex - finish - <change-id>  (收尾者 terminal)         │
+│  (審查或收尾用 worktree: new 時，另開 <change-id> review / finish)     │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+- **App 必須開著**：`handoff-doctor` 依序檢查 `herdr-app` 與 `hc` 指令、herdr-core 在跑（`hc server status`）、app 視窗開著（`herdr-app status`），缺一項就是 `fail host`；start、role、finish 與 cleanup 都直接拒絕，不改用 app 看不到的 `hc run`。
+- **開啟走 app，其餘走 hc**：worktree 的第一個角色用 `herdr-app do space.new` 開 space，後續角色用 `tab.new --space` 加 tab，一律不搶焦點；`--argv` 帶入範本的模型與 effort（Pi 照常寫入 `.pi/settings.json`），由登入 shell 啟動。第一則 prompt 用 `--task` 交給 app，由 app 等 agent 準備好再送；之後輪詢 `hc get`，等不到 agent 開始工作就當作送出結果不明（存 unconfirmed 檔、通知一次、不重送）。`loop.yaml` 記錄 terminal 位址、`happ_space`、`happ_tab` 與迴圈開的 space。
+- **傳訊**：先用 `hc get` 確認 terminal 還在、前景仍是該角色的工具、狀態是 idle 或 done，再 `hc send`；只有回傳 `started: true` 才算送達。agent 回報 `blocked`（permission、question、auth）時不替你回答，發一次通知寫出 space 與 tab，交件單維持未處理，處理完後執行 `handoff-route --foreground`。
+- **清理**：迴圈開的 space 裡只有迴圈的 tab 時關整個 space（`space.close --confirmed true`），你自己加了 tab 時只關迴圈的 tab；接著 `hc rm` 移除已結束的 terminal，都在移除 worktree 之前。角色重開過時，舊的 tab 與 terminal（`happ_stale_tabs`、`happ_stale_terms`）一併列出與清除；重用的 `--reviewer-session` terminal 不會被關。`handoff-role --replace` 尚不支援 herdr-app 角色。
+- **routing log**：停止端記成 `session=herdr-app:<HC_TERMINAL_ID>`，模型記範本值（`(template)`）。
+
 ### 宿主特性對照
 
-| 特性 | Xirp | Herdr TUI |
-|---|---|---|
-| **介面型態** | 桌面應用 / 背景程序 | Terminal UI（Workspace / Tab / Pane） |
-| **Worktree 配置** | 各 Session 獨立指向 worktree 路徑 | Linked Workspace 掛在主 Repo 下，每個角色一個 Tab |
-| **啟動等待** | 建立即返回 | 等待至 Agent 開始工作（`--until working`）或停留對話框 |
-| **模型回報** | 動態透過 API 提取執行模型與強度 | 記錄範本設定值（標註 `(template)`） |
-| **環境變數隔離** | 帶有 `CHIRP_SESSION_ID` | 隔離環境（`HERDR_ENV=1`），Xirp ID 記為 `null`，依賴 integration 回報原生 ID |
-| **清理動作** | `xirp session delete` | 關閉迴圈開立的 Workspace 或 Tab（不碰無關 Pane） |
+| 特性 | Xirp | Herdr TUI | Herdr App |
+|---|---|---|---|
+| **介面型態** | 桌面應用 / 背景程序 | Terminal UI（Workspace / Tab / Pane） | 桌面 app（Space / Tab，terminal 由 herdr-core 執行） |
+| **Worktree 配置** | 各 Session 獨立指向 worktree 路徑 | Linked Workspace 掛在主 Repo 下，每個角色一個 Tab | 一個迴圈一個 Space（資料夾 = worktree），每個角色一個 Tab |
+| **啟動等待** | 建立即返回 | 等待至 Agent 開始工作（`--until working`）或停留對話框 | 第一則 prompt 用 `--task` 交給 app，等 agent 開始工作 |
+| **模型回報** | 動態透過 API 提取執行模型與強度 | 記錄範本設定值（標註 `(template)`） | 記錄範本設定值（標註 `(template)`） |
+| **環境變數隔離** | 帶有 `CHIRP_SESSION_ID` | 隔離環境（`HERDR_ENV=1`），Xirp ID 記為 `null`，依賴 integration 回報原生 ID | terminal 帶 `HC_TERMINAL_ID`，routing log 記 terminal 位址 |
+| **清理動作** | `xirp session delete` | 關閉迴圈開立的 Workspace 或 Tab（不碰無關 Pane） | 關閉迴圈開的 Space 或 Tab，再 `hc rm` 移除 terminal |
 
-- **嚴格驗證**：若設定的 host 未安裝或 server 未啟動，指令直接終止，不猜測或自動切換 host。
+- **嚴格驗證**：若設定的 host 未安裝、server 未啟動或 Herdr app 沒開，指令直接終止，不猜測或自動切換 host。
 - **混合使用**：同一個迴圈支援混用宿主（例如實作者跑 Xirp、審查者跑 Herdr），訊息自動路由至接收端宿主。
 - **未來規劃**：後續評估支援 `ghostty + tmux`。
 
@@ -322,6 +343,7 @@ handoff-cleanup <change-id> --abandon --yes
 │ 步驟 2. 釋放 Session：                                          │
 │         - Xirp：呼叫 xirp session delete                        │
 │         - Herdr：關閉迴圈開立的專屬 Workspace 或 Tab            │
+│         - Herdr App：關閉迴圈開的 Space 或 Tab，hc rm 移除      │
 │ 步驟 3. 移除臨時工作區：                                        │
 │         - 安全刪除額外建立的實作與收尾 Worktree                 │
 │         - feature/<change-id> 分支與已提交 Commit 永遠保留      │
