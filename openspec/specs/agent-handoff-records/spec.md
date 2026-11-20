@@ -64,7 +64,7 @@ The `agent-handoff` skill SHALL ship `handoff-write` so that it is installed at 
 - **AND** the same script exists under `.claude/skills/agent-handoff/`
 
 ### Requirement: Loop configuration identifies the crew
-A loop configuration file `loop.yaml` in the change directory SHALL record the change ID, the round limit, the implementer session and worktree, the reviewer session and worktree once known, the finish worktree once known, the finish trigger and delivery settings, and the implement, review, and finish templates in effect for this loop. Each record stays in the worktree where its role works.
+A loop configuration file `loop.yaml` in the change directory SHALL record the change ID, the round limit, the implementer session and worktree, the reviewer session and worktree once known, the finish worktree once known, the finish trigger and delivery settings, the host of each role with its host-specific session details, and the implement, review, and finish templates in effect for this loop. Each record stays in the worktree where its role works.
 
 #### Scenario: Reviewer is filled in later
 - **WHEN** a loop has just started and no review has happened yet
@@ -78,8 +78,12 @@ A loop configuration file `loop.yaml` in the change directory SHALL record the c
 - **WHEN** `handoff-start` opens a Pi implementer from `roles.yaml` or from an override
 - **THEN** `loop.yaml` records the implement template's harness, provider, model, effort, and billing
 
+#### Scenario: Host of each role is recorded
+- **WHEN** a loop starts with the implementer on `host: xirp` and the reviewer on `host: herdr`
+- **THEN** `loop.yaml` records `xirp` for the implementer and `herdr` with its herdr session for the reviewer
+
 ### Requirement: Author blocks are generated, not retyped
-The `agent-handoff` skill SHALL provide `handoff-author --tool <tool> --model <model>`, which prints `Co-Authored-By`, `AI-Assisted-By` (omitted for an empty model), `SESSION-ID`, and `XIRP-SESSION-ID`, reading the session IDs only from the runtime variables for that tool (`PI_SESSION_ID` for `Pi`) and from `CHIRP_SESSION_ID`, and printing `null` for an ID that is not set. Role prompts SHALL tell the agent to append this output verbatim, and the dedicated GitHub agents SHALL append a caller's `author_file` verbatim.
+The `agent-handoff` skill SHALL provide `handoff-author --tool <tool> --model <model>`, which prints `Co-Authored-By`, `AI-Assisted-By` (omitted for an empty model), `SESSION-ID`, and `XIRP-SESSION-ID`, reading the session IDs only from the runtime variables for that tool (`PI_SESSION_ID` for `Pi`) and from `CHIRP_SESSION_ID`, and printing `null` for an ID that is not set. Inside a herdr pane (`HERDR_ENV=1`), `CHIRP_SESSION_ID` SHALL be treated as not set. Role prompts SHALL tell the agent to append this output verbatim, and the dedicated GitHub agents SHALL append a caller's `author_file` verbatim.
 
 #### Scenario: Codex session writes its Author
 - **WHEN** `handoff-author --tool Codex --model gpt-5.6-luna` runs with `CODEX_SESSION_ID` and `CHIRP_SESSION_ID` set
@@ -92,6 +96,10 @@ The `agent-handoff` skill SHALL provide `handoff-author --tool <tool> --model <m
 #### Scenario: Pi session writes its Author
 - **WHEN** `handoff-author --tool Pi --model gpt-6.2-sol` runs with `PI_SESSION_ID` and `CHIRP_SESSION_ID` set
 - **THEN** it prints `Co-Authored-By: Pi` and the two exact session IDs
+
+#### Scenario: Inherited Xirp variable in a herdr pane
+- **WHEN** `handoff-author --tool "Claude Code" --model opus` runs with `HERDR_ENV=1`, `CLAUDE_CODE_SESSION_ID`, and an inherited `CHIRP_SESSION_ID`
+- **THEN** it prints the Claude Code session ID and `XIRP-SESSION-ID: null`
 
 ### Requirement: Records written in a Pi session carry the session's agent identity
 When `handoff-write` runs inside a Pi session, the record SHALL contain an `agent` section with `harness: pi` and the session's current `provider`, `model`, `effort`, `billing`, and `session`, taken from the Pi runtime and from the credential check, never from arguments the agent types. A value that cannot be determined SHALL be written as `unknown` and SHALL NOT prevent the record from being written. Records written outside Pi SHALL be unchanged.

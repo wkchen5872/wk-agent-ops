@@ -98,6 +98,7 @@ opsx-branch <change-id>              以自選工具開啟 Session／Worktree
 |---|---|
 | `opsx-branch <change-id>` | 在建立 artifacts 前建立或切換 planning branch；分支已被其他 Worktree checkout 時停止 |
 | `handoff-start <change-id>` | 開啟實作 → Review → 收尾的交接迴圈：準備實作者 worktree、開實作者 Session、寫 `loop.yaml`（選用；`bash scripts/handoff/install.sh` 安裝） |
+| `handoff-doctor [change-id]` | 檢查交接迴圈的 host、工具與角色範本，不開啟 Session 或修改檔案 |
 | `handoff-finish <change-id>` | 最新交件單是目前乾淨 head 的 pass 時開收尾 Session（選用） |
 | `handoff-cleanup <change-id> [--abandon] [--yes]` | 收尾完成（或以 `--abandon` 放棄）後封存交件單與報告，刪除迴圈的 Session 與 worktree，保留分支（選用） |
 
@@ -208,8 +209,9 @@ commit／push，也不走 PR 的 create／update／close。
 
 實作、Review、收尾的 Agent 透過交件單互相交接，不需要你轉貼訊息。每個 Agent 結束一輪時以
 `agent-handoff` Skill 的 `handoff-write` 寫入 `.agent-handoff/<change-id>/NN-<role>.yaml`；Agent 停下時，
-Claude Code 與 Codex 的 Stop hook 讀最新的交件單，經 Xirp 通知下一個 Agent，或經既有 Telegram 通知你。
-hook 不用模型、不輪詢、不寫 GitHub。
+交接 hook 讀最新的交件單，透過接收角色的 host 通知下一個 Agent，或經既有 Telegram 通知你。
+hook 不用模型、不輪詢、不寫 GitHub。Xirp 是預設 host；若要使用 herdr，可在 `roles.yaml` 設定
+`host: herdr`，也可按角色選用不同 host。
 
 - `handoff-start <change-id>` 只開實作者；實作者第一次交件時，hook 依範本開審查者。
 - 審查與收尾的 worktree 可設 `shared`（預設，與實作者共用）或 `new`（另開），兩種並行可用。

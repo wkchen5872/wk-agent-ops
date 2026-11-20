@@ -45,8 +45,8 @@
 <text x="330" y="444" font-size="14" fill="#5f7186" font-weight="400" text-anchor="start">預設：實作者另開 worktree</text>
 <text x="700" y="418" font-size="14" fill="#19344c" font-weight="400" text-anchor="start" font-family="SF Mono, Menlo, monospace" xml:space="preserve">  --impl claude:fable:xhigh</text>
 <text x="1010" y="418" font-size="14" fill="#5f7186" font-weight="400" text-anchor="start">覆寫 implement 範本的模型與 effort</text>
-<text x="700" y="444" font-size="14" fill="#19344c" font-weight="400" text-anchor="start" font-family="SF Mono, Menlo, monospace" xml:space="preserve">  --reviewer-session &lt;xirp-id&gt;</text>
-<text x="1010" y="444" font-size="14" fill="#5f7186" font-weight="400" text-anchor="start">沿用已開好的審查 Session</text>
+<text x="700" y="444" font-size="14" fill="#19344c" font-weight="400" text-anchor="start" font-family="SF Mono, Menlo, monospace" xml:space="preserve">  --reviewer-session &lt;id&gt;</text>
+<text x="1010" y="444" font-size="14" fill="#5f7186" font-weight="400" text-anchor="start">沿用 Xirp Session 或 herdr pane</text>
 <rect x="40" y="490" width="250" height="1030" rx="18" fill="#eef1f6"/>
 <rect x="40" y="490" width="250" height="50" rx="18" fill="#19344c"/>
 <text x="58" y="522" font-size="18" fill="#ffffff" font-weight="700" text-anchor="start">你</text>
