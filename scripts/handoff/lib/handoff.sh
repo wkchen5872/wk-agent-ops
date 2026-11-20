@@ -162,13 +162,15 @@ ho_xirp_project_id() {
   xirp project list --json 2>/dev/null | jq -r --arg p "$path" '[.[] | select(.path == $p)][0].id // empty' 2>/dev/null
 }
 
-# ho_xirp_listed <id>: 0 when Xirp lists the session, 1 when it answers without it, 2 when it cannot answer.
+# ho_xirp_listed <id>: 0 when Xirp lists the session, 1 when it answers with a readable list without it, 2 when
+# it cannot answer or the answer is not a list of sessions with string IDs (then absence is not proven).
 ho_xirp_listed() {
-  local out
+  local out r
   out="$(xirp session list --json 2>/dev/null)" || return 2
-  jq -e 'type == "array" or (type == "object" and has("sessions"))' <<<"$out" >/dev/null 2>&1 || return 2
-  jq -e --arg id "$1" '(if type == "array" then . else .sessions end) | any(.id == $id)' <<<"$out" >/dev/null 2>&1 && return 0
-  return 1
+  r="$(jq -r --arg id "$1" '(if type == "array" then . elif type == "object" and (.sessions | type) == "array" then .sessions else null end)
+    | if type == "array" and all(.[]; type == "object" and (.id | type) == "string")
+      then (if any(.[]; .id == $id) then "listed" else "absent" end) else "unknown" end' <<<"$out" 2>/dev/null)"
+  case "$r" in listed) return 0 ;; absent) return 1 ;; *) return 2 ;; esac
 }
 
 ho_xirp_ids_named() {
@@ -1071,9 +1073,11 @@ ho_finish_retry() {
     if (( rc == 0 || rc == 2 )); then ho_loop_set "$dir" finish.retried_for "$base"; else rmdir "$claim"; fi
     (( rc == 0 )) || { echo "could not message finish session $id"; return 1; }
   else
-    # A finish that ran in the implementer's worktree and now has worktree new moves there, with the branch.
-    if [[ "$(kv_get "$loop" finish_template.worktree 2>/dev/null)" == new && "$wt" == "$(kv_get "$loop" implementer.worktree)" ]]; then
-      if ! wt="$(ho_finish_worktree "$dir" "$wt" "$change" "$(ho_head "$wt")" 2>&1)"; then
+    # A finish that ran in the implementer's worktree and now has worktree new moves there, with the branch; a
+    # move or an earlier open cut short is completed (ho_finish_worktree checks and rewrites both records).
+    local impl; impl="$(kv_get "$loop" implementer.worktree)"
+    if [[ "$(kv_get "$loop" finish_template.worktree 2>/dev/null)" == new && ( "$wt" == "$impl" || "$wt" == "$impl-finish" ) ]]; then
+      if ! wt="$(ho_finish_worktree "$dir" "$impl" "$change" "$(ho_head "$wt")" 2>&1)"; then
         rmdir "$claim"; echo "${wt##*$'\n'}"; return 1
       fi
       wt="${wt##*$'\n'}"
@@ -1098,13 +1102,14 @@ ho_finish_record() {
 }
 
 # ho_finish_prepared <loop.yaml> <finish-worktree> <change> <implementer-worktree>: this loop prepared it —
-# the implementer's loop.yaml records it, or (when that record could not be written) the worktree holds
-# this loop's untracked loop.yaml naming it. A worktree made by hand has neither and is never taken over.
+# the implementer's loop.yaml records it, or (when that record could not be written, so it still names no finish
+# worktree or the implementer's) the worktree holds this loop's untracked loop.yaml naming it. A worktree made by
+# hand has neither and is never taken over.
 ho_finish_prepared() {
   local loop="$1" wt="$2" change="$3" impl="$4" copy="$2/.agent-handoff/$3/loop.yaml" recorded
   recorded="$(kv_get "$loop" finish.worktree 2>/dev/null || true)"
   [[ "$recorded" == "$wt" ]] && return 0
-  [[ -z "$recorded" && -f "$copy" && -z "$(git -C "$wt" ls-files -- ".agent-handoff/$change/loop.yaml" 2>/dev/null)" ]] || return 1
+  [[ ( -z "$recorded" || "$recorded" == "$impl" ) && -f "$copy" && -z "$(git -C "$wt" ls-files -- ".agent-handoff/$change/loop.yaml" 2>/dev/null)" ]] || return 1
   [[ "$(kv_get "$copy" change 2>/dev/null)" == "$change" && "$(kv_get "$copy" implementer.worktree 2>/dev/null)" == "$impl" \
     && "$(kv_get "$copy" finish.worktree 2>/dev/null)" == "$wt" ]]
 }
@@ -1120,6 +1125,9 @@ ho_finish_worktree() {
       && "$(ho_head "$wt")" == "$head" ]] && ho_clean "$wt" \
       || { ho_err "cannot reuse the finish worktree $wt"; return 1; }
   else
+    # The new worktree checks out the branch: it must be at the commit the finish continues from.
+    [[ "$(git -C "$impl" rev-parse -q --verify "refs/heads/feature/$change" 2>/dev/null)" == "$head" ]] \
+      || { ho_err "feature/$change is at $(git -C "$impl" rev-parse -q --verify "refs/heads/feature/$change" 2>/dev/null || echo nothing), not $head; the finish worktree was not created"; return 1; }
     git -C "$impl" checkout -q --detach "$head" || { ho_err "cannot detach the implementer worktree"; return 1; }
     git -C "$impl" worktree add -q "$wt" "feature/$change" 2>/dev/null \
       || { git -C "$impl" checkout -q "feature/$change"; ho_err "cannot create the finish worktree $wt"; return 1; }

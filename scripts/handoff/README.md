@@ -211,17 +211,21 @@ stopped first. `--replace` then:
      (`routing.log`) and no review followed, it is routed again in its own worktree, so the new
      reviewer opens from the new settings and receives that round. If it does not open, the record
      stays unprocessed (an attention notice tells you why) and `handoff-route --foreground` retries
-     it once the cause is fixed.
+     it once the cause is fixed. If the host took the prompt but did not confirm it, it is not sent
+     again: check that session as the notice says. If the record's mark cannot be cleared, the
+     command names the line to remove from `.routed` before you run the retry.
    - finish: when the newest record is a blocked finish, or a passing review whose finish session
      had opened, a new finish session opens as `handoff-finish` would open it; if it cannot, you get
      an attention notice and `handoff-finish` retries it. A blocked finish that ran in the
      implementer's worktree and is given `--worktree new` moves to `<worktree>-finish` with the
-     feature branch, as `handoff-finish` does for a new finish worktree.
+     feature branch, as `handoff-finish` does for a new finish worktree, and only when the branch is
+     at the commit the finish stopped on. A move cut short is completed by the next `handoff-finish`.
 
 With no record waiting, only the settings change, and the new role opens when its turn comes. The
 replacement and the hand-off are written to `routing.log`. A Pi role's `.pi/settings.json` that the
 loop wrote for the old role is replaced; one the loop did not write, or one changed since, refuses
-the replacement before anything is deleted unless it already matches the new role.
+the replacement before anything is deleted unless it already matches the new role. So does a
+`.pi/settings.json` tracked in the commit a worktree of the role's own would check out.
 
 ### `handoff-finish <change-id>`
 

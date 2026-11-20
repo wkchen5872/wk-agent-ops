@@ -255,7 +255,7 @@ case "$1 $2" in
     json="$5"; n=$(( $(cat "$S/count" 2>/dev/null || echo 0) + 1 )); echo "$n" > "$S/count"
     printf '%s\n' "$json" > "$S/create-$n.json"
     jq -c --arg id "sess-$n" '{id:$id, name:.customName}' <<<"$json" >> "$S/sessions"; echo '{}' ;;
-  "session list") [[ -e "$S/list-fail" ]] && exit 1; if [[ -s "$S/sessions" ]]; then jq -s '.' "$S/sessions"; else echo '[]'; fi ;;
+  "session list") [[ -e "$S/list-fail" ]] && exit 1; [[ -e "$S/list-null" ]] && { echo '{"sessions":null}'; exit 0; }; if [[ -s "$S/sessions" ]]; then jq -s '.' "$S/sessions"; else echo '[]'; fi ;;
   "session get") [[ "$3" == missing-* || -e "$S/get-fail" ]] && exit 1
     if [[ -f "$S/session.json" ]]; then jq --arg id "$3" '. + {id:$id}' "$S/session.json"
     else jq -n --arg id "$3" '{id:$id, currentAgent:"claude", model:"fake-model", agentLaunchOptions:{agentName:"claude", options:{model:"opus", effort:"high"}}}'; fi ;;
@@ -856,6 +856,21 @@ start_in() { local d="$1"; shift; (cd "$d" && HOME="$(thome)" PATH="${PF_PATH:-$
 finish_in() { local d="$1"; shift; (cd "$d" && HOME="$(thome)" PATH="${PF_PATH:-$FAKES:$PATH}" HANDOFF_CREATE_WAIT=2 "$FINISH" "$@" </dev/null); }
 role_in() { local d="$1"; shift; (cd "$d" && HOME="$(thome)" PATH="${PF_PATH:-$FAKES:$PATH}" HANDOFF_NOTIFY="$FAKES/notify.sh" HANDOFF_CREATE_WAIT=2 "$ROOT/scripts/handoff/handoff-role" "$@" </dev/null); }
 deleted() { cat "$FAKE_XIRP_DIR/deleted" 2>/dev/null; }
+# mv that fails when its destination matches $FAKE_MV_FAIL and its source $FAKE_MV_FROM (globs; test-only fault injection),
+# after letting $FAKE_MV_AFTER matching calls through (counted in $FAKE_MV_COUNT).
+MVSHIM="$tmp/mvshim"; mkdir -p "$MVSHIM"
+cat > "$MVSHIM/mv" <<'SH'
+#!/usr/bin/env bash
+src="$1"; for a in "$@"; do dst="$a"; done
+# shellcheck disable=SC2053
+if [[ -n "${FAKE_MV_FAIL:-}" && "$dst" == $FAKE_MV_FAIL && "$src" == ${FAKE_MV_FROM:-*} ]]; then
+  n="$(cat "${FAKE_MV_COUNT:-/dev/null}" 2>/dev/null)"; n="${n:-0}"; echo $((n + 1)) > "${FAKE_MV_COUNT:-/dev/null}"
+  (( n >= ${FAKE_MV_AFTER:-0} )) && { echo "mv: injected failure" >&2; exit 1; }
+fi
+exec /bin/mv "$@"
+SH
+chmod +x "$MVSHIM/mv"
+MV_KV='*/loop.yaml.[A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9]'  # kv_set's temporary file
 # wrpt <worktree>: an ignored review report r.md in a linked worktree
 wrpt() { local i; i="$(git -C "$1" rev-parse --path-format=absolute --git-common-dir)/info"; printf 'r\n' > "$1/r.md"; mkdir -p "$i"; printf '/r.md\n' >> "$i/exclude"; }
 
@@ -1128,6 +1143,24 @@ if run_section finish; then
   rm -f "$FAKE_XIRP_DIR/create-fail"
   [[ "$rc" != 0 && "$(( $(ncount) - n0 ))" == 1 ]] && jt '.kind=="attention"' && grep -q 'handoff-finish add-export' <<<"$out" \
     && ok "a finish that cannot open after a replacement sends one attention notice" || { bad "a finish that cannot open after a replacement sends one attention notice"; printf '       %s\n' "$out"; }
+
+  # Round 3 (codex-role-review-r02/F-08)
+  R8="$tmp/fin-move-tip"; retry_loop "$R8" fin-9; use_project "$R8"; fresh_state f22
+  git -C "$R8" checkout -q --detach; git -C "$R8" branch -f feature/add-export HEAD~1
+  out="$(role_in "$R8" add-export finish claude:sonnet:high --worktree new --replace 2>&1)"; rc=$?
+  [[ "$rc" != 0 && "$(created)" == 0 && ! -d "$R8-finish" ]] && grep -q 'feature/add-export' <<<"$out" \
+    && ok "a blocked finish is not moved onto a feature branch tip other than its commit (codex-role-review-r02/F-08)" || { bad "a blocked finish is not moved onto a feature branch tip other than its commit (codex-role-review-r02/F-08)"; printf '       %s\n' "$out"; }
+  R9="$tmp/fin-move-copy"; retry_loop "$R9" fin-9; use_project "$R9"; fresh_state f23
+  out="$(PATH="$MVSHIM:$PATH" FAKE_MV_FAIL='*-finish/.agent-handoff/add-export/loop.yaml' role_in "$R9" add-export finish claude:sonnet:high --worktree new --replace 2>&1)"; rc=$?
+  fout="$(finish_in "$R9" add-export 2>&1)"; frc=$?
+  [[ "$rc" != 0 && "$frc" == 0 && "$(created)" == 1 && "$(kv_get "$R9-finish/.agent-handoff/add-export/loop.yaml" finish.worktree)" == "$R9-finish" ]] \
+    && ok "a move whose finish-worktree copy failed is completed by handoff-finish (codex-role-review-r02/F-08)" || { bad "a move whose finish-worktree copy failed is completed by handoff-finish (codex-role-review-r02/F-08)"; printf '       %s\n' "$out" "$fout"; }
+  R10="$tmp/fin-move-ptr"; retry_loop "$R10" fin-9; use_project "$R10"; fresh_state f24; lset "$R10/.agent-handoff/add-export/loop.yaml" finish.worktree "$R10"
+  out="$(PATH="$MVSHIM:$PATH" FAKE_MV_FAIL="$R10/.agent-handoff/add-export/loop.yaml" FAKE_MV_FROM="$MV_KV" role_in "$R10" add-export finish claude:sonnet:high --worktree new --replace 2>&1)"; rc=$?
+  fout="$(finish_in "$R10" add-export 2>&1)"; frc=$?
+  [[ "$rc" != 0 && "$frc" == 0 && "$(created)" == 1 && "$(kv_get "$R10/.agent-handoff/add-export/loop.yaml" finish.worktree)" == "$R10-finish" ]] \
+    && jq -e --arg w "$R10-finish" '.worktreePath==$w' "$FAKE_XIRP_DIR/create-1.json" >/dev/null 2>&1 \
+    && ok "a move whose loop.yaml pointer failed reuses its finish worktree on retry (codex-role-review-r02/F-08)" || { bad "a move whose loop.yaml pointer failed reuses its finish worktree on retry (codex-role-review-r02/F-08)"; printf '       %s\n' "$out" "$fout"; }
 
   # Pass recorded in a separate review worktree B; finish runs from A.
   SA="$tmp/fin-sep"; new_loop "$SA" new ask; use_project "$SA"; fresh_state f8; SB="$SA-review"
@@ -1531,6 +1564,17 @@ if run_section herdr; then
   out="$(role_in "$Q10W" add-export review codex:gpt-6.2-sol:high --replace 2>&1)"; rc=$?
   [[ "$rc" != 0 && "$(cksum < "$q10l")" == "$s0" && ! -s "$(HS)/closed" ]] && grep -q 'tab' <<<"$out" \
     && ok "a herdr reviewer without a recorded tab is not closed (codex-role-review-r01/F-02)" || { bad "a herdr reviewer without a recorded tab is not closed (codex-role-review-r01/F-02)"; printf '       %s\n' "$out"; }
+  # codex-role-review-r02/F-03: a prompt herdr did not confirm is not sent again by a retry.
+  Q12="$tmp/herdr-replace-unconfirmed"; herdr_project "$Q12"; fresh_state h12; Q12W="$Q12-add-export"; q12l="$Q12W/.agent-handoff/add-export/loop.yaml"
+  start_in "$Q12" add-export >/dev/null 2>&1; commit_in "$Q12W" impl; hw "$Q12W" --role implement --status done --head HEAD; route_in "$Q12W" >/dev/null 2>&1
+  touch "$(HS)/prompt-timeout"
+  out="$(role_in "$Q12W" add-export review codex:gpt-6.2-sol:high --replace 2>&1)"; rc=$?
+  rm -f "$(HS)/prompt-timeout"; np="$(kv_get "$q12l" reviewer.session)"
+  routed "$Q12W" 01-implement.yaml; r1=$?; held=0; [[ -f "$Q12W/.agent-handoff/add-export/reviewer-unconfirmed.txt" ]] && held=1
+  rm -f "$Q12W/.agent-handoff/add-export/reviewer-unconfirmed.txt"
+  (cd "$Q12W" && PATH="$FAKES:$PATH" HANDOFF_NOTIFY="$FAKES/notify.sh" CLAUDE_PROJECT_DIR="$Q12W" "$ROUTE" --foreground </dev/null >/dev/null 2>&1)
+  [[ "$rc" != 0 && "$r1" == 0 && "$held" == 1 && -n "$np" && "$(herdr_prompts | grep -c "^$np"$'\t')" == 1 ]] && grep -q 'unconfirmed' <<<"$out" \
+    && ok "a replacement whose new prompt herdr did not confirm is not sent again (codex-role-review-r02/F-03)" || { bad "a replacement whose new prompt herdr did not confirm is not sent again (codex-role-review-r02/F-03)"; printf '       %s\n' "$out"; }
   Q11="$tmp/herdr-fin-replace"; herdr_project "$Q11"; fresh_state h11; Q11W="$Q11-add-export"; q11l="$Q11W/.agent-handoff/add-export/loop.yaml"
   start_in "$Q11" add-export >/dev/null 2>&1; commit_in "$Q11W" impl; hw "$Q11W" --role implement --status done --head HEAD
   wrpt "$Q11W"; hw "$Q11W" --role review --status done --verdict pass --head HEAD --report r.md
@@ -2340,6 +2384,50 @@ SH
   fout="$(HOME="$PI_HOME" finish_in "$PW" add-export 2>&1)"; frc=$?
   [[ "$rc" == 0 && "$frc" == 0 ]] && msgs | grep -q '^sess-3' \
     && ok "a blocked finish is retried after a further reviewer change (codex-role-review-r01/F-07)" || { bad "a blocked finish is retried after a further reviewer change (codex-role-review-r01/F-07)"; printf '       %s\n' "$out" "$fout"; }
+
+  # Round 3 (codex-role-review-r02)
+  open_reviewer; s0="$(sum "$rl")"; touch "$FAKE_XIRP_DIR/delete-fail" "$FAKE_XIRP_DIR/list-null"
+  out="$(prole "$PW" add-export review codex:gpt-6.2-sol:high --replace 2>&1)"; rc=$?
+  rm -f "$FAKE_XIRP_DIR/delete-fail" "$FAKE_XIRP_DIR/list-null"
+  [[ "$rc" != 0 && "$(sum "$rl")" == "$s0" && "$(created)" == 2 ]] \
+    && ok "an unreadable Xirp session list does not prove the old session gone (codex-role-review-r02/F-01)" || { bad "an unreadable Xirp session list does not prove the old session gone (codex-role-review-r02/F-01)"; printf '       %s\n' "$out"; }
+  open_reviewer
+  out="$(PATH="$MVSHIM:$PATH" FAKE_MV_FAIL='*/.routed' prole "$PW" add-export review codex:gpt-6.2-sol:high --replace 2>&1)"; rc=$?
+  grep -vxF 01-implement.yaml "$PW/.agent-handoff/add-export/.routed" > "$tmp/routed.tmp"; cat "$tmp/routed.tmp" > "$PW/.agent-handoff/add-export/.routed"; ROUTE_FG "$PW"
+  [[ "$rc" != 0 && "$(kv_get "$rl" reviewer.session)" == sess-3 ]] && grep -qF '.routed' <<<"$out" && grep -q 'handoff-route --foreground' <<<"$out" \
+    && ok "a hand-off marker that cannot be cleared is reported, and the documented steps complete it (codex-role-review-r02/F-03)" || { bad "a hand-off marker that cannot be cleared is reported, and the documented steps complete it (codex-role-review-r02/F-03)"; printf '       %s\n' "$out"; }
+  pi_project "$CX_IMPL" "$(role_block review codex gpt-6.1-sol high worktree=new)" "$CX_FIN"; pstart "$PD" add-export >/dev/null 2>&1; rl="$PW/.agent-handoff/add-export/loop.yaml"
+  commit_in "$PW" impl; hw "$PW" --role implement --status done --head HEAD; HOME="$PI_HOME" route_in "$PW" >/dev/null 2>&1
+  rvl="$PW-review/.agent-handoff/add-export/loop.yaml"; wrpt "$PW-review"; hw "$PW-review" --role review --status done --verdict changes-required --head HEAD --report r.md; c0="$(sum "$rvl")"
+  out="$(PATH="$MVSHIM:$PATH" FAKE_MV_FAIL="$rvl" prole "$PW" add-export review pi:openai/gpt-6.2-sol:medium:api --replace 2>&1)"; rc=$?; c1="$(sum "$rvl")"
+  out2="$(prole "$PW" add-export review pi:openai/gpt-6.2-sol:medium:api --replace 2>&1)"; rc2=$?
+  copies_ok=1
+  for f in "$rl" "$rvl"; do
+    [[ "$(kv_get "$f" review_template_until_03.harness)" == codex && "$(kv_get "$f" review_template_until_03.model)" == gpt-6.1-sol \
+      && "$(kv_get "$f" review_template_until_03.effort)" == high && "$(kv_get "$f" review_template.harness)" == pi ]] || copies_ok=0
+  done
+  [[ "$rc" != 0 && "$c1" == "$c0" && "$rc2" == 0 && "$copies_ok" == 1 ]] \
+    && ok "a loop.yaml copy whose write fails stays whole, and a rerun completes every copy (codex-role-review-r02/F-04)" || { bad "a loop.yaml copy whose write fails stays whole, and a rerun completes every copy (codex-role-review-r02/F-04)"; printf '       %s\n' "$out" "$out2"; }
+  # The same, with the copy's first write let through and the second (provider) failing, as the review injected it.
+  pi_project "$CX_IMPL" "$(role_block review codex gpt-6.1-sol high worktree=new)" "$CX_FIN"; pstart "$PD" add-export >/dev/null 2>&1; rl="$PW/.agent-handoff/add-export/loop.yaml"
+  commit_in "$PW" impl; hw "$PW" --role implement --status done --head HEAD; HOME="$PI_HOME" route_in "$PW" >/dev/null 2>&1
+  rvl="$PW-review/.agent-handoff/add-export/loop.yaml"; wrpt "$PW-review"; hw "$PW-review" --role review --status done --verdict changes-required --head HEAD --report r.md; c0="$(sum "$rvl")"
+  rm -f "$tmp/mvcount"
+  out="$(PATH="$MVSHIM:$PATH" FAKE_MV_FAIL="$rvl" FAKE_MV_AFTER=1 FAKE_MV_COUNT="$tmp/mvcount" prole "$PW" add-export review pi:openai/gpt-6.2-sol:medium:api --replace 2>&1)"; rc=$?; c1="$(sum "$rvl")"
+  out2=""; (( rc == 0 )) || out2="$(prole "$PW" add-export review pi:openai/gpt-6.2-sol:medium:api --replace 2>&1)"
+  copies_ok=1
+  for f in "$rl" "$rvl"; do
+    for k in harness:codex model:gpt-6.1-sol effort:high; do [[ "$(kv_get "$f" "review_template_until_03.${k%%:*}")" == "${k#*:}" ]] || copies_ok=0; done
+    kv_get "$f" review_template_until_03.provider >/dev/null 2>&1 && kv_get "$f" review_template_until_03.billing >/dev/null 2>&1 || copies_ok=0
+  done
+  { (( rc == 0 )) || [[ "$c1" == "$c0" ]]; } && [[ "$copies_ok" == 1 ]] \
+    && ok "a copy write interrupted after its first change never leaves a partial earlier template (codex-role-review-r02/F-04)" || { bad "a copy write interrupted after its first change never leaves a partial earlier template (codex-role-review-r02/F-04)"; printf '       %s\n' "$out" "$out2"; }
+  pi_project "$CX_IMPL" "$CX_REV" "$CX_FIN"; pstart "$PD" add-export >/dev/null 2>&1; rl="$PW/.agent-handoff/add-export/loop.yaml"
+  mkdir -p "$PW/.pi"; printf '{"defaultModel":"mine"}\n' > "$PW/.pi/settings.json"; git -C "$PW" add -f .pi/settings.json; git -C "$PW" commit -qm "own pi settings"
+  commit_in "$PW" impl; hw "$PW" --role implement --status done --head HEAD; HOME="$PI_HOME" route_in "$PW" >/dev/null 2>&1; s0="$(sum "$rl")"
+  out="$(prole "$PW" add-export review pi:openai/gpt-6.2-sol:medium:api --worktree new --replace 2>&1)"; rc=$?
+  [[ "$rc" != 0 && "$(sum "$rl")" == "$s0" && -z "$(deleted)" && ! -d "$PW-review" ]] && grep -q 'tracked' <<<"$out" \
+    && ok "Pi settings tracked in the commit a new worktree will check out refuse the replacement first (codex-role-review-r02/F-06)" || { bad "Pi settings tracked in the commit a new worktree will check out refuse the replacement first (codex-role-review-r02/F-06)"; printf '       %s\n' "$out"; }
 fi
 
 if [[ "$fail" -ne 0 ]]; then

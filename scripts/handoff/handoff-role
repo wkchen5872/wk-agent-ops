@@ -54,8 +54,9 @@ fi
 
 # change_role <loop.yaml>: keep the current template for the records so far, then apply the new settings.
 change_role() {
-  local f="$1" k v snap="${tsec}_until_$until"
-  if [[ -n "$until" ]] && ! kv_get "$f" "$snap.harness" >/dev/null 2>&1; then
+  local f="$1" k v snap="${tsec}_until_$until" whole=1
+  for k in harness provider model effort billing; do kv_get "$f" "$snap.$k" >/dev/null 2>&1 || whole=0; done
+  if [[ -n "$until" ]] && (( ! whole )); then
     for k in harness provider model effort billing; do
       v="$(kv_get "$f" "$tsec.$k" 2>/dev/null)"; kv_set "$f" "$snap.$k" "${v:+\"$v\"}" || return 1
     done
@@ -90,6 +91,13 @@ if [[ "$(kv_get "$scratch" "$tsec.harness")" == pi ]]; then
   impl="$(kv_get "$loop" implementer.worktree)"
   if [[ "$role" == finish && "$rstate" == finish/blocked/* ]]; then twt="$(kv_get "$loop" finish.worktree 2>/dev/null)"; twt="${twt:-$impl}"; fi
   [[ "$(kv_get "$scratch" "$tsec.worktree" 2>/dev/null)" == new ]] && twt="$impl-$role" || twt="${twt:-$impl}"
+  # A worktree of its own checks out a commit (the round under review, or the feature branch for finish) that
+  # may track the file; it is checked before anything is deleted.
+  if [[ "$twt" != "$impl" ]]; then
+    c="$(ho_head "$impl")"; [[ "$role" == review && -n "$rec" ]] && c="$(kv_get "$rec" head 2>/dev/null || echo "$c")"
+    git -C "$impl" cat-file -e "$c:.pi/settings.json" 2>/dev/null \
+      && die "$twt would check out ${c:0:7}, where .pi/settings.json is tracked by Git; a Pi role cannot use it; nothing was changed"
+  fi
   f="$twt/.pi/settings.json"
   if [[ -e "$f" && "$f" != "$drop_pi" ]]; then
     [[ -z "$(git -C "$twt" ls-files -- .pi/settings.json 2>/dev/null)" ]] || die "$f is tracked by Git; a Pi role cannot use $twt; nothing was changed"
@@ -118,10 +126,12 @@ fi
 clear_role() { local k; for k in $clear; do kv_get "$1" "$key.$k" >/dev/null 2>&1 && { kv_set "$1" "$key.$k" "" || return 1; }; done; return 0; }
 rerun="fix that, then run the same handoff-role command again (with --replace)"
 dirs="$(ho_loop_dirs "$dir")"
+# Each copy is replaced whole (written to a temporary file, then renamed), so a failure leaves it as it was.
 while IFS= read -r d; do
   [[ "$d" == "$dir" ]] && continue
-  change_role "$d/loop.yaml" && clear_role "$d/loop.yaml" \
-    || die "${old:+the old $role session $old was deleted, but }$d/loop.yaml could not be written; $rerun"
+  t="$d/loop.yaml.new.$$"
+  cp "$d/loop.yaml" "$t" && change_role "$t" && clear_role "$t" && mv "$t" "$d/loop.yaml" \
+    || { rm -f "$t"; die "${old:+the old $role session $old was deleted, but }$d/loop.yaml could not be written; $rerun"; }
 done <<<"$dirs"
 clear_role "$scratch" && cat "$scratch" > "$loop.new.$$" && mv "$loop.new.$$" "$loop" \
   || { rm -f "$loop.new.$$"; die "${old:+the old $role session $old was deleted, but }$loop could not be written; $rerun"; }
@@ -139,18 +149,26 @@ base="$(basename "$rec")" rdir="$(dirname "$rec")"
 if [[ "$role" == review && "$rstate" == implement/done/* ]] && grep -qxF "$base" "$rdir/.routed" 2>/dev/null \
   && grep -qE " $base action=reviewer:(opened|messaged):$old( |\$)" "$rdir/routing.log" 2>/dev/null; then
   wt="$(cd "$rdir/../.." && pwd)"
-  for f in .routed .notified; do
-    [[ -f "$rdir/$f" ]] || continue
-    grep -vxF "$base" "$rdir/$f" > "$rdir/$f.tmp"; mv "$rdir/$f.tmp" "$rdir/$f"
-  done
   if [[ -f "$here/handoff-route" ]]; then route="$here/handoff-route"; else route="$HOME/.config/wk-workflow/handoff/handoff-route"; fi
+  manual="remove the line $base from $rdir/.routed, then run in $wt: bash $route --foreground"
+  # unmark <file>: drop the record from a route marker file; fails when the file could not be rewritten.
+  unmark() {
+    [[ -f "$1" ]] || return 0
+    { grep -vxF "$base" "$1" > "$1.tmp"; (( $? <= 1 )); } && mv "$1.tmp" "$1" || { rm -f "$1.tmp"; return 1; }
+  }
+  unmark "$rdir/.routed" || die "the review role was replaced, but $base is still marked as processed; $manual"
+  unmark "$rdir/.notified" || die "the review role was replaced, but $rdir/.notified could not be updated; fix that, then run in $wt: bash $route --foreground"
   n0="$(wc -l < "$rdir/routing.log" 2>/dev/null || echo 0)"
   # The route finds its worktree in CLAUDE_PROJECT_DIR before the working directory: point both at the record's.
   (cd "$wt" && CLAUDE_PROJECT_DIR="$wt" bash "$route" --foreground </dev/null >/dev/null 2>&1)
   action="$(tail -n +$((n0 + 1)) "$rdir/routing.log" 2>/dev/null | grep -F " $base action=" | tail -1 | sed 's/.* action=\([^ ]*\).*/\1/')"
-  if [[ "$action" == reviewer:opened:* ]]; then printf 'Handed %s to the new reviewer (%s)\n' "$base" "$action"; exit 0; fi
-  # Whatever stopped it, the record stays unprocessed so that a retry hands it over.
-  [[ -f "$rdir/.routed" ]] && { grep -vxF "$base" "$rdir/.routed" > "$rdir/.routed.tmp"; mv "$rdir/.routed.tmp" "$rdir/.routed"; }
+  case "$action" in
+    reviewer:opened:*) printf 'Handed %s to the new reviewer (%s)\n' "$base" "$action"; exit 0 ;;
+    # The prompt may have arrived: the record stays processed and nothing is sent again (as the route does).
+    *send-unconfirmed*) die "the review role was replaced, but the host did not confirm the new reviewer's prompt ($action); it is not sent again. Check that session as the attention notice says" ;;
+  esac
+  # Nothing was sent: the record stays unprocessed so that a retry hands it over.
+  unmark "$rdir/.routed" || die "the review role was replaced, but $base did not reach the new reviewer (${action:-no route result}) and is still marked as processed; $manual"
   die "the review role was replaced, but $base did not reach the new reviewer (${action:-no route result}); see $rdir/routing.log, then retry in $wt with: bash $route --foreground"
 elif [[ "$role" == finish && ( "$rstate" == finish/blocked/* || "$rstate" == review/done/pass ) ]]; then
   rmdir "$dir"/.finish-retry-* 2>/dev/null
