@@ -1,8 +1,8 @@
 ---
 type: Playbook
 title: Agent Handoff 交接迴圈指南
-description: 使用 handoff-start、handoff-role、handoff-finish 與 handoff-cleanup 協調多 Agent 自動化實作、審查與收尾。
-tags: [skills, handoff, workflow, xirp, agents, notify]
+description: 使用 handoff-start、handoff-role、handoff-finish、handoff-cleanup 與 handoff-doctor 協調多 Agent 自動化實作、審查與收尾。
+tags: [skills, handoff, workflow, xirp, herdr, agents, notify]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-19T10:06:02+08:00" }
 sources:
   - id: handoff-scripts
@@ -20,7 +20,7 @@ sources:
 
 `agent-handoff` 是一套自動化的多 Agent 協作迴圈系統。它讓負責實作（implementer）、審查（reviewer）與收尾（finish）的各個 Agent 能在無需人工反覆傳話的情況下，自動接力完成功能開發、審查驗收與最終提交。
 
-每個 Agent 在當前輪次結束時，透過 `agent-handoff` Skill 寫入標準化的「交件單」；當 Agent 停下時，系統內建的 `Stop` 鉤子（`handoff-route`）會讀取該交件單，透過 `xirp` CLI 自動向下一位 Agent 發送訊息，並發送 Telegram 即時進度通知或在需要人工介入時發送停點警報。[^handoff-scripts]
+每個 Agent 在當前輪次結束時，透過 `agent-handoff` Skill 寫入標準化的「交件單」；當 Agent 停下時，系統內建的 `Stop` 鉤子（`handoff-route`）會讀取該交件單，透過下一位 Agent 所在的 session 宿主（host：`xirp` 或 `herdr`）自動發送訊息，並發送 Telegram 即時進度通知或在需要人工介入時發送停點警報。[^handoff-scripts]
 
 相關流程圖稿：
 - [啟動流程圖（SVG）](/docs/diagrams/agent-handoff-start.svg)
@@ -117,6 +117,26 @@ sources:
 
 ---
 
+## Session 宿主（host）
+
+host 是角色的 session 跑在哪裡、在哪裡看得到：`xirp`（預設）或 `herdr`。host 是機器的屬性，寫在不進 Git 的 `roles.yaml`：頂層 `host:` 套用到所有角色，角色自己的 `host:` 可以覆寫；`herdr_session:` 指定在 herdr 之外啟動時要用的 herdr session。
+
+```yaml
+host: herdr
+herdr_session: work
+```
+
+- `handoff-start` 把每個角色的 host（herdr 角色另含 herdr session）寫進 `loop.yaml`，之後一律從 `loop.yaml` 讀，不從環境變數推測；沒有 host 欄位的舊 `loop.yaml` 視為 `xirp`。同一個迴圈可以混用，訊息走接收者的 host。
+- 設定的 host 不能用（指令不存在，或 herdr 的 server 沒在跑）時，`handoff-start`、`handoff-role`、`handoff-finish` 直接拒絕，不會改用其他 host。
+- herdr session：在 herdr pane 裡執行時沿用該 pane 的 session，否則用 `herdr_session`，再否則用 herdr 的預設 session。
+- herdr 配置：迴圈掛在主 repo 的 workspace 之下（沒有就自動開，不搶焦點）。新 worktree 開一個 linked workspace，標籤是 change ID；主工作區的迴圈在主 repo workspace 開 tab。每個角色一個 tab，名稱用範本的 `name`。
+- 啟動方式：`herdr agent start` 帶入範本的模型與 effort（Pi 另帶 provider，並照常寫入 worktree 的 `.pi/settings.json`），第一則 prompt 另外用 `herdr agent prompt --timeout` 送出。`loop.yaml` 記錄 pane ID、tab、herdr session、原生 Session ID 與迴圈開的 workspace；傳訊前確認 pane 裡仍是同一個 agent。
+- **對話框與重試**：新 worktree 會讓 Claude Code、Codex 跳出信任資料夾的對話框。迴圈不替你回答：保留 pane、記 `pending_prompt`、發一次 attention 通知寫明 herdr 的 workspace、tab 與 pane；你處理完後執行通知裡的 `handoff-route --foreground`，只補送 prompt 到同一個 pane。實作者在 `handoff-start` 時卡住，就處理後再跑一次 `handoff-start <change-id>`。
+- routing log：herdr 不回報模型，所以 herdr 角色記成 `model=<範本模型>(template)`。
+- 之後可能支援的 host：`ghostty + tmux`（目前不支援）。
+
+---
+
 ## 指令手冊
 
 ### 1. `handoff-start <change-id>`
@@ -133,7 +153,7 @@ handoff-start <change-id> [選項]
 - `--impl <override>`：臨時覆寫實作者配置（例：`--impl claude:opus:high`）。
 - `--review <override>`：臨時覆寫審查者配置（例：`--review codex:gpt-6.1-sol:high`；Pi 為 `--review pi:openai-codex/gpt-6.2-sol:high:subscription`，與範本一樣驗證）。
 - `--finish ask|auto`：覆寫審查通過時的行為（是否自動啟動 finish）。
-- `--reviewer-session <xirp-id>`：綁定並沿用現有的 Xirp session 作為審查者。
+- `--reviewer-session <id>`：沿用審查角色 host 上現有的 session 作為審查者（Xirp session ID，或 herdr 的 pane ID）。
 
 override 換了工具時，prompt 開頭的 skill 呼叫會改成新工具的寫法（例如 `$change-review` 換成 Pi 的 `/skill:change-review`），以舊工具名稱開頭的 session 名稱也會改成新工具名稱。
 
@@ -151,7 +171,7 @@ handoff-role <change-id> finish codex:gpt-6.1-sol:high
 
 **行為與安全檢查：**
 - **自動適應工具寫法**：重寫 Prompt 開頭的 Skill 呼叫與 Session 名稱，使其符合新工具慣例。
-- **嚴格關卡驗證**：執行與 `handoff-start` 完全相同的安全檢查（範本欄位完整性、一個 worktree 最多一個 Pi 角色限制、Pi 模型/憑證/計費與信任狀態），全部通過後才寫入實作者的 `loop.yaml`。
+- **嚴格關卡驗證**：對該角色執行 `handoff-doctor` 的檢查（範本欄位、工具與觸發器、host、Pi 模型/憑證/計費與信任狀態），再加上一個 worktree 最多一個 Pi 角色的限制，全部通過後才寫入實作者的 `loop.yaml`。
 - **防止衝突**：若目標角色的 Session 已經開啟，指令會直接拒絕更換；永不修改原始 `roles.yaml` 與正在執行的實作者角色。
 
 ### 3. `handoff-finish <change-id>`
@@ -191,9 +211,36 @@ handoff-cleanup <change-id> --abandon --yes
 
 **執行清理動作：**
 1. **歷史證據歸檔**：將 `.agent-handoff/<change-id>/` 內的交件單與審查報告拷貝至主工作區 `.agent-handoff/archive/<change-id>/` 保存；即將移除的 worktree 中的 `work-items/WI-*` 也整個複製到 `archive/<change-id>/<worktree>/work-items/`，避免審查引用的驗收證據隨 worktree 消失。主工作區的 Work Item 留在原處；預覽（不加 `--yes`）會列出將歸檔的 Work Item，以及若由本次迴圈寫入則將從保留的主工作區中移除的 `.pi/settings.json`。
-2. **刪除 Sessions**：呼叫 `xirp session delete` 釋放背景程序。
+2. **刪除 Sessions**：Xirp 角色呼叫 `xirp session delete`；herdr 角色關閉迴圈自己開的東西——迴圈為 worktree 開的 workspace，或（主工作區的迴圈）只關角色的 tab；不是迴圈開的 workspace、tab、pane 一律不碰。這一步在移除 worktree 之前，因為 herdr server 重啟時會自動恢復仍開著的 pane 裡的 agent。
 3. **移除臨時 Worktrees**：安全移除額外建立的實作與收尾 worktree。
 4. **保留分支**：`feature/<change-id>` 分支與已提交 commit 永遠保留，由團隊另行授權 merge 與清理。
+
+### 5. `handoff-doctor [change-id]`
+
+在開任何 session 之前，集中檢查這台機器能不能跑交接迴圈。不開、不傳訊、不關任何 session，也不改任何檔案。
+
+```bash
+# 檢查 roles.yaml 的三個角色
+handoff-doctor
+
+# 檢查某個迴圈 loop.yaml 裡實際生效的角色（含 override 與 handoff-role 的變更）
+handoff-doctor <change-id>
+```
+
+每項檢查印一行 `<ok|warn|fail> <區> <訊息>`，任何一行是 `fail` 就以非零狀態結束：
+
+| 區 | 檢查項目 | 有問題時 |
+|---|---|---|
+| `base` | `git`、`jq`、main worktree、範本檔（`roles.yaml` 或 `loop.yaml`）；這裡失敗就不做其他檢查 | `fail` |
+| `host` | 每個用到的 host。`xirp`：指令、main worktree 已登錄為 Xirp project；`herdr`：指令、版本、所選 herdr session 的 server 在跑 | `fail` |
+| `harness` | 每個用到的工具：指令與版本，以及觸發器（Claude Code／Codex 的 `handoff-route` Stop hook、Pi 擴充） | `fail` |
+| `harness` | Codex hook 是否已在 `/hooks` 信任，無法從外部確認 | `warn` |
+| `harness` | herdr 角色：herdr 對該工具的整合（`herdr integration status`），沒有就拿不到原生 Session ID | `warn` |
+| `role` | 範本欄位、harness 與 host；Pi 另檢查 repo 信任、模型、憑證與計費 | `fail` |
+| `role` | Claude Code、Codex 的模型沒有可靠的清單可查，標示 `model not verified` | `ok` |
+| `notify` | 通知器已安裝 | `warn` |
+
+**何時自動執行**：`handoff-start`（三個角色）、`handoff-role`（被更換的角色）與 `handoff-finish`（收尾角色）在開 session 或寫 `loop.yaml` 之前都會跑同一套檢查：印出 `warn` 與 `fail` 那幾行（前面加上指令名稱），有 `fail` 就拒絕，什麼都不開。
 
 ---
 

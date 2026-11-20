@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Offline tests for the agent handoff loop: record parser, handoff-write, routing hook, and launcher.
-# Usage: bash tests/test_agent_handoff.sh [kv|write|skill|install|route|notify|mixed|start|finish|hookinstall|cleanup|pi|all]
+# Usage: bash tests/test_agent_handoff.sh [kv|write|skill|install|route|notify|mixed|start|finish|doctor|herdr|hookinstall|cleanup|pi|all]
 set -u
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -177,6 +177,9 @@ if run_section skill; then
   a3="$(env -i PATH="$PATH" CHIRP_SESSION_ID=x-1 "$AUTH" --tool Codex --model '' 2>/dev/null)"
   [[ "$a3" == $'Co-Authored-By: Codex\nSESSION-ID: null\nXIRP-SESSION-ID: x-1' ]] \
     && ok "handoff-author omits an unknown model and writes null for a missing native ID" || bad "handoff-author omits an unknown model and writes null for a missing native ID ($a3)"
+  a4="$(env -i PATH="$PATH" HERDR_ENV=1 CLAUDE_CODE_SESSION_ID=c-2 CHIRP_SESSION_ID=x-inherited "$AUTH" --tool 'Claude Code' --model opus 2>/dev/null)"
+  [[ "$a4" == $'Co-Authored-By: Claude Code\nAI-Assisted-By: opus\nSESSION-ID: c-2\nXIRP-SESSION-ID: null' ]] \
+    && ok "inside a herdr pane handoff-author ignores an inherited Xirp ID" || bad "inside a herdr pane handoff-author ignores an inherited Xirp ID ($a4)"
   grep -q 'handoff-author' "$SKILL/SKILL.md" && ok "SKILL.md documents handoff-author" || bad "SKILL.md documents handoff-author"
 fi
 
@@ -272,6 +275,81 @@ printf 'event=%s action_required=%s %s\n' "$1" "${NOTIFY_ACTION_REQUIRED:-unset}
 exit "${FAKE_NOTIFY_RC:-0}"
 SH
 chmod +x "$FAKES/xirp" "$FAKES/gh" "$FAKES/notify.sh"
+# Fake Claude Code and Codex CLIs: only their version is ever asked for.
+printf '#!/usr/bin/env bash\necho "2.9.0 (Claude Code)"\n' > "$FAKES/claude"
+printf '#!/usr/bin/env bash\necho "codex-cli 0.130.0"\n' > "$FAKES/codex"
+# Fake herdr 0.9.5 (state in $FAKE_XIRP_DIR/herdr). Success JSON on stdout, error JSON on stderr with exit 1,
+# as the real CLI. Switches (files in the state dir): server-down, busy (count of agent_pane_busy answers),
+# not-ready (agent start stops at a dialog), blocked (agent prompt refused), no-native, shell-<pane>
+# (the pane runs a shell), no-integration-<kind>.
+cat > "$FAKES/herdr" <<'SH'
+#!/usr/bin/env bash
+S="$FAKE_XIRP_DIR/herdr"; mkdir -p "$S"
+sess="default"; [[ "${1:-}" == --session ]] && { sess="$2"; shift 2; }
+printf '%s\t%s\n' "$sess" "$*" >> "$S/calls"
+ok() { jq -c '{id:"1", result:.}'; }
+err() { printf '{"id":"1","error":{"code":"%s","message":"%s"}}\n' "$1" "$1" >&2; exit 1; }
+opt() { local k="$1"; shift; while [[ $# -gt 0 ]]; do [[ "$1" == "$k" ]] && { printf '%s' "$2"; return; }; shift; done; }
+n() { local c; c=$(( $(cat "$S/n-$1" 2>/dev/null || echo 0) + 1 )); echo "$c" > "$S/n-$1"; echo "$c"; }
+[[ "$1" == --version ]] && { echo "herdr 0.9.5"; exit 0; }
+if [[ "$1 ${2:-}" == "status server" ]]; then
+  if [[ -e "$S/server-down" ]]; then jq -nc --arg s "$sess" '{status:"not_running", running:false, session:$s}'
+  else jq -nc --arg s "$sess" '{status:"running", running:true, version:"0.9.5", session:$s}'; fi; exit 0
+fi
+if [[ "$1 ${2:-}" == "integration status" ]]; then
+  for k in pi claude codex; do [[ -e "$S/no-integration-$k" ]] && echo "$k: not installed (x)" || echo "$k: current (v1) (x)"; done; exit 0
+fi
+[[ -e "$S/server-down" ]] && err server_not_running
+ws_json() { jq -nc --arg w "$1" --arg l "$2" --arg p "$3" '{workspace_id:$w, label:$l, worktree:{checkout_path:$p}}'; }
+new_ws() {  # <path> <label> -> ws id; also makes tab and pane 1
+  local w="w$(n ws)"; ws_json "$w" "$2" "$1" >> "$S/workspaces"; echo "$w:t1" >> "$S/tabs"; echo "$w"
+}
+case "$1 ${2:-}" in
+  "workspace list") touch "$S/workspaces"; jq -sc '{type:"workspace_list", workspaces:.}' "$S/workspaces" | ok ;;
+  "workspace create")
+    w="$(new_ws "$(opt --cwd "$@")" "$(opt --label "$@")")"
+    jq -nc --arg w "$w" --arg l "$(opt --label "$@")" --arg p "$(opt --cwd "$@")" \
+      '{type:"workspace_created", workspace:{workspace_id:$w, label:$l, worktree:{checkout_path:$p}}, tab:{tab_id:($w+":t1")}, root_pane:{pane_id:($w+":p1")}}' | ok ;;
+  "worktree open")
+    p="$(opt --path "$@")"; w="$(jq -r --arg p "$p" 'select(.worktree.checkout_path == $p) | .workspace_id' "$S/workspaces" 2>/dev/null | head -1)"
+    if [[ -n "$w" ]]; then already=true; else already=false; w="$(new_ws "$p" "$(opt --label "$@")")"; fi
+    jq -nc --arg w "$w" --arg p "$p" --argjson a "$already" \
+      '{type:"worktree_opened", already_open:$a, workspace:{workspace_id:$w, worktree:{checkout_path:$p}}, tab:{tab_id:($w+":t1")}, root_pane:{pane_id:($w+":p1")}}' | ok ;;
+  "tab create")
+    w="$(opt --workspace "$@")"; t="$w:t$(( $(n "tab-$w") + 1 ))"; echo "$t" >> "$S/tabs"
+    jq -nc --arg t "$t" --arg p "$w:p$(( $(n "pane-$w") + 1 ))" '{type:"tab_created", tab:{tab_id:$t}, root_pane:{pane_id:$p}}' | ok ;;
+  "tab rename") printf '%s\t%s\n' "$3" "$4" >> "$S/renamed"; jq -nc '{type:"ok"}' | ok ;;
+  "agent start")
+    name="$3"; shift 3; kind="$(opt --kind "$@")"; pane="$(opt --pane "$@")"
+    if [[ -s "$S/busy" ]]; then b="$(cat "$S/busy")"; if (( b > 0 )); then echo $((b - 1)) > "$S/busy"; err agent_pane_busy; fi; fi
+    printf '%s\n' "$kind" > "$S/pane-$pane"; rm -f "$S/shell-$pane"
+    [[ -e "$S/not-ready" ]] && err agent_not_ready
+    jq -nc --arg p "$pane" --arg k "$kind" --arg n "$name" '{type:"agent_started", agent:{pane_id:$p, agent:$k, name:$n, agent_status:"idle"}, argv:[]}' | ok ;;
+  "agent get")
+    p="$3"; [[ -f "$S/pane-$p" && ! -e "$S/shell-$p" ]] || err agent_not_found
+    jq -nc --arg p "$p" --arg k "$(cat "$S/pane-$p")" --arg v "native-$p" --argjson nn "$([[ -e "$S/no-native" ]] && echo true || echo false)" \
+      '{type:"agent_info", agent:{pane_id:$p, agent:$k, agent_status:"idle", agent_session:(if $nn then null else {agent:$k, kind:"id", source:"herdr", value:$v} end)}}' | ok ;;
+  "agent prompt")
+    p="$3"; [[ -f "$S/pane-$p" && ! -e "$S/shell-$p" ]] || err agent_not_found
+    [[ -e "$S/blocked" || -e "$S/not-ready" ]] && err agent_blocked  # an agent at a startup dialog stays blocked
+    printf '%s\t%s\n' "$p" "$4" >> "$S/prompts"; jq -nc --arg p "$p" '{type:"agent_prompted", agent:{pane_id:$p}}' | ok ;;
+  "workspace close"|"tab close"|"pane close")
+    path="$(jq -r --arg w "${3%%:*}" 'select(.workspace_id == $w) | .worktree.checkout_path' "$S/workspaces" 2>/dev/null | head -1)"
+    printf '%s %s %s exists=%s\n' "$1" "$2" "$3" "$([[ -d "$path" ]] && echo yes || echo no)" >> "$S/closed"; jq -nc '{type:"ok"}' | ok ;;
+  *) err "unsupported: $*" ;;
+esac
+SH
+chmod +x "$FAKES/claude" "$FAKES/codex" "$FAKES/herdr"
+# hook_home <dir>: a HOME where handoff-route is registered for Claude Code and Codex.
+hook_home() {
+  mkdir -p "$1/.claude" "$1/.codex"
+  jq -n '{hooks:{Stop:[{matcher:"",hooks:[{type:"command",command:"bash \"~/.config/wk-workflow/handoff/handoff-route\""}]}]}}' | tee "$1/.claude/settings.json" > "$1/.codex/hooks.json"
+}
+REAL_HOME="$HOME"; TEST_HOME="$tmp/home-test"; hook_home "$TEST_HOME"
+# Commands run with the test HOME, unless a test sets its own HOME for the call.
+thome() { if [[ "$HOME" == "$REAL_HOME" ]]; then printf '%s' "$TEST_HOME"; else printf '%s' "$HOME"; fi; }
+herdr_calls() { cat "$FAKE_XIRP_DIR/herdr/calls" 2>/dev/null; }
+herdr_prompts() { cat "$FAKE_XIRP_DIR/herdr/prompts" 2>/dev/null; }
 
 # new_loop <dir> [review-mode] [finish-trigger] [max] : repo with a loop for change add-export
 new_loop() {
@@ -308,7 +386,7 @@ finish_template:
   prompt: "\$openspec-commit {change} delivery {delivery}"
 YAML
 }
-fresh_state() { export FAKE_XIRP_DIR="$tmp/state-$1"; rm -rf "$FAKE_XIRP_DIR"; mkdir -p "$FAKE_XIRP_DIR"; }
+fresh_state() { export FAKE_XIRP_DIR="$tmp/state-$1"; rm -rf "$FAKE_XIRP_DIR"; mkdir -p "$FAKE_XIRP_DIR/herdr"; }
 use_project() { export FAKE_PROJECT_PATH="$(dirname "$(git -C "$1" rev-parse --path-format=absolute --git-common-dir)")"; }
 # Hook mode run synchronously (HANDOFF_ROUTE_WAIT=1), as when an agent stops.
 route_in() { (cd "$1" && PATH="$FAKES:$PATH" HANDOFF_NOTIFY="$FAKES/notify.sh" HANDOFF_CREATE_WAIT=2 HANDOFF_ROUTE_WAIT=1 CHIRP_SESSION_ID="${T_SID-chirp-1}" "$ROUTE" </dev/null); }
@@ -345,8 +423,14 @@ if run_section route; then
   grep -qF 'agent-handoff/scripts/handoff-author --tool Codex --model gpt-6.1-sol' <<<"$g" && ! grep -q '{author}' <<<"$g" && ! grep -q '不要寫 null' <<<"$g" \
     && ok "reviewer prompt has it attach the Author block from handoff-author with its tool and template model" || bad "reviewer prompt has it attach the Author block from handoff-author with its tool and template model"
   grep -q 'action=reviewer:opened:sess-1 .*model=' "$A/.agent-handoff/add-export/routing.log" 2>/dev/null && ok "routing log records the action and the session's model" || bad "routing log records the action and the session's model"
+  grep -q 'action=reviewer:opened:sess-1 session=chirp-1 ' "$A/.agent-handoff/add-export/routing.log" 2>/dev/null \
+    && ok "outside herdr the routing log names the Xirp session" || bad "outside herdr the routing log names the Xirp session"
   route_in "$A"
   [[ "$(created)" == 1 ]] && ok "the same record is routed only once" || bad "the same record is routed only once"
+  HE="$tmp/route-herdr-env"; new_loop "$HE"; use_project "$HE"; fresh_state r12; hw "$HE" --role implement --status done --head HEAD
+  (export HERDR_ENV=1; T_SID=chirp-inherited route_in "$HE")
+  [[ "$(created)" == 1 ]] && grep -q 'action=reviewer:opened' "$HE/.agent-handoff/add-export/routing.log" && ! grep -q 'chirp-inherited' "$HE/.agent-handoff/add-export/routing.log" \
+    && ok "inside a herdr pane the routing log does not name an inherited Xirp session" || bad "inside a herdr pane the routing log does not name an inherited Xirp session ($(cat "$HE/.agent-handoff/add-export/routing.log" 2>/dev/null))"
 
   printf 'SECRET-FINDING detail\n' > "$A/report-r1.md"; mkdir -p "$A/.git/info"; printf '/report-*.md\n' >> "$A/.git/info/exclude"
   hw "$A" --role review --status done --verdict changes-required --head HEAD --report report-r1.md
@@ -360,6 +444,7 @@ if run_section route; then
   commit_in "$A" two; Y="$(git -C "$A" rev-parse HEAD)"; hw "$A" --role implement --status done --head HEAD
   route_in "$A"
   [[ "$(created)" == 1 ]] && msgs | grep -q $'^sess-1\t.*'"$Y" && ok "later implement handoffs message the same reviewer" || bad "later implement handoffs message the same reviewer"
+  ! grep -q 'host' "$loop" && msgs | grep -q $'^sess-1\t' && ok "a loop.yaml without host fields is routed through Xirp" || bad "a loop.yaml without host fields is routed through Xirp"
 
   before="$(msgs | wc -l)"
   hw "$A" --role review --status blocked --verdict changes-required --head HEAD --report report-r1.md --note "reply timed out"
@@ -749,8 +834,8 @@ new_project() {
   git -C "$d" add openspec; git -C "$d" commit -qm change; git -C "$d" branch feature/add-export
   mkdir -p "$d/.agent-handoff"; cp "$SKILL/roles.example.yaml" "$d/.agent-handoff/roles.yaml"
 }
-start_in() { local d="$1"; shift; (cd "$d" && PATH="$FAKES:$PATH" HANDOFF_CREATE_WAIT=2 "$START" "$@" </dev/null); }
-finish_in() { local d="$1"; shift; (cd "$d" && PATH="$FAKES:$PATH" HANDOFF_CREATE_WAIT=2 "$FINISH" "$@" </dev/null); }
+start_in() { local d="$1"; shift; (cd "$d" && HOME="$(thome)" PATH="${PF_PATH:-$FAKES:$PATH}" HANDOFF_CREATE_WAIT=2 "$START" "$@" </dev/null); }
+finish_in() { local d="$1"; shift; (cd "$d" && HOME="$(thome)" PATH="${PF_PATH:-$FAKES:$PATH}" HANDOFF_CREATE_WAIT=2 "$FINISH" "$@" </dev/null); }
 
 if run_section start; then
   printf 'launcher\n'
@@ -868,6 +953,37 @@ if run_section start; then
   R2="$tmp/start-reuse-missing"; new_project "$R2"; use_project "$R2"; fresh_state s8
   out="$(start_in "$R2" add-export --reviewer-session missing-1 2>&1)"; rc=$?
   [[ "$rc" != 0 && "$(created)" == 0 ]] && ok "an unknown reviewer session is refused" || bad "an unknown reviewer session is refused"
+
+  # Session hosts: recorded per role in loop.yaml; xirp when roles.yaml names none.
+  hl="$P-add-export/.agent-handoff/add-export/loop.yaml"
+  [[ "$(kv_get "$hl" implement_template.host)" == xirp && "$(kv_get "$hl" review_template.host)" == xirp && "$(kv_get "$hl" finish_template.host)" == xirp ]] \
+    && ok "without a host in roles.yaml every role records host xirp" || bad "without a host in roles.yaml every role records host xirp"
+  # host_roles <dir> <section> <host> [top-level lines...]: give one role a host in roles.yaml
+  host_roles() {
+    local d="$1" sec="$2" h="$3" r="$1/.agent-handoff/roles.yaml"; shift 3
+    awk -v s="$sec:" -v h="$h" '$0 == s {print; print "  host: " h; next} {print}' "$r" > "$r.tmp" && mv "$r.tmp" "$r"
+    local l; for l in "$@"; do printf '%s\n' "$l" >> "$r"; done
+  }
+  HV="$tmp/start-host-review"; new_project "$HV"; use_project "$HV"; fresh_state s9; host_roles "$HV" review herdr "herdr_session: work"
+  out="$(start_in "$HV" add-export 2>&1)"; rc=$?
+  hvl="$HV-add-export/.agent-handoff/add-export/loop.yaml"
+  [[ "$rc" == 0 && "$(created)" == 1 && "$(kv_get "$hvl" implement_template.host)" == xirp && "$(kv_get "$hvl" review_template.host)" == herdr \
+    && "$(kv_get "$hvl" implementer.session)" == sess-1 ]] && ! herdr_calls | grep -q 'agent start' \
+    && ok "a role that sets host: herdr records it, and the implementer still opens through Xirp" || { bad "a role that sets host: herdr records it, and the implementer still opens through Xirp"; printf '       %s\n' "$out"; }
+  [[ "$(kv_get "$hvl" reviewer.herdr_session)" == work ]] \
+    && ok "outside herdr the herdr role uses herdr_session from roles.yaml" || bad "outside herdr the herdr role uses herdr_session from roles.yaml ($(kv_get "$hvl" reviewer.herdr_session))"
+  HP="$tmp/start-host-pane"; new_project "$HP"; use_project "$HP"; fresh_state s10; host_roles "$HP" review herdr "herdr_session: work"
+  HERDR_ENV=1 HERDR_SESSION=dev start_in "$HP" add-export >/dev/null 2>&1
+  [[ "$(kv_get "$HP-add-export/.agent-handoff/add-export/loop.yaml" reviewer.herdr_session)" == dev ]] \
+    && ok "inside a herdr pane the herdr role uses the pane's session" || bad "inside a herdr pane the herdr role uses the pane's session"
+  HN="$tmp/start-host-default"; new_project "$HN"; use_project "$HN"; fresh_state s11; host_roles "$HN" review herdr
+  start_in "$HN" add-export >/dev/null 2>&1
+  [[ "$(kv_get "$HN-add-export/.agent-handoff/add-export/loop.yaml" reviewer.herdr_session)" == default ]] \
+    && ok "without herdr_session the herdr role uses the default session" || bad "without herdr_session the herdr role uses the default session"
+  HT="$tmp/start-host-tmux"; new_project "$HT"; use_project "$HT"; fresh_state s12; host_roles "$HT" review tmux
+  out="$(start_in "$HT" add-export 2>&1)"; rc=$?
+  [[ "$rc" != 0 && "$(created)" == 0 && ! -d "$HT-add-export" ]] && grep -q review <<<"$out" && grep -q 'xirp or herdr' <<<"$out" && [[ -z "$(herdr_calls | grep -v 'status\|integration\|version')" ]] \
+    && ok "an unknown host is refused, naming the role and the accepted hosts, and nothing opens" || { bad "an unknown host is refused, naming the role and the accepted hosts, and nothing opens"; printf '       %s\n' "$out"; }
 fi
 
 # ---------------------------------------------------------------- handoff-finish
@@ -988,13 +1104,241 @@ if run_section finish; then
     && ok "finish worktree new does nothing when A is unclean" || bad "finish worktree new does nothing when A is unclean"
 fi
 
+# ---------------------------------------------------------------- environment checks (ho_preflight, handoff-doctor)
+LIB="$ROOT/scripts/handoff/lib/handoff.sh"
+DOCTOR="$ROOT/scripts/handoff/handoff-doctor"
+# pf <dir> <file> <sections...>: run ho_preflight in <dir> with the test HOME and the fakes
+pf() { local d="$1"; shift; (cd "$d" && export HOME="$(thome)" PATH="${PF_PATH:-$FAKES:$PATH}" HANDOFF_NOTIFY="${PF_NOTIFY-$FAKES/notify.sh}"; source "$LIB"; ho_preflight "$@"); }
+doctor_in() { local d="$1"; shift; (cd "$d" && HOME="$(thome)" PATH="${PF_PATH:-$FAKES:$PATH}" HANDOFF_NOTIFY="${PF_NOTIFY-$FAKES/notify.sh}" "$DOCTOR" "$@" </dev/null); }
+# A PATH with every fake but one tool, and nothing that could hold the real one.
+path_without() { local b="$tmp/bin-without-$1"; rm -rf "$b"; cp -R "$FAKES" "$b"; rm -f "$b/$1"; ln -sf "$(command -v jq)" "$b/jq"; printf '%s' "$b:/usr/bin:/bin"; }
+
+if run_section doctor; then
+  printf 'environment checks\n'
+  source "$KV"
+  D="$tmp/doc-p"; new_project "$D"; use_project "$D"; fresh_state d1; DR="$D/.agent-handoff/roles.yaml"
+  out="$(pf "$D" "$DR" implement review finish)"; rc=$?
+  [[ "$rc" == 0 ]] && ! grep -qv '^\(ok\|warn\) \(base\|host\|harness\|role\|notify\) ' <<<"$out" \
+    && ok "a ready machine has only ok and warn lines, each with its area, and passes" || { bad "a ready machine has only ok and warn lines, each with its area, and passes"; printf '       %s\n' "$out"; }
+  grep -q '^ok role implement: .*opus.*not verified' <<<"$out" \
+    && ok "a Claude model is ok and marked not verified" || { bad "a Claude model is ok and marked not verified"; printf '       %s\n' "$out"; }
+  grep -q '^warn harness .*codex.*/hooks' <<<"$out" \
+    && ok "Codex hook trust is a warning that points to /hooks" || bad "Codex hook trust is a warning that points to /hooks"
+  grep -q '^ok harness .*codex-cli 0.130.0' <<<"$out" && grep -q '^ok host .*xirp' <<<"$out" \
+    && ok "harness lines show the tool version and the host line names Xirp" || { bad "harness lines show the tool version and the host line names Xirp"; printf '       %s\n' "$out"; }
+  out="$(PF_PATH="$(path_without codex)" pf "$D" "$DR" implement review finish)"; rc=$?
+  [[ "$rc" != 0 ]] && grep -q '^fail harness .*review.*codex' <<<"$out" \
+    && ok "a missing codex is a failed harness check naming the review role" || { bad "a missing codex is a failed harness check naming the review role"; printf '       %s\n' "$out"; }
+  out="$(FAKE_PROJECT_PATH="$tmp/nowhere" pf "$D" "$DR" implement review finish)"; rc=$?
+  [[ "$rc" != 0 ]] && grep -q '^fail host .*xirp project add' <<<"$out" \
+    && ok "an unregistered Xirp project is a failed host check that shows how to register it" || { bad "an unregistered Xirp project is a failed host check that shows how to register it"; printf '       %s\n' "$out"; }
+  out="$(PF_NOTIFY="$tmp/no-notifier.sh" pf "$D" "$DR" implement review finish)"; rc=$?
+  [[ "$rc" == 0 ]] && grep -q '^warn notify ' <<<"$out" \
+    && ok "a missing notifier is only a warning" || { bad "a missing notifier is only a warning"; printf '       %s\n' "$out"; }
+  DH="$tmp/doc-nohook"; mkdir -p "$DH"
+  out="$(HOME="$DH" pf "$D" "$DR" implement)"; rc=$?
+  [[ "$rc" != 0 ]] && grep -q '^fail harness .*claude.*settings.json' <<<"$out" \
+    && ok "a Claude Code Stop hook that is not registered is a failed harness check" || { bad "a Claude Code Stop hook that is not registered is a failed harness check"; printf '       %s\n' "$out"; }
+  out="$(pf "$D" "$tmp/doc-none.yaml" implement)"; rc=$?
+  [[ "$rc" != 0 ]] && grep -q '^fail base .*doc-none.yaml' <<<"$out" && ! grep -q '^\(ok\|fail\) \(host\|harness\|role\)' <<<"$out" \
+    && ok "a missing template file fails the base check and nothing else is checked" || { bad "a missing template file fails the base check and nothing else is checked"; printf '       %s\n' "$out"; }
+  awk '/^review:/{print; print "  host: tmux"; next} {print}' "$DR" > "$tmp/doc-tmux.yaml"
+  out="$(pf "$D" "$tmp/doc-tmux.yaml" implement review finish)"; rc=$?
+  [[ "$rc" != 0 ]] && grep -q "^fail role review.*xirp or herdr" <<<"$out" \
+    && ok "an unknown host fails the role check" || { bad "an unknown host fails the role check"; printf '       %s\n' "$out"; }
+
+  # handoff-doctor
+  out="$(doctor_in "$D" 2>&1)"; rc=$?
+  [[ "$rc" == 0 ]] && grep -q '^ok role implement' <<<"$out" && grep -q '^ok role review' <<<"$out" && grep -q '^ok role finish' <<<"$out" \
+    && ok "handoff-doctor checks the three roles of roles.yaml" || { bad "handoff-doctor checks the three roles of roles.yaml"; printf '       %s\n' "$out"; }
+  out="$(PF_PATH="$(path_without codex)" doctor_in "$D" 2>&1)"; rc=$?
+  [[ "$rc" != 0 ]] && grep -q '^fail harness .*review.*codex' <<<"$out" \
+    && ok "handoff-doctor exits non-zero on a failed check" || { bad "handoff-doctor exits non-zero on a failed check"; printf '       %s\n' "$out"; }
+  start_in "$D" add-export >/dev/null 2>&1; DA="$D-add-export"; commit_in "$DA" impl; hw "$DA" --role implement --status done --head HEAD
+  dl="$DA/.agent-handoff/add-export"; awk '/^review_template:/{print; print "  model: \"gpt-6.1-terra\""; next} {print}' "$dl/loop.yaml" > "$tmp/dl.tmp" && cat "$tmp/dl.tmp" > "$dl/loop.yaml"
+  snap="$(cd "$dl" && ls -la && cat ./*)"; ncalls="$(wc -l < "$FAKE_XIRP_DIR/calls")"
+  out="$(doctor_in "$DA" add-export 2>&1)"; rc=$?
+  [[ "$rc" == 0 ]] && grep -q '^ok role review_template\|^ok role review: .*gpt-6.1-terra' <<<"$out" \
+    && ok "handoff-doctor <change> checks the roles recorded in that loop's loop.yaml" || { bad "handoff-doctor <change> checks the roles recorded in that loop's loop.yaml"; printf '       %s\n' "$out"; }
+  [[ "$(cd "$dl" && ls -la && cat ./*)" == "$snap" ]] && ! tail -n +"$((ncalls + 1))" "$FAKE_XIRP_DIR/calls" | grep -q 'api send\|session message\|session delete' \
+    && ok "handoff-doctor changes no loop file or record and sends nothing to a session" || bad "handoff-doctor changes no loop file or record and sends nothing to a session"
+  # start, role and finish refuse on a failed check and print warnings without stopping
+  DS="$tmp/doc-start"; new_project "$DS"; use_project "$DS"; fresh_state d2
+  out="$(PF_PATH="$(path_without codex)" start_in "$DS" add-export 2>&1)"; rc=$?
+  [[ "$rc" != 0 && "$(created)" == 0 && ! -e "$DS-add-export" ]] && grep -q 'handoff-start: fail harness .*review.*codex' <<<"$out" \
+    && ok "handoff-start with a missing reviewer tool prints the failed check and opens nothing" || { bad "handoff-start with a missing reviewer tool prints the failed check and opens nothing"; printf '       %s\n' "$out"; }
+  out="$(start_in "$DS" add-export 2>&1)"; rc=$?
+  [[ "$rc" == 0 && "$(created)" == 1 ]] && grep -q 'handoff-start: warn notify' <<<"$out" && ! grep -q 'handoff-start: ok ' <<<"$out" \
+    && ok "handoff-start prints warnings and still opens the implementer" || { bad "handoff-start prints warnings and still opens the implementer"; printf '       %s\n' "$out"; }
+  dsl="$DS-add-export/.agent-handoff/add-export/loop.yaml"; before="$(cat "$dsl")"
+  out="$(cd "$DS" && HOME="$(thome)" PATH="$(path_without claude)" "$ROOT/scripts/handoff/handoff-role" add-export review claude:sonnet:high 2>&1)"; rc=$?
+  [[ "$rc" != 0 && "$(cat "$dsl")" == "$before" ]] && grep -q 'handoff-role: fail harness .*review.*claude' <<<"$out" \
+    && ok "handoff-role refuses a role whose tool is missing and keeps loop.yaml" || { bad "handoff-role refuses a role whose tool is missing and keeps loop.yaml"; printf '       %s\n' "$out"; }
+  DF="$tmp/doc-finish"; new_loop "$DF"; use_project "$DF"; fresh_state d3; rpt "$DF"
+  hw "$DF" --role implement --status done --head HEAD; hw "$DF" --role review --status done --verdict pass --head HEAD --report r.md
+  out="$(PF_PATH="$(path_without codex)" finish_in "$DF" add-export 2>&1)"; rc=$?
+  [[ "$rc" != 0 && "$(created)" == 0 ]] && grep -q 'handoff-finish: fail harness .*finish.*codex' <<<"$out" \
+    && ok "handoff-finish with a missing finish tool prints the failed check and opens nothing" || { bad "handoff-finish with a missing finish tool prints the failed check and opens nothing"; printf '       %s\n' "$out"; }
+  out="$(doctor_in "$D" no-such-change 2>&1)"; rc=$?
+  [[ "$rc" != 0 ]] && grep -q 'no-such-change' <<<"$out" && ok "handoff-doctor refuses an unknown change" || bad "handoff-doctor refuses an unknown change"
+fi
+
+# ---------------------------------------------------------------- herdr host
+HS() { printf '%s' "$FAKE_XIRP_DIR/herdr"; }
+# herdr_project <dir> [roles.yaml lines...]: project whose roles all run on herdr (plus the given lines)
+herdr_project() {
+  local d="$1" l; shift; new_project "$d"; use_project "$d"
+  { printf 'host: herdr\n'; for l in "$@"; do printf '%s\n' "$l"; done; cat "$d/.agent-handoff/roles.yaml"; } > "$d/r.tmp" && mv "$d/r.tmp" "$d/.agent-handoff/roles.yaml"
+}
+if run_section herdr; then
+  printf 'herdr host\n'
+  source "$KV"
+  # 4.2 environment checks for herdr
+  Q="$tmp/herdr-doc"; herdr_project "$Q" "herdr_session: work"; fresh_state h1; QR="$Q/.agent-handoff/roles.yaml"
+  out="$(pf "$Q" "$QR" implement review finish)"; rc=$?
+  [[ "$rc" == 0 ]] && grep -q '^ok host .*herdr 0.9.5' <<<"$out" && grep -q "^ok host .*work" <<<"$out" && ! grep -q 'xirp' <<<"$out" \
+    && herdr_calls | grep -q $'^work\tstatus server' \
+    && ok "a herdr loop checks herdr and the server of herdr_session, and not Xirp" || { bad "a herdr loop checks herdr and the server of herdr_session, and not Xirp"; printf '       %s\n' "$out"; }
+  : > "$(HS)/calls"; out="$(HERDR_ENV=1 HERDR_SESSION=dev pf "$Q" "$QR" implement review finish)"
+  herdr_calls | grep -q $'^dev\tstatus server' && ! herdr_calls | grep -q $'^work\t' \
+    && ok "inside a herdr pane the check uses the pane's session" || { bad "inside a herdr pane the check uses the pane's session"; herdr_calls | sed 's/^/       /'; }
+  touch "$(HS)/server-down"
+  out="$(pf "$Q" "$QR" implement review finish)"; rc=$?
+  [[ "$rc" != 0 ]] && grep -q '^fail host .*not running' <<<"$out" \
+    && ok "a herdr server that is not running fails the host check" || { bad "a herdr server that is not running fails the host check"; printf '       %s\n' "$out"; }
+  out="$(start_in "$Q" add-export 2>&1)"; rc=$?
+  [[ "$rc" != 0 && "$(created)" == 0 && ! -e "$Q-add-export" ]] && grep -q 'handoff-start: fail host .*not running' <<<"$out" \
+    && ! herdr_calls | grep -q 'agent start\|workspace create\|worktree open' \
+    && ok "handoff-start refuses when the herdr server is not running and opens nothing on any host" || { bad "handoff-start refuses when the herdr server is not running and opens nothing on any host"; printf '       %s\n' "$out"; }
+  rm -f "$(HS)/server-down"; touch "$(HS)/no-integration-codex"
+  out="$(pf "$Q" "$QR" implement review finish)"; rc=$?
+  [[ "$rc" == 0 ]] && grep -q '^warn harness review, finish: .*herdr.*codex.*integration' <<<"$out" && ! grep -q '^warn harness implement: .*integration' <<<"$out" \
+    && ok "a missing herdr integration for a herdr role's tool is a warning" || { bad "a missing herdr integration for a herdr role's tool is a warning"; printf '       %s\n' "$out"; }
+  out="$(PF_PATH="$(path_without herdr)" pf "$Q" "$QR" implement review finish)"; rc=$?
+  [[ "$rc" != 0 ]] && grep -q '^fail host .*herdr command was not found' <<<"$out" \
+    && ok "a missing herdr command fails the host check" || { bad "a missing herdr command fails the host check"; printf '       %s\n' "$out"; }
+  # 4.3 opening a herdr role
+  Q2="$tmp/herdr-open"; herdr_project "$Q2"; fresh_state h2; QW="$Q2-add-export"; ql="$QW/.agent-handoff/add-export/loop.yaml"
+  out="$(start_in "$Q2" add-export 2>&1)"; rc=$?
+  seq="$(herdr_calls | cut -f2 | awk '{print $1, $2}' | grep -v '^status server\|^integration status\|^--version' | paste -sd, -)"
+  [[ "$rc" == 0 && "$seq" == "workspace list,workspace create,worktree open,tab rename,agent start,agent prompt,agent get" ]] \
+    && herdr_calls | grep -qF "workspace create --cwd $Q2 --label $(basename "$Q2") --no-focus" \
+    && herdr_calls | grep -qF "worktree open --workspace w1 --path $QW --label add-export --no-focus" \
+    && ok "a missing repository workspace is opened, then the loop's worktree workspace under it" || { bad "a missing repository workspace is opened, then the loop's worktree workspace under it ($seq)"; printf '       %s\n' "$out"; herdr_calls | sed 's/^/       /'; }
+  grep -qF $'w2:t1\tclaude - impl - add-export' "$(HS)/renamed" 2>/dev/null \
+    && ok "the implementer's tab is named after the template" || bad "the implementer's tab is named after the template"
+  herdr_calls | grep 'agent start' | grep -qE 'agent start impl-[a-z0-9]+ --kind claude --pane w2:p1 -- --model opus --effort high --name claude - impl - add-export$' \
+    && ok "Claude Code starts with the template's model, effort and name" || { bad "Claude Code starts with the template's model, effort and name"; herdr_calls | grep 'agent start' | sed 's/^/       /'; }
+  herdr_prompts | grep -q $'^w2:p1\t.*openspec-apply-change add-export' && herdr_calls | grep 'agent prompt' | grep -q -- '--timeout [0-9]' && ! herdr_calls | grep 'agent prompt' | grep -q -- '--wait' \
+    && ok "the implement prompt is sent separately, with a timeout and without waiting" || bad "the implement prompt is sent separately, with a timeout and without waiting"
+  [[ -z "$(herdr_calls | grep -E 'workspace create|worktree open|tab create' | grep -v -- '--no-focus')" ]] \
+    && ok "every workspace and tab opens without focus" || bad "every workspace and tab opens without focus"
+  [[ "$(kv_get "$ql" implementer.session)" == w2:p1 && "$(kv_get "$ql" implementer.native_session)" == native-w2:p1 && "$(kv_get "$ql" implementer.herdr_session)" == default \
+    && "$(kv_get "$ql" implementer.herdr_tab)" == w2:t1 && "$(kv_get "$ql" herdr.workspaces)" == w2 && "$(kv_get "$ql" implementer.pending_prompt 2>/dev/null)" != true \
+    && "$(created)" == 0 ]] \
+    && ok "loop.yaml records the pane, herdr session, native session ID, tab and the workspace the loop opened" || { bad "loop.yaml records the pane, herdr session, native session ID, tab and the workspace the loop opened"; cat "$ql"; }
+  # The reviewer shares the worktree: it joins the same workspace in a tab of its own.
+  commit_in "$QW" impl; hw "$QW" --role implement --status done --head HEAD; route_in "$QW"
+  [[ "$(kv_get "$ql" reviewer.session)" == w2:p2 ]] && herdr_calls | grep -qF 'tab create --workspace w2 --cwd '"$QW"' --label codex - review - add-export --no-focus' \
+    && herdr_calls | grep 'agent start' | grep -qE 'review-[a-z0-9]+ --kind codex --pane w2:p2 -- -m gpt-6.1-sol -c model_reasoning_effort=high$' \
+    && herdr_prompts | grep -q $'^w2:p2\t.*change-review add-export' && [[ "$(kv_get "$ql" herdr.workspaces)" == w2 ]] \
+    && [[ "$(herdr_calls | grep -c -- "worktree open --workspace w1 --path $QW --label add-export --no-focus")" == 2 ]] \
+    && ok "a shared herdr reviewer opens in a new tab of the loop's workspace with Codex's model and effort" || { bad "a shared herdr reviewer opens in a new tab of the loop's workspace with Codex's model and effort"; herdr_calls | sed 's/^/       /'; }
+  # 5.1 messages go to the recorded pane after checking it still runs the role's agent
+  qc="$(git -C "$QW" rev-parse --path-format=absolute --git-common-dir)"; mkdir -p "$qc/info"; printf '/r.md\n' >> "$qc/info/exclude"; printf 'r\n' > "$QW/r.md"
+  hw "$QW" --role review --status done --verdict changes-required --head HEAD --report r.md; route_in "$QW"
+  herdr_prompts | grep -q $'^w2:p1\t.*changes-required' && routed "$QW" 02-review.yaml \
+    && ok "changes-required is sent to the implementer's pane" || { bad "changes-required is sent to the implementer's pane"; herdr_prompts | sed 's/^/       /'; }
+  grep -q '02-review.yaml action=implementer:messaged:w2:p1 .*model=gpt-6.1-sol(template)' "$QW/.agent-handoff/add-export/routing.log" \
+    && ok "the routing log shows a herdr role's model from its template, marked as such" || { bad "the routing log shows a herdr role's model from its template, marked as such"; cat "$QW/.agent-handoff/add-export/routing.log"; }
+  commit_in "$QW" two; hw "$QW" --role implement --status done --head HEAD; touch "$(HS)/shell-w2:p2"; np="$(herdr_prompts | wc -l)"; nn="$(ncount)"
+  route_in "$QW"
+  [[ "$(herdr_prompts | wc -l)" == "$np" && "$(ncount)" == $((nn + 1)) ]] && ! routed "$QW" 03-implement.yaml && grep -q 'reviewer:send-failed:w2:p2' "$QW/.agent-handoff/add-export/routing.log" \
+    && ok "a reviewer pane that now runs a shell gets no text and the record stays unprocessed" || { bad "a reviewer pane that now runs a shell gets no text and the record stays unprocessed"; tail -2 "$QW/.agent-handoff/add-export/routing.log"; }
+  rm -f "$(HS)/shell-w2:p2"; touch "$(HS)/blocked"; route_in "$QW"
+  [[ "$(herdr_prompts | wc -l)" == "$np" && "$(ncount)" == $((nn + 1)) ]] && ! routed "$QW" 03-implement.yaml \
+    && ok "a reviewer waiting on a dialog gets no text and no second notice" || bad "a reviewer waiting on a dialog gets no text and no second notice"
+  rm -f "$(HS)/blocked"; lset "$ql" reviewer.native_session other-session; route_in "$QW"
+  [[ "$(herdr_prompts | wc -l)" == "$np" ]] && ! routed "$QW" 03-implement.yaml \
+    && ok "a pane whose agent has another native session is treated as gone" || bad "a pane whose agent has another native session is treated as gone"
+  lset "$ql" reviewer.native_session native-w2:p2; route_in "$QW"
+  herdr_prompts | tail -1 | grep -q $'^w2:p2\t.*第 2 輪' && routed "$QW" 03-implement.yaml && herdr_calls | grep 'agent prompt w2:p2' | grep -q -- '--timeout' && ! herdr_calls | grep -q -- '--wait' \
+    && ok "a retry sends the review message to the recorded pane once" || bad "a retry sends the review message to the recorded pane once"
+  # 5.2 an agent that stops at a dialog when it opens: keep the pane, notify once, retry only the prompt
+  Q5="$tmp/herdr-trust"; herdr_project "$Q5"; fresh_state h5; Q5W="$Q5-add-export"; q5l="$Q5W/.agent-handoff/add-export/loop.yaml"
+  start_in "$Q5" add-export >/dev/null 2>&1; commit_in "$Q5W" impl; hw "$Q5W" --role implement --status done --head HEAD
+  touch "$(HS)/not-ready"; route_in "$Q5W"
+  [[ "$(kinds)" == attention && "$(kv_get "$q5l" reviewer.session)" == w2:p2 && "$(kv_get "$q5l" reviewer.pending_prompt)" == true ]] && ! routed "$Q5W" 01-implement.yaml \
+    && jt '(.detail|test("w2:t2")) and (.detail|test("codex - review - add-export")) and (.detail|test("w2[^:]")) and (.next|test("handoff-route --foreground"))' \
+    && ! herdr_prompts | grep -q '^w2:p2' && ! herdr_calls | grep -q 'send-keys' \
+    && ok "a reviewer stopped at a trust dialog keeps its pane, sends one notice naming its workspace and tab, and answers nothing" \
+    || { bad "a reviewer stopped at a trust dialog keeps its pane, sends one notice naming its workspace and tab, and answers nothing ($(kinds))"; jl | tail -1 | sed 's/^/       /'; }
+  route_in "$Q5W"; [[ "$(ncount)" == 1 ]] && ok "the dialog is notified only once" || { bad "the dialog is notified only once"; notes | cut -c1-300; cat "$Q5W/.agent-handoff/add-export/routing.log"; }
+  rm -f "$(HS)/not-ready"; ntab="$(herdr_calls | grep -c 'tab create')"
+  (cd "$Q5W" && PATH="$FAKES:$PATH" HANDOFF_NOTIFY="$FAKES/notify.sh" HANDOFF_CREATE_WAIT=2 "$ROUTE" --foreground </dev/null)
+  [[ "$(herdr_calls | grep -c 'tab create')" == "$ntab" && "$(herdr_calls | grep -c 'agent start')" == 2 && -z "$(kv_get "$q5l" reviewer.pending_prompt)" ]] \
+    && herdr_prompts | grep -q $'^w2:p2\t.*change-review add-export' && routed "$Q5W" 01-implement.yaml \
+    && ok "a foreground retry sends the review prompt to the same pane and marks the record processed" || { bad "a foreground retry sends the review prompt to the same pane and marks the record processed"; herdr_calls | sed 's/^/       /'; }
+  Q6="$tmp/herdr-trust-start"; herdr_project "$Q6"; fresh_state h6; touch "$(HS)/not-ready"
+  out="$(start_in "$Q6" add-export 2>&1)"; rc=$?
+  [[ "$rc" != 0 && "$(kv_get "$Q6-add-export/.agent-handoff/add-export/loop.yaml" implementer.pending_prompt)" == true ]] && grep -q 'w2:t1' <<<"$out" && grep -q 'handoff-start add-export' <<<"$out" \
+    && ok "an implementer stopped at a dialog keeps its pane and handoff-start says to run it again" || { bad "an implementer stopped at a dialog keeps its pane and handoff-start says to run it again"; printf '       %s\n' "$out"; }
+  rm -f "$(HS)/not-ready"; out="$(start_in "$Q6" add-export 2>&1)"; rc=$?
+  [[ "$rc" == 0 && "$(herdr_calls | grep -c 'worktree open')" == 1 && "$(kv_get "$Q6-add-export/.agent-handoff/add-export/loop.yaml" implementer.session)" == w2:p1 ]] \
+    && herdr_prompts | grep -q $'^w2:p1\t.*openspec-apply-change' \
+    && ok "running handoff-start again sends the implement prompt to the same pane" || { bad "running handoff-start again sends the implement prompt to the same pane"; printf '       %s\n' "$out"; }
+  # 5.3 a loop that uses both hosts routes each message through the receiving role's host
+  MX="$tmp/herdr-mixed"; new_loop "$MX"; use_project "$MX"; fresh_state h7; rpt "$MX"; mxl="$MX/.agent-handoff/add-export/loop.yaml"
+  lset "$mxl" review_template.host herdr; lset "$mxl" reviewer.herdr_session default
+  hw "$MX" --role implement --status done --head HEAD; route_in "$MX"
+  hw "$MX" --role review --status done --verdict changes-required --head HEAD --report r.md; route_in "$MX"
+  [[ "$(created)" == 0 && "$(kv_get "$mxl" reviewer.session)" == w1:p2 ]] && herdr_prompts | grep -q $'^w1:p2\t.*change-review' && msgs | grep -q $'^impl-1\t.*changes-required' \
+    && ok "with the implementer on Xirp and the reviewer on herdr, each message goes through its receiver's host" || { bad "with the implementer on Xirp and the reviewer on herdr, each message goes through its receiver's host"; msgs; herdr_calls | sed 's/^/       /'; }
+  NX="$tmp/herdr-noxirp"; herdr_project "$NX"; fresh_state h8; start_in "$NX" add-export >/dev/null 2>&1; NXW="$NX-add-export"
+  commit_in "$NXW" impl; hw "$NXW" --role implement --status done --head HEAD
+  (cd "$NXW" && PATH="$(path_without xirp)" HANDOFF_NOTIFY="$FAKES/notify.sh" HANDOFF_CREATE_WAIT=2 HANDOFF_ROUTE_WAIT=1 "$ROUTE" </dev/null)
+  routed "$NXW" 01-implement.yaml && herdr_prompts | grep -q $'^w2:p2\t.*change-review' \
+    && ok "a herdr loop is routed on a machine without xirp" || { bad "a herdr loop is routed on a machine without xirp"; cat "$NXW/.agent-handoff/add-export/routing.log" 2>/dev/null; }
+  # 6.1 cleanup closes what the loop opened in herdr, before it removes the worktrees
+  CLEAN="$ROOT/scripts/handoff/handoff-cleanup"
+  hclean() { local d="$1"; shift; (cd "$d" && PATH="$FAKES:$PATH" "$CLEAN" "$@" </dev/null); }
+  printf 'r\n' > "$NXW/r.md"; nxc="$(git -C "$NXW" rev-parse --path-format=absolute --git-common-dir)"; mkdir -p "$nxc/info"; printf '/r.md\n' >> "$nxc/info/exclude"
+  hw "$NXW" --role review --status done --verdict pass --head HEAD --report r.md; hw "$NXW" --role finish --status done --head HEAD
+  out="$(hclean "$NX" add-export 2>&1)"; rc=$?
+  [[ "$rc" == 0 && ! -s "$(HS)/closed" ]] && grep -q 'herdr workspace w2' <<<"$out" && ! grep -q 'herdr workspace w1' <<<"$out" \
+    && ok "the cleanup preview lists the herdr workspace the loop opened and closes nothing" || { bad "the cleanup preview lists the herdr workspace the loop opened and closes nothing"; printf '       %s\n' "$out"; }
+  out="$(hclean "$NX" add-export --yes 2>&1)"; rc=$?
+  [[ "$rc" == 0 && "$(cat "$(HS)/closed" 2>/dev/null)" == "workspace close w2 exists=yes" && ! -e "$NXW" ]] \
+    && ok "cleanup closes the loop's herdr workspace once, before its worktree is removed, and keeps the repository workspace" \
+    || { bad "cleanup closes the loop's herdr workspace once, before its worktree is removed, and keeps the repository workspace"; printf '       %s\n' "$out"; cat "$(HS)/closed" 2>/dev/null; }
+  Q8="$tmp/herdr-clean-here"; herdr_project "$Q8"; fresh_state h9; git -C "$Q8" switch -q feature/add-export
+  start_in "$Q8" add-export --worktree here >/dev/null 2>&1; commit_in "$Q8" impl; hw "$Q8" --role implement --status done --head HEAD; route_in "$Q8"
+  out="$(hclean "$Q8" add-export --abandon --yes 2>&1)"; rc=$?
+  [[ "$rc" == 0 && "$(sort "$(HS)/closed" 2>/dev/null | paste -sd, -)" == "tab close w1:t2 exists=yes,tab close w1:t3 exists=yes" && -d "$Q8/.git" ]] \
+    && ok "cleanup of a loop in the main worktree closes only the loop's tabs" || { bad "cleanup of a loop in the main worktree closes only the loop's tabs"; printf '       %s\n' "$out"; cat "$(HS)/closed" 2>/dev/null; }
+  out="$(hclean "$MX" add-export --abandon --yes 2>&1)"; rc=$?
+  [[ "$rc" == 0 ]] && grep -qx 'impl-1' "$FAKE_XIRP_DIR/deleted" 2>/dev/null && grep -q 'tab close w1:t2' "$(HS)/closed" 2>/dev/null \
+    && ok "cleanup of a loop on both hosts deletes the Xirp session and closes the herdr tab" || { bad "cleanup of a loop on both hosts deletes the Xirp session and closes the herdr tab"; printf '       %s\n' "$out"; }
+  Q3="$tmp/herdr-busy"; herdr_project "$Q3"; fresh_state h3; echo 1 > "$(HS)/busy"
+  printf '%s\n' "{\"workspace_id\":\"w9\",\"label\":\"repo\",\"worktree\":{\"checkout_path\":\"$Q3\"}}" > "$(HS)/workspaces"
+  out="$(start_in "$Q3" add-export --impl codex:gpt-x:low 2>&1)"; rc=$?
+  [[ "$rc" == 0 && "$(herdr_calls | grep -c 'agent start')" == 2 ]] && ! herdr_calls | grep -q 'workspace create' && herdr_calls | grep -qF 'worktree open --workspace w9 ' \
+    && herdr_calls | grep 'agent start' | tail -1 | grep -qE -- '--kind codex --pane w1:p1 -- -m gpt-x -c model_reasoning_effort=low$' \
+    && ok "an open repository workspace is reused, and a busy new pane is retried" || { bad "an open repository workspace is reused, and a busy new pane is retried"; printf '       %s\n' "$out"; herdr_calls | sed 's/^/       /'; }
+  Q4="$tmp/herdr-here"; herdr_project "$Q4"; fresh_state h4; git -C "$Q4" switch -q feature/add-export
+  out="$(start_in "$Q4" add-export --worktree here 2>&1)"; rc=$?; q4l="$Q4/.agent-handoff/add-export/loop.yaml"
+  [[ "$rc" == 0 && "$(kv_get "$q4l" implementer.session)" == w1:p2 && "$(kv_get "$q4l" implementer.herdr_tab)" == w1:t2 && -z "$(kv_get "$q4l" herdr.workspaces 2>/dev/null)" ]] \
+    && ! herdr_calls | grep -q 'worktree open' && herdr_calls | grep -qF "tab create --workspace w1 --cwd $Q4 --label claude - impl - add-export --no-focus" \
+    && ok "an implementer in the main worktree opens a tab in the repository workspace" || { bad "an implementer in the main worktree opens a tab in the repository workspace"; printf '       %s\n' "$out"; herdr_calls | sed 's/^/       /'; }
+fi
+
 # ---------------------------------------------------------------- user-level installer and README
 if run_section hookinstall; then
   printf 'hook installer\n'
   HH="$tmp/home"; mkdir -p "$HH/.codex"; printf 'keep = true\n' > "$HH/.codex/config.toml"
   out="$(HOME="$HH" bash "$ROOT/scripts/handoff/install.sh" 2>&1)"; rc=$?
   HOME="$HH" bash "$ROOT/scripts/handoff/install.sh" >/dev/null 2>&1
-  [[ "$rc" == 0 && -x "$HH/.local/bin/handoff-start" && -x "$HH/.local/bin/handoff-finish" && -x "$HH/.local/bin/handoff-cleanup" && -x "$HH/.local/bin/handoff-role" && -x "$HH/.config/wk-workflow/handoff/handoff-route" \
+  [[ "$rc" == 0 && -x "$HH/.local/bin/handoff-start" && -x "$HH/.local/bin/handoff-finish" && -x "$HH/.local/bin/handoff-cleanup" && -x "$HH/.local/bin/handoff-role" && -x "$HH/.local/bin/handoff-doctor" && -x "$HH/.config/wk-workflow/handoff/handoff-route" \
     && -f "$HH/.config/wk-workflow/handoff/lib/handoff.sh" && -f "$HH/.config/wk-workflow/handoff/lib/kv.sh" ]] \
     && ok "installs the commands, the hook and its libraries" || { bad "installs the commands, the hook and its libraries"; printf '       %s\n' "$out"; }
   n_claude="$(jq '[.hooks.Stop[]?.hooks[]? | select(.command | test("handoff-route"))] | length' "$HH/.claude/settings.json" 2>/dev/null)"
@@ -1045,6 +1389,10 @@ if run_section hookinstall; then
   done
   [[ -f "$readme" && -z "$missing" ]] && grep -q 'handoff-finish' "$readme" && grep -q 'handoff-role' "$readme" && grep -q 'roles.yaml' "$readme" \
     && ok "README documents every command option" || bad "README documents every command option (missing:$missing)"
+  grep -q '^## Session hosts' "$readme" && grep -q 'host: herdr' "$readme" && grep -q 'herdr_session' "$readme" && grep -q 'ghostty + tmux' "$readme" \
+    && grep -q '^# host: herdr' "$SKILL/roles.example.yaml" && grep -q '^# herdr_session:' "$SKILL/roles.example.yaml" \
+    && ok "README and roles.example.yaml document host, herdr_session and the possible ghostty + tmux host" || bad "README and roles.example.yaml document host, herdr_session and the possible ghostty + tmux host"
+  grep -q 'HERDR_ENV' "$SKILL/SKILL.md" && ok "SKILL.md explains XIRP-SESSION-ID inside a herdr pane" || bad "SKILL.md explains XIRP-SESSION-ID inside a herdr pane"
 fi
 
 # ---------------------------------------------------------------- handoff-cleanup
@@ -1154,6 +1502,7 @@ if run_section pi; then
   cat > "$FAKES/pi" <<'SH'
 #!/usr/bin/env bash
 D="${FAKE_PI_DIR:?}"; printf '%s\n' "$*" >> "$D/calls"
+[[ "$1" == --version ]] && { echo "0.80.0"; exit 0; }
 if [[ "$1" == --list-models ]]; then
   printf 'provider  model  context  max-out  thinking  images\n'
   awk -v q="$2" 'index($2, q) {printf "%s  %s  200K  64K  %s  yes\n", $1, $2, $3}' "$D/models"; exit 0
@@ -1176,7 +1525,7 @@ SH
   pi_home() {
     local h="$tmp/home-pi-$1" j='{}' d; shift; rm -rf "$h"; mkdir -p "$h/.pi/agent/extensions"; : > "$h/.pi/agent/extensions/wk-handoff.ts"
     for d in "$@"; do j="$(jq --arg d "$d" '. + {($d): true}' <<<"$j")"; done
-    printf '%s\n' "$j" > "$h/.pi/agent/trust.json"; export PI_HOME="$h"
+    printf '%s\n' "$j" > "$h/.pi/agent/trust.json"; hook_home "$h"; export PI_HOME="$h"
   }
   role_block() {  # <section> <harness> <model> <effort> [key=value...]
     local sec="$1" h="$2" m="$3" e="$4" kv; shift 4
@@ -1361,6 +1710,15 @@ SH
   pi_project "$CX_IMPL" "$CX_REV" "$CX_FIN"; out="$(pstart "$PD" add-export --impl pi:openai-codex/gpt-6.2-sol:high:api 2>&1)"; rc=$?
   [[ "$rc" != 0 && "$(created)" == 0 ]] && grep -q implement <<<"$out" && ok "a Pi override is verified like a template" || bad "a Pi override is verified like a template ($out)"
 
+  # Environment checks: a Pi role's model is verified.
+  pi_project "$CX_IMPL" "$(role_block review pi nope-1 high worktree=new provider=openai-codex billing=subscription)" "$CX_FIN"
+  out="$(HOME="$PI_HOME" pf "$PD" "$PD/.agent-handoff/roles.yaml" implement review finish)"; rc=$?
+  [[ "$rc" != 0 ]] && grep '^fail role review' <<<"$out" | grep -q 'nope-1' && grep '^fail role review' <<<"$out" | grep -q 'openai-codex' \
+    && ok "a Pi model its provider does not list fails the role check, naming role, provider and model" || { bad "a Pi model its provider does not list fails the role check, naming role, provider and model"; printf '       %s\n' "$out"; }
+  pi_project "$CX_IMPL" "$PI_REV_NEW" "$CX_FIN"
+  out="$(HOME="$PI_HOME" pf "$PD" "$PD/.agent-handoff/roles.yaml" implement review finish)"; rc=$?
+  [[ "$rc" == 0 ]] && grep -q '^ok role review: .*openai-codex/gpt-6.2-sol' <<<"$out" && grep -q '^ok harness .*pi 0.80.0' <<<"$out" \
+    && ok "a ready Pi role passes with its verified model and Pi version" || { bad "a ready Pi role passes with its verified model and Pi version"; printf '       %s\n' "$out"; }
   # 3.4 roles.example.yaml Pi example
   exf="$tmp/pi-example.yaml"
   sed -n '/^# --- Pi role example ---$/,/^# --- end of Pi role example ---$/p' "$SKILL/roles.example.yaml" | grep -E '^# ?(review:|  )' | sed -E 's/^# ?//' > "$exf"
@@ -1568,6 +1926,13 @@ SH
   out="$( (cd "$LD" && source "$LIB" && HOME="$PI_HOME" PATH="$FAKES:$PATH" HANDOFF_CREATE_WAIT=2 ho_open_role "$LD/.agent-handoff/add-export" review_template "$tmp/pi-elsewhere" "$(git -C "$LD" rev-parse HEAD)" 1 "" 2>&1) )"; rc=$?
   [[ "$rc" != 0 && "$(created)" == 0 ]] && grep -q 'trust' <<<"$out" && ok "a Pi role is not opened in a worktree the Pi trigger would not trust" || bad "a Pi role is not opened in a worktree the Pi trigger would not trust ($out)"
 
+  # A Pi reviewer on herdr starts from its worktree settings and runs Pi on the template's provider and model.
+  m=$((m + 1)); LD="$tmp/pi-h$m"; new_loop "$LD" new; use_project "$LD"; fresh_state "pih$m"; pi_state "h$m"; pi_home "h$m" "$LD"; pi_review_template "$LD"
+  lset "$LD/.agent-handoff/add-export/loop.yaml" review_template.host herdr; hw "$LD" "${REC_ARGS[@]}"; proute "$LD"
+  [[ "$(created)" == 0 && "$(jq -r .defaultModel "${LD}-review/.pi/settings.json" 2>/dev/null)" == gpt-6.2-sol ]] && routed "$LD" 01-implement.yaml \
+    && herdr_calls | grep 'agent start' | grep -qE -- '--kind pi --pane w2:p1 -- --provider openai-codex --model gpt-6.2-sol --thinking high$' \
+    && ok "a Pi reviewer on herdr gets its settings file and runs Pi on the template's provider, model and thinking" \
+    || { bad "a Pi reviewer on herdr gets its settings file and runs Pi on the template's provider, model and thinking ($(kinds))"; herdr_calls | sed 's/^/       /'; }
   # 5.4 cleanup removes the settings the loop wrote in the main worktree
   pi_state cleanup
   pi_project "$PI_IMPL" "$CX_REV" "$CX_FIN"; git -C "$PD" switch -q feature/add-export

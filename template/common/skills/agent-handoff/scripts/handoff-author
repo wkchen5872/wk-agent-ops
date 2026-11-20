@@ -4,6 +4,7 @@
 # Usage: handoff-author --tool <Codex|Claude Code|Pi> --model <model>
 #   An empty --model omits AI-Assisted-By. A Session ID the runtime does not expose is null.
 #   Reads only CODEX_SESSION_ID, CLAUDE_CODE_SESSION_ID or PI_SESSION_ID (by tool) and CHIRP_SESSION_ID.
+#   Inside a herdr pane (HERDR_ENV=1) CHIRP_SESSION_ID is inherited from the shell that started herdr, so it is not read.
 set -u
 
 tool="" model="" have_model=0
@@ -27,4 +28,5 @@ esac
 printf 'Co-Authored-By: %s\n' "$tool"
 [[ -n "$model" ]] && printf 'AI-Assisted-By: %s\n' "$model"
 printf 'SESSION-ID: %s\n' "${native:-null}"
-printf 'XIRP-SESSION-ID: %s\n' "${CHIRP_SESSION_ID:-null}"
+xirp="${CHIRP_SESSION_ID:-}"; [[ "${HERDR_ENV:-}" == 1 ]] && xirp=""
+printf 'XIRP-SESSION-ID: %s\n' "${xirp:-null}"

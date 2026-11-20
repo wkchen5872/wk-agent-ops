@@ -110,6 +110,8 @@ copy it.
 It prints the four Author lines of the `github-issue`／`github-pr` frame — `Co-Authored-By`,
 `AI-Assisted-By` (omitted when `--model` is empty), `SESSION-ID` (from `CODEX_SESSION_ID`,
 `CLAUDE_CODE_SESSION_ID` or `PI_SESSION_ID`, by tool), and `XIRP-SESSION-ID` (from `CHIRP_SESSION_ID`) — writing
-`null` for an ID the runtime does not expose. Append the output under `## Author`. When a
+`null` for an ID the runtime does not expose. Inside a herdr pane (`HERDR_ENV=1`) `XIRP-SESSION-ID`
+is always `null`: a `CHIRP_SESSION_ID` there was inherited from the shell that started herdr and
+names another session. Append the output under `## Author`. When a
 dedicated agent posts for you, save the output to a file and pass it as `author_file`. The role
 prompts give the tool and the template model; the agent does not look up its own model.

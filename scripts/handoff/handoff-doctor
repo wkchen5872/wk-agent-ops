@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Check that this machine can run an agent handoff loop, before any session opens.
+# Usage: handoff-doctor [change-id]
+#   no change id: check the three roles of <main worktree>/.agent-handoff/roles.yaml
+#   change id:    check the roles recorded in that loop's loop.yaml
+# Prints one line per check: <ok|warn|fail> <base|host|harness|role|notify> <message>.
+# Exits non-zero when any check fails. Changes no file and touches no session.
+# handoff-start, handoff-role and handoff-finish run the same checks and refuse on a failure.
+set -u
+
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "$here/lib/handoff.sh" ]]; then lib="$here/lib/handoff.sh"
+else lib="$HOME/.config/wk-workflow/handoff/lib/handoff.sh"; fi
+# shellcheck source=lib/handoff.sh
+source "$lib" || { echo "handoff-doctor: cannot load $lib" >&2; exit 1; }
+
+die() { printf 'handoff-doctor: %s\n' "$1" >&2; exit 1; }
+case "${1:-}" in -h|--help) sed -n '2,8p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;; esac
+[[ $# -le 1 ]] || die "usage: handoff-doctor [change-id]"
+
+if [[ -z "${1:-}" ]]; then
+  main="$(ho_main_worktree)" || die "not inside a Git repository"
+  ho_preflight "$main/.agent-handoff/roles.yaml" implement review finish
+else
+  [[ "$1" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]] || die "change must be a kebab-case id"
+  dir="$(ho_find_loop_dir "$1")" || die "no loop for '$1' in this repository's worktrees"
+  ho_preflight "$dir/loop.yaml" implement_template review_template finish_template
+fi

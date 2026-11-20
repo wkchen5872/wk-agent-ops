@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Install the agent handoff loop for the current user:
-#   ~/.local/bin/handoff-start, handoff-finish, handoff-cleanup, handoff-role
+#   ~/.local/bin/handoff-start, handoff-finish, handoff-cleanup, handoff-role, handoff-doctor
 #   ~/.config/wk-workflow/handoff/handoff-route, handoff-pi-trust (+ lib/)
 #   ~/.pi/agent/extensions/wk-handoff.ts (the Pi trigger)
 # and register handoff-route as a Stop hook for Claude Code and Codex. Idempotent.
@@ -21,11 +21,12 @@ install -m 0755 "$SRC/handoff-start" "$BIN_DIR/handoff-start"
 install -m 0755 "$SRC/handoff-finish" "$BIN_DIR/handoff-finish"
 install -m 0755 "$SRC/handoff-cleanup" "$BIN_DIR/handoff-cleanup"
 install -m 0755 "$SRC/handoff-role" "$BIN_DIR/handoff-role"
+install -m 0755 "$SRC/handoff-doctor" "$BIN_DIR/handoff-doctor"
 install -m 0755 "$SRC/handoff-route" "$HOME_DIR/handoff-route"
 install -m 0755 "$SRC/handoff-pi-trust" "$HOME_DIR/handoff-pi-trust"
 install -m 0644 "$SRC/lib/handoff.sh" "$HOME_DIR/lib/handoff.sh"
 install -m 0644 "$REPO/template/common/skills/agent-handoff/scripts/kv.sh" "$HOME_DIR/lib/kv.sh"
-echo "  ✓ Installed handoff-start, handoff-finish, handoff-cleanup and handoff-role in $BIN_DIR"
+echo "  ✓ Installed handoff-start, handoff-finish, handoff-cleanup, handoff-role and handoff-doctor in $BIN_DIR"
 echo "  ✓ Installed handoff-route in $HOME_DIR"
 PI_EXT_DIR="$HOME/.pi/agent/extensions"
 mkdir -p "$PI_EXT_DIR"

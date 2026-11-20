@@ -3,7 +3,7 @@
 Implementation, review, and finish agents hand work to each other without you relaying
 messages. Each agent ends its round by writing a handoff record with the `agent-handoff`
 skill; when the agent stops, a Stop hook reads that record and messages the next agent
-through Xirp, or notifies you through the existing Telegram notifier.
+through its session host — Xirp or herdr — or notifies you through the existing Telegram notifier.
 
 Scope: one person's machine. Handoff records and the hook exist only locally, so the loop never
 spans people: it commits locally and does not push, open a PR, or post reviews by default. Work
@@ -11,8 +11,10 @@ that another person implements or reviews goes through the GitHub PR instead (`g
 `change-review`), which is where the team boundary is. See
 [本機開發四階段流程](../../docs/workflow/local-development.md) for how the two fit together.
 
-Requirements: `git`, `jq`, and the `xirp` CLI for opening and messaging sessions; the `pi` CLI
-only for Pi roles. Without Xirp the hook does nothing and the manual workflow is unchanged.
+Requirements: `git`, `jq`, and the CLI of each [session host](#session-hosts) in use for opening
+and messaging sessions — `xirp` (the default) or `herdr`; the `pi` CLI only for Pi roles. When a
+record's host is not installed, the hook does nothing for it and the manual workflow is unchanged.
+Run [`handoff-doctor`](#handoff-doctor-change-id) to check a machine.
 Supported agents: Claude Code, Codex, and Pi (see [Pi roles](#pi-roles)).
 
 ## Install
@@ -63,6 +65,8 @@ fall back to whatever `/model` last saved as the tool's default.
 | `<role>.profile` | Codex only: a Codex configuration profile for that session. Use `handoff-net` for a Codex finish role with `delivery: pr`; Codex's default sandbox has no network |
 | `<role>.provider` | Pi only, required: the Pi provider that owns the model, for example `openai-codex` |
 | `<role>.billing` | Pi only, required: `subscription` (OAuth login) or `api` (API key) |
+| `host`, `<role>.host` | Where the sessions run: `xirp` (default) or `herdr`; a role's `host` overrides the top-level one. See [Session hosts](#session-hosts) |
+| `herdr_session` | The herdr session for herdr roles started outside herdr (default: herdr's default session) |
 
 Prompt placeholders: `{change}`, `{head}`, `{round}`, `{report}`, `{delivery}`, `{handoff_write}`, `{author}`.
 `{author}` tells the agent its Author identity: the tool, the template model, and the environment
@@ -71,6 +75,67 @@ Agents cannot ask Xirp from inside a sandbox, so the model comes from the templa
 appends the output of `agent-handoff/scripts/handoff-author` so the shell, not the model, copies the IDs.
 Claude Code calls skills as `/skill`, Codex as `$skill`, Pi as `/skill:<name>`. Session names default to
 `<tool> - <impl|review|finish> - <change-id>`.
+
+## Session hosts
+
+A session host is where a role's session runs and where you watch it: `xirp` (the default) or
+`herdr`. It is a property of your machine, so it lives in your untracked `roles.yaml`:
+
+```yaml
+host: herdr            # every role; omit for xirp
+herdr_session: work    # herdr session used when you start a loop outside herdr
+
+review:
+  host: xirp           # this role only
+  harness: codex
+  # ...
+```
+
+`handoff-start` records each role's host (and a herdr role's herdr session) in `loop.yaml`; every
+later step takes it from there, never from environment variables. A `loop.yaml` without host fields
+is an `xirp` loop. One loop may mix hosts, for example the implementer in Xirp and the reviewer in
+herdr: each message goes through its receiver's host. A configured host that is missing — its
+command, or for herdr the selected session's server — stops `handoff-start`, `handoff-role` and
+`handoff-finish` before anything opens; the loop never falls back to another host.
+
+**herdr session.** Inside a herdr pane the loop uses that pane's session (`HERDR_SESSION`);
+otherwise `herdr_session` from `roles.yaml`, otherwise herdr's default session. Every herdr call
+names that session.
+
+**herdr layout.** The loop groups its sessions under the repository's workspace (the workspace of
+the main worktree), opening it without focus when herdr has none:
+
+- A loop worktree (`--worktree new`, or a role with `worktree: new`) gets a linked workspace under
+  the repository workspace, labelled with the change ID. The first role uses its root pane; a
+  `shared` reviewer or finish role joins it in a new tab.
+- A loop in the main worktree (`--worktree here` there) opens its tabs in the repository workspace.
+- Each role has its own tab, named after the template's `name` (for example
+  `claude - impl - add-export`). Nothing takes focus.
+
+Each role starts as `herdr agent start` with the template's model and effort (Codex `-m`,
+`-c model_reasoning_effort=`, `-p <profile>`; Pi `--provider`, `--model`, `--thinking`, plus the
+worktree's `.pi/settings.json` as with Xirp). The first prompt is then submitted separately with
+`herdr agent prompt … --timeout`, never `--wait`. `loop.yaml` records the role's pane ID as its
+session, its tab, the herdr session, the native session ID once herdr's integration reports it, and
+the workspaces the loop opened. Before each message the hook checks that the pane still runs the
+role's tool and, once known, the same native session; otherwise nothing is sent and the record is
+retried like a failed Xirp message.
+
+**Dialogs and retry.** A new worktree makes Claude Code and Codex ask whether to trust the folder,
+and other prompts (approvals, a Codex usage notice) can appear too. The loop never answers them:
+trusting a folder is your decision. When a role stops at a dialog as it opens or when a message is
+due, its pane is kept (`<role>.pending_prompt: true`), you get one attention notice naming the
+herdr workspace, tab and pane, and the record stays unprocessed. Answer the dialog there, then run
+the retry command from the notice (`handoff-route --foreground` in that worktree); only the missing
+prompt is sent, to the same pane. When the implementer stops at a dialog, `handoff-start` keeps its
+pane and tells you so: answer it and run `handoff-start <change-id>` again. Trusting the parent
+directory of your worktrees in Claude Code and Codex beforehand avoids most of these stops.
+
+herdr needs its integration for each tool (`herdr integration install claude|codex|pi`) to report
+native session IDs; `handoff-doctor` warns when one is missing. `XIRP-SESSION-ID` is `null` in a
+herdr pane, even when herdr was started from an Xirp shell (see the `agent-handoff` skill).
+
+Possible later host: `ghostty + tmux` (tmux `send-keys` can type into a pane) is not supported yet.
 
 ## Commands
 
@@ -89,11 +154,13 @@ implementer first hands over.
 | `--impl <override>` | Override the implement template for this loop |
 | `--review <override>` | Override the review template for this loop |
 | `--finish ask\|auto` | Override `finish.trigger` for this loop |
-| `--reviewer-session <xirp-id>` | Reuse an existing Xirp session as the reviewer |
+| `--reviewer-session <id>` | Reuse an existing session on the review role's host as the reviewer: an Xirp session ID, or a herdr pane ID |
 
 An override is `claude|codex:<model>:<effort>`, or `pi:<provider>/<model>:<effort>:<billing>` for
 Pi (verified like a Pi template). Overrides are written to `loop.yaml`; `roles.yaml` is never
-changed. Every Pi role in effect is verified before any worktree or session is created.
+changed. The [`handoff-doctor`](#handoff-doctor-change-id) checks run first for all three roles in
+effect, including every Pi role's model, credential, billing and trust; a failed check creates no
+worktree, session or `loop.yaml`.
 When an override changes the tool, the prompt's leading skill call follows it (`$change-review`
 becomes `/skill:change-review` for Pi or `/change-review` for Claude Code), and a session name
 that starts with the old tool's name starts with the new one; anything else stays as written.
@@ -108,9 +175,8 @@ handoff-role add-export review pi:openai/gpt-6.2-sol:high:api
 ```
 
 The override takes the same form as `handoff-start`'s and rewrites the skill call and session
-name the same way. It runs the same checks first (template fields, one Pi role per worktree, and
-for Pi the model, credential, billing and trust) and writes the implementer's `loop.yaml` only when
-all of them pass. It refuses a role whose session is already recorded, and never changes
+name the same way. It runs the `handoff-doctor` checks for that role and the one-Pi-role-per-worktree
+check first, and writes the implementer's `loop.yaml` only when all of them pass. It refuses a role whose session is already recorded, and never changes
 `roles.yaml` or the implementer.
 
 ### `handoff-finish <change-id>`
@@ -139,7 +205,11 @@ file it would remove from a kept main worktree. With `--yes` it:
    `<main worktree>/.agent-handoff/archive/<change-id>/<worktree name>/` (still ignored by Git),
    together with every `work-items/WI-*` directory of a worktree it will remove, under `work-items/`
    there; Work Items in a kept main worktree stay where they are. If any copy fails, nothing is removed;
-2. deletes the loop's Xirp sessions;
+2. deletes the loop's Xirp sessions, and for herdr roles closes what the loop opened: the
+   workspace it opened for a loop worktree, or only the role's tab in the repository workspace
+   (a loop in the main worktree). It never closes a workspace, tab or pane the loop did not open.
+   This happens before the worktrees go, because herdr resumes the agents of open panes when its
+   server restarts;
 3. removes every loop worktree except the main worktree, without `--force`. In a kept main worktree
    it removes the `.pi/settings.json` the loop created for a Pi role (recorded in `loop.yaml` and
    unchanged); a file that existed before the loop is kept.
@@ -149,6 +219,47 @@ branch separately.
 
 For a loop that will not finish (for example a blocked finish whose PR was closed), add
 `--abandon`: the finish record is not required, and every other check and step stays the same.
+
+### `handoff-doctor [change-id]`
+
+Checks that this machine can run a loop, without opening, messaging or closing any session and
+without changing any file. Without a change ID it checks the three roles of `roles.yaml`; with one,
+the roles recorded in that loop's `loop.yaml` (overrides and `handoff-role` changes included). It
+prints one line per check, `<ok|warn|fail> <area> <message>`, and exits non-zero when any line is
+`fail`:
+
+```text
+$ handoff-doctor
+ok base git found
+ok base jq found
+ok base main worktree /Users/me/src/app
+ok base templates /Users/me/src/app/.agent-handoff/roles.yaml
+ok host implement, review, finish: xirp project 3f1c… for /Users/me/src/app
+ok harness implement: claude 2.9.0 (Claude Code)
+ok harness implement: Claude Code Stop hook registered
+ok harness review, finish: codex codex-cli 0.130.0
+ok harness review, finish: Codex Stop hook registered
+warn harness review, finish: codex hook trust cannot be checked from outside Codex; confirm "Agent 交接派送" is trusted and enabled in /hooks
+ok role implement: claude model opus at high (model not verified)
+ok role review: codex model gpt-6.1-sol at high (model not verified)
+ok role finish: codex model gpt-5.6-terra at medium (model not verified)
+warn notify no notifier at /Users/me/.config/ai-notify/hooks/telegram-notify.sh; loop notices will not be delivered (see /notify-setup)
+```
+
+| Area | Checks | A problem is |
+| --- | --- | --- |
+| `base` | `git`, `jq`, the main worktree, the template file (`roles.yaml` or `loop.yaml`). A failure here skips every other check | `fail` |
+| `host` | For each host in use. `xirp`: the command, and the main worktree registered as an Xirp project. `herdr`: the command, its version, and the server of each selected herdr session | `fail` |
+| `harness` | For each tool in use: the command and its version, and its trigger — the `handoff-route` Stop hook in `~/.claude/settings.json` or `~/.codex/hooks.json`, or the Pi trigger extension | `fail` |
+| `harness` | Codex hook trust, which cannot be read from outside Codex | `warn` |
+| `harness` | For a role on herdr: herdr's integration for its tool (`herdr integration status`); without it herdr cannot report the native session ID | `warn` |
+| `role` | Template fields, harness and host; for Pi, the repository trust, the model listed under the provider, the credential and its billing | `fail` |
+| `role` | Claude Code and Codex models, which have no reliable list to check: shown as `model not verified` | `ok` |
+| `notify` | The notifier is installed | `warn` |
+
+`handoff-start` (all three roles), `handoff-role` (the role it changes) and `handoff-finish` (the
+finish role) run the same checks before they open a session or write `loop.yaml`. They print the
+`warn` and `fail` lines, prefixed with the command name, and refuse when any line is `fail`.
 
 ## What the hook does
 
@@ -164,7 +275,8 @@ Before routing, the worktree holding the record must be clean at the record's `h
 otherwise you are notified. Each record is logged in `.agent-handoff/<change-id>/routing.log`
 with the stopping session's model: the model Xirp reports for Claude Code and Codex (for example
 `model=claude-opus-5-5`), and `provider/model` from the record's `agent` section for Pi (for
-example `model=openai/gpt-6.2-sol`). The hook never writes to GitHub and never pushes, and it
+example `model=openai/gpt-6.2-sol`). herdr reports no model, so a Claude Code or Codex role on
+herdr shows its template's model, marked `model=gpt-6.1-sol(template)`. The hook never writes to GitHub and never pushes, and it
 always exits successfully.
 
 **Continuing after `blocked`.** A blocked record stops the loop until you act; nothing resumes it
@@ -306,8 +418,11 @@ unaffected; only usage moves.
 ## Troubleshooting
 
 - **Nothing happens after an agent stops**: the session was opened before the hook was
-  installed, Codex has not trusted the hook, or the agent did not write a record. Check
-  `routing.log` and `.agent-handoff/<change-id>/`.
+  installed, Codex has not trusted the hook, the agent did not write a record, or the host of the
+  next role is not installed on this machine. Check `routing.log`, `.agent-handoff/<change-id>/`
+  and `handoff-doctor <change-id>`.
+- **A herdr role does not move on**: it may wait on a dialog (folder trust, an approval). Find the
+  tab named in the attention notice, answer it there, then run the retry command.
 - **Xirp shows no reviewer, or the implementer shows `idle` mid-round**: Xirp lists only the
   sessions it opened (the loop's implementer, reviewer, and finish sessions). Subagents an
   agent starts inside its session (for example Claude Code's Agent tool) and background

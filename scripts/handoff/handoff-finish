@@ -22,9 +22,8 @@ case "${1:-}" in
 esac
 change="$1"
 [[ "$change" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]] || { echo "handoff-finish: change must be a kebab-case id" >&2; exit 1; }
-command -v xirp >/dev/null 2>&1 || { echo "handoff-finish: xirp is required to open sessions" >&2; exit 1; }
-
 dir="$(ho_find_loop_dir "$change")" || { echo "handoff-finish: no loop for '$change' in this repository's worktrees" >&2; exit 1; }
+ho_preflight_or_refuse handoff-finish "$dir/loop.yaml" finish_template || exit 1
 rec="$(ho_newest_in_loop "$dir")"
 if [[ -n "$rec" && "$(kv_get "$rec" role)" == finish && "$(kv_get "$rec" status)" == blocked ]]; then
   if ! id="$(ho_finish_retry "$dir" 2>&1)"; then printf 'handoff-finish: cannot retry: %s\n' "$id" >&2; exit 1; fi

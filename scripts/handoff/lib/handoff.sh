@@ -192,6 +192,228 @@ ho_xirp_create() {
   done
 }
 
+# --- session hosts -----------------------------------------------------------------
+# A role runs on a host (design D1, D2). loop.yaml records it as <template>.host; a loop.yaml
+# without one is an xirp loop. Each host implements four actions; callers never call a host directly.
+ho_role_tsec() { case "$1" in implementer) echo implement_template ;; reviewer) echo review_template ;; finish) echo finish_template ;; esac; }
+ho_role_host() { ho_sec_host "$1" "$(ho_role_tsec "$2")"; }
+HANDOFF_HOSTS="xirp herdr"
+
+# ho_sec_host <file> <section>: the section's host, else the file's top-level host, else xirp.
+ho_sec_host() {
+  local h
+  h="$(kv_get "$1" "$2.host" 2>/dev/null)"; [[ -n "$h" ]] || h="$(kv_get "$1" host 2>/dev/null)"
+  printf '%s\n' "${h:-xirp}"
+}
+
+# ho_herdr_session_choice <roles-file>: inside a herdr pane its session, else herdr_session, else default.
+ho_herdr_session_choice() {
+  local s=""
+  [[ "${HERDR_ENV:-}" == 1 ]] && s="${HERDR_SESSION:-}"
+  [[ -n "$s" ]] || s="$(kv_get "$1" herdr_session 2>/dev/null)"
+  printf '%s\n' "${s:-default}"
+}
+
+# ho_host_open <host> <loop-dir> <role> <worktree> <name> <prompt> <template-file> <section>: prints the session id.
+ho_host_open() {
+  local host="$1" wt="$4" name="$5" prompt="$6" tf="$7" sec="$8" main project
+  case "$host" in
+    xirp)
+      main="$(ho_main_worktree "$wt")"; project="$(ho_xirp_project_id "$main")"
+      [[ -n "$project" ]] || { ho_err "no Xirp project registered for $main"; return 1; }
+      ho_xirp_create "$project" "$wt" "$(kv_get "$tf" "$sec.harness")" "$(kv_get "$tf" "$sec.model")" "$(kv_get "$tf" "$sec.effort")" \
+        "$name" "$prompt" "$(kv_get "$tf" "$sec.profile" 2>/dev/null || true)" "$(kv_get "$tf" "$sec.provider" 2>/dev/null || true)" ;;
+    herdr) ho_herdr_open "$2" "$3" "$wt" "$name" "$prompt" "$tf" "$sec" ;;
+    *) ho_err "unknown host: $host"; return 1 ;;
+  esac
+}
+
+# ho_host_message <host> <loop-dir> <role> <session> <text>
+ho_host_message() {
+  case "$1" in
+    xirp) ho_xirp_message "$4" "$5" ;;
+    herdr) ho_herdr_message "$2" "$3" "$4" "$5" ;;
+    *) return 1 ;;
+  esac
+}
+
+# ho_host_exists <host> <loop-dir> <role> <session>
+ho_host_exists() {
+  case "$1" in
+    xirp) ho_xirp_exists "$4" ;;
+    herdr) ho_herdr_exists "$2" "$3" "$4" ;;
+    *) return 1 ;;
+  esac
+}
+
+# ho_host_close <host> <loop-dir> <role> <session>: delete or close what the loop opened for the role.
+ho_host_close() {
+  case "$1" in
+    xirp) xirp session delete "$4" --yes >/dev/null 2>&1 ;;
+    herdr) ho_herdr_close "$2" "$3" ;;
+    *) return 1 ;;
+  esac
+}
+
+# --- herdr host (design D3–D6) ---------------------------------------------------------
+# A herdr role is identified by its pane ID (<role>.session) and, once herdr reports it, the agent's
+# native session ID (<role>.native_session). Every call names the role's herdr session explicitly.
+HANDOFF_HERDR_TIMEOUT_MS="${HANDOFF_HERDR_TIMEOUT_MS:-30000}"
+HANDOFF_NATIVE_WAIT="${HANDOFF_NATIVE_WAIT:-5}"
+
+# ho_herdr <session> <args...>: herdr's JSON answer (stdout on success, stderr on error) and its status.
+ho_herdr() { local s="$1"; shift; herdr --session "$s" "$@" </dev/null 2>&1; }
+ho_herdr_code() { jq -r '.error.code // empty' <<<"$1" 2>/dev/null; }
+ho_herdr_session_of() { local s; s="$(kv_get "$1/loop.yaml" "$2.herdr_session" 2>/dev/null)"; printf '%s\n' "${s:-default}"; }
+
+# ho_herdr_main_ws <session> <main-worktree>: the repository's workspace, opened when herdr has none.
+ho_herdr_main_ws() {
+  local hs="$1" main="$2" phys out id
+  phys="$(cd "$main" && pwd -P)"
+  out="$(ho_herdr "$hs" workspace list)" || { ho_err "herdr workspace list failed: $(ho_herdr_code "$out")"; return 1; }
+  id="$(jq -r --arg a "$main" --arg b "$phys" \
+    '[.result.workspaces[] | select(.worktree.checkout_path == $a or .worktree.checkout_path == $b)][0].workspace_id // empty' <<<"$out")"
+  if [[ -z "$id" ]]; then
+    out="$(ho_herdr "$hs" workspace create --cwd "$main" --label "$(basename "$main")" --no-focus)" \
+      || { ho_err "herdr could not open a workspace for $main: $(ho_herdr_code "$out")"; return 1; }
+    id="$(jq -r '.result.workspace.workspace_id' <<<"$out")"
+  fi
+  printf '%s\n' "$id"
+}
+
+# ho_herdr_place <loop-dir> <role> <session> <worktree> <name>: a pane for the role, in its own tab named
+# <name>, under the repository workspace (design D3). Records the pane, the tab and any workspace it opened.
+ho_herdr_place() {
+  local dir="$1" role="$2" hs="$3" wt="$4" name="$5" main mws out ws tab pane label cur
+  main="$(ho_main_worktree "$wt")"; mws="$(ho_herdr_main_ws "$hs" "$main")" || return 1
+  if [[ "$(cd "$wt" && pwd -P)" == "$(cd "$main" && pwd -P)" ]]; then
+    out="$(ho_herdr "$hs" tab create --workspace "$mws" --cwd "$wt" --label "$name" --no-focus)" \
+      || { ho_err "herdr could not open a tab in $mws: $(ho_herdr_code "$out")"; return 1; }
+  else
+    # --label also renames an open workspace, so a role sharing the implementer's worktree keeps its label.
+    label="$(kv_get "$dir/loop.yaml" change)"
+    [[ "$wt" == "$(kv_get "$dir/loop.yaml" implementer.worktree 2>/dev/null)" ]] || label="$label $role"
+    out="$(ho_herdr "$hs" worktree open --workspace "$mws" --path "$wt" --label "$label" --no-focus)" \
+      || { ho_err "herdr could not open a workspace for $wt: $(ho_herdr_code "$out")"; return 1; }
+    ws="$(jq -r '.result.workspace.workspace_id' <<<"$out")"
+    if [[ "$(jq -r '.result.already_open' <<<"$out")" == false ]]; then
+      # A workspace this loop opened: its root pane holds the first role, and cleanup closes it.
+      cur="$(kv_get "$dir/loop.yaml" herdr.workspaces 2>/dev/null)"
+      ho_loop_set "$dir" herdr.workspaces "${cur:+$cur }$ws" || return 1
+      ho_herdr "$hs" tab rename "$(jq -r '.result.tab.tab_id' <<<"$out")" "$name" >/dev/null
+    else
+      out="$(ho_herdr "$hs" tab create --workspace "$ws" --cwd "$wt" --label "$name" --no-focus)" \
+        || { ho_err "herdr could not open a tab in $ws: $(ho_herdr_code "$out")"; return 1; }
+    fi
+  fi
+  tab="$(jq -r '.result.tab.tab_id' <<<"$out")"; pane="$(jq -r '.result.root_pane.pane_id' <<<"$out")"
+  ho_loop_set "$dir" "$role.herdr_tab" "$tab" && ho_loop_set "$dir" "$role.session" "$pane" || return 1
+  printf '%s\n' "$pane"
+}
+
+# ho_herdr_agent_get <session> <pane> <harness>: the agent JSON when the pane runs that harness.
+ho_herdr_agent_get() {
+  local out
+  out="$(ho_herdr "$1" agent get "$2")" || return 1
+  [[ "$(jq -r '.result.agent.agent // empty' <<<"$out")" == "$3" ]] || return 1
+  printf '%s\n' "$out"
+}
+
+# ho_herdr_dialog <loop-dir> <role> <pane>: where the user finds a role that waits on a dialog.
+ho_herdr_dialog() {
+  local tab name
+  tab="$(kv_get "$1/loop.yaml" "$2.herdr_tab" 2>/dev/null)"
+  name="$(ho_render "$(kv_get "$1/loop.yaml" "$(ho_role_tsec "$2").name" 2>/dev/null)" "$(kv_get "$1/loop.yaml" change 2>/dev/null)" "" "" "" "")"
+  printf '%s waits on a dialog in herdr workspace %s, tab %s ("%s"), pane %s; answer it there' "$2" "${tab%%:*}" "$tab" "$name" "$3"
+}
+
+# ho_role_pending <loop-dir> <role>: an earlier open left the role's pane waiting for its first prompt.
+ho_role_pending() { [[ "$(kv_get "$1/loop.yaml" "$2.pending_prompt" 2>/dev/null)" == true ]]; }
+
+# ho_herdr_open <loop-dir> <role> <worktree> <name> <prompt> <template-file> <section>: start the
+# template's agent in the role's pane, then send the prompt (design D4). A pane left by an attempt that
+# stopped at a dialog (<role>.pending_prompt) is reused: only what is missing is done again (D5).
+ho_herdr_open() {
+  local dir="$1" role="$2" wt="$3" name="$4" prompt="$5" tf="$6" sec="$7" loop="$1/loop.yaml"
+  local hs h m e pane out code aname waited=0 native fresh=0 args=()
+  hs="$(ho_herdr_session_of "$dir" "$role")"
+  h="$(kv_get "$tf" "$sec.harness")"; m="$(kv_get "$tf" "$sec.model")"; e="$(kv_get "$tf" "$sec.effort")"
+  pane="$(kv_get "$loop" "$role.session" 2>/dev/null)"
+  if [[ -z "$pane" || "$(kv_get "$loop" "$role.pending_prompt" 2>/dev/null)" != true ]]; then
+    pane="$(ho_herdr_place "$dir" "$role" "$hs" "$wt" "$name")" || return 1
+    ho_loop_set "$dir" "$role.pending_prompt" true; fresh=1
+  fi
+  if (( fresh )) || ! ho_herdr_agent_get "$hs" "$pane" "$h" >/dev/null; then
+    case "$h" in
+      claude) args=(--model "$m" --effort "$e" --name "$name") ;;
+      codex) args=(-m "$m" -c "model_reasoning_effort=$e")
+        [[ -z "$(kv_get "$tf" "$sec.profile" 2>/dev/null)" ]] || args+=(-p "$(kv_get "$tf" "$sec.profile")") ;;
+      pi) args=(--provider "$(kv_get "$tf" "$sec.provider")" --model "$m" --thinking "$e") ;;
+      *) ho_err "unsupported harness: $h"; return 1 ;;
+    esac
+    # herdr agent names must match [a-z][a-z0-9_-]{0,31}; they are labels only, the pane identifies the role.
+    case "$role" in implementer) aname=impl ;; reviewer) aname=review ;; *) aname="$role" ;; esac
+    aname="$aname-$(printf '%s' "$pane$$$RANDOM" | shasum | cut -c1-6)"
+    until out="$(ho_herdr "$hs" agent start "$aname" --kind "$h" --pane "$pane" -- "${args[@]}")"; do
+      code="$(ho_herdr_code "$out")"
+      if [[ "$code" == agent_pane_busy ]] && (( waited < HANDOFF_CREATE_WAIT )); then sleep 1; waited=$((waited + 1)); continue; fi
+      if [[ "$code" == agent_not_ready ]]; then ho_err "$(ho_herdr_dialog "$dir" "$role" "$pane")"
+      else ho_err "herdr agent start failed in pane $pane: ${code:-no answer}"; fi
+      return 1
+    done
+  fi
+  if ! out="$(ho_herdr "$hs" agent prompt "$pane" "$prompt" --timeout "$HANDOFF_HERDR_TIMEOUT_MS")"; then
+    code="$(ho_herdr_code "$out")"
+    if [[ "$code" == agent_blocked ]]; then ho_err "$(ho_herdr_dialog "$dir" "$role" "$pane")"
+    else ho_err "herdr agent prompt failed in pane $pane: ${code:-no answer}"; fi
+    return 1
+  fi
+  ho_loop_set "$dir" "$role.pending_prompt" ""
+  # The native session ID arrives through herdr's integration hook, a little later (design D4 step 5).
+  for ((waited = 0; waited <= HANDOFF_NATIVE_WAIT; waited++)); do
+    native="$(ho_herdr "$hs" agent get "$pane" | jq -r '.result.agent.agent_session.value // empty' 2>/dev/null)"
+    [[ -n "$native" ]] && { ho_loop_set "$dir" "$role.native_session" "$native"; break; }
+    (( waited < HANDOFF_NATIVE_WAIT )) && sleep 1
+  done
+  printf '%s\n' "$pane"
+}
+
+# ho_herdr_exists <loop-dir> <role> <pane>: the pane still runs the role's agent (design D6): the same
+# harness and, when recorded, the same native session. A native ID first seen here is recorded.
+ho_herdr_exists() {
+  local dir="$1" role="$2" pane="$3" hs json have want
+  hs="$(ho_herdr_session_of "$dir" "$role")"
+  json="$(ho_herdr_agent_get "$hs" "$pane" "$(kv_get "$dir/loop.yaml" "$(ho_role_tsec "$role").harness" 2>/dev/null)")" || return 1
+  have="$(jq -r '.result.agent.agent_session.value // empty' <<<"$json")"
+  want="$(kv_get "$dir/loop.yaml" "$role.native_session" 2>/dev/null)"
+  if [[ -n "$want" ]]; then [[ "$have" == "$want" ]] || return 1
+  elif [[ -n "$have" ]]; then ho_loop_set "$dir" "$role.native_session" "$have"; fi
+  return 0
+}
+
+# ho_herdr_message <loop-dir> <role> <pane> <text>: submit only to the role's own agent. A timeout does
+# not prove the text was not delivered, so there is no --wait and no resend here.
+ho_herdr_message() {
+  ho_herdr_exists "$1" "$2" "$3" || return 1
+  ho_herdr "$(ho_herdr_session_of "$1" "$2")" agent prompt "$3" "$4" --timeout "$HANDOFF_HERDR_TIMEOUT_MS" >/dev/null
+}
+
+# ho_herdr_close_target <loop-dir> <role>: what cleanup closes for a herdr role (design D3): the workspace
+# when this loop opened it, otherwise only the role's tab. Prints "workspace <id>" or "tab <id>".
+ho_herdr_close_target() {
+  local tab ws
+  tab="$(kv_get "$1/loop.yaml" "$2.herdr_tab" 2>/dev/null)"; [[ -n "$tab" ]] || return 1
+  ws="${tab%%:*}"
+  if [[ " $(kv_get "$1/loop.yaml" herdr.workspaces 2>/dev/null) " == *" $ws "* ]]; then printf 'workspace %s\n' "$ws"
+  else printf 'tab %s\n' "$tab"; fi
+}
+
+# ho_herdr_close <loop-dir> <role>: close that target; closing it ends the agents in it.
+ho_herdr_close() {
+  local t; t="$(ho_herdr_close_target "$1" "$2")" || return 1
+  ho_herdr "$(ho_herdr_session_of "$1" "$2")" ${t% *} close "${t#* }" >/dev/null
+}
+
 # --- templates -------------------------------------------------------------------
 # ho_author <harness> <model>: tells a role to append handoff-author's output as its Author.
 # The model comes from the template (agents cannot query Xirp from a sandbox); the script copies
@@ -224,6 +446,8 @@ ho_template_check() {
   done
   [[ -z "$missing" ]] || { ho_err "$sec template is missing:$missing"; return 1; }
   [[ "$h" == claude || "$h" == codex || "$h" == pi ]] || { ho_err "$sec template harness must be claude, codex or pi, got '$h'"; return 1; }
+  v="$(ho_sec_host "$file" "$sec")"
+  [[ " $HANDOFF_HOSTS " == *" $v "* ]] || { ho_err "$sec host must be xirp or herdr, got '$v'"; return 1; }
   if [[ "$h" == pi ]]; then
     v="$(kv_get "$file" "$sec.billing")"
     [[ "$v" == subscription || "$v" == api ]] || { ho_err "$sec template billing must be subscription or api, got '$v'"; return 1; }
@@ -299,12 +523,11 @@ ho_apply_override() {
 # Open a role session from the template stored in loop.yaml. Prints the session id.
 ho_open_role() {
   local dir="$1" tsec="$2" wt="$3" head="$4" round="$5" report="$6"
-  local loop="$dir/loop.yaml" change main project name prompt delivery
+  local loop="$dir/loop.yaml" change main name prompt delivery role
   change="$(kv_get "$loop" change)"
   delivery="$(kv_get "$loop" finish.delivery 2>/dev/null || echo local)"
   main="$(ho_main_worktree "$wt")"
-  project="$(ho_xirp_project_id "$main")"
-  [[ -n "$project" ]] || { ho_err "no Xirp project registered for $main"; return 1; }
+  role="$(ho_pi_role_key "$tsec")"
   if [[ "$(kv_get "$loop" "$tsec.harness")" == pi ]]; then
     ho_pi_ready "$loop" "$tsec" "${tsec%_template}" "$main" || return 1
     ho_pi_worktree_ready "$wt" "$main" \
@@ -316,9 +539,7 @@ ho_open_role() {
   name="$(ho_render "$(kv_get "$loop" "$tsec.name")" "$change" "$head" "$round" "$report" "$delivery")"
   prompt="$(ho_render "$(kv_get "$loop" "$tsec.prompt")" "$change" "$head" "$round" "$report" "$delivery" \
     "$(kv_get "$loop" "$tsec.harness")" "$(kv_get "$loop" "$tsec.model")")"
-  ho_xirp_create "$project" "$wt" "$(kv_get "$loop" "$tsec.harness")" "$(kv_get "$loop" "$tsec.model")" \
-    "$(kv_get "$loop" "$tsec.effort")" "$name" "$prompt" "$(kv_get "$loop" "$tsec.profile" 2>/dev/null || true)" \
-    "$(kv_get "$loop" "$tsec.provider" 2>/dev/null || true)"
+  ho_host_open "$(ho_role_host "$loop" "$role")" "$dir" "$role" "$wt" "$name" "$prompt" "$loop" "$tsec"
 }
 
 # --- Pi roles ------------------------------------------------------------------------
@@ -490,6 +711,158 @@ ho_pi_record_label() {
     "$(kv_get "$rec" agent.model 2>/dev/null || echo unknown)" "$(kv_get "$rec" agent.effort 2>/dev/null || echo unknown)" "$b"
 }
 
+# --- environment checks (handoff-doctor, design D9) -------------------------------------
+# Each check prints lines "<ok|warn|fail> <area> <message>"; areas: base, host, harness, role, notify.
+# <file> is roles.yaml (sections implement, review, finish) or loop.yaml (sections *_template).
+ho_line() { printf '%s %s %s\n' "$1" "$2" "$3"; }
+ho_sec_role() { printf '%s\n' "${1%_template}"; }
+
+ho_check_base() {
+  local file="$1" t main
+  for t in git jq; do
+    if command -v "$t" >/dev/null 2>&1; then ho_line ok base "$t found"; else ho_line fail base "$t command not found"; fi
+  done
+  if main="$(ho_main_worktree)"; then ho_line ok base "main worktree $main"; else ho_line fail base "not inside a Git repository"; fi
+  if [[ -f "$file" && -r "$file" ]]; then ho_line ok base "templates $file"
+  else ho_line fail base "role templates not found: $file (run the wk-agent-ops installer, or copy roles.example.yaml there)"; fi
+}
+
+# ho_secs_with <file> <lookup-fn> <value> <sections...>: the roles (comma-separated) whose lookup is <value>.
+ho_secs_with() {
+  local file="$1" fn="$2" want="$3" sec out=""; shift 3
+  for sec in "$@"; do [[ "$("$fn" "$file" "$sec")" == "$want" ]] && out+="${out:+, }$(ho_sec_role "$sec")"; done
+  printf '%s' "$out"
+}
+ho_sec_harness() { kv_get "$1" "$2.harness" 2>/dev/null; }
+
+ho_check_host() {
+  local file="$1" h roles main project; shift
+  main="$(ho_main_worktree)"
+  for h in $HANDOFF_HOSTS; do
+    roles="$(ho_secs_with "$file" ho_sec_host "$h" "$@")"; [[ -n "$roles" ]] || continue
+    if ! command -v "$h" >/dev/null 2>&1; then ho_line fail host "$roles: the $h command was not found"; continue; fi
+    case "$h" in
+      xirp)
+        project="$(ho_xirp_project_id "$main")"
+        if [[ -n "$project" ]]; then ho_line ok host "$roles: xirp project $project for $main"
+        else ho_line fail host "$roles: no Xirp project is registered for $main (xirp project add $main)"; fi ;;
+      herdr) ho_check_herdr "$file" "$@" ;;
+    esac
+  done
+}
+
+# ho_sec_herdr_session <file> <section>: the herdr session recorded for the role in loop.yaml, or the
+# one a loop started now would choose (design D4).
+ho_sec_herdr_session() {
+  local s; s="$(kv_get "$1" "$(ho_pi_role_key "$2").herdr_session" 2>/dev/null)"
+  [[ -n "$s" ]] && printf '%s\n' "$s" || ho_herdr_session_choice "$1"
+}
+
+# ho_check_herdr <file> <sections...>: herdr's version and the server of every herdr session in use.
+ho_check_herdr() {
+  local file="$1" sec hs seen=" " roles ver; shift
+  ver="$(herdr --version </dev/null 2>/dev/null | head -1)"
+  ho_line ok host "herdr: ${ver:-version unknown}"
+  for sec in "$@"; do
+    [[ "$(ho_sec_host "$file" "$sec")" == herdr ]] || continue
+    hs="$(ho_sec_herdr_session "$file" "$sec")"; [[ "$seen" == *" $hs "* ]] && continue; seen+="$hs "
+    roles="$(ho_secs_with "$file" ho_sec_herdr_session "$hs" "$@")"
+    if herdr --session "$hs" status server --json </dev/null 2>/dev/null | jq -e '.running == true' >/dev/null 2>&1; then
+      ho_line ok host "$roles: herdr session '$hs' server is running"
+    else
+      ho_line fail host "$roles: the herdr server for session '$hs' is not running (start it with: herdr --session $hs)"
+    fi
+  done
+}
+
+# ho_hook_registered <settings-json>: handoff-route is a Stop hook there.
+ho_hook_registered() {
+  jq -e '[.hooks.Stop[]?.hooks[]? | select((.command // "") | test("handoff-route"))] | length > 0' "$1" >/dev/null 2>&1
+}
+
+ho_check_harness() {
+  local file="$1" h roles ver; shift
+  for h in claude codex pi; do
+    roles="$(ho_secs_with "$file" ho_sec_harness "$h" "$@")"; [[ -n "$roles" ]] || continue
+    if ! command -v "$h" >/dev/null 2>&1; then ho_line fail harness "$roles: the $h command was not found"; continue; fi
+    ver="$("$h" --version </dev/null 2>/dev/null | head -1)"
+    ho_line ok harness "$roles: $h ${ver:-(version unknown)}"
+    case "$h" in
+      claude) ho_hook_registered "$HOME/.claude/settings.json" && ho_line ok harness "$roles: Claude Code Stop hook registered" \
+        || ho_line fail harness "$roles: handoff-route is not a Stop hook in ~/.claude/settings.json (run scripts/handoff/install.sh)" ;;
+      codex)
+        ho_hook_registered "$HOME/.codex/hooks.json" && ho_line ok harness "$roles: Codex Stop hook registered" \
+          || ho_line fail harness "$roles: handoff-route is not a Stop hook in ~/.codex/hooks.json (run scripts/handoff/install.sh)"
+        ho_line warn harness "$roles: codex hook trust cannot be checked from outside Codex; confirm \"Agent 交接派送\" is trusted and enabled in /hooks" ;;
+      pi) [[ -f "$(ho_pi_extension)" ]] && ho_line ok harness "$roles: Pi trigger $(ho_pi_extension) installed" \
+        || ho_line fail harness "$roles: the Pi handoff trigger $(ho_pi_extension) is not installed; run scripts/handoff/install.sh" ;;
+    esac
+    ho_check_herdr_integration "$file" "$h" "$@"
+  done
+}
+
+# ho_check_herdr_integration <file> <harness> <sections...>: herdr reports a herdr role's native session
+# ID only through its integration for that tool.
+ho_check_herdr_integration() {
+  local file="$1" h="$2" sec roles=""; shift 2
+  for sec in "$@"; do
+    [[ "$(ho_sec_harness "$file" "$sec")" == "$h" && "$(ho_sec_host "$file" "$sec")" == herdr ]] && roles+="${roles:+, }$(ho_sec_role "$sec")"
+  done
+  [[ -n "$roles" ]] && command -v herdr >/dev/null 2>&1 || return 0
+  if herdr integration status </dev/null 2>/dev/null | grep -E "^$h: " | grep -qv 'not installed'; then
+    ho_line ok harness "$roles: herdr $h integration installed"
+  else
+    ho_line warn harness "$roles: herdr's $h integration is not installed (herdr integration install $h); herdr cannot report the native session ID"
+  fi
+}
+
+# ho_check_role <file> <section>: the template passed ho_template_check; check the model where possible.
+ho_check_role() {
+  local file="$1" sec="$2" role h m e p msg main
+  role="$(ho_sec_role "$sec")"; h="$(kv_get "$file" "$sec.harness")"; m="$(kv_get "$file" "$sec.model")"; e="$(kv_get "$file" "$sec.effort")"
+  if [[ "$h" != pi ]]; then ho_line ok role "$role: $h model $m at $e (model not verified)"; return 0; fi
+  p="$(kv_get "$file" "$sec.provider")"; main="$(ho_main_worktree)"
+  if ! ho_pi_repo_trusted "$main"; then ho_line fail role "$role: Pi does not trust $main yet; open Pi in that directory and run /trust"; return 0; fi
+  if msg="$(ho_pi_verify "$role" "$p" "$m" "$e" "$(kv_get "$file" "$sec.billing")" warn 2>&1)"; then
+    ho_line ok role "$role: pi $p/$m at $e verified"
+    [[ -z "$msg" ]] || ho_line warn role "${msg#⚠️  }"
+  else
+    ho_line fail role "$msg"
+  fi
+}
+
+ho_check_notify() {
+  if [[ -f "$HANDOFF_NOTIFY" ]]; then ho_line ok notify "notifier $HANDOFF_NOTIFY"
+  else ho_line warn notify "no notifier at $HANDOFF_NOTIFY; loop notices will not be delivered (see /notify-setup)"; fi
+}
+
+# ho_preflight <file> <sections...>: every check for these roles; fails when any line is fail.
+# A failed base check stops the rest; a role whose template fails is not checked further.
+ho_preflight() {
+  local file="$1" base out sec msg valid=() tfail=""; shift
+  base="$(ho_check_base "$file")"; printf '%s\n' "$base"
+  grep -q '^fail ' <<<"$base" && return 1
+  for sec in "$@"; do
+    if msg="$(ho_template_check "$file" "$sec" 2>&1)"; then valid+=("$sec"); else tfail+="fail role $(ho_sec_role "$sec"): $msg"$'\n'; fi
+  done
+  out="$(
+    if (( ${#valid[@]} )); then ho_check_host "$file" "${valid[@]}"; ho_check_harness "$file" "${valid[@]}"; fi
+    printf '%s' "$tfail"
+    for sec in "${valid[@]+"${valid[@]}"}"; do ho_check_role "$file" "$sec"; done
+    ho_check_notify
+  )"
+  printf '%s\n' "$out"
+  ! grep -q '^fail ' <<<"$out"
+}
+
+# ho_preflight_or_refuse <command> <file> <sections...>: print warn and fail lines on stderr; fail on any fail.
+ho_preflight_or_refuse() {
+  local cmd="$1" out rc; shift
+  out="$(ho_preflight "$@")"; rc=$?
+  grep -E '^(warn|fail) ' <<<"$out" | sed "s/^/$cmd: /" >&2
+  return $rc
+}
+
 # --- finish ------------------------------------------------------------------------
 # ho_finish_check <dir>: prints the passing head, or the reason it cannot finish (exit 1).
 ho_finish_check() {
@@ -546,11 +919,11 @@ ho_finish_retry() {
   ho_clean "$wt" || { echo "$wt has uncommitted changes"; return 1; }
   change="$(kv_get "$loop" change)"; note="$(kv_get "$rec" note 2>/dev/null)"
   id="$(kv_get "$loop" finish.session 2>/dev/null)"
-  if [[ -n "$id" ]] && ho_xirp_exists "$id"; then
+  if [[ -n "$id" ]] && ! ho_role_pending "$dir" finish && ho_host_exists "$(ho_role_host "$loop" finish)" "$dir" finish "$id"; then
     msg="[$change] 重試收尾。上次停在：${note}。使用者已處理並要求重試：依 openspec-commit 的中斷恢復規則，從停下的階段接續，不重複已完成的步驟。"
     msg+="封存時若有待同步的 delta spec，直接同步主規格後封存，不需詢問。$(ho_delivery_text "$(kv_get "$loop" finish.delivery 2>/dev/null || echo local)")；"
     msg+="結束時以 $HANDOFF_WRITE_REL --change $change --role finish 寫新的交件單，不要改舊的交件單。"
-    ho_xirp_message "$id" "$msg" || { echo "could not message finish session $id"; return 1; }
+    ho_host_message "$(ho_role_host "$loop" finish)" "$dir" finish "$id" "$msg" || { echo "could not message finish session $id"; return 1; }
   else
     id="$(ho_open_role "$dir" finish_template "$wt" "$(ho_head "$wt")" "$(kv_get "$rec" round)" "")" || { echo "could not open a finish session"; return 1; }
     ho_loop_set "$dir" finish.session "$id"
@@ -587,7 +960,7 @@ ho_finish_open() {
   # No finish record yet, so a recorded session that still exists is the finish in progress.
   # ponytail: an idle one that died without a record is reused too; delete it in Xirp for a new one.
   id="$(kv_get "$loop" finish.session 2>/dev/null)"
-  if [[ -n "$id" ]] && ho_xirp_exists "$id"; then printf '%s\n' "$id"; return 0; fi
+  if [[ -n "$id" ]] && ! ho_role_pending "$dir" finish && ho_host_exists "$(ho_role_host "$loop" finish)" "$dir" finish "$id"; then printf '%s\n' "$id"; return 0; fi
   impl="$(kv_get "$loop" implementer.worktree)"; change="$(kv_get "$loop" change)"
   mode="$(kv_get "$loop" finish_template.worktree 2>/dev/null || echo shared)"
   wt="$impl"

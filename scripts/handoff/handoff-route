@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Stop hook for the agent handoff loop (Claude Code and Codex; Pi through pi/wk-handoff.ts).
 # Reads the newest unprocessed handoff record in the stopping agent's worktree and
-# routes it: notify the next agent through Xirp, or notify the user, then tells the user
+# routes it: notify the next agent through its host (Xirp or herdr), or notify the user, then tells the user
 # what happened (progress or attention, see lib/handoff.sh ho_notify). Never writes to
 # GitHub, never pushes, never blocks the agent: the work runs in the background and
 # every failure ends with exit 0.
@@ -24,7 +24,6 @@ manual=0
 route() {
   # shellcheck source=lib/handoff.sh
   source "$lib" || return 0
-  command -v xirp >/dev/null 2>&1 || return 0
   local root dir
   root="$(ho_toplevel "$cwd")" || return 0
   for dir in "$root"/.agent-handoff/*/; do
@@ -40,7 +39,7 @@ route() {
 #   retry     — sending or opening failed: one attention notice (.notified), left unprocessed
 #               so a later hook run or `handoff-route --foreground` tries again.
 route_dir() {
-  local dir="$1" root="$2" rec base change role status verdict head round report loop max
+  local dir="$1" root="$2" rec base change role status verdict head round report loop max to from
   local action="" outcome="stop" kind="attention" out_verdict="" next="" detail="" why sess_json ctx
   loop="$dir/loop.yaml"
   rec="$(ho_newest_in "$dir")" || return 0
@@ -51,6 +50,9 @@ route_dir() {
   verdict="$(kv_get "$rec" verdict 2>/dev/null || true)"; head="$(kv_get "$rec" head)"
   round="$(kv_get "$rec" round)"; report="$(kv_get "$rec" report 2>/dev/null || true)"
   max="$(kv_get "$loop" max_rounds 2>/dev/null || echo 3)"
+  # The host this record would be routed through must be installed; otherwise do nothing for it.
+  case "$role" in implement) to=reviewer ;; review) [[ "$verdict" == changes-required ]] && to=implementer || to=finish ;; *) to=finish ;; esac
+  command -v "$(ho_role_host "$loop" "$to")" >/dev/null 2>&1 || return 0
 
   if [[ "$(ho_head "$root")" != "$head" ]]; then
     action="user:unclean-head"
@@ -113,14 +115,19 @@ route_dir() {
     next="請 Agent 依 agent-handoff Skill 寫新的交件單。"
   fi
 
-  # One Xirp query serves the routing log and the agent label.
-  sess_json="$(ho_xirp_session "${CHIRP_SESSION_ID:-}")" || sess_json=""
+  # One Xirp query serves the routing log and the agent label. Inside a herdr pane CHIRP_SESSION_ID
+  # is inherited from the shell that started herdr, never this agent's (design D7).
+  local xsid="${CHIRP_SESSION_ID:-}"; [[ "${HERDR_ENV:-}" == 1 ]] && xsid=""
+  sess_json="$(ho_xirp_session "$xsid")" || sess_json=""
   [[ -n "$sess_json" ]] || sess_json='{}'
   # A Pi record names its own agent (written by handoff-write from the Pi runtime).
   local label model
   model="$(jq -r '.model // "unknown"' <<<"$sess_json" 2>/dev/null || echo unknown)"
+  # herdr does not report the model: the log shows the role template's, marked as such (design D8).
+  from="$(ho_pi_role_key "$role")"
+  [[ -n "$from" && "$(ho_role_host "$loop" "$from")" == herdr ]] && model="$(kv_get "$loop" "$(ho_role_tsec "$from").model" 2>/dev/null)(template)"
   if label="$(ho_pi_record_label "$rec")"; then model="$(kv_get "$rec" agent.provider)/$(kv_get "$rec" agent.model)"; fi
-  ho_log "$dir" "$base action=$action session=${CHIRP_SESSION_ID:-unknown} model=$model"
+  ho_log "$dir" "$base action=$action session=${xsid:-unknown} model=$model"
   # Other records do not say who wrote them: only an agent's own stop on a first attempt names it.
   # A manual run or a retry may be triggered by someone else, so it names nobody.
   local agent_json="$sess_json" sid="$native_session"
@@ -146,7 +153,8 @@ to_reviewer() {
   sess="$(kv_get "$loop" reviewer.session 2>/dev/null || true)"
   wt="$(kv_get "$loop" reviewer.worktree 2>/dev/null || true)"
   mode="$(kv_get "$loop" review_template.worktree 2>/dev/null || echo shared)"
-  if [[ -z "$sess" ]]; then
+  # A reviewer whose pane waits for its first prompt (it stopped at a dialog) is opened again: only the prompt is sent.
+  if [[ -z "$sess" ]] || ho_role_pending "$dir" reviewer; then
     if [[ "$mode" == new ]]; then
       wt="${root}-review"
       # A retry finds the worktree made by an earlier attempt: move it only when it is clean.
@@ -190,7 +198,7 @@ to_reviewer() {
     git -C "$wt" checkout -q --detach "$head" 2>/dev/null \
       || { action="user:review-move-failed"; detail="無法把審查 worktree $wt 移到 ${head:0:7}，第 $round 輪未交給審查者，迴圈已停住。"; return; }
   fi
-  if ho_xirp_message "$sess" "[agent-handoff] $change 第 $round 輪：請以 change-review 審查 commit ${head}（worktree ${wt}）。完成後依 agent-handoff Skill 寫 review 交件單。"; then
+  if ho_host_message "$(ho_role_host "$loop" reviewer)" "$dir" reviewer "$sess" "[agent-handoff] $change 第 $round 輪：請以 change-review 審查 commit ${head}（worktree ${wt}）。完成後依 agent-handoff Skill 寫 review 交件單。"; then
     action="reviewer:messaged:$sess"; outcome="delivered"; kind="implement"
     next="已請審查者審查第 $round 輪。"
   else
@@ -203,7 +211,7 @@ to_implementer() {
   local dir="$1" root="$2" change="$3" head="$4" round="$5" report="$6" loop="$1/loop.yaml" sess abs
   sess="$(kv_get "$loop" implementer.session)"
   abs="$root/$report"
-  if ho_xirp_message "$sess" "[agent-handoff] $change 第 $round 輪審查結果為 changes-required。受審 commit：${head}。報告：${abs}。請依報告修正，測試通過後本機 commit，再寫 implement 交件單。"; then
+  if ho_host_message "$(ho_role_host "$loop" implementer)" "$dir" implementer "$sess" "[agent-handoff] $change 第 $round 輪審查結果為 changes-required。受審 commit：${head}。報告：${abs}。請依報告修正，測試通過後本機 commit，再寫 implement 交件單。"; then
     action="implementer:messaged:$sess"; outcome="delivered"; kind="review"; out_verdict="changes-required"
     next="已把第 $round 輪的審查報告交給實作者修正。"
   else

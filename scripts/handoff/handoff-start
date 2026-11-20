@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 # Start an implement–review–finish loop for one OpenSpec change.
 # Usage: handoff-start <change-id> [--worktree new|here] [--impl <override>]
-#                      [--review <override>] [--finish ask|auto] [--reviewer-session <xirp-id>]
+#                      [--review <override>] [--finish ask|auto] [--reviewer-session <id>]
 #   --worktree new|here         new (default): open the implementer in ../<repo>-<change-id>;
 #                               here: use the current checkout, which must be on feature/<change-id>
 #   --impl <override>           override the implement template for this loop
 #   --review <override>         override the review template for this loop
 #                               <override>: claude|codex:<model>:<effort> or pi:<provider>/<model>:<effort>:<billing>
 #   --finish ask|auto           override finish.trigger for this loop
-#   --reviewer-session <id>     reuse an existing Xirp session as the reviewer
+#   --reviewer-session <id>     reuse an existing session (Xirp ID or herdr pane) as the reviewer
 # Role templates: <main worktree>/.agent-handoff/roles.yaml (not tracked by Git).
-# Pi roles are verified first (model, credential, billing, trust, one Pi role per worktree).
+# The handoff-doctor checks run first for all three roles; any failure opens nothing.
 set -u
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -43,31 +43,38 @@ for ov in "$impl_ov" "$review_ov"; do
   [[ -z "$ov" || "$ov" =~ ^(claude|codex):[^:]+:[^:]+$ || "$ov" =~ ^pi:[^:/]+/[^:/]+:[^:]+:[^:]+$ ]] \
     || die "override must be claude|codex:<model>:<effort> or pi:<provider>/<model>:<effort>:<billing>, got '$ov'"
 done
-command -v xirp >/dev/null 2>&1 || die "xirp is required to open sessions"
-
 main="$(ho_main_worktree)" || die "not inside a Git repository"
 roles="$main/.agent-handoff/roles.yaml"
-[[ -f "$roles" ]] || die "role templates not found: $roles (run the wk-agent-ops installer, or copy roles.example.yaml there)"
+# Work on a scratch copy so overrides never touch roles.yaml; check the environment before anything else.
+scratch="$(mktemp)"; trap 'rm -f "$scratch"' EXIT
+tfile="$roles"
+if [[ -f "$roles" ]]; then
+  cp "$roles" "$scratch"; tfile="$scratch"
+  [[ -z "$impl_ov" ]] || ho_apply_override "$scratch" implement "$impl_ov"
+  [[ -z "$review_ov" ]] || ho_apply_override "$scratch" review "$review_ov"
+fi
+ho_preflight_or_refuse handoff-start "$tfile" implement review finish || exit 1
 git -C "$main" show-ref --verify --quiet "refs/heads/feature/$change" || die "branch feature/$change does not exist (run opsx-branch $change first)"
 # The implementer works on the branch, so the change must be there (planning is usually committed on it).
 git -C "$main" cat-file -e "feature/$change:openspec/changes/$change" 2>/dev/null \
   || die "no active OpenSpec change '$change' on feature/$change (commit its artifacts on that branch first)"
 
-# Work on a scratch copy so overrides never touch roles.yaml.
-scratch="$(mktemp)"; trap 'rm -f "$scratch"' EXIT
-cp "$roles" "$scratch"
-[[ -z "$impl_ov" ]] || ho_apply_override "$scratch" implement "$impl_ov"
-[[ -z "$review_ov" ]] || ho_apply_override "$scratch" review "$review_ov"
-for sec in implement review finish; do ho_template_check "$scratch" "$sec" 2>&1 | sed 's/^/handoff-start: /' >&2; [[ ${PIPESTATUS[0]} -eq 0 ]] || exit 1; done
 trigger="${finish_ov:-$(kv_get "$scratch" finish.trigger 2>/dev/null || true)}"; trigger="${trigger:-ask}"
 delivery="$(kv_get "$scratch" finish.delivery 2>/dev/null || true)"; delivery="${delivery:-local}"
 [[ "$trigger" == ask || "$trigger" == auto ]] || die "finish.trigger must be ask or auto"
 [[ "$delivery" == local || "$delivery" == pr ]] || die "finish.delivery must be local or pr"
 max="$(kv_get "$scratch" max_rounds 2>/dev/null || true)"; max="${max:-3}"
 
-if [[ -n "$reviewer" ]]; then ho_xirp_exists "$reviewer" || die "Xirp session '$reviewer' was not found"; fi
+if [[ -n "$reviewer" ]]; then
+  # The host reads the review role from a loop file; loop.yaml does not exist yet.
+  rh="$(ho_sec_host "$scratch" review)"; rdir="$(mktemp -d)"
+  printf 'review_template:\n  host: %s\n  harness: %s\nreviewer:\n  herdr_session: %s\n' "$rh" "$(kv_get "$scratch" review.harness)" \
+    "$(ho_herdr_session_choice "$scratch")" > "$rdir/loop.yaml"
+  ho_host_exists "$rh" "$rdir" reviewer "$reviewer"; found=$?; rm -rf "$rdir"
+  (( found == 0 )) || die "the review role's $rh session '$reviewer' was not found"
+fi
 
-# Pi roles, before any worktree or session (design decisions 1, 2 and 8).
+# One Pi role per worktree, before any worktree or session (design decisions 1, 2 and 8).
 pi_in_impl=()
 for sec in implement review finish; do
   [[ "$(kv_get "$scratch" "$sec.harness")" == pi ]] || continue
@@ -77,13 +84,19 @@ if (( ${#pi_in_impl[@]} > 1 )); then
   roles_txt="${pi_in_impl[*]}"
   die "Pi roles ${roles_txt// / and } would share the implementer worktree; a worktree holds one Pi role, so set worktree: new for the Pi review or finish role"
 fi
-for sec in implement review finish; do
-  [[ "$(kv_get "$scratch" "$sec.harness")" == pi ]] || continue
-  ho_pi_ready "$scratch" "$sec" "$sec" "$main" warn 2>&1 | sed 's/^/handoff-start: /' >&2; [[ ${PIPESTATUS[0]} -eq 0 ]] || exit 1
-done
 impl_pi=0; [[ "$(kv_get "$scratch" implement.harness)" == pi ]] && impl_pi=1
 if (( impl_pi )) && [[ "$mode" == new ]] && git -C "$main" cat-file -e "feature/$change:.pi/settings.json" 2>/dev/null; then
   die "feature/$change tracks .pi/settings.json; a Pi implementer cannot use this branch's worktree"
+fi
+
+# An implementer that stopped at a dialog when this loop started: send the prompt to the same pane.
+if dir="$(ho_find_loop_dir "$change" "$main")" && ho_role_pending "$dir" implementer; then
+  wt="$(kv_get "$dir/loop.yaml" implementer.worktree)"
+  id="$(ho_open_role "$dir" implement_template "$wt" "$(ho_head "$wt")" 1 "（無）")" \
+    || die "the implementer still waits; answer the dialog, then run handoff-start $change again"
+  kv_set "$dir/loop.yaml" implementer.session "$id"
+  printf 'Implement prompt sent for %s\n  implementer: %s\n  worktree:    %s\n' "$change" "$id" "$wt"
+  exit 0
 fi
 
 # Where the branch is checked out now, if anywhere.
@@ -117,19 +130,23 @@ mkdir -p "$dir"
 ho_copy_template "$scratch" implement "$loop" implement_template
 ho_copy_template "$scratch" review "$loop" review_template
 ho_copy_template "$scratch" finish "$loop" finish_template
+for sec in implement review finish; do
+  h="$(ho_sec_host "$scratch" "$sec")"; kv_set "$loop" "${sec}_template.host" "$h"
+  [[ "$h" == herdr ]] && kv_set "$loop" "$(ho_pi_role_key "$sec").herdr_session" "$(ho_herdr_session_choice "$scratch")"
+done
+impl_host="$(ho_role_host "$loop" implementer)"
 
 if (( impl_pi )) && ! ho_pi_worktree_ready "$wt" "$main"; then
   die "the Pi trigger would not trust $wt (its loop.yaml does not list it); the implementer was not opened"
 fi
-project="$(ho_xirp_project_id "$main")"
-[[ -n "$project" ]] || die "no Xirp project is registered for $main (xirp project add $main)"
 head="$(ho_head "$wt")"
 name="$(ho_render "$(kv_get "$scratch" implement.name)" "$change" "$head" 1 "（無）" "$delivery")"
 prompt="$(ho_render "$(kv_get "$scratch" implement.prompt)" "$change" "$head" 1 "（無）" "$delivery" \
   "$(kv_get "$scratch" implement.harness)" "$(kv_get "$scratch" implement.model)")"
-id="$(ho_xirp_create "$project" "$wt" "$(kv_get "$scratch" implement.harness)" "$(kv_get "$scratch" implement.model)" \
-  "$(kv_get "$scratch" implement.effort)" "$name" "$prompt" "$(kv_get "$scratch" implement.profile 2>/dev/null || true)" \
-  "$(kv_get "$scratch" implement.provider 2>/dev/null || true)")" || die "could not open the implementer session"
+if ! id="$(ho_host_open "$impl_host" "$dir" implementer "$wt" "$name" "$prompt" "$scratch" implement)"; then
+  ho_role_pending "$dir" implementer && die "the implementer's pane is kept; answer the dialog, then run handoff-start $change again"
+  die "could not open the implementer session"
+fi
 kv_set "$loop" implementer.session "$id"
 
 printf 'Loop started for %s\n  implementer: %s (%s)\n  worktree:    %s\n  loop:        %s\n  reviewer:    %s\n  finish:      trigger %s, delivery %s\n' \
