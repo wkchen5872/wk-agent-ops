@@ -121,22 +121,61 @@ sources:
 
 ## Session 宿主（host）
 
-host 是角色的 session 跑在哪裡、在哪裡看得到：`xirp`（預設）或 `herdr`。host 是機器的屬性，寫在不進 Git 的 `roles.yaml`：頂層 `host:` 套用到所有角色，角色自己的 `host:` 可以覆寫；`herdr_session:` 指定在 herdr 之外啟動時要用的 herdr session。
+host 決定角色的 Session 執行與顯示位置：`xirp`（預設）或 `herdr`。此設定為本機屬性，定義於主工作區不進 Git 的 `roles.yaml`（頂層套用全域，角色可個別覆寫）：
 
 ```yaml
-host: herdr
-herdr_session: work
+host: herdr            # 全域預設宿主：xirp 或 herdr
+herdr_session: work    # 於 herdr 外部執行時使用的 herdr session 名稱（預設為 default）
 ```
 
-- `handoff-start` 把每個角色的 host（herdr 角色另含 herdr session）寫進 `loop.yaml`，之後一律從 `loop.yaml` 讀，不從環境變數推測；沒有 host 欄位的舊 `loop.yaml` 視為 `xirp`。同一個迴圈可以混用，訊息走接收者的 host。
-- 設定的 host 不能用（指令不存在，或 herdr 的 server 沒在跑）時，`handoff-start`、`handoff-role`、`handoff-finish` 直接拒絕，不會改用其他 host。
-- herdr session：在 herdr pane 裡執行時沿用該 pane 的 session，否則用 `herdr_session`，再否則用 herdr 的預設 session。
-- herdr 配置：迴圈掛在主 repo 的 workspace 之下（沒有就自動開，不搶焦點）。新 worktree 開一個 linked workspace，標籤是 change ID；主工作區的迴圈在主 repo workspace 開 tab。每個角色一個 tab，名稱用範本的 `name`。
-- 啟動方式：`herdr agent start` 帶入範本的模型與 effort（Pi 另帶 provider，並照常寫入 worktree 的 `.pi/settings.json`），第一則 prompt 另外用 `herdr agent prompt --wait --until working --until blocked --timeout` 送出，只等到 agent 開始工作（或停在對話框）就返回，不等整個回合結束。agent 還在啟動時可能吃掉 Enter，讓文字停在輸入框；herdr 回 `agent_prompt_stalled` 時，迴圈補按一次 Enter（不重送文字）再等一次，仍然沒動靜就當作送出結果不明。`loop.yaml` 記錄 pane ID、tab、herdr session、原生 Session ID 與迴圈開的 workspace；傳訊前確認 pane 裡仍是同一個 agent。
-- **對話框與重試**：新 worktree 會讓 Claude Code、Codex 跳出信任資料夾的對話框。迴圈不替你回答：保留 pane、記 `pending_prompt`、發一次 attention 通知寫明 herdr 的 workspace、tab 與 pane；你處理完後執行通知裡的 `handoff-route --foreground`，只補送 prompt 到同一個 pane。實作者在 `handoff-start` 時卡住，就處理後再跑一次 `handoff-start <change-id>`。
-- **送出結果不明**：herdr 明確回報沒送出（`agent_blocked`、`agent_not_found`、`pane_not_found`、`server_not_running`）時照常重試；其他錯誤（例如逾時）無法確定 agent 有沒有收到，迴圈不重送，把訊息存成 `.agent-handoff/<change-id>/<role>-unconfirmed.txt` 並發一次通知。檔案存在期間，hook、`handoff-start`、`handoff-finish` 都不會再傳訊給這個角色，已開的收尾 Session 也不會被當成已開始；到該 pane 確認，沒收到就貼上檔案內容，再刪掉檔案即可繼續。
-- routing log：herdr 不回報模型，所以 herdr 角色記成 `model=<範本模型>(template)`；停止端在 herdr pane 中記成 `session=herdr:<pane ID> native=<原生 Session ID>`，不採用繼承的 Xirp ID；手動 `--foreground` 或重試可能由別人觸發，停止端記 `session=unknown`，執行者另記 `trigger=…`。對話框通知的 workspace 與 tab 由 herdr 即時查詢，重用的審查者 pane 也適用。
-- 之後可能支援的 host：`ghostty + tmux`（目前不支援）。
+### Herdr TUI 工作區與 Tab 拓撲
+
+```text
+┌────────────────────────────────────────────────────────────────────────┐
+│ Herdr TUI Server                                                       │
+│  └─ 主 Repo Workspace (wk-agent-ops)                                  │
+│      ├─ Linked Worktree Workspace (../wk-agent-ops-<change-id>)        │
+│      │   ├─ Tab 1: claude - impl - <change-id>   (實作者 Pane)        │
+│      │   ├─ Tab 2: codex - review - <change-id>  (審查者 Pane)        │
+│      │   └─ Tab 3: codex - finish - <change-id>  (收尾者 Pane)        │
+│      └─ (若為 --worktree here，則直接在主 Repo Workspace 建立 Tabs)    │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+### Herdr 提問防卡死與重試機制 (Prompt Lifecycle & Recovery)
+
+```text
+herdr agent start (開啟 Pane，注入模型/effort 參數)
+       │
+       ▼
+herdr agent prompt (--wait --until working/blocked)
+       ├─► [正常] Agent 開始工作 (working) ──────────► 進入回合執行
+       │
+       ├─► [對話框] 遇到信任/權限視窗 (agent_blocked) ─► 留 Pane + 標記 pending_prompt
+       │                                              │  發 Attention 通知 (workspace/tab/pane)
+       │                                              └─► 人工確認後 ─► handoff-route --foreground
+       │
+       └─► [吞 Enter] 停在輸入框 (agent_prompt_stalled)
+             │
+             └─► 迴圈自動補按一次 Enter (agent send-keys enter)
+                   ├─► [成功] Agent 啟動 working ───► 正常交接
+                   └─► [仍無動靜] 產生 <role>-unconfirmed.txt 鎖定防護，發送通知
+```
+
+### 宿主特性對照
+
+| 特性 | Xirp | Herdr TUI |
+|---|---|---|
+| **介面型態** | 桌面應用 / 背景程序 | Terminal UI（Workspace / Tab / Pane） |
+| **Worktree 配置** | 各 Session 獨立指向 worktree 路徑 | Linked Workspace 掛在主 Repo 下，每個角色一個 Tab |
+| **啟動等待** | 建立即返回 | 等待至 Agent 開始工作（`--until working`）或停留對話框 |
+| **模型回報** | 動態透過 API 提取執行模型與強度 | 記錄範本設定值（標註 `(template)`） |
+| **環境變數隔離** | 帶有 `CHIRP_SESSION_ID` | 隔離環境（`HERDR_ENV=1`），Xirp ID 記為 `null`，依賴 integration 回報原生 ID |
+| **清理動作** | `xirp session delete` | 關閉迴圈開立的 Workspace 或 Tab（不碰無關 Pane） |
+
+- **嚴格驗證**：若設定的 host 未安裝或 server 未啟動，指令直接終止，不猜測或自動切換 host。
+- **混合使用**：同一個迴圈支援混用宿主（例如實作者跑 Xirp、審查者跑 Herdr），訊息自動路由至接收端宿主。
+- **未來規劃**：後續評估支援 `ghostty + tmux`。
 
 ---
 
@@ -175,21 +214,60 @@ handoff-role <change-id> finish codex:gpt-6.1-sol:high
 handoff-role <change-id> review pi:openai/gpt-6.2-sol:medium:api --worktree new --replace
 ```
 
-**行為與安全檢查：**
-- **自動適應工具寫法**：重寫 Prompt 開頭的 Skill 呼叫與 Session 名稱，使其符合新工具慣例。
-- **嚴格關卡驗證**：對該角色執行 `handoff-doctor` 的檢查（範本欄位、工具與觸發器、host、Pi 模型/憑證/計費與信任狀態），再加上一個 worktree 最多一個 Pi 角色的限制；任何一項失敗，舊 session、`loop.yaml` 與交件單都不變。
-- **`--worktree new`**：讓角色改用自己的 worktree（`<worktree>-review` 或 `<worktree>-finish`），例如讓 Pi 審查者與共用實作者 worktree 的 Pi 收尾並存。可以單獨使用，也可以和 override 一起用；不支援改回共用 worktree。
-- **`--replace`**：角色的 Session 已經開啟時，沒有 `--replace` 會直接拒絕並提示這個選項。加上後依序：
-  1. 透過舊角色的 host 結束舊 session，host 確認後才繼續，否則什麼都不改。Xirp 必須刪除成功，或回覆已不再列出該 session；herdr 只關閉迴圈為該角色開的 tab，而且 pane 仍執行該角色的 agent（相同工具與原生 session）或沒有 agent 時才關，herdr 回報 pane 已不存在則不需關閉。舊 pane 未確認的提示不再擋住新角色。
-  2. 清空每一份 `loop.yaml` 中該角色的 session，再寫入新設定。既有交件單仍依寫入當時的角色設定驗證，例如審查者改成 Pi 後，先前 Codex 的 pass 仍然有效。舊 session 刪除後若寫入失敗，指令會說明並以非零結束；排除原因後再執行同一個指令即可。
+**角色更換決策與處理流程：**
 
-  **更換前先確認舊角色已停止**，避免它在被刪除前寫出交件單。
-- **自動改送等待中的交件單**：
-  - 審查：最新交件單是舊審查者已收到（見 `routing.log`）的 `implement`/`done`、之後沒有審查交件單時，在該交件單所在的 worktree 重新派送，新審查者依新範本開啟並收到這一輪。沒有開啟時交件單維持未處理，attention 通知會說明原因，排除後用 `handoff-route --foreground` 重試。新審查者 session 已收到、或可能已收到這一輪時（host 未確認 prompt，或 session ID、結果無法記錄），都不會重送，請依訊息找回或檢查該 session；交件單的處理標記無法清除時，指令會說明要從 `.routed` 移除哪一行再重試。
-  - 收尾：最新交件單是收尾 `blocked`，或者審查 pass 而且舊收尾 session 已開啟時，依 `handoff-finish` 的流程開新的收尾 session；開不起來時發 attention 通知，之後用 `handoff-finish` 重試。原本在實作者 worktree 的 `blocked` 收尾加上 `--worktree new` 時，會帶著 feature branch 移到 `<worktree>-finish`；原 worktree 必須仍包含收尾暫停的 commit、feature branch 必須停在它的 `HEAD`，新 worktree 也只在該 commit 開啟，中斷的移動由下一次 `handoff-finish` 補完。
-  - 沒有交件單在等待時，只換設定；輪到這個角色時再依新範本開啟。更換與改送都記在 `routing.log`。
-  - Pi 角色的 `.pi/settings.json`：迴圈替舊角色寫入、且之後沒被改過的檔案會被換掉；迴圈沒寫過或已被修改的檔案，若與新角色設定不同，會在刪除舊 session 之前拒絕；角色自己的 worktree 將 checkout 的 commit 若追蹤了 `.pi/settings.json`，也一樣在刪除前拒絕。
-- **不可更換的部分**：實作者不能更換，原始 `roles.yaml` 永不修改。
+```text
+       handoff-role <change-id> <review|finish> [override] [--worktree new] [--replace]
+                                      │
+                                      ▼
+                       ┌──────────────────────────────┐
+                       │ 1. 預檢門檻 (Doctor Check)   │
+                       │    範本、工具、host、Pi 憑證 │
+                       └──────────────┬───────────────┘
+                                      │ Pass (Fail 則立即終止，不改任何狀態)
+                                      ▼
+                       ┌──────────────────────────────┐
+                       │ 2. 目標角色 Session 狀態？   │
+                       └──────┬────────────────┬──────┘
+                              │                │
+                     [未開啟] │                │ [已開啟]
+                              │                ▼
+                              │   ┌──────────────────────────────┐
+                              │   │ 檢查有無 --replace 旗標？    │
+                              │   └──────┬────────────────┬──────┘
+                              │          │ 無             │ 有
+                              │          ▼                ▼
+                              │   ┌─────────────┐  ┌───────────────────────────────────┐
+                              │   │ 拒絕執行    │  │ ① 安全結束舊 Session (Xirp/Herdr) │
+                              │   │ 提示加旗標  │  │ ② 清空 loop.yaml 舊 Session 紀錄  │
+                              │   └─────────────┘  │ ③ 寫入新角色範本配置              │
+                              │                    └─────────────────┬─────────────────┘
+                              ▼                                      │
+           ┌──────────────────────────────────────┐                  │
+           │ 3. 更新 loop.yaml 範本配置           │                  │
+           └──────────────────┬───────────────────┘                  │
+                              │                                      │
+                              └──────────────────┬───────────────────┘
+                                                 │
+                                                 ▼
+                       ┌──────────────────────────────────────────────┐
+                       │ 4. 自動改送等待中的交件單                    │
+                       │    - 審查角色：重新派送等待中的 implement 單 │
+                       │    - 收尾角色：若為 blocked/pass 則重啟收尾  │
+                       └──────────────────────────────────────────────┘
+```
+
+**行為與安全規則要點：**
+- **自動適配語法**：自動重寫 Prompt 開頭的 Skill 呼叫（如 Claude `$change-review` 轉 Pi `/skill:change-review`）與 Session 名稱。
+- **嚴格預檢**：呼叫 `handoff-doctor` 執行範本、工具、host 與 Pi 憑證驗證，若不通過則完全不改動現有配置。
+- **`--worktree new`**：將角色移至獨立目錄（`<worktree>-review` 或 `<worktree>-finish`），避免多個 Pi 角色共用工作區的限制。
+- **`--replace` 汰換舊 Session**：
+  1. 透過 host 安全終止舊 Session（Xirp 刪除 Session；Herdr 關閉該角色 Tab/Pane）。
+  2. 清空 `loop.yaml` 舊 Session 記錄並寫入新範本（既有歷史交件單結論依然有效）。
+- **自動改送交件單**：
+  - 審查角色：若舊審查者有未處理的 `implement:done` 交件單，自動在新 Session 重新派送。
+  - 收尾角色：若收尾處於 `blocked` 或審查通過已開 Session，自動重啟新收尾流程。
+- **不可更換邊界**：實作者不可更換，主庫原始 `roles.yaml` 永不修改。詳細啟動拓撲請見 [啟動流程圖（SVG）](/docs/diagrams/agent-handoff-start.svg)。
 
 ### 3. `handoff-finish <change-id>`
 
@@ -221,16 +299,39 @@ handoff-cleanup <change-id> --yes
 handoff-cleanup <change-id> --abandon --yes
 ```
 
-**三道安全防護門檻：**
-1. **紀錄判定**：最新交件單必須為 `finish: done`（除非明示 `--abandon`）。
-2. **乾淨檢查**：迴圈內的所有 worktree 必須為 clean（無未提交變更），任何 dirty state 均會立即報錯終止，**絕不冒險丟失代碼**。
-3. **主工作區保護**：主 repo 工作區永遠保留，不執行 worktree remove。
+**清理回收安全門檻與執行流程：**
 
-**執行清理動作：**
-1. **歷史證據歸檔**：將 `.agent-handoff/<change-id>/` 內的交件單與審查報告拷貝至主工作區 `.agent-handoff/archive/<change-id>/` 保存；即將移除的 worktree 中的 `work-items/WI-*` 也整個複製到 `archive/<change-id>/<worktree>/work-items/`，避免審查引用的驗收證據隨 worktree 消失。主工作區的 Work Item 留在原處；預覽（不加 `--yes`）會列出將歸檔的 Work Item，以及若由本次迴圈寫入則將從保留的主工作區中移除的 `.pi/settings.json`。
-2. **刪除 Sessions**：Xirp 角色呼叫 `xirp session delete`；herdr 角色關閉迴圈自己開的東西——迴圈為 worktree 開的 workspace，或（主工作區的迴圈）只關角色的 tab；不是迴圈開的 workspace、tab、pane 一律不碰。這一步在移除 worktree 之前，因為 herdr server 重啟時會自動恢復仍開著的 pane 裡的 agent。herdr 回報目標已不存在視為已關閉；herdr 不在、server 沒在跑或關閉失敗時，cleanup 以非零狀態停下，不移除任何 worktree，修好後再跑一次。
-3. **移除臨時 Worktrees**：安全移除額外建立的實作與收尾 worktree。
-4. **保留分支**：`feature/<change-id>` 分支與已提交 commit 永遠保留，由團隊另行授權 merge 與清理。
+```text
+           handoff-cleanup <change-id> [--abandon] [--yes]
+                                 │
+                                 ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     【三道安全防護門檻】                        │
+│ 1. 紀錄判定：最新交件單須為 finish:done（除非明示 --abandon）   │
+│ 2. 乾淨檢查：所有 Worktree 須為 Clean（無未提交變更，否則終止） │
+│ 3. 主庫保護：主 Repo 工作區永遠保留，絕不執行 worktree remove   │
+└────────────────────────────────┬────────────────────────────────┘
+                                 │ 通過門檻且帶有 --yes
+                                 │ （未帶 --yes 僅執行 Dry Run 預覽，不改狀態）
+                                 ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     【執行三階段清理回收】                      │
+│ 步驟 1. 歷史證據歸檔：                                          │
+│         - 交件單與審查報告拷貝至主庫 archive/<change-id>/       │
+│         - 臨時 Worktree 中的 WI-* 證據同步歸檔                  │
+│ 步驟 2. 釋放 Session：                                          │
+│         - Xirp：呼叫 xirp session delete                        │
+│         - Herdr：關閉迴圈開立的專屬 Workspace 或 Tab            │
+│ 步驟 3. 移除臨時工作區：                                        │
+│         - 安全刪除額外建立的實作與收尾 Worktree                 │
+│         - feature/<change-id> 分支與已提交 Commit 永遠保留      │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**清理行為與安全要點：**
+- **歷史證據永存**：臨時 Worktree 內的 `work-items/WI-*` 與交件單均複製歸檔至主工作區 `.agent-handoff/archive/`，驗收與審查軌跡不隨目錄刪除而遺失。
+- **精準釋放 Session**：只關閉迴圈自行建立的 Session/Workspace/Tab，絕不影響其他外部 Pane 或現存工作。
+- **代碼絕對安全**：任何 Worktree 存在未暫存或未提交代碼時立即報錯終止；`feature/<change-id>` 分支保留交由團隊後續合併。完整清理拓撲請見 [收尾清理圖（SVG）](/docs/diagrams/agent-handoff-cleanup.svg)。
 
 ### 5. `handoff-doctor [change-id]`
 
@@ -311,28 +412,71 @@ author:
 
 `harness: pi` 的角色在 Pi 中執行，另需 `provider` 與 `billing`；`model` 是該 provider 底下的精確模型 ID（不加 `provider/`、不用別名），`effort` 為 Pi 的 thinking 等級（`off`、`minimal`、`low`、`medium`、`high`、`xhigh`、`max`）。迴圈在三個關口確認角色跑在宣告的 provider、模型與計費方式上，對不上就停下：[^handoff-scripts]
 
-1. **`handoff-start`**：在建立 worktree 與開 Session 前，驗證所有 Pi 角色——一個 worktree 最多一個 Pi 角色、Pi 觸發器已安裝、主 worktree 已在 Pi 信任、模型列在該 provider 下、`pi auth check` 為 `ready` 且 `oauth` 對 `subscription`、`api_key` 對 `api`。
-2. **路由交件單**：交件單的 `agent` 區塊與 `loop.yaml` 的範本不同（例如中途 `/model`），或缺少、為 `unknown`，就不接棒，通知你一次。
-3. **hook 開 Pi 審查或收尾前**：重做第 1 點的驗證；失敗時通知一次、交件單保留，修正後下次觸發會重試。
+```text
+                 Pi 角色三道檢驗關卡 (3-Gate Validation)
+                                 │
+   1. 啟動預檢 (handoff-start)   │ 驗證 roles.yaml/loop.yaml
+ ┌───────────────────────────────┴───────────────────────────────┐
+ │ • 一個 worktree 最多一個 Pi 角色（第二個須設 worktree: new）  │
+ │ • Pi 觸發器已安裝、主 worktree 已在 Pi 信任 (/trust)          │
+ │ • 模型存在於 provider 下、pi auth check 狀態為 ready          │
+ └───────────────────────────────┬───────────────────────────────┘
+                                 │ 通過後建立 Worktree / Session
+   2. 路由檢驗 (Stop Hook)       │ 檢查交件單 YAML 的 agent 區塊
+ ┌───────────────────────────────┴───────────────────────────────┐
+ │ • 實際執行的 provider/model/effort 與 loop.yaml 範本完全相符  │
+ │ • 若中途被手動切換模型或為 unknown，立即停下並發送 Attention  │
+ └───────────────────────────────┬───────────────────────────────┘
+                                 │ 相符才接棒
+   3. 開啟前複檢 (handoff-route) │ 開啟 Pi Reviewer / Finish Session 前
+ ┌───────────────────────────────┴───────────────────────────────┐
+ │ • 重新確認環境、憑證與計費方式（OAuth 對 subscription）       │
+ │ • 驗證失敗則保留交件單並發通知，排除後自動重試                │
+ └───────────────────────────────────────────────────────────────┘
+```
 
-Xirp 目前不套用 Pi 1.x 的啟動選項，所以角色從寫入其 worktree 的 `.pi/settings.json` 啟動；這個檔案以 repo 本機的 `info/exclude` 忽略、不進 Git。因此一個 worktree 最多一個 Pi 角色：Pi 角色可以和 Claude Code、Codex 共用 worktree，第二個 Pi 角色要設 `worktree: new`。
-
-Pi 會在有 `.pi/settings.json` 或 `.agents/skills` 的資料夾詢問是否信任。Pi 觸發器（`~/.pi/agent/extensions/wk-handoff.ts`）只在「主 repo 已被你在 Pi 信任、未被追蹤的 `loop.yaml` 列出這個 worktree」時替該 Session 回答信任，不寫入 `trust.json`。第一次使用 Pi 角色前，請在主 worktree 以 Pi 執行一次 `/trust`；安裝後已開啟的 Pi Session 需 `/reload`。
-
-`anthropic` 搭配 `subscription` 且認證為 `oauth` 時照常執行，但 `handoff-start` 會提醒可能使用付費的 extra usage。角色內 subagent 會換 provider 的三種例外，見 [Pi roles](/scripts/handoff/README.md#pi-roles)。
-
-### 費用與 Context 膨脹考量
-
-- **審查 Session 延續性**：審查者在整個交接迴圈中保持同一個 Session，因此 Context 會隨著輪數增加而膨脹；當 Context 填滿時，Pi 會自動執行 Compaction 壓縮並繼續工作。
-- **Provider Context Window 差異**：不同 Provider 提供的 Context 上限不同（可透過 `pi --list-models <model>` 查詢；例如同一個模型在 `openai` 下的 Window 可能小於 `openai-codex`）。
-- **計費模式選擇**：若使用 `billing: api`，每輪審查都會產生 API 調用費用，且 Pi 會將使用者的全域 Packages 與 Skills 注入每個角色 Session 增加 Token 消耗。因此長輪數迴圈強烈建議優先選用 `subscription`，並選擇 Window 較大的 Provider。
-- **Subagent 行為**：角色內的 subagent 不會被鎖定在特定 provider，但交件單依然由外層 Session 撰寫，不影響路由判定。
+**配置與運行要點：**
+- **單一 Worktree 限制**：Xirp 從本機 `.pi/settings.json`（由 repo `info/exclude` 忽略、不進 Git）啟動角色，因此一個 worktree 僅限一個 Pi 角色；多個 Pi 角色需使用 `worktree: new` 分離目錄。
+- **資料夾信任授權**：首次使用前需在主庫以 Pi 執行 `/trust`；全域擴充（`wk-handoff.ts`）會在主庫已信任且 `loop.yaml` 列出該 worktree 時自動授權，不需反覆手動信任。
+- **費用與 Context 考量**：
+  - 審查 Session 貫穿全迴圈，長輪數建議優先選用 `subscription`（OAuth 登入）與大 Context Window provider，避免 API 費用與 Context 膨脹。
+  - 當 Context 滿時 Pi 會自動 compaction；角色內 subagent 不會鎖定特定 provider，交件單一律由外層 Session 撰寫。詳細細節見 [Pi roles](/scripts/handoff/README.md#pi-roles)。
 
 ---
 
 ## 交接迴圈即時通知 (Notifications)
 
-交接迴圈內建 Telegram 結構化事件通知，由 Stop 鉤子（`scripts/handoff/handoff-route`）在每次路由交件單時自動送出。通知具備專屬的進度回報、不可關閉的停點安全保護、Agent 身分標記與失敗重試保障。[^notify-telegram]
+交接迴圈內建 Telegram 結構化事件通知，由 Stop 鉤子（`scripts/handoff/handoff-route`）在每次路由交件單時自動送出。通知具備專屬的進度回報、不可關閉的停點安全保護、Agent 身分標記與失敗重試保障。完整通知系統整體架構請見 [通知架構與延遲授權流程（SVG）](/docs/diagrams/notify-architecture.svg)。[^notify-telegram]
+
+```text
+                     交接迴圈事件通知流與安全保護
+                                   │
+                    ┌──────────────┴──────────────┐
+                    │  Stop Hook 捕獲交件單狀態   │
+                    └──────────────┬──────────────┘
+                                   │
+         ┌─────────────────────────┼─────────────────────────┐
+         ▼                         ▼                         ▼
+┌─────────────────┐       ┌─────────────────┐       ┌─────────────────┐
+│ handoff:implement│      │ handoff:review  │       │ handoff:finish  │
+│ ✅ 實作完成     │       │ 🟢 通過 / 🔁 退回│       │ 📦 收尾完成     │
+└────────┬────────┘       └────────┬────────┘       └────────┬────────┘
+         │                         │                         │
+         └─────────────────────────┼─────────────────────────┘
+                                   │
+              [正常運轉：可由 ~/.config/ai-notify/config 開關]
+                                   │
+                                   ▼
+        ═══════════════════════════════════════════════════
+        🚨 停點安全保護 (Safety Anchor Guarantee - 不可關閉)
+        ═══════════════════════════════════════════════════
+        若遭遇以下停點事件，強制發送 handoff:attention (🔴 需要你處理)：
+          • 交件單為 blocked 或遭遇執行錯誤
+          • 退回輪數達 max_rounds 上限
+          • 工作區 dirty 或 HEAD 與交件單不一致
+          • 審查通過但設為 ask (等待手動下達 handoff-finish)
+          • 宿主傳訊失敗或需使用者互動確認
+```
 
 ### 1. 四大通知事件與對應範本
 
