@@ -3,7 +3,7 @@ type: Playbook
 title: Agent Handoff 交接迴圈指南
 description: 使用 handoff-start、handoff-role、handoff-finish、handoff-cleanup 與 handoff-doctor 協調多 Agent 自動化實作、審查與收尾。
 tags: [skills, handoff, workflow, xirp, herdr, agents, notify]
-generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-19T10:06:02+08:00" }
+generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-20T14:05:00+08:00" }
 sources:
   - id: handoff-scripts
     resource: /scripts/handoff/README.md
@@ -158,22 +158,31 @@ handoff-start <change-id> [選項]
 
 override 換了工具時，prompt 開頭的 skill 呼叫會改成新工具的寫法（例如 `$change-review` 換成 Pi 的 `/skill:change-review`），以舊工具名稱開頭的 session 名稱也會改成新工具名稱。
 
-### 2. `handoff-role <change-id> <review|finish> <override>`
+### 2. `handoff-role <change-id> <review|finish> [<override>] [--worktree new] [--replace]`
 
-在交接迴圈運行中，若審查（review）或收尾（finish）的 Session 尚未開啟，可使用此指令動態更換其角色範本：
+在交接迴圈運行中更換審查（review）或收尾（finish）的角色範本：
 
 ```bash
-# 例如：將審查者換為 Pi
+# 例如：將還沒開啟的審查者換為 Pi
 handoff-role <change-id> review pi:openai/gpt-6.2-sol:high:api
 
 # 例如：將收尾者換為 Codex
 handoff-role <change-id> finish codex:gpt-6.1-sol:high
+
+# 例如：審查者已開啟、額度用完，換成在自己 worktree 的 Pi 審查者
+handoff-role <change-id> review pi:openai/gpt-6.2-sol:medium:api --worktree new --replace
 ```
 
 **行為與安全檢查：**
 - **自動適應工具寫法**：重寫 Prompt 開頭的 Skill 呼叫與 Session 名稱，使其符合新工具慣例。
-- **嚴格關卡驗證**：對該角色執行 `handoff-doctor` 的檢查（範本欄位、工具與觸發器、host、Pi 模型/憑證/計費與信任狀態），再加上一個 worktree 最多一個 Pi 角色的限制，全部通過後才寫入實作者的 `loop.yaml`。
-- **防止衝突**：若目標角色的 Session 已經開啟，指令會直接拒絕更換；永不修改原始 `roles.yaml` 與正在執行的實作者角色。
+- **嚴格關卡驗證**：對該角色執行 `handoff-doctor` 的檢查（範本欄位、工具與觸發器、host、Pi 模型/憑證/計費與信任狀態），再加上一個 worktree 最多一個 Pi 角色的限制；任何一項失敗，舊 session、`loop.yaml` 與交件單都不變。
+- **`--worktree new`**：讓角色改用自己的 worktree（`<worktree>-review` 或 `<worktree>-finish`），例如讓 Pi 審查者與共用實作者 worktree 的 Pi 收尾並存。可以單獨使用，也可以和 override 一起用；不支援改回共用 worktree。
+- **`--replace`**：角色的 Session 已經開啟時，沒有 `--replace` 會直接拒絕並提示這個選項。加上後，先透過舊角色的 host 刪除舊 session（Xirp 刪除 session；herdr 只關閉該角色的 tab），清空 `loop.yaml` 中該角色的 session，再寫入新設定。**更換前先確認舊角色已停止**，避免它在被刪除前寫出交件單。
+- **自動改送等待中的交件單**：
+  - 審查：最新交件單是 `implement`/`done`、之後沒有審查交件單時，重新派送這張交件單，新審查者依新範本開啟並收到這一輪。開啟失敗時交件單維持未處理，發一次 attention 通知，之後用 `handoff-route --foreground` 重試。
+  - 收尾：最新交件單是收尾 `blocked`，或者審查 pass 而且舊收尾 session 已開啟時，依 `handoff-finish` 的流程開新的收尾 session。收尾 `blocked` 時會沿用原本存放收尾 commit 的 worktree，因此不接受 `--worktree new`。
+  - 沒有交件單在等待時，只換設定；輪到這個角色時再依新範本開啟。更換與改送都記在 `routing.log`。
+- **不可更換的部分**：實作者不能更換，原始 `roles.yaml` 永不修改。
 
 ### 3. `handoff-finish <change-id>`
 
@@ -382,7 +391,16 @@ Codex 預設的 `workspace-write` 沙盒禁止對外網路存取。若收尾角�
 - **實作或審查 blocked**：排除阻礙原因後，由實作者在乾淨且已 commit 的 `HEAD` 產生一筆新的 `implement` / `done` 交件單。Stop hook 會將其作為新一輪轉交給審查者（計入 `max_rounds`）。若審查僅因「需要人工親自驗收（例如真實環境驗證）」而 blocked，請人工完成驗收並將證據記錄在該 Change 的 Work Item 中，再請實作者勾選 Task、commit 並交件。
 - **收尾 blocked**：若因網路或權限問題導致 `finish` 失敗，排解問題後再次執行 `handoff-finish <change-id>` 即可重試或重開收尾 Session。
 
-### Q6: Xirp 顯示 Pi 角色為 `finished`，但工作似乎還沒完成？
+### Q6: 審查者額度用完，迴圈中途要換人？
+先確認舊審查者已停止（或已閒置），再以 `--replace` 更換。若收尾是共用實作者 worktree 的 Pi，Pi 審查者需要自己的 worktree：
+
+```bash
+handoff-role <change-id> review pi:openai/gpt-6.2-sol:medium:api --worktree new --replace
+```
+
+舊 session 會被刪除；已送給舊審查者、還沒有審查結果的這一輪，會改送給在 `<worktree>-review` 開啟的新審查者。可在 `routing.log` 看到 `reviewer:opened`。
+
+### Q7: Xirp 顯示 Pi 角色為 `finished`，但工作似乎還沒完成？
 Pi 角色在背景工作或等待時，Xirp 介面可能暫時標記其為 `finished`，但實際執行程序仍在進行，Stop hook 發送的訊息依然能正常送達。請以交件單記錄及 `.agent-handoff/<change-id>/routing.log` 的實際進度為準。
 
 [^handoff-scripts]: [Agent Handoff Loop Scripts](/scripts/handoff/README.md)

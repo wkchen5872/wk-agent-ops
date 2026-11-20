@@ -246,11 +246,12 @@ ho_host_exists() {
   esac
 }
 
-# ho_host_close <host> <loop-dir> <role> <session>: delete or close what the loop opened for the role.
+# ho_host_close <host> <loop-dir> <role> <session> [tab]: delete or close what the loop opened for the role.
+# With "tab", herdr closes only the role's tab: replacing one role must not end the others in its workspace.
 ho_host_close() {
   case "$1" in
     xirp) xirp session delete "$4" --yes >/dev/null 2>&1 ;;
-    herdr) ho_herdr_close "$2" "$3" ;;
+    herdr) ho_herdr_close "$2" "$3" "${5:-}" ;;
     *) return 1 ;;
   esac
 }
@@ -464,11 +465,13 @@ ho_herdr_close_target() {
   else printf 'tab %s\n' "$tab"; fi
 }
 
-# ho_herdr_close <loop-dir> <role>: close that target; closing it ends the agents in it. Succeeds only
-# when herdr confirms the close or reports the target gone (closed earlier), so cleanup can stop otherwise.
+# ho_herdr_close <loop-dir> <role> [tab]: close that target (with "tab", only the role's tab); closing it ends
+# the agents in it. Succeeds only when herdr confirms the close or reports the target gone (closed earlier),
+# so cleanup can stop otherwise.
 ho_herdr_close() {
   local t out code
   t="$(ho_herdr_close_target "$1" "$2")" || return 0
+  [[ "${3:-}" == tab ]] && t="tab $(kv_get "$1/loop.yaml" "$2.herdr_tab")"
   out="$(ho_herdr "$(ho_herdr_session_of "$1" "$2")" "${t% *}" close "${t#* }")" && return 0
   code="$(ho_herdr_code "$out")"
   [[ "$code" == "${t% *}_not_found" ]] && return 0

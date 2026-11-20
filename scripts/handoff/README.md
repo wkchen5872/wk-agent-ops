@@ -177,19 +177,38 @@ When an override changes the tool, the prompt's leading skill call follows it (`
 becomes `/skill:change-review` for Pi or `/change-review` for Claude Code), and a session name
 that starts with the old tool's name starts with the new one; anything else stays as written.
 
-### `handoff-role <change-id> <review|finish> <override>`
+### `handoff-role <change-id> <review|finish> [<override>] [--worktree new] [--replace]`
 
-Changes the review or finish role of a running loop before its session opens, for example to
-run the reviewer in Pi after `handoff-start`:
+Changes the review or finish role of a running loop, for example to run the reviewer in Pi after
+`handoff-start`:
 
 ```bash
 handoff-role add-export review pi:openai/gpt-6.2-sol:high:api
 ```
 
 The override takes the same form as `handoff-start`'s and rewrites the skill call and session
-name the same way. It runs the `handoff-doctor` checks for that role and the one-Pi-role-per-worktree
-check first, and writes the implementer's `loop.yaml` only when all of them pass. It refuses a role whose session is already recorded, and never changes
-`roles.yaml` or the implementer.
+name the same way. `--worktree new` moves the role from the implementer's worktree to one of its
+own (`<worktree>-review` or `<worktree>-finish`), for example so that a Pi reviewer can work next to a
+shared Pi finish role; it can be given with or without an override. Moving a role back to the
+implementer's worktree is not supported. It runs the `handoff-doctor` checks for that role and the
+one-Pi-role-per-worktree check first, and changes nothing unless all of them pass. It never changes
+`roles.yaml` or the implementer: only `review` and `finish` can be changed.
+
+A role whose session is open is refused unless `--replace` is given. Make sure the old session has
+stopped first: `--replace` deletes it through its host (Xirp deletes the session; herdr closes only
+the role's tab), clears the role's session in `loop.yaml`, writes the new settings, and then hands
+the new role the record that waited for the old one:
+
+- review: when the newest record is an `implement`/`done` record with no review after it, the record
+  is routed again (as `handoff-route --foreground` does), so the new reviewer opens from the new
+  settings and receives that round. If it cannot open, the record stays unprocessed, you get one
+  attention notice, and `handoff-route --foreground` retries it.
+- finish: when the newest record is a blocked finish, or a passing review whose finish session had
+  opened, a new finish session opens as `handoff-finish` would open it.
+
+With no record waiting, only the settings change, and the new role opens when its turn comes. The
+replacement and the hand-off are written to `routing.log`. A blocked finish keeps its worktree, so
+`--worktree new` is refused when replacing one that ran in the implementer's worktree.
 
 ### `handoff-finish <change-id>`
 
@@ -459,6 +478,15 @@ unaffected; only usage moves.
   write a new record.
 - **`handoff-finish` refuses**: the message names the failed condition, such as a newer
   commit than the passing review or an unfinished round.
+- **The reviewer ran out of quota mid-loop**: stop it (or wait until it is idle), then replace it.
+  With a Pi finish role in the implementer's worktree, a Pi reviewer needs a worktree of its own:
+
+  ```bash
+  handoff-role add-export review pi:openai/gpt-6.2-sol:medium:api --worktree new --replace
+  ```
+
+  The old session is deleted, and a round that had already gone to it goes to the new reviewer in
+  `<worktree>-review`; check `routing.log` for `reviewer:opened`.
 - **A Pi role is refused**: the message names the role and the check. Run
   `pi --list-models <model>` and `pi auth check --provider <provider> --json` to compare, run
   `scripts/handoff/install.sh` for a missing trigger, or `/trust` in Pi in the main worktree.
