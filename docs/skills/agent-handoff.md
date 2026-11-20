@@ -133,7 +133,7 @@ herdr_session: work
 - 啟動方式：`herdr agent start` 帶入範本的模型與 effort（Pi 另帶 provider，並照常寫入 worktree 的 `.pi/settings.json`），第一則 prompt 另外用 `herdr agent prompt` 送出，不帶 `--wait`（herdr 的 `--timeout` 只能搭配 `--wait`）。`loop.yaml` 記錄 pane ID、tab、herdr session、原生 Session ID 與迴圈開的 workspace；傳訊前確認 pane 裡仍是同一個 agent。
 - **對話框與重試**：新 worktree 會讓 Claude Code、Codex 跳出信任資料夾的對話框。迴圈不替你回答：保留 pane、記 `pending_prompt`、發一次 attention 通知寫明 herdr 的 workspace、tab 與 pane；你處理完後執行通知裡的 `handoff-route --foreground`，只補送 prompt 到同一個 pane。實作者在 `handoff-start` 時卡住，就處理後再跑一次 `handoff-start <change-id>`。
 - **送出結果不明**：herdr 明確回報沒送出（`agent_blocked`、`agent_not_found`、`pane_not_found`、`server_not_running`）時照常重試；其他錯誤（例如逾時）無法確定 agent 有沒有收到，迴圈不重送，把訊息存成 `.agent-handoff/<change-id>/<role>-unconfirmed.txt` 並發一次通知。檔案存在期間，hook、`handoff-start`、`handoff-finish` 都不會再傳訊給這個角色，已開的收尾 Session 也不會被當成已開始；到該 pane 確認，沒收到就貼上檔案內容，再刪掉檔案即可繼續。
-- routing log：herdr 不回報模型，所以 herdr 角色記成 `model=<範本模型>(template)`；停止端在 herdr pane 中記成 `session=herdr:<pane ID> native=<原生 Session ID>`，不採用繼承的 Xirp ID。對話框通知的 workspace 與 tab 由 herdr 即時查詢，重用的審查者 pane 也適用。
+- routing log：herdr 不回報模型，所以 herdr 角色記成 `model=<範本模型>(template)`；停止端在 herdr pane 中記成 `session=herdr:<pane ID> native=<原生 Session ID>`，不採用繼承的 Xirp ID；手動 `--foreground` 或重試可能由別人觸發，停止端記 `session=unknown`，執行者另記 `trigger=…`。對話框通知的 workspace 與 tab 由 herdr 即時查詢，重用的審查者 pane 也適用。
 - 之後可能支援的 host：`ghostty + tmux`（目前不支援）。
 
 ---
@@ -187,7 +187,7 @@ handoff-finish <change-id>
 - 檢查最新交件單必須為 `review` / `done` / `pass`。
 - 檢查實作者 worktree 的 HEAD 與交件單記載之 `head` 一致且乾淨（無未暫存修改）。
 - 若設定 `finish.worktree: new`，實作者 worktree 會切換至 detached HEAD，新建立的 `../<repo>-<change-id>-finish` 接手 `feature/<change-id>` 分支進行收尾。
-- **失敗重試（Retry）**：若收尾過程因網路中斷或遠端拒絕而停下（交件單為 `finish` / `blocked`），排解問題後再次執行 `handoff-finish`，系統會直接自中斷點接續或重開收尾 Session。
+- **失敗重試（Retry）**：若收尾過程因網路中斷或遠端拒絕而停下（交件單為 `finish` / `blocked`），排解問題後再次執行 `handoff-finish`，系統會直接自中斷點接續或重開收尾 Session。每筆 blocked 交件單只送一次重試（記在 `loop.yaml` 的 `finish.retried_for`）；收尾 Session 寫出新交件單之前再執行，只會回報已送過，不會重送。
 - **實作或審查 blocked 後接續**：迴圈不會自行恢復。排除原因後，請實作者在乾淨且已 commit 的 `HEAD` 寫一筆新的 `implement` / `done` 交件單，hook 會把它當成下一輪交給審查者（計入 `max_rounds`）。審查只因需要人親自做的步驟（例如真實環境驗收）而 blocked 時：由人完成該步驟、把證據記在該 change 的 Work Item（cleanup 會歸檔被移除 worktree 的 Work Item），再請實作者勾選 task、commit 並交件。
 
 ### 4. `handoff-cleanup <change-id> [--abandon] [--yes]`

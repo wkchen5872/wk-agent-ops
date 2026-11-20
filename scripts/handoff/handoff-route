@@ -120,7 +120,11 @@ route_dir() {
   # One Xirp query serves the routing log and the agent label. Inside a herdr pane CHIRP_SESSION_ID
   # is inherited from the shell that started herdr, never this agent's (design D7).
   local xsid="${CHIRP_SESSION_ID:-}"; [[ "${HERDR_ENV:-}" == 1 ]] && xsid=""
-  sess_json="$(ho_xirp_session "$xsid")" || sess_json=""
+  # Only an agent's own stop on a first attempt identifies the stopping session. A manual run or a
+  # retry may be triggered by someone else, so its environment never names the stopping session.
+  local attributed=1
+  if [[ "$manual" == 1 ]] || grep -qxF "$base" "$dir/.notified" 2>/dev/null; then attributed=0; fi
+  sess_json=""; (( attributed )) && { sess_json="$(ho_xirp_session "$xsid")" || sess_json=""; }
   [[ -n "$sess_json" ]] || sess_json='{}'
   # A Pi record names its own agent (written by handoff-write from the Pi runtime).
   local label model
@@ -131,13 +135,17 @@ route_dir() {
   if label="$(ho_pi_record_label "$rec")"; then model="$(kv_get "$rec" agent.provider)/$(kv_get "$rec" agent.model)"; fi
   # The stopping session's identifiers, each in its own namespace: Xirp's, or herdr's pane and the
   # native session ID from the hook input (codex-herdr-r03/F-01).
-  local who="session=${xsid:-unknown}"
+  local who="session=${xsid:-unknown}" trig=""
   [[ "${HERDR_ENV:-}" == 1 ]] && who="session=herdr:${HERDR_PANE_ID:-unknown} native=${native_session:-unknown}"
+  if (( ! attributed )); then
+    # The stopping session stays unknown; whoever ran this is named separately, in its own namespace.
+    if [[ "${HERDR_ENV:-}" == 1 ]]; then trig="herdr:${HERDR_PANE_ID:-unknown}"; elif [[ -n "$xsid" ]]; then trig="xirp:$xsid"; fi
+    who="session=unknown${trig:+ trigger=$trig}"
+  fi
   ho_log "$dir" "$base action=$action $who model=$model"
-  # Other records do not say who wrote them: only an agent's own stop on a first attempt names it.
-  # A manual run or a retry may be triggered by someone else, so it names nobody.
+  # Other records do not say who wrote them; the notice names an agent only for an attributed stop.
   local agent_json="$sess_json" sid="$native_session"
-  if [[ "$manual" == 1 ]] || grep -qxF "$base" "$dir/.notified" 2>/dev/null; then agent_json='{}'; sid=""; fi
+  (( attributed )) || { agent_json='{}'; sid=""; }
   [[ -n "$label" ]] || label="$(ho_agent_label "$agent_json")"
   ctx="$(jq -nc --arg c "$change" --arg r "$round" --arg h "${head:0:7}" --arg a "$label" \
     --arg s "$sid" --arg w "$root" '{change:$c, round:$r, commit:$h, agent:$a, session_id:$s, cwd:$w}')"

@@ -1420,6 +1420,26 @@ if run_section herdr; then
   grep -q '02-implement.yaml action=reviewer:messaged:w2:p2 session=herdr:w2:p1 native=native-w2:p1 model=opus(template)' "$HL/.agent-handoff/add-export/routing.log" \
     && ! grep -q chirp-inherited "$HL/.agent-handoff/add-export/routing.log" \
     && ok "a herdr stop is logged with its herdr pane and native session, not the inherited Xirp ID (codex-herdr-r03/F-01)" || { bad "a herdr stop is logged with its herdr pane and native session, not the inherited Xirp ID (codex-herdr-r03/F-01)"; tail -1 "$HL/.agent-handoff/add-export/routing.log"; }
+  # codex-herdr-r04 regressions
+  # r01/F-03: once a finish retry was submitted for a blocked record, handoff-finish never sends it again for that record
+  herdr_loop "$tmp/herdr-r4a" h31; hw "$HL" --role review --status done --verdict pass --head HEAD --report r.md
+  finish_in "$HL" add-export >/dev/null 2>&1; commit_in "$HL" archive; hw "$HL" --role finish --status blocked --head HEAD --note "push rejected"
+  touch "$(HS)/prompt-timeout"; finish_in "$HL" add-export >/dev/null 2>&1; rm -f "$(HS)/prompt-timeout"; n1="$(herdr_prompts | grep -c '^w2:p3')"
+  rm -f "$HL/.agent-handoff/add-export/finish-unconfirmed.txt"; out="$(finish_in "$HL" add-export 2>&1)"; rc=$?
+  [[ "$rc" == 0 && "$(herdr_prompts | grep -c '^w2:p3')" == "$n1" ]] && grep -q 'already sent.*03-finish.yaml' <<<"$out" \
+    && ok "after the user clears an unconfirmed finish retry, handoff-finish does not resend it for the same record (codex-herdr-r04, r01/F-03)" \
+    || { bad "after the user clears an unconfirmed finish retry, handoff-finish does not resend it for the same record (codex-herdr-r04, r01/F-03)"; printf '       %s\n' "$out"; }
+  herdr_loop "$tmp/herdr-r4b" h32; hw "$HL" --role review --status done --verdict pass --head HEAD --report r.md
+  finish_in "$HL" add-export >/dev/null 2>&1; commit_in "$HL" archive; hw "$HL" --role finish --status blocked --head HEAD --note "push rejected"
+  finish_in "$HL" add-export >/dev/null 2>&1; finish_in "$HL" add-export >/dev/null 2>&1
+  commit_in "$HL" again; hw "$HL" --role finish --status blocked --head HEAD --note "push rejected again"; finish_in "$HL" add-export >/dev/null 2>&1
+  [[ "$(herdr_prompts | grep '^w2:p3' | grep -c '重試收尾')" == 2 ]] \
+    && ok "a delivered finish retry is sent once per blocked record" || { bad "a delivered finish retry is sent once per blocked record"; herdr_prompts | grep '^w2:p3' | cut -c1-60; }
+  # r03/F-01: a manual run does not name whoever ran it as the stopping session
+  herdr_loop "$tmp/herdr-r4c" h33; commit_in "$HL" two; hw "$HL" --role implement --status done --head HEAD
+  (cd "$HL" && PATH="$FAKES:$PATH" HANDOFF_NOTIFY="$FAKES/notify.sh" HANDOFF_CREATE_WAIT=2 HERDR_ENV=1 HERDR_PANE_ID=w1:p9 CHIRP_SESSION_ID=chirp-inherited "$ROUTE" --foreground </dev/null)
+  grep -q '02-implement.yaml action=reviewer:messaged:w2:p2 session=unknown trigger=herdr:w1:p9 model=opus(template)' "$HL/.agent-handoff/add-export/routing.log" \
+    && ok "a manual run logs the stopping session as unknown and names who ran it separately (codex-herdr-r04, r03/F-01)" || { bad "a manual run logs the stopping session as unknown and names who ran it separately (codex-herdr-r04, r03/F-01)"; tail -1 "$HL/.agent-handoff/add-export/routing.log"; }
   Q3="$tmp/herdr-busy"; herdr_project "$Q3"; fresh_state h3; echo 1 > "$(HS)/busy"
   printf '%s\n' "{\"workspace_id\":\"w9\",\"label\":\"repo\",\"worktree\":{\"checkout_path\":\"$Q3\"}}" > "$(HS)/workspaces"
   out="$(start_in "$Q3" add-export --impl codex:gpt-x:low 2>&1)"; rc=$?

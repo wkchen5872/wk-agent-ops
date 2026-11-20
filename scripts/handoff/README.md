@@ -204,7 +204,10 @@ run `handoff-finish` again to open a new one.
 
 After a blocked finish (for example a rejected push), fix the cause and run `handoff-finish`
 again. It retries when the finish worktree is clean and builds on the passing review: the
-finish session resumes from the stopped stage, or a new one opens if it is gone.
+finish session resumes from the stopped stage, or a new one opens if it is gone. The retry is sent
+once per blocked record (recorded as `finish.retried_for` in `loop.yaml`), whether or not herdr
+confirmed it: running `handoff-finish` again before the finish session writes a new record reports
+that the retry was already sent and sends nothing.
 
 ### `handoff-cleanup <change-id> [--abandon] [--yes]`
 
@@ -292,7 +295,9 @@ with the stopping session's model: the model Xirp reports for Claude Code and Co
 example `model=openai/gpt-6.2-sol`). herdr reports no model, so a Claude Code or Codex role on
 herdr shows its template's model, marked `model=gpt-6.1-sol(template)`. The stopping session is
 `session=<Xirp session ID>`, or inside a herdr pane `session=herdr:<pane ID> native=<native session ID>`
-(an Xirp ID inherited by herdr panes is never used). The hook never writes to GitHub and never pushes, and it
+(an Xirp ID inherited by herdr panes is never used). A manual `--foreground` run or a retry may be
+started by someone else, so it logs `session=unknown` and names who ran it as
+`trigger=xirp:<id>` or `trigger=herdr:<pane ID>`. The hook never writes to GitHub and never pushes, and it
 always exits successfully.
 
 **Continuing after `blocked`.** A blocked record stops the loop until you act; nothing resumes it

@@ -26,7 +26,9 @@ dir="$(ho_find_loop_dir "$change")" || { echo "handoff-finish: no loop for '$cha
 ho_preflight_or_refuse handoff-finish "$dir/loop.yaml" finish_template || exit 1
 rec="$(ho_newest_in_loop "$dir")"
 if [[ -n "$rec" && "$(kv_get "$rec" role)" == finish && "$(kv_get "$rec" status)" == blocked ]]; then
-  if ! id="$(ho_finish_retry "$dir" 2>&1)"; then printf 'handoff-finish: cannot retry: %s\n' "$id" >&2; exit 1; fi
+  id="$(ho_finish_retry "$dir" 2>&1)"; rc=$?
+  (( rc == 3 )) && { printf '%s\n' "$id"; exit 0; }
+  (( rc == 0 )) || { printf 'handoff-finish: cannot retry: %s\n' "$id" >&2; exit 1; }
   printf 'Finish retried for %s: %s\n' "$change" "$id"
   exit 0
 fi
