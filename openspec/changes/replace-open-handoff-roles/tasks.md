@@ -15,6 +15,7 @@
   - 測試要求：先寫失敗測試：收尾是 shared Pi 時，審查者加上 `--worktree new` 換成 Pi 會通過，不加則被拒；未開啟的角色只帶 `--worktree new` 時，只改 worktree 模式。
   - 審查修正（r01、r02 的 F-08）：在實作者 worktree 的 blocked 收尾加上 `--worktree new` 時，會帶著 feature branch 移到 `<worktree>-finish`；branch 不在暫停的 commit 時拒絕；中斷的移動由下一次 `handoff-finish` 補完。各項都有回歸測試。
   - 審查修正（r03 的 F-08）：搬移前，原 worktree 必須仍包含 blocked 交件單的 commit；建立新 worktree 後核對實際 HEAD，不符就不開啟；搬移完成後的一般重試只補寫紀錄，沿用原有要求。各項都有回歸測試。
+  - 審查修正（pi-role-review-r04 的 F-08）：主檔已指向 `-finish`、但目的地副本未完成時視為搬移未完成，補完前核對目的地包含 blocked 交件單的 commit，不符就停止並指出該 commit。有回歸測試。
 
 ## 3. 改送等待中的交件單
 
@@ -22,6 +23,7 @@
   - 測試要求：先寫失敗測試：更換後假 `xirp` 依序收到 delete、create（Pi 範本），`reviewer.session` 是新 ID，`routing.log` 有 `reviewer:opened`；開啟失敗時交件單不在 `.routed`，而且只發一次通知；實作者還在工作時（最新是 review 交件單），更換後不開任何 session。
   - 審查修正（r01、r02 的 F-03）：只改送舊審查者確實收到的紀錄，並在紀錄所在 worktree 派送；送達與否只看本次結果；沒送出時保持未處理，host 未確認時不重送；處理標記無法清除時，指令會說明手動步驟。各項都有回歸測試。
   - 審查修正（r03 的 F-03）：是否可能已送達改由迴圈狀態判斷（已記錄的新 session，而且第一個 prompt 不在 pending），不依賴 `routing.log`；可能已送達的紀錄一律保持已處理，不會重送。有回歸測試。
+  - 審查修正（pi-role-review-r04 的 F-03）：新審查者已開啟、但 session ID 無法寫入 `loop.yaml` 時，route 以 `reviewer:opened-unrecorded:<id>` 停住而不是重試；`handoff-role` 綜合 session 紀錄、本次 log 與 `.routed` 判斷，任何可能已送達的跡象都保持已處理，並指出要找回的 session。有回歸測試。
 - [x] 3.2 收尾：最新交件單是 `finish`/`blocked`，或者審查 pass 而且舊收尾 session 已開啟時，用 `handoff-finish` 的開啟流程開新的收尾 session。
   - 測試要求：先寫失敗測試：blocked 收尾更換後，開出新收尾並收到收尾 prompt；pass 但收尾還沒開啟時，只換設定、不開啟（仍由 `handoff-finish` 開）。
   - 審查修正（r01）：收尾在更換後無法開啟時，發一次 attention 通知。

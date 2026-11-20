@@ -1088,6 +1088,11 @@ ho_finish_retry() {
       fi
       wt="${wt##*$'\n'}"
     elif [[ "$(kv_get "$loop" finish_template.worktree 2>/dev/null)" == new && "$wt" == "$impl-finish" ]]; then
+      # Its own copy not naming it means a move into it was cut short: complete it only on the blocked finish's work.
+      if [[ "$(kv_get "$wt/.agent-handoff/$change/loop.yaml" finish.worktree 2>/dev/null)" != "$wt" ]] \
+        && ! git -C "$wt" merge-base --is-ancestor "$bh" HEAD 2>/dev/null; then
+        rmdir "$claim"; echo "the move to $wt was not completed and $wt is at $(ho_head "$wt"), which does not hold the blocked finish's commit $bh; bring $wt back to $bh, then run handoff-finish again"; return 1
+      fi
       if ! err="$(ho_finish_record "$dir" "$wt" "$change" 2>&1)"; then rmdir "$claim"; echo "${err##*$'\n'}"; return 1; fi
     fi
     id="$(ho_open_role "$dir" finish_template "$wt" "$(ho_head "$wt")" "$(kv_get "$rec" round)" "")"; rc=$?

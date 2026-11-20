@@ -171,15 +171,20 @@ if [[ "$role" == review && "$rstate" == implement/done/* ]] && grep -qxF "$base"
   # The route finds its worktree in CLAUDE_PROJECT_DIR before the working directory: point both at the record's.
   (cd "$wt" && CLAUDE_PROJECT_DIR="$wt" bash "$route" --foreground </dev/null >/dev/null 2>&1)
   action="$(tail -n +$((n0 + 1)) "$rdir/routing.log" 2>/dev/null | grep -F " $base action=" | tail -1 | sed 's/.* action=\([^ ]*\).*/\1/')"
-  # The loop's state, not the log, says whether the round may have reached a reviewer: a recorded session whose first
-  # prompt is not pending was opened with it (Xirp) or was sent it (herdr, confirmed or not). Such a record stays
-  # processed so that nothing sends it again; only a record that reached no one is left for a retry.
-  sess="$(kv_get "$loop" reviewer.session 2>/dev/null)"
-  if [[ -n "$sess" ]] && ! ho_role_pending "$dir" reviewer; then
+  # Whether the round may have reached a reviewer is read from every trace this run left, so that a lost write
+  # never turns a delivered round into a pending one: a recorded session whose first prompt is not pending (opened
+  # with the round on Xirp, or sent it on herdr), a logged reviewer action other than a failed open, or, with no
+  # result logged, the route marking the record processed again. Such a record stays processed and is not sent again.
+  sess="$(kv_get "$loop" reviewer.session 2>/dev/null)" reached=0
+  [[ -n "$sess" ]] && ! ho_role_pending "$dir" reviewer && reached=1
+  [[ "$action" == reviewer:* && "$action" != reviewer:open-failed* ]] && reached=1
+  [[ -z "$action" ]] && grep -qxF "$base" "$rdir/.routed" 2>/dev/null && reached=1
+  if (( reached )); then
+    [[ -n "$sess" ]] || { sess="${action##*:}"; [[ "$action" == reviewer:* && -n "$sess" ]] || sess="unknown"; }
     grep -qxF "$base" "$rdir/.routed" 2>/dev/null || printf '%s\n' "$base" >> "$rdir/.routed" \
       || die "the new reviewer session $sess may have received $base, but $rdir/.routed could not be updated: add the line $base there so that it is not sent again"
-    [[ "$action" == reviewer:opened:* ]] && { printf 'Handed %s to the new reviewer (%s)\n' "$base" "$action"; exit 0; }
-    die "the review role was replaced and the new reviewer session $sess was opened, but the hand-off of $base is not confirmed (${action:-no result logged}); it is not sent again. Check that session as the attention notice says"
+    [[ "$action" == reviewer:opened:* && "$sess" == "${action##*:}" ]] && { printf 'Handed %s to the new reviewer (%s)\n' "$base" "$action"; exit 0; }
+    die "the review role was replaced and a new reviewer (session $sess) may have received $base, but the hand-off is not confirmed (${action:-no result logged}); it is not sent again. Find or check that session as the attention notice says, and record it as reviewer.session in $loop if it is missing"
   fi
   # Nothing was sent: the record stays unprocessed so that a retry hands it over.
   unmark "$rdir/.routed" || die "the review role was replaced, but $base did not reach the new reviewer (${action:-no route result}) and is still marked as processed; $manual"

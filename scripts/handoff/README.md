@@ -212,8 +212,8 @@ stopped first. `--replace` then:
      reviewer opens from the new settings and receives that round. If it does not open, the record
      stays unprocessed (an attention notice tells you why) and `handoff-route --foreground` retries
      it once the cause is fixed. Once a new reviewer session holds the round, or may hold it (the
-     host did not confirm the prompt, or the result could not be logged), it is never sent again:
-     check that session as the message says. If the record's mark cannot be cleared, the
+     host did not confirm the prompt, or its session ID or the result could not be recorded), it is
+     never sent again: find or check that session as the message says. If the record's mark cannot be cleared, the
      command names the line to remove from `.routed` before you run the retry.
    - finish: when the newest record is a blocked finish, or a passing review whose finish session
      had opened, a new finish session opens as `handoff-finish` would open it; if it cannot, you get
@@ -357,7 +357,7 @@ Each record ends in one of three outcomes:
 | Outcome | Examples | Notice | Marked processed (`.routed`) |
 | --- | --- | --- | --- |
 | Delivered | reviewer opened or messaged, report handed to the implementer, finish opened | progress notice (if its switch is on) | yes |
-| Stops for you | `blocked`, round limit, any `finish` record, pass with `ask`, worktree not clean or not at `head`, review worktree not clean, unreadable record, a Pi record that differs from its template | one attention notice | yes |
+| Stops for you | `blocked`, round limit, any `finish` record, pass with `ask`, worktree not clean or not at `head`, review worktree not clean, unreadable record, a Pi record that differs from its template, a reviewer opened whose session ID could not be written to `loop.yaml` (`opened-unrecorded`; write it as `reviewer.session` yourself) | one attention notice | yes |
 | Retry | Xirp message not delivered, reviewer or finish session not opened (including a Pi role that fails verification), review worktree not created or moved | one attention notice (recorded in `.notified`) | no |
 
 A retry record is tried again by the next hook run in that worktree, or right away with

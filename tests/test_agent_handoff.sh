@@ -857,13 +857,15 @@ finish_in() { local d="$1"; shift; (cd "$d" && HOME="$(thome)" PATH="${PF_PATH:-
 role_in() { local d="$1"; shift; (cd "$d" && HOME="$(thome)" PATH="${PF_PATH:-$FAKES:$PATH}" HANDOFF_NOTIFY="$FAKES/notify.sh" HANDOFF_CREATE_WAIT=2 "$ROOT/scripts/handoff/handoff-role" "$@" </dev/null); }
 deleted() { cat "$FAKE_XIRP_DIR/deleted" 2>/dev/null; }
 # mv that fails when its destination matches $FAKE_MV_FAIL and its source $FAKE_MV_FROM (globs; test-only fault injection),
-# after letting $FAKE_MV_AFTER matching calls through (counted in $FAKE_MV_COUNT).
+# after letting $FAKE_MV_AFTER matching calls through (counted in $FAKE_MV_COUNT); with $FAKE_MV_IF, only when the
+# source file contains that text.
 MVSHIM="$tmp/mvshim"; mkdir -p "$MVSHIM"
 cat > "$MVSHIM/mv" <<'SH'
 #!/usr/bin/env bash
 src="$1"; for a in "$@"; do dst="$a"; done
 # shellcheck disable=SC2053
-if [[ -n "${FAKE_MV_FAIL:-}" && "$dst" == $FAKE_MV_FAIL && "$src" == ${FAKE_MV_FROM:-*} ]]; then
+if [[ -n "${FAKE_MV_FAIL:-}" && "$dst" == $FAKE_MV_FAIL && "$src" == ${FAKE_MV_FROM:-*} ]] \
+  && { [[ -z "${FAKE_MV_IF:-}" ]] || grep -qF -- "$FAKE_MV_IF" "$src" 2>/dev/null; }; then
   n="$(cat "${FAKE_MV_COUNT:-/dev/null}" 2>/dev/null)"; n="${n:-0}"; echo $((n + 1)) > "${FAKE_MV_COUNT:-/dev/null}"
   (( n >= ${FAKE_MV_AFTER:-0} )) && { echo "mv: injected failure" >&2; exit 1; }
 fi
@@ -1179,6 +1181,14 @@ if run_section finish; then
   out="$(PATH="$GITSHIM:$PATH" FAKE_GIT_MOVE_TO="$(git -C "$R12" rev-parse HEAD~2)" role_in "$R12" add-export finish claude:sonnet:high --worktree new --replace 2>&1)"; rc=$?
   [[ "$rc" != 0 && "$(created)" == 0 ]] && grep -q 'not opened' <<<"$out" \
     && ok "a finish worktree that checked out another commit is not opened (codex-role-review-r03/F-08)" || { bad "a finish worktree that checked out another commit is not opened (codex-role-review-r03/F-08)"; printf '       %s\n' "$out"; }
+
+  # Round 5 (pi-role-review-r04/F-08): a move cut short is not completed on a commit without the blocked finish's work.
+  R13="$tmp/fin-move-rewound"; retry_loop "$R13" fin-9; use_project "$R13"; fresh_state f27; B13="$(git -C "$R13" rev-parse HEAD)"
+  PATH="$MVSHIM:$PATH" FAKE_MV_FAIL='*-finish/.agent-handoff/add-export/loop.yaml' role_in "$R13" add-export finish claude:sonnet:high --worktree new --replace >/dev/null 2>&1
+  git -C "$R13-finish" reset -q --hard HEAD~1
+  fout="$(finish_in "$R13" add-export 2>&1)"; frc=$?
+  [[ "$frc" != 0 && "$(created)" == 0 ]] && grep -q "${B13:0:7}" <<<"$fout" \
+    && ok "completing a move cut short refuses a finish worktree without the blocked finish's commit (pi-role-review-r04/F-08)" || { bad "completing a move cut short refuses a finish worktree without the blocked finish's commit (pi-role-review-r04/F-08)"; printf '       %s\n' "$fout"; }
 
   # Pass recorded in a separate review worktree B; finish runs from A.
   SA="$tmp/fin-sep"; new_loop "$SA" new ask; use_project "$SA"; fresh_state f8; SB="$SA-review"
@@ -2483,6 +2493,13 @@ SH
   out="$(prole "$PW" add-export review pi:openai/gpt-6.2-sol:medium:api --replace 2>&1)"; rc=$?
   [[ "$rc" == 0 && "$(deleted)" == sess-2 && "$(created)" == 2 && "$(kv_get "$rl" review_template.harness)" == pi ]] \
     && ok "with no round waiting, an earlier review's commit is not checked as the next checkout (codex-role-review-r03/F-06)" || { bad "with no round waiting, an earlier review's commit is not checked as the next checkout (codex-role-review-r03/F-06)"; printf '       %s\n' "$out"; }
+
+  # Round 5 (pi-role-review-r04/F-03): the new reviewer opened, but its session ID could not be recorded.
+  open_reviewer
+  out="$(PATH="$MVSHIM:$PATH" FAKE_MV_FAIL='*/loop.yaml' FAKE_MV_IF='session: sess-3' prole "$PW" add-export review codex:gpt-6.2-sol:high --replace 2>&1)"; rc=$?
+  ROUTE_FG "$PW"
+  [[ "$rc" != 0 && "$(created)" == 3 ]] && routed "$PW" 01-implement.yaml && grep -q 'sess-3' <<<"$out" \
+    && ok "a reviewer opened whose session ID could not be recorded is named, and no second reviewer opens (pi-role-review-r04/F-03)" || { bad "a reviewer opened whose session ID could not be recorded is named, and no second reviewer opens (pi-role-review-r04/F-03)"; printf '       %s\n' "$out"; }
 fi
 
 if [[ "$fail" -ne 0 ]]; then

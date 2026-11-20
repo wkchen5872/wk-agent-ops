@@ -206,9 +206,15 @@ to_reviewer() {
     fi
     if out="$(ho_open_role "$dir" review_template "$wt" "$head" "$round" "" 2>&1)"; then
       id="${out##*$'\n'}"
-      ho_loop_set "$dir" reviewer.session "$id"
-      action="reviewer:opened:$id"; outcome="delivered"; kind="implement"
-      next="已開啟審查者的 Session，請其審查第 ${round} 輪。"
+      if ho_loop_set "$dir" reviewer.session "$id"; then
+        action="reviewer:opened:$id"; outcome="delivered"; kind="implement"
+        next="已開啟審查者的 Session，請其審查第 ${round} 輪。"
+      else
+        # The reviewer has the round: stop rather than retry, or a retry would open a second one.
+        action="reviewer:opened-unrecorded:$id"; outcome="stop"
+        detail="已開啟審查者的 Session ${id} 並送出第 $round 輪，但無法把它記入 loop.yaml；未重送，迴圈已停住。"
+        next="在 $loop 的 reviewer 下寫入 session: ${id}，之後的輪次才會交給它。"
+      fi
     else
       rc=$?
       if (( rc == 2 )); then unconfirmed reviewer "$(kv_get "$loop" reviewer.session 2>/dev/null)" "${out##*$'\n'}"
