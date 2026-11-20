@@ -148,8 +148,12 @@ prompt="$(ho_render "$(kv_get "$scratch" implement.prompt)" "$change" "$head" 1 
   "$(kv_get "$scratch" implement.harness)" "$(kv_get "$scratch" implement.model)")"
 id="$(ho_host_open "$impl_host" "$dir" implementer "$wt" "$name" "$prompt" "$scratch" implement)"; rc=$?
 if (( rc == 2 )); then
-  # herdr did not confirm the prompt: it is not sent again; the message above names the file holding it.
+  # The host did not confirm the prompt: it is not sent again; the message above names the file holding it,
+  # and one attention notice says so, as for any role (codex-herdr-app-r01/F-04).
   id="$(kv_get "$loop" implementer.session)"
+  ho_notify "$(jq -nc --arg c "$change" --arg h "${head:0:7}" --arg w "$wt" '{change:$c, round:"1", commit:$h, agent:"", session_id:"", cwd:$w}')" \
+    attention "" "到該 Session 確認是否收到；沒收到就把 $dir/implementer-unconfirmed.txt 的內容貼給它，再刪掉該檔案。" \
+    "無法確認交給 implementer 的第一則 prompt 是否送達（Session ${id}），未重送。"
 elif (( rc != 0 )); then
   ho_role_pending "$dir" implementer && die "the implementer's pane is kept; fix the cause above (for a dialog, answer it there), then run handoff-start $change again"
   die "could not open the implementer session"

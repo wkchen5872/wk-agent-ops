@@ -177,16 +177,21 @@ host: herdr-app        # every role; the Herdr app must be open
   `<role>-unconfirmed.txt`, one notice, never resent). `loop.yaml` records the terminal address (for
   example `t1k`) as the role's session, `<role>.happ_space`, `<role>.happ_tab`, and the spaces the loop
   opened as `herdr_app.spaces`.
-- **Messages.** Before each message `hc get` must show the terminal live, still running the role's tool,
-  and idle or done; otherwise nothing is sent and the record is retried. `hc send` counts as delivered
+- **Messages.** Before each message `hc get` must show the terminal live, the role's tool as its foreground
+  program, and a reported status of idle or done; otherwise nothing is sent and the record is retried. An
+  agent that reports no status (no Herdr status integration) cannot be confirmed idle, so it gets no message.
+  The status alone never identifies the agent: hc keeps an agent's last status when a shell takes over. `hc send` counts as delivered
   only when it answers `started: true`; any other answer is an unconfirmed submission.
 - **Dialogs.** An agent that reports `blocked` (a permission, question or auth prompt) is never answered:
   you get one attention notice naming its space and tab, the record stays unprocessed, and after you
   answer the dialog `handoff-route --foreground` retries. A first prompt that waits on a dialog stays
   with the app (`<role>.pending_prompt: true`); the retry only checks that the agent took it.
-- **Cleanup** closes the spaces the loop opened (`space.close --confirmed true`) and, for a role in a space
-  the loop did not open, only its tab (`tab.close`), then removes the roles' finished terminals with
-  `hc rm`, all before the worktrees go. A reused `--reviewer-session` terminal is never closed.
+- **Cleanup** closes a space the loop opened (`space.close --confirmed true`) when every tab and terminal in it
+  is the loop's. Otherwise — a role in a space the loop did not open, or a tab you added to the loop's space —
+  it closes only the loop's own tabs (`tab.close`) and leaves the rest. A loop tab that also holds a terminal
+  the loop did not open is not closed: cleanup stops and keeps the worktrees. It then removes the roles'
+  finished terminals with `hc rm`, all before the worktrees go. A reused `--reviewer-session` terminal is
+  never closed.
 - `handoff-role --replace` does not support herdr-app roles yet: it refuses and changes nothing.
 
 Possible later host: `ghostty + tmux` (tmux `send-keys` can type into a pane) is not supported yet.
@@ -309,9 +314,9 @@ file it would remove from a kept main worktree. With `--yes` it:
    This happens before the worktrees go, because herdr resumes the agents of open panes when its
    server restarts. A target herdr reports as already gone counts as closed. If herdr is missing, its
    server is not running, or a close fails, cleanup stops with a non-zero status and removes no
-   worktree; start herdr and run it again. For herdr-app roles it closes the spaces the loop opened (or a
-   role's tab in another space) and removes their terminals with `hc rm`; with the Herdr app closed it
-   stops the same way;
+   worktree; start herdr and run it again. For herdr-app roles it closes the spaces the loop opened, or
+   only the loop's tabs where a space also holds something else (see [herdr-app](#herdr-app)), and removes
+   their terminals with `hc rm`; with the Herdr app closed it stops the same way;
 3. removes every loop worktree except the main worktree, without `--force`. In a kept main worktree
    it removes the `.pi/settings.json` the loop created for a Pi role (recorded in `loop.yaml` and
    unchanged); a file that existed before the loop is kept.

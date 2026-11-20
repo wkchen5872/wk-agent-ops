@@ -569,10 +569,11 @@ ho_happ_argv() {
   esac
 }
 
-# ho_happ_runs <terminal-json> <harness>: the terminal is live and runs that harness (its own status report,
-# or the foreground program: a Node CLI such as pi shows as node with the script next).
+# ho_happ_runs <terminal-json> <harness>: the terminal is live and its foreground program is that harness (a Node
+# CLI such as pi shows as node with the script next). The status report is not evidence: hc keeps an agent's last
+# status when a nested shell takes over (codex-herdr-app-r01/F-02).
 ho_happ_runs() {
-  jq -e --arg h "$2" '.state == "live" and ((.status.app // "") == $h or (.foreground.name // "") == $h
+  jq -e --arg h "$2" '.state == "live" and ((.foreground.name // "") == $h
     or any((.foreground.argv // [])[0:2][]; split("/") | last == $h))' <<<"$1" >/dev/null 2>&1
 }
 
@@ -602,10 +603,18 @@ ho_happ_space_for() {
 # earlier attempt (<role>.pending_prompt) is only checked again: its task is still with the app.
 ho_happ_open() {
   local dir="$1" role="$2" wt="$3" name="$4" prompt="$5" tf="$6" sec="$7" loop="$1/loop.yaml"
-  local t argv sp out label cur json waited
+  local t argv sp out label cur json waited reopen=1 kind
   t="$(kv_get "$loop" "$role.session" 2>/dev/null)"
   ho_herdr_hold_error "$dir" "$role" "$t" || return 1
-  if [[ -z "$t" ]] || ! ho_role_pending "$dir" "$role" || [[ "$(ho_hc get --json "$t" | jq -r '.state // empty' 2>/dev/null)" != live ]]; then
+  if [[ -n "$t" ]] && ho_role_pending "$dir" "$role"; then
+    # A new tab only when hc says the waiting one is gone; an unknown answer keeps it and its task (r01/F-05).
+    if json="$(ho_hc get --json "$t")"; then [[ "$(jq -r '.state // empty' <<<"$json")" == finished ]] || reopen=0
+    else
+      kind="$(ho_hc_kind "$json")"
+      [[ "$kind" == not_found ]] || { ho_err "herdr-core could not say whether terminal $t still waits for the $role's first prompt (${kind:-no answer}); nothing was opened"; return 1; }
+    fi
+  fi
+  if (( reopen )); then
     argv="$(ho_happ_argv "$tf" "$sec" "$name")" || return 1
     if sp="$(ho_happ_space_for "$dir" "$role" "$wt")"; then
       out="$(ho_happ_do tab.new --space "$sp" --name "$name" --argv "$argv" --task "$prompt" --focus false)" \
@@ -656,11 +665,11 @@ ho_happ_message() {
     ho_err "terminal $t no longer runs the $role's agent (Herdr app tab $(kv_get "$dir/loop.yaml" "$role.happ_tab" 2>/dev/null)); nothing was sent"; return 1
   fi
   st="$(jq -r '.status.state // empty' <<<"$json")"
-  # An agent that never reports its status cannot be checked; hc's started then tells.
+  # Only a reported idle or done is idle: an agent that reports no status cannot be checked (codex-herdr-app-r01/F-02).
   case "$st" in
     blocked) ho_err "$(ho_happ_dialog "$role" "$t" "$json")"; return 1 ;;
-    ""|idle|done) ;;
-    *) ho_err "the $role's agent in terminal $t is $st, not idle; nothing was sent"; return 1 ;;
+    idle|done) ;;
+    *) ho_err "the $role's agent in terminal $t is ${st:-not reporting its status}, not idle or done; nothing was sent"; return 1 ;;
   esac
   if out="$(ho_hc send --json -- "$t" "$4")"; then
     [[ "$(jq -r '.started' <<<"$out" 2>/dev/null)" == true ]] && return 0
@@ -676,25 +685,47 @@ ho_happ_message() {
   ho_herdr_unconfirmed "$dir" "$role" "$t" "$4"; return 2
 }
 
-# ho_happ_close_target <loop-dir> <role>: "space <id>" when the loop opened the role's space, else "tab <id>" (D8).
-# A role the loop did not open (no recorded tab) has none.
+# ho_happ_owned <loop-dir>: the tabs and terminals the loop opened, as a JSON array.
+ho_happ_owned() {
+  local r ids=()
+  for r in implementer reviewer finish; do
+    [[ -n "$(kv_get "$1/loop.yaml" "$r.happ_tab" 2>/dev/null)" ]] || continue
+    ids+=("$(kv_get "$1/loop.yaml" "$r.happ_tab")" "$(kv_get "$1/loop.yaml" "$r.session" 2>/dev/null)")
+  done
+  jq -cn '$ARGS.positional' --args "${ids[@]+"${ids[@]}"}"
+}
+
+# ho_happ_close_target <loop-dir> <role> [app-ls-json]: "space <id>" when the loop opened the role's space and,
+# as far as the app's layout (when given) shows, every tab and terminal in it is the loop's; else "tab <id>"
+# (D8, codex-herdr-app-r01/F-01). A role the loop did not open (no recorded tab) has none.
 ho_happ_close_target() {
   local tab sp
   tab="$(kv_get "$1/loop.yaml" "$2.happ_tab" 2>/dev/null)"; [[ -n "$tab" ]] || return 1
   sp="$(kv_get "$1/loop.yaml" "$2.happ_space" 2>/dev/null)"
-  if [[ -n "$sp" && " $(kv_get "$1/loop.yaml" herdr_app.spaces 2>/dev/null) " == *" $sp "* ]]; then printf 'space %s\n' "$sp"
+  if [[ -n "$sp" && " $(kv_get "$1/loop.yaml" herdr_app.spaces 2>/dev/null) " == *" $sp "* ]] \
+    && { [[ -z "${3:-}" ]] || jq -e --arg sp "$sp" --argjson own "$(ho_happ_owned "$1")" \
+      '[.spaces[]? | select(.id == $sp) | .tabs[]? | .id, .terminals[]?.terminal] | all(. as $x | $own | index($x) != null)' <<<"$3" >/dev/null 2>&1; }
+  then printf 'space %s\n' "$sp"
   else printf 'tab %s\n' "$tab"; fi
 }
+
+# ho_happ_ls: the app's layout, or nothing (status 1) when the app cannot answer.
+ho_happ_ls() { local out; out="$(herdr-app ls </dev/null 2>/dev/null)" && jq -e 'type == "object"' <<<"$out" >/dev/null 2>&1 && printf '%s\n' "$out"; }
 
 # ho_happ_close <loop-dir> <role>: close that target unless the app no longer shows it (closed earlier, or by an
 # earlier role of this cleanup), then remove the role's finished terminal from herdr-core. Fails unless both
 # are confirmed, so cleanup keeps the worktrees.
 ho_happ_close() {
-  local t kind id ls out term i
-  t="$(ho_happ_close_target "$1" "$2")" || return 0
-  kind="${t% *}"; id="${t#* }"
-  ls="$(herdr-app ls </dev/null 2>/dev/null)" && jq -e 'type == "object"' <<<"$ls" >/dev/null 2>&1 \
-    || { ho_err "the Herdr app is not open, so its $kind $id was not closed; open the Herdr app and run this again"; return 1; }
+  local t kind id ls out term i foreign
+  ho_happ_close_target "$1" "$2" >/dev/null || return 0
+  ls="$(ho_happ_ls)" || { ho_err "the Herdr app is not open, so the $2's $(ho_happ_close_target "$1" "$2") was not closed; open the Herdr app and run this again"; return 1; }
+  t="$(ho_happ_close_target "$1" "$2" "$ls")"; kind="${t% *}"; id="${t#* }"
+  if [[ "$kind" == tab ]]; then
+    # Closing a tab ends every terminal in it: refuse when one is not the loop's.
+    foreign="$(jq -r --arg id "$id" --argjson own "$(ho_happ_owned "$1")" \
+      '[.spaces[]?.tabs[]? | select(.id == $id) | .terminals[]?.terminal | select(. as $x | $own | index($x) == null)] | join(" ")' <<<"$ls" 2>/dev/null)"
+    [[ -z "$foreign" ]] || { ho_err "the $2's tab $id also holds terminal(s) $foreign, which the loop did not open; nothing was closed. Move or close them yourself, then run this again"; return 1; }
+  fi
   if jq -e --arg id "$id" '[.spaces[]? | .id, (.tabs[]?.id)] | index($id) != null' <<<"$ls" >/dev/null 2>&1; then
     out="$(ho_happ_do "$kind.close" --id "$id" --confirmed true)" || { ho_err "the Herdr app could not close $kind $id: ${out##*$'\n'}"; return 1; }
   fi
@@ -1087,7 +1118,7 @@ ho_check_happ() {
   command -v hc >/dev/null 2>&1 || { ho_line fail host "$1: the hc command (herdr-core) was not found; install the Herdr app"; return 0; }
   out="$(hc server status --json </dev/null 2>/dev/null)" && ver="$(jq -r '.version // empty' <<<"$out" 2>/dev/null)" && [[ -n "$ver" ]] \
     || { ho_line fail host "$1: herdr-core is not running (open the Herdr app, or run: hc server start)"; return 0; }
-  if herdr-app status </dev/null 2>/dev/null | jq -e 'type == "object"' >/dev/null 2>&1; then
+  if out="$(herdr-app status </dev/null 2>/dev/null)" && jq -e 'type == "object"' <<<"$out" >/dev/null 2>&1; then
     ho_line ok host "$1: Herdr app open, herdr-core $ver"
   else
     ho_line fail host "$1: the Herdr app is not open; open the Herdr app, then run this again"
