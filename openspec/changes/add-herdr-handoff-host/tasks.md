@@ -54,5 +54,5 @@
 
 - [x] 7.1 完整執行 `bash tests/test_agent_handoff.sh` 與專案的 pre-commit 檢查，全部通過。
   - 測試要求：指令輸出全部通過。
-- [ ] 7.2 用真實 herdr 跑一個小型迴圈（實作、審查各一輪到 pass，再 cleanup），確認 workspace 分組、tab 名稱、原生 Session ID、信任對話框的 retry、cleanup 後沒有殘留的 pane。
+- [x] 7.2 用真實 herdr 跑一個小型迴圈（實作、審查各一輪到 pass，再 cleanup），確認 workspace 分組、tab 名稱、原生 Session ID、信任對話框的 retry、cleanup 後沒有殘留的 pane。
   - 測試要求：無法自動化；把重播步驟、預期結果與實際結果記在 Work Item `WI-20261120-handoff-session-hosts`。
