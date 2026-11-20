@@ -152,11 +152,13 @@ while IFS= read -r d; do rm -f "$d/$key-unconfirmed.txt"; done <<<"$dirs"
 ho_log "$dir" "handoff-role replaced the $role session $old"
 printf 'Deleted the old %s session %s\n' "$role" "$old"
 
-# Hand the new role the record that waited for the old one (design D3), through the usual paths.
+# Hand the new role the record that waited for the old one (design D3), through the usual paths. A review round
+# waits for the old reviewer when the log shows that very session received it: opened with it (recorded or not)
+# or messaged it.
 [[ -n "$rec" ]] || exit 0
 base="$(basename "$rec")" rdir="$(dirname "$rec")"
 if [[ "$role" == review && "$rstate" == implement/done/* ]] && grep -qxF "$base" "$rdir/.routed" 2>/dev/null \
-  && grep -qE " $base action=reviewer:(opened|messaged):$old( |\$)" "$rdir/routing.log" 2>/dev/null; then
+  && grep -qE " $base action=reviewer:(opened|opened-unrecorded|messaged):$old( |\$)" "$rdir/routing.log" 2>/dev/null; then
   wt="$(cd "$rdir/../.." && pwd)"
   if [[ -f "$here/handoff-route" ]]; then route="$here/handoff-route"; else route="$HOME/.config/wk-workflow/handoff/handoff-route"; fi
   manual="remove the line $base from $rdir/.routed, then run in $wt: bash $route --foreground"

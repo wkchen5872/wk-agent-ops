@@ -24,6 +24,7 @@
   - 審查修正（r01、r02 的 F-03）：只改送舊審查者確實收到的紀錄，並在紀錄所在 worktree 派送；送達與否只看本次結果；沒送出時保持未處理，host 未確認時不重送；處理標記無法清除時，指令會說明手動步驟。各項都有回歸測試。
   - 審查修正（r03 的 F-03）：是否可能已送達改由迴圈狀態判斷（已記錄的新 session，而且第一個 prompt 不在 pending），不依賴 `routing.log`；可能已送達的紀錄一律保持已處理，不會重送。有回歸測試。
   - 審查修正（pi-role-review-r04 的 F-03）：新審查者已開啟、但 session ID 無法寫入 `loop.yaml` 時，route 以 `reviewer:opened-unrecorded:<id>` 停住而不是重試；`handoff-role` 綜合 session 紀錄、本次 log 與 `.routed` 判斷，任何可能已送達的跡象都保持已處理，並指出要找回的 session。有回歸測試。
+  - 審查修正（pi-role-review-r05 的 F-01）：`reviewer:opened-unrecorded:<舊 session>` 也算該舊審查者已收到這一輪；補記 session ID 後明確以 `--replace` 再換一次時，同一輪只改送給新審查者一次，普通前景重試仍不會再開。有回歸測試。
 - [x] 3.2 收尾：最新交件單是 `finish`/`blocked`，或者審查 pass 而且舊收尾 session 已開啟時，用 `handoff-finish` 的開啟流程開新的收尾 session。
   - 測試要求：先寫失敗測試：blocked 收尾更換後，開出新收尾並收到收尾 prompt；pass 但收尾還沒開啟時，只換設定、不開啟（仍由 `handoff-finish` 開）。
   - 審查修正（r01）：收尾在更換後無法開啟時，發一次 attention 通知。

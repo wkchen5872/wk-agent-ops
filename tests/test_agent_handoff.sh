@@ -2500,6 +2500,12 @@ SH
   ROUTE_FG "$PW"
   [[ "$rc" != 0 && "$(created)" == 3 ]] && routed "$PW" 01-implement.yaml && grep -q 'sess-3' <<<"$out" \
     && ok "a reviewer opened whose session ID could not be recorded is named, and no second reviewer opens (pi-role-review-r04/F-03)" || { bad "a reviewer opened whose session ID could not be recorded is named, and no second reviewer opens (pi-role-review-r04/F-03)"; printf '       %s\n' "$out"; }
+  # pi-role-review-r05/F-01: once its ID is recorded by hand, replacing that reviewer hands the round on, once.
+  lset "$rl" reviewer.session sess-3
+  out="$(prole "$PW" add-export review codex:gpt-6.2-sol:high --replace 2>&1)"; rc=$?
+  ROUTE_FG "$PW"
+  [[ "$rc" == 0 && "$(deleted | tail -1)" == sess-3 && "$(created)" == 4 && "$(kv_get "$rl" reviewer.session)" == sess-4 ]] \
+    && ok "replacing a reviewer that was opened unrecorded hands the waiting round to the new one once (pi-role-review-r05/F-01)" || { bad "replacing a reviewer that was opened unrecorded hands the waiting round to the new one once (pi-role-review-r05/F-01)"; printf '       %s\n' "$out"; }
 fi
 
 if [[ "$fail" -ne 0 ]]; then
