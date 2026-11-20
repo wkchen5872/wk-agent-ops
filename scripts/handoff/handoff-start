@@ -8,7 +8,7 @@
 #   --review <override>         override the review template for this loop
 #                               <override>: claude|codex:<model>:<effort> or pi:<provider>/<model>:<effort>:<billing>
 #   --finish ask|auto           override finish.trigger for this loop
-#   --reviewer-session <id>     reuse an existing session (Xirp ID or herdr pane) as the reviewer
+#   --reviewer-session <id>     reuse an existing session (Xirp ID, herdr pane or Herdr app terminal) as the reviewer
 # Role templates: <main worktree>/.agent-handoff/roles.yaml (not tracked by Git).
 # The handoff-doctor checks run first for all three roles; any failure opens nothing.
 set -u

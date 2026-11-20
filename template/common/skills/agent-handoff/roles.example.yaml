@@ -11,9 +11,10 @@
 
 max_rounds: 3
 
-# Session host: where the roles' sessions run. xirp (default) or herdr; a role can set its own
-# host: line to override this one. herdr_session names the herdr session used when a loop starts
-# outside herdr (inside a herdr pane, that pane's session is used); default: herdr's default session.
+# Session host: where the roles' sessions run. xirp (default), herdr or herdr-app; a role can set its own
+# host: line to override this one. herdr is the herdr terminal UI; herdr-app is the Herdr desktop app,
+# which must be open (its sessions run in herdr-core, hc). herdr_session names the herdr session used when
+# a loop starts outside herdr (inside a herdr pane, that pane's session is used); default: herdr's default session.
 # host: herdr
 # herdr_session: work
 

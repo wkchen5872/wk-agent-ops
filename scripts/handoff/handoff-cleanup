@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Clean up a finished handoff loop: archive its records, delete its sessions (Xirp) or close what it
-# opened (herdr), then remove its worktrees.
+# opened (herdr, the Herdr app), then remove its worktrees.
 # Usage: handoff-cleanup <change-id> [--abandon] [--yes]
 #   --yes       act; without it the command only lists what it would remove
 #   --abandon   clean up a loop that will not finish (no finish/done record needed)
@@ -43,7 +43,7 @@ fi
 
 # Worktrees and sessions named by any copy of loop.yaml. Xirp sessions are deleted one by one;
 # for herdr roles cleanup closes what the loop opened: its workspace, or the role's tab (design D3).
-dirs=() wts=() sessions=() herdr_items=() herdr_dirs=() herdr_roles=()
+dirs=() wts=() sessions=() herdr_items=() herdr_dirs=() herdr_roles=() happ_items=() happ_dirs=() happ_roles=()
 while IFS= read -r d; do
   dirs+=("$d")
   wt="$(cd "$d/../.." && pwd -P)"
@@ -55,6 +55,13 @@ while IFS= read -r d; do
       t="$(ho_herdr_close_target "$d" "$k")" || continue
       for x in "${herdr_items[@]-}"; do [[ "$x" == "$t" ]] && continue 2; done
       herdr_items+=("$t"); herdr_dirs+=("$d"); herdr_roles+=("$k")
+    elif [[ "$(ho_role_host "$d/loop.yaml" "$k")" == herdr-app ]]; then
+      # Every role is closed (a space already closed is skipped) so that each terminal is removed; listed once.
+      t="$(ho_happ_close_target "$d" "$k")" || continue
+      for x in "${happ_roles[@]-}"; do [[ "$x" == "$k" ]] && continue 2; done
+      happ_dirs+=("$d"); happ_roles+=("$k")
+      for x in "${happ_items[@]-}"; do [[ "$x" == "$t" ]] && continue 2; done
+      happ_items+=("$t")
     else
       case " ${sessions[*]-} " in *" $s "*) ;; *) sessions+=("$s") ;; esac
     fi
@@ -77,6 +84,9 @@ else printf 'Cleanup for %s\n' "$change"; fi
 printf '  sessions to delete:\n'; for s in "${sessions[@]-}"; do [[ -n "$s" ]] && printf '    %s\n' "$s"; done
 if (( ${#herdr_items[@]} )); then
   printf '  herdr to close:\n'; for t in "${herdr_items[@]}"; do printf '    herdr %s\n' "$t"; done
+fi
+if (( ${#happ_items[@]} )); then
+  printf '  Herdr app to close:\n'; for t in "${happ_items[@]}"; do printf '    herdr-app %s\n' "$t"; done
 fi
 printf '  worktrees to remove:\n'
 for wt in "${wts[@]}"; do [[ "$wt" == "$main" ]] && printf '    %s (main worktree: kept)\n' "$wt" || printf '    %s\n' "$wt"; done
@@ -128,7 +138,14 @@ for i in "${!herdr_items[@]}"; do
   if ho_host_close herdr "${herdr_dirs[$i]}" "${herdr_roles[$i]}" ""; then printf 'Closed herdr %s\n' "${herdr_items[$i]}"
   else herdr_failed=1; fi
 done
-(( herdr_failed )) && die "herdr did not confirm closing the loop's workspaces or tabs; no worktree was removed. Start herdr (or close them yourself), then run handoff-cleanup $change --yes again"
+for i in "${!happ_roles[@]}"; do
+  if ! command -v herdr-app >/dev/null 2>&1 || ! command -v hc >/dev/null 2>&1; then
+    printf 'herdr-app or hc not found: the Herdr app spaces and tabs were not closed\n' >&2; herdr_failed=1; break
+  fi
+  if ho_host_close herdr-app "${happ_dirs[$i]}" "${happ_roles[$i]}" ""; then printf 'Closed herdr-app %s (%s)\n' "$(ho_happ_close_target "${happ_dirs[$i]}" "${happ_roles[$i]}")" "${happ_roles[$i]}"
+  else herdr_failed=1; break; fi
+done
+(( herdr_failed )) && die "herdr or the Herdr app did not confirm closing what the loop opened; no worktree was removed. Start herdr or open the Herdr app (or close them yourself), then run handoff-cleanup $change --yes again"
 
 # 3. Remove the loop worktrees; the main worktree keeps its files, minus the moved records.
 rc=0

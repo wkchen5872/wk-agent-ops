@@ -3,7 +3,7 @@
 Implementation, review, and finish agents hand work to each other without you relaying
 messages. Each agent ends its round by writing a handoff record with the `agent-handoff`
 skill; when the agent stops, a Stop hook reads that record and messages the next agent
-through its session host — Xirp or herdr — or notifies you through the existing Telegram notifier.
+through its session host — Xirp, herdr or the Herdr desktop app — or notifies you through the existing Telegram notifier.
 
 Scope: one person's machine. Handoff records and the hook exist only locally, so the loop never
 spans people: it commits locally and does not push, open a PR, or post reviews by default. Work
@@ -12,7 +12,7 @@ that another person implements or reviews goes through the GitHub PR instead (`g
 [本機開發四階段流程](../../docs/workflow/local-development.md) for how the two fit together.
 
 Requirements: `git`, `jq`, and the CLI of each [session host](#session-hosts) in use for opening
-and messaging sessions — `xirp` (the default) or `herdr`; the `pi` CLI only for Pi roles. When a
+and messaging sessions — `xirp` (the default), `herdr`, or `herdr-app` with `hc`; the `pi` CLI only for Pi roles. When a
 record's host is not installed, the hook does nothing for it and the manual workflow is unchanged.
 Run [`handoff-doctor`](#handoff-doctor-change-id) to check a machine.
 Supported agents: Claude Code, Codex, and Pi (see [Pi roles](#pi-roles)).
@@ -65,7 +65,7 @@ fall back to whatever `/model` last saved as the tool's default.
 | `<role>.profile` | Codex only: a Codex configuration profile for that session. Use `handoff-net` for a Codex finish role with `delivery: pr`; Codex's default sandbox has no network |
 | `<role>.provider` | Pi only, required: the Pi provider that owns the model, for example `openai-codex` |
 | `<role>.billing` | Pi only, required: `subscription` (OAuth login) or `api` (API key) |
-| `host`, `<role>.host` | Where the sessions run: `xirp` (default) or `herdr`; a role's `host` overrides the top-level one. See [Session hosts](#session-hosts) |
+| `host`, `<role>.host` | Where the sessions run: `xirp` (default), `herdr` (the terminal UI) or `herdr-app` (the Herdr desktop app); a role's `host` overrides the top-level one. See [Session hosts](#session-hosts) |
 | `herdr_session` | The herdr session for herdr roles started outside herdr (default: herdr's default session) |
 
 Prompt placeholders: `{change}`, `{head}`, `{round}`, `{report}`, `{delivery}`, `{handoff_write}`, `{author}`.
@@ -78,8 +78,9 @@ Claude Code calls skills as `/skill`, Codex as `$skill`, Pi as `/skill:<name>`. 
 
 ## Session hosts
 
-A session host is where a role's session runs and where you watch it: `xirp` (the default) or
-`herdr`. It is a property of your machine, so it lives in your untracked `roles.yaml`:
+A session host is where a role's session runs and where you watch it: `xirp` (the default),
+`herdr` (the herdr terminal UI) or `herdr-app` (the Herdr desktop app, see [herdr-app](#herdr-app)).
+Any other value is refused before anything opens. It is a property of your machine, so it lives in your untracked `roles.yaml`:
 
 ```yaml
 host: herdr            # every role; omit for xirp
@@ -150,6 +151,44 @@ herdr needs its integration for each tool (`herdr integration install claude|cod
 native session IDs; `handoff-doctor` warns when one is missing. `XIRP-SESSION-ID` is `null` in a
 herdr pane, even when herdr was started from an Xirp shell (see the `agent-handoff` skill).
 
+### herdr-app
+
+`host: herdr-app` runs the roles in the Herdr desktop app. The app runs its terminals in herdr-core
+(`hc`), a different runtime from the herdr terminal UI: a herdr server's sessions never show in the app,
+so the two hosts are separate values and may be mixed in one loop.
+
+```yaml
+host: herdr-app        # every role; the Herdr app must be open
+```
+
+- **The app must be open.** `handoff-doctor` checks that `herdr-app` and `hc` exist, that herdr-core runs
+  (`hc server status`), and that the app window is open (`herdr-app status`); each missing piece is a
+  `fail host` line. `handoff-start`, `handoff-role`, `handoff-finish` and cleanup refuse while the app
+  is closed. The loop never falls back to `hc run`, whose terminals the app does not show.
+- **Layout.** The first herdr-app role in a worktree opens a space for it with
+  `herdr-app do space.new`: named after the change ID (`<change-id> review` or `<change-id> finish` for
+  a role with `worktree: new`), with the worktree as its folder. Later roles in the same worktree join it
+  with `tab.new --space`. Each tab is named after the template's `name`; nothing takes focus.
+- **Start.** The agent starts from `--argv` with the template's model and effort (the same arguments as
+  for herdr; Pi also writes the worktree's `.pi/settings.json`), in your login shell, so tools installed
+  through nvm are found. The first prompt goes to the app as `--task`; the app sends it once the agent is
+  ready. The loop then reads `hc get` for up to `HANDOFF_CREATE_WAIT` seconds: a working agent or a
+  finished turn counts as delivered; no sign of it is an [unconfirmed submission](#session-hosts) (kept in
+  `<role>-unconfirmed.txt`, one notice, never resent). `loop.yaml` records the terminal address (for
+  example `t1k`) as the role's session, `<role>.happ_space`, `<role>.happ_tab`, and the spaces the loop
+  opened as `herdr_app.spaces`.
+- **Messages.** Before each message `hc get` must show the terminal live, still running the role's tool,
+  and idle or done; otherwise nothing is sent and the record is retried. `hc send` counts as delivered
+  only when it answers `started: true`; any other answer is an unconfirmed submission.
+- **Dialogs.** An agent that reports `blocked` (a permission, question or auth prompt) is never answered:
+  you get one attention notice naming its space and tab, the record stays unprocessed, and after you
+  answer the dialog `handoff-route --foreground` retries. A first prompt that waits on a dialog stays
+  with the app (`<role>.pending_prompt: true`); the retry only checks that the agent took it.
+- **Cleanup** closes the spaces the loop opened (`space.close --confirmed true`) and, for a role in a space
+  the loop did not open, only its tab (`tab.close`), then removes the roles' finished terminals with
+  `hc rm`, all before the worktrees go. A reused `--reviewer-session` terminal is never closed.
+- `handoff-role --replace` does not support herdr-app roles yet: it refuses and changes nothing.
+
 Possible later host: `ghostty + tmux` (tmux `send-keys` can type into a pane) is not supported yet.
 
 ## Commands
@@ -169,7 +208,7 @@ implementer first hands over.
 | `--impl <override>` | Override the implement template for this loop |
 | `--review <override>` | Override the review template for this loop |
 | `--finish ask\|auto` | Override `finish.trigger` for this loop |
-| `--reviewer-session <id>` | Reuse an existing session on the review role's host as the reviewer: an Xirp session ID, or a herdr pane ID |
+| `--reviewer-session <id>` | Reuse an existing session on the review role's host as the reviewer: an Xirp session ID, a herdr pane ID, or a Herdr app terminal address |
 
 An override is `claude|codex:<model>:<effort>`, or `pi:<provider>/<model>:<effort>:<billing>` for
 Pi (verified like a Pi template). Overrides are written to `loop.yaml`; `roles.yaml` is never
@@ -270,7 +309,9 @@ file it would remove from a kept main worktree. With `--yes` it:
    This happens before the worktrees go, because herdr resumes the agents of open panes when its
    server restarts. A target herdr reports as already gone counts as closed. If herdr is missing, its
    server is not running, or a close fails, cleanup stops with a non-zero status and removes no
-   worktree; start herdr and run it again;
+   worktree; start herdr and run it again. For herdr-app roles it closes the spaces the loop opened (or a
+   role's tab in another space) and removes their terminals with `hc rm`; with the Herdr app closed it
+   stops the same way;
 3. removes every loop worktree except the main worktree, without `--force`. In a kept main worktree
    it removes the `.pi/settings.json` the loop created for a Pi role (recorded in `loop.yaml` and
    unchanged); a file that existed before the loop is kept.
@@ -310,7 +351,7 @@ warn notify no notifier at /Users/me/.config/ai-notify/hooks/telegram-notify.sh;
 | Area | Checks | A problem is |
 | --- | --- | --- |
 | `base` | `git`, `jq`, the main worktree, the template file (`roles.yaml` or `loop.yaml`). A failure here skips every other check | `fail` |
-| `host` | For each host in use. `xirp`: the command, and the main worktree registered as an Xirp project. `herdr`: the command, its version, and the server of each selected herdr session | `fail` |
+| `host` | For each host in use. `xirp`: the command, and the main worktree registered as an Xirp project. `herdr`: the command, its version, and the server of each selected herdr session. `herdr-app`: the `herdr-app` and `hc` commands, herdr-core running (its version), and the Herdr app window open | `fail` |
 | `harness` | For each tool in use: the command and its version, and its trigger — the `handoff-route` Stop hook in `~/.claude/settings.json` or `~/.codex/hooks.json`, or the Pi trigger extension | `fail` |
 | `harness` | Codex hook trust, which cannot be read from outside Codex | `warn` |
 | `harness` | For a role on herdr: herdr's integration for its tool (`herdr integration status`); without it herdr cannot report the native session ID | `warn` |
@@ -338,10 +379,10 @@ with the stopping session's model: the model Xirp reports for Claude Code and Co
 `model=claude-opus-5-5`), and `provider/model` from the record's `agent` section for Pi (for
 example `model=openai/gpt-6.2-sol`). herdr reports no model, so a Claude Code or Codex role on
 herdr shows its template's model, marked `model=gpt-6.1-sol(template)`. The stopping session is
-`session=<Xirp session ID>`, or inside a herdr pane `session=herdr:<pane ID> native=<native session ID>`
+`session=<Xirp session ID>`, inside a herdr pane `session=herdr:<pane ID> native=<native session ID>`, or in a Herdr app terminal `session=herdr-app:<HC_TERMINAL_ID> native=<native session ID>` (herdr-app roles also show the template's model)
 (an Xirp ID inherited by herdr panes is never used). A manual `--foreground` run or a retry may be
 started by someone else, so it logs `session=unknown` and names who ran it as
-`trigger=xirp:<id>` or `trigger=herdr:<pane ID>`. The hook never writes to GitHub and never pushes, and it
+`trigger=xirp:<id>`, `trigger=herdr:<pane ID>` or `trigger=herdr-app:<terminal>`. The hook never writes to GitHub and never pushes, and it
 always exits successfully.
 
 **Continuing after `blocked`.** A blocked record stops the loop until you act; nothing resumes it

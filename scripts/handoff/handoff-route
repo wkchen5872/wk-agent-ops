@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Stop hook for the agent handoff loop (Claude Code and Codex; Pi through pi/wk-handoff.ts).
 # Reads the newest unprocessed handoff record in the stopping agent's worktree and
-# routes it: notify the next agent through its host (Xirp or herdr), or notify the user, then tells the user
+# routes it: notify the next agent through its host (Xirp, herdr or the Herdr app), or notify the user, then tells the user
 # what happened (progress or attention, see lib/handoff.sh ho_notify). Never writes to
 # GitHub, never pushes, never blocks the agent: the work runs in the background and
 # every failure ends with exit 0.
@@ -119,7 +119,7 @@ route_dir() {
 
   # One Xirp query serves the routing log and the agent label. Inside a herdr pane CHIRP_SESSION_ID
   # is inherited from the shell that started herdr, never this agent's (design D7).
-  local xsid="${CHIRP_SESSION_ID:-}"; [[ "${HERDR_ENV:-}" == 1 ]] && xsid=""
+  local xsid="${CHIRP_SESSION_ID:-}"; [[ "${HERDR_ENV:-}" == 1 || -n "${HC_TERMINAL_ID:-}" ]] && xsid=""
   # Only an agent's own stop on a first attempt identifies the stopping session. A manual run or a
   # retry may be triggered by someone else, so its environment never names the stopping session.
   local attributed=1
@@ -129,17 +129,20 @@ route_dir() {
   # A Pi record names its own agent (written by handoff-write from the Pi runtime).
   local label model
   model="$(jq -r '.model // "unknown"' <<<"$sess_json" 2>/dev/null || echo unknown)"
-  # herdr does not report the model: the log shows the role template's, marked as such (design D8).
+  # herdr and the Herdr app do not report the model: the log shows the role template's, marked as such (design D8).
   from="$(ho_pi_role_key "$role")"
-  [[ -n "$from" && "$(ho_role_host "$loop" "$from")" == herdr ]] && model="$(kv_get "$loop" "$(ho_role_tsec "$from").model" 2>/dev/null)(template)"
+  [[ -n "$from" && "$(ho_role_host "$loop" "$from")" == herdr* ]] && model="$(kv_get "$loop" "$(ho_role_tsec "$from").model" 2>/dev/null)(template)"
   if label="$(ho_pi_record_label "$rec")"; then model="$(kv_get "$rec" agent.provider)/$(kv_get "$rec" agent.model)"; fi
-  # The stopping session's identifiers, each in its own namespace: Xirp's, or herdr's pane and the
-  # native session ID from the hook input (codex-herdr-r03/F-01).
+  # The stopping session's identifiers, each in its own namespace: Xirp's, herdr's pane or the Herdr app's
+  # terminal, and the native session ID from the hook input (codex-herdr-r03/F-01; herdr-app design D9).
   local who="session=${xsid:-unknown}" trig=""
-  [[ "${HERDR_ENV:-}" == 1 ]] && who="session=herdr:${HERDR_PANE_ID:-unknown} native=${native_session:-unknown}"
+  if [[ "${HERDR_ENV:-}" == 1 ]]; then who="session=herdr:${HERDR_PANE_ID:-unknown} native=${native_session:-unknown}"
+  elif [[ -n "${HC_TERMINAL_ID:-}" ]]; then who="session=herdr-app:$HC_TERMINAL_ID native=${native_session:-unknown}"; fi
   if (( ! attributed )); then
     # The stopping session stays unknown; whoever ran this is named separately, in its own namespace.
-    if [[ "${HERDR_ENV:-}" == 1 ]]; then trig="herdr:${HERDR_PANE_ID:-unknown}"; elif [[ -n "$xsid" ]]; then trig="xirp:$xsid"; fi
+    if [[ "${HERDR_ENV:-}" == 1 ]]; then trig="herdr:${HERDR_PANE_ID:-unknown}"
+    elif [[ -n "${HC_TERMINAL_ID:-}" ]]; then trig="herdr-app:$HC_TERMINAL_ID"
+    elif [[ -n "$xsid" ]]; then trig="xirp:$xsid"; fi
     who="session=unknown${trig:+ trigger=$trig}"
   fi
   ho_log "$dir" "$base action=$action $who model=$model"

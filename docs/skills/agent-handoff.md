@@ -2,7 +2,7 @@
 type: Playbook
 title: Agent Handoff 交接迴圈指南
 description: 使用 handoff-start、handoff-role、handoff-finish、handoff-cleanup 與 handoff-doctor 協調多 Agent 自動化實作、審查與收尾。
-tags: [skills, handoff, workflow, xirp, herdr, agents, notify]
+tags: [skills, handoff, workflow, xirp, herdr, herdr-app, agents, notify]
 generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-20T14:05:00+08:00" }
 sources:
   - id: handoff-scripts
@@ -20,7 +20,7 @@ sources:
 
 `agent-handoff` 是一套自動化的多 Agent 協作迴圈系統。它讓負責實作（implementer）、審查（reviewer）與收尾（finish）的各個 Agent 能在無需人工反覆傳話的情況下，自動接力完成功能開發、審查驗收與最終提交。
 
-每個 Agent 在當前輪次結束時，透過 `agent-handoff` Skill 寫入標準化的「交件單」；當 Agent 停下時，系統內建的 `Stop` 鉤子（`handoff-route`）會讀取該交件單，透過下一位 Agent 所在的 session 宿主（host：`xirp` 或 `herdr`）自動發送訊息，並發送 Telegram 即時進度通知或在需要人工介入時發送停點警報。[^handoff-scripts]
+每個 Agent 在當前輪次結束時，透過 `agent-handoff` Skill 寫入標準化的「交件單」；當 Agent 停下時，系統內建的 `Stop` 鉤子（`handoff-route`）會讀取該交件單，透過下一位 Agent 所在的 session 宿主（host：`xirp`、`herdr` 或 `herdr-app`）自動發送訊息，並發送 Telegram 即時進度通知或在需要人工介入時發送停點警報。[^handoff-scripts]
 
 相關流程圖稿：
 - [啟動流程圖（SVG）](/docs/diagrams/agent-handoff-start.svg)
@@ -95,7 +95,7 @@ sources:
 
 | 欄位 | 說明與預設值 |
 |---|---|
-| `host` | `xirp`（預設）或 `herdr`：Session 跑在哪裡。可寫在頂層套用至所有角色，或由個別角色覆寫 |
+| `host` | `xirp`（預設）、`herdr`（終端機版）或 `herdr-app`（Herdr 桌面 app）：Session 跑在哪裡。可寫在頂層套用至所有角色，或由個別角色覆寫 |
 | `herdr_session` | 在 herdr 外部啟動時指定 herdr session 名稱（預設使用 herdr default session） |
 | `max_rounds` | 最大退回修復輪數，預設為 `3`。達上限時 Stop hook 停止自動調度並通知你 |
 | `review.worktree` | `shared`（預設）：審查者與實作者共用同一個 worktree；`new`：另開獨立 detached worktree 停在該 commit |
@@ -195,7 +195,7 @@ handoff-start <change-id> [選項]
 - `--impl <override>`：臨時覆寫實作者配置（例：`--impl claude:opus:high`）。
 - `--review <override>`：臨時覆寫審查者配置（例：`--review codex:gpt-6.1-sol:high`；Pi 為 `--review pi:openai-codex/gpt-6.2-sol:high:subscription`，與範本一樣驗證）。
 - `--finish ask|auto`：覆寫審查通過時的行為（是否自動啟動 finish）。
-- `--reviewer-session <id>`：沿用審查角色 host 上現有的 session 作為審查者（Xirp session ID，或 herdr 的 pane ID）。
+- `--reviewer-session <id>`：沿用審查角色 host 上現有的 session 作為審查者（Xirp session ID、herdr 的 pane ID，或 Herdr app 的 terminal 位址）。
 
 override 換了工具時，prompt 開頭的 skill 呼叫會改成新工具的寫法（例如 `$change-review` 換成 Pi 的 `/skill:change-review`），以舊工具名稱開頭的 session 名稱也會改成新工具名稱。
 
@@ -350,7 +350,7 @@ handoff-doctor <change-id>
 | 區 | 檢查項目 | 有問題時 |
 |---|---|---|
 | `base` | `git`、`jq`、main worktree、範本檔（`roles.yaml` 或 `loop.yaml`）；這裡失敗就不做其他檢查 | `fail` |
-| `host` | 每個用到的 host。`xirp`：指令、main worktree 已登錄為 Xirp project；`herdr`：指令、版本、所選 herdr session 的 server 在跑 | `fail` |
+| `host` | 每個用到的 host。`xirp`：指令、main worktree 已登錄為 Xirp project；`herdr`：指令、版本、所選 herdr session 的 server 在跑；`herdr-app`：`herdr-app` 與 `hc` 指令、herdr-core 在跑（顯示版本）、Herdr app 視窗開著 | `fail` |
 | `harness` | 每個用到的工具：指令與版本，以及觸發器（Claude Code／Codex 的 `handoff-route` Stop hook、Pi 擴充） | `fail` |
 | `harness` | Codex hook 是否已在 `/hooks` 信任，無法從外部確認 | `warn` |
 | `harness` | herdr 角色：herdr 對該工具的整合（`herdr integration status`），沒有就拿不到原生 Session ID | `warn` |

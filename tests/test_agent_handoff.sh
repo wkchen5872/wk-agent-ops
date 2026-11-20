@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Offline tests for the agent handoff loop: record parser, handoff-write, routing hook, and launcher.
-# Usage: bash tests/test_agent_handoff.sh [kv|write|skill|install|route|notify|mixed|start|finish|doctor|herdr|hookinstall|cleanup|pi|all]
+# Usage: bash tests/test_agent_handoff.sh [kv|write|skill|install|route|notify|mixed|start|finish|doctor|herdr|happ|hookinstall|cleanup|pi|all]
 set -u
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -9,6 +9,8 @@ KV="$SKILL/scripts/kv.sh"
 WRITE="$SKILL/scripts/handoff-write"
 section="${1:-all}"
 fail=0
+# Run inside a Herdr app terminal, the route would name that terminal as the stopping session.
+unset HC_TERMINAL_ID
 
 ok() { printf '  ok   %s\n' "$1"; }
 bad() { printf '  FAIL %s\n' "$1"; fail=1; }
@@ -364,6 +366,83 @@ case "$1 ${2:-}" in
 esac
 SH
 chmod +x "$FAKES/claude" "$FAKES/codex" "$FAKES/herdr"
+# Fake Herdr desktop app CLI 0.1.16 (state in $FAKE_XIRP_DIR/happ). Each call is recorded as a JSON array in happ/calls.
+# do space.new|tab.new answer {space, tab, pane, terminal} and create the terminal for the fake hc; an errors is
+# { "error": "..." } with exit 1. Switch: app-closed (no window: a message on stderr, exit 2, as the real CLI).
+cat > "$FAKES/herdr-app" <<'SH'
+#!/usr/bin/env bash
+A="$FAKE_XIRP_DIR/happ"; H="$FAKE_XIRP_DIR/hc"; mkdir -p "$A" "$H"; touch "$A/spaces" "$A/tabs"
+printf '%s\0' "$@" | jq -Rsc 'split("\u0000")[:-1]' >> "$A/calls"
+[[ "$1" == --version ]] && { echo "herdr-app 0.1.16"; exit 0; }
+[[ -e "$A/app-closed" ]] && { echo "herdr-app: no Herdr window at x/herdr-app.sock: No such file or directory (os error 2)" >&2; exit 2; }
+opt() { local k="--$1"; shift; while [[ $# -gt 0 ]]; do [[ "$1" == "$k" ]] && { printf '%s' "$2"; return; }; shift; done; }
+n() { local c; c=$(( $(cat "$A/n-$1" 2>/dev/null || echo 0) + 1 )); echo "$c" > "$A/n-$1"; echo "$c"; }
+col() { awk -F'\t' -v k="$2" -v c="$3" '$1 == k {print $c}' "$A/$1"; }
+case "$1" in
+  status) jq -n '{space:"spU", tab:"tbU", errors:[]}' ;;
+  ls) jq -n --rawfile s "$A/spaces" --rawfile t "$A/tabs" '($t | split("\n") | map(select(length > 0) | split("\t"))) as $tabs
+        | {spaces: [$s | split("\n")[] | select(length > 0) | split("\t") as $sp | {id:$sp[0], name:$sp[1], folder:$sp[2],
+           tabs: [$tabs[] | select(.[1] == $sp[0]) | {id:.[0], name:.[2], terminals:[{terminal:.[3]}]}]}]}' ;;
+  do)
+    cmd="$2"; shift 2
+    case "$cmd" in
+      space.new|tab.new)
+        if [[ "$cmd" == space.new ]]; then sp="sp$(n space)"; printf '%s\t%s\t%s\n' "$sp" "$(opt name "$@")" "$(opt folder "$@")" >> "$A/spaces"; tn="$(opt tab "$@")"
+        else sp="$(opt space "$@")"; [[ -n "$(col spaces "$sp" 1)" ]] || { echo "{ \"error\": \"no space $sp\" }"; exit 1; }; tn="$(opt name "$@")"; fi
+        tb="tb$(n tab)"; t="t$(n term)"; printf '%s\t%s\t%s\t%s\n' "$tb" "$sp" "$tn" "$t" >> "$A/tabs"
+        turn=1; [[ -e "$H/no-start" || -z "$(opt task "$@")" ]] && turn=0
+        jq -n --arg t "$t" --argjson argv "$(opt argv "$@")" --arg w "$(col spaces "$sp" 2) / $tn" --arg sp "$sp" --arg tb "$tb" --argjson turn "$turn" \
+          '{address:$t, state:"live", argv:$argv, turn:$turn, labels:{"herdr.space":$sp, "herdr.tab":$tb, where:$w}}' > "$H/term-$t"
+        jq -n --arg sp "$sp" --arg tb "$tb" --arg t "$t" '{space:$sp, tab:$tb, pane:"p1", terminal:$t}' ;;
+      space.close|tab.close)
+        id="$(opt id "$@")"; f=spaces; [[ "$cmd" == tab.close ]] && f=tabs
+        [[ -n "$(col "$f" "$id" 1)" ]] || { echo "{ \"error\": \"no ${cmd%.close} $id\" }"; exit 1; }
+        [[ "$(opt confirmed "$@")" == true ]] || { echo '{ "error": "not confirmed" }'; exit 1; }
+        sp="$id"; [[ "$f" == tabs ]] && sp="$(col tabs "$id" 2)"; folder="$(col spaces "$sp" 3)"
+        for t in $(awk -F'\t' -v id="$id" '$1 == id || $2 == id {print $4}' "$A/tabs"); do
+          jq '.state = "finished"' "$H/term-$t" > "$H/term-$t.tmp" && mv "$H/term-$t.tmp" "$H/term-$t"
+        done
+        awk -F'\t' -v id="$id" '$1 != id && $2 != id' "$A/tabs" > "$A/tabs.tmp" && mv "$A/tabs.tmp" "$A/tabs"
+        [[ "$f" == spaces ]] && { awk -F'\t' -v id="$id" '$1 != id' "$A/spaces" > "$A/spaces.tmp" && mv "$A/spaces.tmp" "$A/spaces"; }
+        printf '%s %s exists=%s\n' "$cmd" "$id" "$([[ -d "$folder" ]] && echo yes || echo no)" >> "$A/closed"; echo '"ok"' ;;
+      *) echo "{ \"error\": \"unsupported $cmd\" }"; exit 1 ;;
+    esac ;;
+  *) exit 2 ;;
+esac
+SH
+# Fake herdr-core hc 0.1.21 (terminals in $FAKE_XIRP_DIR/hc/term-<t>, made by the fake herdr-app). Errors are
+# {"error":{"kind":...}} with exit 3. Switches: core-down, blocked (status blocked, kind permission; send refuses),
+# no-start (the app's --task is never taken: turn stays 0), send-unstarted (send answers started:false),
+# finished-<t> (the terminal has finished), shell-<t> (it runs a shell).
+cat > "$FAKES/hc" <<'SH'
+#!/usr/bin/env bash
+H="$FAKE_XIRP_DIR/hc"; mkdir -p "$H"; printf '%s\n' "$*" >> "$H/calls"
+[[ "$1" == --version || "$1" == -V ]] && { echo "hc 0.1.21"; exit 0; }
+err() { jq -nc --arg k "$1" '{error:{kind:$k, message:$k}}'; exit 3; }
+sw() { [[ -e "$H/$1" ]] && echo true || echo false; }
+args=(); for a in "$@"; do [[ "$a" == --json || "$a" == -- ]] || args+=("$a"); done; set -- "${args[@]}"
+if [[ "$1 ${2:-}" == "server status" ]]; then
+  [[ -e "$H/core-down" ]] && { echo "hc: herdr-core is not running" >&2; exit 1; }; jq -nc '{version:"0.1.21", live:1}'; exit 0
+fi
+[[ -e "$H/core-down" ]] && err unavailable
+t="${2:-}"; f="$H/term-$t"
+case "$1" in
+  get) [[ -f "$f" ]] || err not_found
+    jq -c --argjson fin "$(sw "finished-$t")" --argjson sh "$(sw "shell-$t")" --argjson bl "$(sw blocked)" '.argv[0] as $h
+      | if $fin or .state == "finished" then .state = "finished" | .foreground = null | .status = null
+        elif $sh then .foreground = {name:"zsh", argv:["zsh"], cwd:"/", pid:2} | .status = null
+        else .foreground = (if $h == "pi" then {name:"node", argv:["node", "/x/bin/pi"]} else {name:$h, argv:[$h]} end)
+          | .status = (if $bl then {app:$h, state:"blocked", kind:"permission"} else {app:$h, state:"idle"} end) end' "$f" ;;
+  send) [[ -f "$f" ]] || err not_found
+    [[ -e "$H/finished-$t" || "$(jq -r .state "$f")" == finished ]] && err finished; [[ -e "$H/blocked" ]] && err blocked
+    printf '%s\t%s\n' "$t" "$3" >> "$H/sends"; turn="$(jq .turn "$f")"; jq '.turn += 1' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+    jq -nc --argjson n "$turn" --argjson s "$([[ -e "$H/send-unstarted" ]] && echo false || echo true)" '{started:$s, status:"idle", turn:$n}' ;;
+  rm) [[ -f "$f" ]] || err not_found; [[ "$(jq -r .state "$f")" == finished ]] || err live
+    printf '%s\n' "$t" >> "$H/removed"; rm -f "$f"; jq -nc --arg t "$t" '{removed:$t}' ;;
+  *) err invalid_params ;;
+esac
+SH
+chmod +x "$FAKES/herdr-app" "$FAKES/hc"
 # hook_home <dir>: a HOME where handoff-route is registered for Claude Code and Codex.
 hook_home() {
   mkdir -p "$1/.claude" "$1/.codex"
@@ -410,7 +489,7 @@ finish_template:
   prompt: "\$openspec-commit {change} delivery {delivery}"
 YAML
 }
-fresh_state() { export FAKE_XIRP_DIR="$tmp/state-$1"; rm -rf "$FAKE_XIRP_DIR"; mkdir -p "$FAKE_XIRP_DIR/herdr"; }
+fresh_state() { export FAKE_XIRP_DIR="$tmp/state-$1"; rm -rf "$FAKE_XIRP_DIR"; mkdir -p "$FAKE_XIRP_DIR/herdr" "$FAKE_XIRP_DIR/happ" "$FAKE_XIRP_DIR/hc"; }
 use_project() { export FAKE_PROJECT_PATH="$(dirname "$(git -C "$1" rev-parse --path-format=absolute --git-common-dir)")"; }
 # Hook mode run synchronously (HANDOFF_ROUTE_WAIT=1), as when an agent stops.
 route_in() { (cd "$1" && PATH="$FAKES:$PATH" HANDOFF_NOTIFY="$FAKES/notify.sh" HANDOFF_CREATE_WAIT=2 HANDOFF_ROUTE_WAIT=1 CHIRP_SESSION_ID="${T_SID-chirp-1}" "$ROUTE" </dev/null); }
@@ -1035,7 +1114,7 @@ if run_section start; then
     && ok "without herdr_session the herdr role uses the default session" || bad "without herdr_session the herdr role uses the default session"
   HT="$tmp/start-host-tmux"; new_project "$HT"; use_project "$HT"; fresh_state s12; host_roles "$HT" review tmux
   out="$(start_in "$HT" add-export 2>&1)"; rc=$?
-  [[ "$rc" != 0 && "$(created)" == 0 && ! -d "$HT-add-export" ]] && grep -q review <<<"$out" && grep -q 'xirp or herdr' <<<"$out" && [[ -z "$(herdr_calls | grep -v 'status\|integration\|version')" ]] \
+  [[ "$rc" != 0 && "$(created)" == 0 && ! -d "$HT-add-export" ]] && grep -q review <<<"$out" && grep -q 'xirp, herdr, herdr-app' <<<"$out" && [[ -z "$(herdr_calls | grep -v 'status\|integration\|version')" ]] \
     && ok "an unknown host is refused, naming the role and the accepted hosts, and nothing opens" || { bad "an unknown host is refused, naming the role and the accepted hosts, and nothing opens"; printf '       %s\n' "$out"; }
 fi
 
@@ -1263,7 +1342,7 @@ if run_section doctor; then
     && ok "a missing template file fails the base check and nothing else is checked" || { bad "a missing template file fails the base check and nothing else is checked"; printf '       %s\n' "$out"; }
   awk '/^review:/{print; print "  host: tmux"; next} {print}' "$DR" > "$tmp/doc-tmux.yaml"
   out="$(pf "$D" "$tmp/doc-tmux.yaml" implement review finish)"; rc=$?
-  [[ "$rc" != 0 ]] && grep -q "^fail role review.*xirp or herdr" <<<"$out" \
+  [[ "$rc" != 0 ]] && grep -q "^fail role review.*xirp, herdr, herdr-app" <<<"$out" \
     && ok "an unknown host fails the role check" || { bad "an unknown host fails the role check"; printf '       %s\n' "$out"; }
 
   # handoff-doctor
@@ -1637,6 +1716,164 @@ if run_section herdr; then
     && ok "replacing a finish role whose prompt herdr did not confirm opens the new one with one prompt (codex-role-review-r01/F-05)" || { bad "replacing a finish role whose prompt herdr did not confirm opens the new one with one prompt (codex-role-review-r01/F-05)"; printf '       %s\n' "$out"; }
 fi
 
+# ---------------------------------------------------------------- herdr-app host (Herdr desktop app)
+HA() { printf '%s' "$FAKE_XIRP_DIR/happ"; }
+HC() { printf '%s' "$FAKE_XIRP_DIR/hc"; }
+# happ_do <command>: the recorded herdr-app do calls of that command, one JSON array each
+happ_do() { jq -c --arg c "$1" 'select(.[0] == "do" and .[1] == $c)' "$(HA)/calls" 2>/dev/null; }
+# happ_opt <call-json> <option>: that option's value in one recorded call
+happ_opt() { jq -r --arg k "--$2" '. as $a | [range(length) | select($a[.] == $k) | $a[. + 1]][0] // empty' <<<"$1"; }
+hc_sends() { cat "$(HC)/sends" 2>/dev/null; }
+# happ_project <dir> [roles.yaml lines...]: project whose roles all run on the Herdr app (plus the given lines)
+happ_project() {
+  local d="$1" l; shift; new_project "$d"; use_project "$d"
+  { printf 'host: herdr-app\n'; for l in "$@"; do printf '%s\n' "$l"; done; cat "$d/.agent-handoff/roles.yaml"; } > "$d/r.tmp" && mv "$d/r.tmp" "$d/.agent-handoff/roles.yaml"
+}
+# happ_loop <dir> <state>: a herdr-app loop with the reviewer opened for round 1; sets AL (worktree) and ALL (loop.yaml)
+happ_loop() {
+  happ_project "$1"; fresh_state "$2"; start_in "$1" add-export >/dev/null 2>&1; AL="$1-add-export"; ALL="$AL/.agent-handoff/add-export/loop.yaml"
+  wrpt "$AL"; commit_in "$AL" impl; hw "$AL" --role implement --status done --head HEAD; route_in "$AL"
+}
+hclean() { local d="$1"; shift; (cd "$d" && PATH="$FAKES:$PATH" "$ROOT/scripts/handoff/handoff-cleanup" "$@" </dev/null); }
+if run_section happ; then
+  printf 'herdr-app host\n'
+  source "$KV"
+  # 1.3 environment checks
+  AD="$tmp/happ-doc"; happ_project "$AD"; fresh_state a1; ADR="$AD/.agent-handoff/roles.yaml"
+  out="$(pf "$AD" "$ADR" implement review finish)"; rc=$?
+  [[ "$rc" == 0 ]] && grep -q '^ok host implement, review, finish: .*Herdr app.*herdr-core 0.1.21' <<<"$out" && ! grep -q 'xirp\|^ok host .*herdr 0.9' <<<"$out" \
+    && ok "a herdr-app loop checks the Herdr app and herdr-core, shows the core version, and not Xirp or herdr" || { bad "a herdr-app loop checks the Herdr app and herdr-core, shows the core version, and not Xirp or herdr"; printf '       %s\n' "$out"; }
+  touch "$(HA)/app-closed"; out="$(pf "$AD" "$ADR" implement review finish)"; rc=$?
+  [[ "$rc" != 0 ]] && grep -q '^fail host .*Herdr app is not open.*open' <<<"$out" \
+    && ok "a closed Herdr app fails the host check and asks to open it" || { bad "a closed Herdr app fails the host check and asks to open it"; printf '       %s\n' "$out"; }
+  out="$(start_in "$AD" add-export 2>&1)"; rc=$?
+  [[ "$rc" != 0 && ! -e "$AD-add-export" && -z "$(happ_do space.new)$(happ_do tab.new)" && "$(created)" == 0 ]] && grep -q 'handoff-start: fail host .*Herdr app' <<<"$out" \
+    && ok "handoff-start refuses while the Herdr app is closed and opens no session on any host" || { bad "handoff-start refuses while the Herdr app is closed and opens no session on any host"; printf '       %s\n' "$out"; }
+  rm -f "$(HA)/app-closed"; touch "$(HC)/core-down"; out="$(pf "$AD" "$ADR" implement review finish)"; rc=$?
+  [[ "$rc" != 0 ]] && grep -q '^fail host .*herdr-core is not running' <<<"$out" \
+    && ok "herdr-core that is not running fails the host check" || { bad "herdr-core that is not running fails the host check"; printf '       %s\n' "$out"; }
+  rm -f "$(HC)/core-down"
+  out="$(PF_PATH="$(path_without herdr-app)" pf "$AD" "$ADR" implement review finish)"; rc=$?
+  [[ "$rc" != 0 ]] && grep -q '^fail host .*herdr-app command was not found' <<<"$out" \
+    && ok "a missing herdr-app command fails the host check and names it" || { bad "a missing herdr-app command fails the host check and names it"; printf '       %s\n' "$out"; }
+  out="$(PF_PATH="$(path_without hc)" pf "$AD" "$ADR" implement review finish)"; rc=$?
+  [[ "$rc" != 0 ]] && grep -q '^fail host .*hc command .*not found' <<<"$out" \
+    && ok "a missing hc command fails the host check and names it" || { bad "a missing hc command fails the host check and names it"; printf '       %s\n' "$out"; }
+  # 1.1 host value
+  AV="$tmp/happ-value"; happ_project "$AV"; fresh_state a2; out="$(start_in "$AV" add-export 2>&1)"; rc=$?; avl="$AV-add-export/.agent-handoff/add-export/loop.yaml"
+  [[ "$rc" == 0 && "$(kv_get "$avl" implement_template.host)" == herdr-app && "$(kv_get "$avl" review_template.host)" == herdr-app \
+    && "$(kv_get "$avl" finish_template.host)" == herdr-app && ! -s "$FAKE_XIRP_DIR/herdr/calls" && "$(created)" == 0 ]] \
+    && ok "host: herdr-app is recorded for every role and no herdr TUI or Xirp command is used" || { bad "host: herdr-app is recorded for every role and no herdr TUI or Xirp command is used"; printf '       %s\n' "$out"; }
+  # 2.1 opening
+  c="$(happ_do space.new)"; AW="$AV-add-export"
+  [[ "$(happ_opt "$c" name)" == add-export && "$(happ_opt "$c" folder)" == "$AW" && "$(happ_opt "$c" tab)" == "claude - impl - add-export" \
+    && "$(happ_opt "$c" focus)" == false && "$(happ_opt "$c" argv)" == '["claude","--model","opus","--effort","high","--name","claude - impl - add-export"]' ]] \
+    && happ_opt "$c" task | grep -q 'openspec-apply-change add-export' \
+    && ok "the implementer opens a space named after the change, with Claude's argv, the prompt as its task and no focus" || { bad "the implementer opens a space named after the change, with Claude's argv, the prompt as its task and no focus"; printf '       %s\n' "$c"; }
+  [[ "$(kv_get "$avl" implementer.session)" == t1 && "$(kv_get "$avl" implementer.happ_space)" == sp1 && "$(kv_get "$avl" implementer.happ_tab)" == tb1 \
+    && "$(kv_get "$avl" herdr_app.spaces)" == sp1 && "$(kv_get "$avl" implementer.pending_prompt 2>/dev/null)" != true && ! -e "$AW/.agent-handoff/add-export/implementer-unconfirmed.txt" ]] \
+    && ok "loop.yaml records the terminal, space, tab and the space the loop opened" || { bad "loop.yaml records the terminal, space, tab and the space the loop opened"; cat "$avl"; }
+  wrpt "$AW"; commit_in "$AW" impl; hw "$AW" --role implement --status done --head HEAD; route_in "$AW"; c="$(happ_do tab.new)"
+  [[ "$(happ_opt "$c" space)" == sp1 && "$(happ_opt "$c" name)" == "codex - review - add-export" && "$(happ_opt "$c" focus)" == false \
+    && "$(happ_opt "$c" argv)" == '["codex","-m","gpt-6.1-sol","-c","model_reasoning_effort=high"]' && "$(kv_get "$avl" reviewer.session)" == t2 \
+    && "$(kv_get "$avl" herdr_app.spaces)" == sp1 && "$(happ_do space.new | wc -l | tr -d ' ')" == 1 ]] && happ_opt "$c" task | grep -q 'change-review add-export' && routed "$AW" 01-implement.yaml \
+    && ok "a shared reviewer opens as a tab in the loop's space with Codex's argv" || { bad "a shared reviewer opens as a tab in the loop's space with Codex's argv"; printf '       %s\n' "$c"; cat "$AW/.agent-handoff/add-export/routing.log"; }
+  # 3.1 messages
+  hw "$AW" --role review --status done --verdict changes-required --head HEAD --report r.md; route_in "$AW"
+  hc_sends | grep -q $'^t1\t.*changes-required' && routed "$AW" 02-review.yaml \
+    && ok "changes-required is sent to the implementer's idle terminal and the record is processed" || { bad "changes-required is sent to the implementer's idle terminal and the record is processed"; hc_sends; tail -1 "$AW/.agent-handoff/add-export/routing.log"; }
+  # 3.2 the routing log names the stopping terminal
+  grep -q '02-review.yaml action=implementer:messaged:t1 session=chirp-1 model=gpt-6.1-sol(template)' "$AW/.agent-handoff/add-export/routing.log" \
+    && ok "without HC_TERMINAL_ID the routing log names the session as before, with the herdr-app role's template model" || { bad "without HC_TERMINAL_ID the routing log names the session as before, with the herdr-app role's template model"; tail -1 "$AW/.agent-handoff/add-export/routing.log"; }
+  commit_in "$AW" two; hw "$AW" --role implement --status done --head HEAD
+  (cd "$AW" && printf '{"session_id":"native-1"}' | PATH="$FAKES:$PATH" HANDOFF_NOTIFY="$FAKES/notify.sh" HANDOFF_CREATE_WAIT=2 HANDOFF_ROUTE_WAIT=1 \
+    HC_TERMINAL_ID=t1 CHIRP_SESSION_ID=chirp-inherited "$ROUTE")
+  grep -q '03-implement.yaml action=reviewer:messaged:t2 session=herdr-app:t1 native=native-1 model=opus(template)' "$AW/.agent-handoff/add-export/routing.log" \
+    && ! grep -q chirp-inherited "$AW/.agent-handoff/add-export/routing.log" && hc_sends | grep -q $'^t2\t.*第 2 輪' \
+    && ok "with HC_TERMINAL_ID the routing log names herdr-app:<terminal>, never an inherited Xirp ID" || { bad "with HC_TERMINAL_ID the routing log names herdr-app:<terminal>, never an inherited Xirp ID"; tail -1 "$AW/.agent-handoff/add-export/routing.log"; }
+  # blocked: nothing is answered, one notice, the record stays unprocessed
+  commit_in "$AW" three; hw "$AW" --role implement --status done --head HEAD; touch "$(HC)/blocked"; ns="$(hc_sends | wc -l)"; nn="$(ncount)"
+  route_in "$AW"; route_in "$AW"
+  [[ "$(hc_sends | wc -l)" == "$ns" && "$(ncount)" == $((nn + 1)) ]] && ! routed "$AW" 04-implement.yaml && ! grep -q -- '--force' "$(HC)/calls" \
+    && jt '.kind=="attention" and (.detail|test("permission")) and (.detail|test("add-export")) and (.detail|test("codex - review - add-export"))' \
+    && ok "a reviewer at a permission dialog gets no text, one notice naming its space and tab, and the record stays unprocessed" || { bad "a reviewer at a permission dialog gets no text, one notice naming its space and tab, and the record stays unprocessed"; jl | tail -1; }
+  rm -f "$(HC)/blocked"; (cd "$AW" && PATH="$FAKES:$PATH" HANDOFF_NOTIFY="$FAKES/notify.sh" HANDOFF_CREATE_WAIT=2 "$ROUTE" --foreground </dev/null)
+  [[ "$(hc_sends | grep -c $'^t2\t.*第 3 輪')" == 1 ]] && routed "$AW" 04-implement.yaml \
+    && ok "after the dialog is answered a foreground retry sends the round once" || bad "after the dialog is answered a foreground retry sends the round once"
+  # a terminal that has finished: delivery fails, nothing is sent
+  commit_in "$AW" four; hw "$AW" --role implement --status done --head HEAD; touch "$(HC)/finished-t2"; ns="$(hc_sends | wc -l)"
+  route_in "$AW"
+  [[ "$(hc_sends | wc -l)" == "$ns" ]] && ! routed "$AW" 05-implement.yaml && grep -q '05-implement.yaml action=reviewer:send-failed:t2' "$AW/.agent-handoff/add-export/routing.log" \
+    && ok "a reviewer terminal that has finished gets no text and the delivery fails" || { bad "a reviewer terminal that has finished gets no text and the delivery fails"; tail -1 "$AW/.agent-handoff/add-export/routing.log"; }
+  rm -f "$(HC)/finished-t2"; touch "$(HC)/shell-t2"; route_in "$AW"
+  [[ "$(hc_sends | wc -l)" == "$ns" ]] && ! routed "$AW" 05-implement.yaml \
+    && ok "a reviewer terminal that now runs a shell gets no text" || bad "a reviewer terminal that now runs a shell gets no text"
+  # started:false: kept unconfirmed, never resent
+  rm -f "$(HC)/shell-t2"; touch "$(HC)/send-unstarted"; ns="$(hc_sends | wc -l)"
+  (cd "$AW" && PATH="$FAKES:$PATH" HANDOFF_NOTIFY="$FAKES/notify.sh" HANDOFF_CREATE_WAIT=2 "$ROUTE" --foreground </dev/null); route_in "$AW"; rm -f "$(HC)/send-unstarted"
+  (( $(hc_sends | wc -l) == ns + 1 )) && routed "$AW" 05-implement.yaml && grep -q '第 4 輪' "$AW/.agent-handoff/add-export/reviewer-unconfirmed.txt" 2>/dev/null \
+    && ok "a send that did not start a turn is kept in an unconfirmed file and not sent again" || { bad "a send that did not start a turn is kept in an unconfirmed file and not sent again"; tail -2 "$AW/.agent-handoff/add-export/routing.log"; }
+  # first prompt not observed: unconfirmed, one notice, not resent
+  happ_project "$tmp/happ-nostart"; fresh_state a3; start_in "$tmp/happ-nostart" add-export >/dev/null 2>&1; NW="$tmp/happ-nostart-add-export"
+  commit_in "$NW" impl; hw "$NW" --role implement --status done --head HEAD; touch "$(HC)/no-start"; nn="$(ncount)"
+  route_in "$NW"; route_in "$NW"
+  [[ "$(happ_do tab.new | wc -l | tr -d ' ')" == 1 && "$(ncount)" == $((nn + 1)) && "$(kv_get "$NW/.agent-handoff/add-export/loop.yaml" reviewer.session)" == t2 ]] \
+    && grep -q 'change-review add-export' "$NW/.agent-handoff/add-export/reviewer-unconfirmed.txt" 2>/dev/null && routed "$NW" 01-implement.yaml && jt '.kind=="attention"' \
+    && ok "a first prompt with no started turn is kept unconfirmed with one notice and not resent" || { bad "a first prompt with no started turn is kept unconfirmed with one notice and not resent"; cat "$NW/.agent-handoff/add-export/routing.log"; }
+  # first prompt waits on a dialog: the tab is kept, one notice names it, a retry opens nothing new
+  happ_project "$tmp/happ-dialog"; fresh_state a4; start_in "$tmp/happ-dialog" add-export >/dev/null 2>&1; BW="$tmp/happ-dialog-add-export"; bwl="$BW/.agent-handoff/add-export/loop.yaml"
+  commit_in "$BW" impl; hw "$BW" --role implement --status done --head HEAD; touch "$(HC)/blocked"
+  route_in "$BW"; route_in "$BW"
+  [[ "$(ncount)" == 1 && "$(kv_get "$bwl" reviewer.session)" == t2 && "$(kv_get "$bwl" reviewer.pending_prompt)" == true ]] && ! routed "$BW" 01-implement.yaml \
+    && jt '.kind=="attention" and (.detail|test("add-export")) and (.detail|test("codex - review - add-export")) and (.next|test("handoff-route --foreground"))' \
+    && ok "a reviewer whose first prompt waits on a dialog keeps its tab and gets one notice naming its space and tab" || { bad "a reviewer whose first prompt waits on a dialog keeps its tab and gets one notice naming its space and tab"; jl | tail -1; }
+  rm -f "$(HC)/blocked"; (cd "$BW" && PATH="$FAKES:$PATH" HANDOFF_NOTIFY="$FAKES/notify.sh" HANDOFF_CREATE_WAIT=2 "$ROUTE" --foreground </dev/null)
+  [[ "$(happ_do tab.new | wc -l | tr -d ' ')" == 1 && -z "$(kv_get "$bwl" reviewer.pending_prompt)" && ! -s "$(HC)/sends" ]] && routed "$BW" 01-implement.yaml \
+    && ok "after the dialog a retry takes the handed prompt as delivered without opening or sending again" || { bad "after the dialog a retry takes the handed prompt as delivered without opening or sending again"; cat "$BW/.agent-handoff/add-export/routing.log"; }
+  # a reviewer with a worktree of its own opens its own space
+  happ_project "$tmp/happ-new"; awk '/^review:/{print; print "  worktree: new"; next} /^  worktree: shared/ && r==0 {r=1; next} {print}' "$tmp/happ-new/.agent-handoff/roles.yaml" > "$tmp/r.tmp"
+  cp "$tmp/r.tmp" "$tmp/happ-new/.agent-handoff/roles.yaml"; fresh_state a5; start_in "$tmp/happ-new" add-export >/dev/null 2>&1; EW="$tmp/happ-new-add-export"
+  commit_in "$EW" impl; hw "$EW" --role implement --status done --head HEAD; route_in "$EW"; c="$(happ_do space.new | tail -1)"
+  [[ "$(happ_opt "$c" name)" == "add-export review" && "$(happ_opt "$c" folder)" == "$EW-review" && "$(happ_opt "$c" tab)" == "codex - review - add-export" \
+    && -z "$(happ_do tab.new)" && "$(kv_get "$EW/.agent-handoff/add-export/loop.yaml" herdr_app.spaces)" == "sp1 sp2" ]] \
+    && ok "a reviewer with worktree new opens a space of its own" || { bad "a reviewer with worktree new opens a space of its own"; printf '       %s\n' "$c"; cat "$EW/.agent-handoff/add-export/loop.yaml"; }
+  # mixed hosts: implementer on Xirp, reviewer on the Herdr app
+  MA="$tmp/happ-mixed"; new_loop "$MA"; use_project "$MA"; fresh_state a6; rpt "$MA"; mal="$MA/.agent-handoff/add-export/loop.yaml"; lset "$mal" review_template.host herdr-app
+  hw "$MA" --role implement --status done --head HEAD; route_in "$MA"
+  hw "$MA" --role review --status done --verdict changes-required --head HEAD --report r.md; route_in "$MA"
+  commit_in "$MA" two; hw "$MA" --role implement --status done --head HEAD; route_in "$MA"
+  [[ "$(created)" == 0 && "$(kv_get "$mal" reviewer.session)" == t1 ]] && msgs | grep -q $'^impl-1\t.*changes-required' && hc_sends | grep -q $'^t1\t.*第 2 輪' \
+    && [[ "$(happ_opt "$(happ_do space.new)" name)" == add-export ]] \
+    && ok "with the implementer on Xirp and the reviewer on the Herdr app, each message goes through its receiver's CLI" || { bad "with the implementer on Xirp and the reviewer on the Herdr app, each message goes through its receiver's CLI"; msgs; hc_sends; }
+  # 4.1 cleanup
+  happ_loop "$tmp/happ-clean" a7; hw "$AL" --role review --status done --verdict pass --head HEAD --report r.md; hw "$AL" --role finish --status done --head HEAD
+  out="$(hclean "$tmp/happ-clean" add-export 2>&1)"; rc=$?
+  [[ "$rc" == 0 && ! -s "$(HA)/closed" ]] && grep -q 'herdr-app space sp1' <<<"$out" && [[ "$(grep -c 'herdr-app ' <<<"$out")" == 1 ]] \
+    && ok "the cleanup preview lists the Herdr app space the loop opened, once, and closes nothing" || { bad "the cleanup preview lists the Herdr app space the loop opened, once, and closes nothing"; printf '       %s\n' "$out"; }
+  touch "$(HA)/app-closed"; out="$(hclean "$tmp/happ-clean" add-export --yes 2>&1)"; rc=$?
+  [[ "$rc" != 0 && -d "$AL" && -f "$ALL" && ! -s "$(HA)/closed" ]] && grep -q 'Herdr app' <<<"$out" \
+    && ok "cleanup with the Herdr app closed fails, asks to open it and removes no worktree" || { bad "cleanup with the Herdr app closed fails, asks to open it and removes no worktree"; printf '       %s\n' "$out"; }
+  rm -f "$(HA)/app-closed"; out="$(hclean "$tmp/happ-clean" add-export --yes 2>&1)"; rc=$?
+  [[ "$rc" == 0 && "$(cat "$(HA)/closed" 2>/dev/null)" == "space.close sp1 exists=yes" && ! -e "$AL" ]] && git -C "$tmp/happ-clean" show-ref -q --verify refs/heads/feature/add-export \
+    && [[ "$(sort "$(HC)/removed" 2>/dev/null | paste -sd, -)" == "t1,t2" ]] && happ_do space.close | grep -q '"--confirmed","true"' \
+    && ok "cleanup closes the loop's space before removing the worktree, removes its terminals and keeps the branch" || { bad "cleanup closes the loop's space before removing the worktree, removes its terminals and keeps the branch"; printf '       %s\n' "$out"; cat "$(HA)/closed" "$(HC)/removed" 2>/dev/null; }
+  # only what the loop opened: a role in a space the loop did not open closes only its tab; a reused terminal is left alone
+  happ_loop "$tmp/happ-other" a8
+  printf 'spU\tmine\t%s\n' "$tmp" >> "$(HA)/spaces"; awk -F'\t' -v OFS='\t' '$1 == "tb2" {$2 = "spU"} {print}' "$(HA)/tabs" > "$tmp/t.tmp" && cat "$tmp/t.tmp" > "$(HA)/tabs"
+  lset "$ALL" reviewer.happ_space spU
+  out="$(hclean "$tmp/happ-other" add-export --abandon --yes 2>&1)"; rc=$?
+  [[ "$rc" == 0 && "$(sort "$(HA)/closed" | paste -sd, -)" == "space.close sp1 exists=yes,tab.close tb2 exists=yes" ]] && grep -q $'^spU\t' "$(HA)/spaces" \
+    && ok "a role in a space the loop did not open has only its tab closed" || { bad "a role in a space the loop did not open has only its tab closed"; printf '       %s\n' "$out"; cat "$(HA)/closed"; }
+  happ_project "$tmp/happ-reuse"; fresh_state a9; mkdir -p "$(HC)"; jq -n '{address:"t9", state:"live", argv:["codex"], turn:3, labels:{where:"mine / review"}}' > "$(HC)/term-t9"
+  out="$(start_in "$tmp/happ-reuse" add-export --reviewer-session t9 2>&1)"; rc=$?
+  [[ "$rc" == 0 && "$(kv_get "$tmp/happ-reuse-add-export/.agent-handoff/add-export/loop.yaml" reviewer.session)" == t9 ]] \
+    && ok "an existing Herdr app terminal running the review harness can be reused as the reviewer" || { bad "an existing Herdr app terminal running the review harness can be reused as the reviewer"; printf '       %s\n' "$out"; }
+  hclean "$tmp/happ-reuse" add-export --abandon --yes >/dev/null 2>&1
+  [[ -f "$(HC)/term-t9" ]] && ! grep -q 't9' "$(HA)/closed" 2>/dev/null && ok "cleanup never closes or removes a reused terminal" || bad "cleanup never closes or removes a reused terminal"
+  out="$(start_in "$tmp/happ-reuse" add-export --reviewer-session t404 2>&1)"; rc=$?
+  [[ "$rc" != 0 ]] && grep -q "t404" <<<"$out" && ok "a reviewer terminal that does not exist is refused" || { bad "a reviewer terminal that does not exist is refused"; printf '       %s\n' "$out"; }
+fi
+
 # ---------------------------------------------------------------- user-level installer and README
 if run_section hookinstall; then
   printf 'hook installer\n'
@@ -1697,6 +1934,9 @@ if run_section hookinstall; then
   grep -q '^## Session hosts' "$readme" && grep -q 'host: herdr' "$readme" && grep -q 'herdr_session' "$readme" && grep -q 'ghostty + tmux' "$readme" \
     && grep -q '^# host: herdr' "$SKILL/roles.example.yaml" && grep -q '^# herdr_session:' "$SKILL/roles.example.yaml" \
     && ok "README and roles.example.yaml document host, herdr_session and the possible ghostty + tmux host" || bad "README and roles.example.yaml document host, herdr_session and the possible ghostty + tmux host"
+  grep -q '^### herdr-app' "$readme" && grep -q 'host: herdr-app' "$readme" && grep -q 'herdr-app do space.new' "$readme" && grep -q 'Herdr app' "$ROOT/docs/skills/agent-handoff.md" \
+    && grep -q '^# Session host: .*xirp (default), herdr or herdr-app' "$SKILL/roles.example.yaml" \
+    && ok "README, the skill guide and roles.example.yaml document the herdr-app host" || bad "README, the skill guide and roles.example.yaml document the herdr-app host"
   grep -qF -- '--replace' "$readme" && grep -qF -- '--worktree new' "$readme" && grep -qF -- '--replace' "$ROOT/docs/skills/agent-handoff.md" && grep -qF -- '--worktree new' "$ROOT/docs/skills/agent-handoff.md" \
     && ok "README and the skill guide document handoff-role --replace and --worktree new" || bad "README and the skill guide document handoff-role --replace and --worktree new"
   grep -q 'HERDR_ENV' "$SKILL/SKILL.md" && ok "SKILL.md explains XIRP-SESSION-ID inside a herdr pane" || bad "SKILL.md explains XIRP-SESSION-ID inside a herdr pane"
@@ -2529,6 +2769,13 @@ SH
   ROUTE_FG "$PW"
   [[ "$rc" == 0 && "$(deleted | tail -1)" == sess-3 && "$(created)" == 4 && "$(kv_get "$rl" reviewer.session)" == sess-4 ]] \
     && ok "replacing a reviewer that was opened unrecorded hands the waiting round to the new one once (pi-role-review-r05/F-01)" || { bad "replacing a reviewer that was opened unrecorded hands the waiting round to the new one once (pi-role-review-r05/F-01)"; printf '       %s\n' "$out"; }
+  # herdr-app: a Pi role starts in the Herdr app with provider, model and thinking, and its worktree gets the Pi settings
+  pi_project "$PI_IMPL" "$CX_REV" "$CX_FIN"; { printf 'host: herdr-app\n'; cat "$PD/.agent-handoff/roles.yaml"; } > "$PD/r.tmp" && mv "$PD/r.tmp" "$PD/.agent-handoff/roles.yaml"
+  out="$(pstart "$PD" add-export 2>&1)"; rc=$?; c="$(happ_do space.new)"
+  [[ "$rc" == 0 && "$(created)" == 0 && "$(happ_opt "$c" argv)" == '["pi","--provider","openai-codex","--model","gpt-6.2-sol","--thinking","high"]' \
+    && "$(jq -c . "$PW/.pi/settings.json" 2>/dev/null)" == '{"defaultModel":"gpt-6.2-sol","defaultProvider":"openai-codex","defaultThinkingLevel":"high"}' ]] \
+    && ok "a Pi implementer on the Herdr app starts with provider, model and thinking, and its worktree gets the Pi settings" \
+    || { bad "a Pi implementer on the Herdr app starts with provider, model and thinking, and its worktree gets the Pi settings"; printf '       %s\n' "$out" "$c"; }
 fi
 
 if [[ "$fail" -ne 0 ]]; then
