@@ -163,13 +163,15 @@ ho_xirp_project_id() {
 }
 
 # ho_xirp_listed <id>: 0 when Xirp lists the session, 1 when it answers with a readable list without it, 2 when
-# it cannot answer or the answer is not a list of sessions with string IDs (then absence is not proven).
+# it cannot answer or the answer is not exactly one list of sessions with string IDs (then absence is not proven).
 ho_xirp_listed() {
   local out r
   out="$(xirp session list --json 2>/dev/null)" || return 2
-  r="$(jq -r --arg id "$1" '(if type == "array" then . elif type == "object" and (.sessions | type) == "array" then .sessions else null end)
+  # Slurped, so trailing or truncated output fails the whole parse instead of yielding an answer first.
+  r="$(jq -rs --arg id "$1" 'if length != 1 then "unknown" else .[0]
+    | (if type == "array" then . elif type == "object" and (.sessions | type) == "array" then .sessions else null end)
     | if type == "array" and all(.[]; type == "object" and (.id | type) == "string")
-      then (if any(.[]; .id == $id) then "listed" else "absent" end) else "unknown" end' <<<"$out" 2>/dev/null)"
+      then (if any(.[]; .id == $id) then "listed" else "absent" end) else "unknown" end end' <<<"$out" 2>/dev/null)" || return 2
   case "$r" in listed) return 0 ;; absent) return 1 ;; *) return 2 ;; esac
 }
 
@@ -1073,14 +1075,20 @@ ho_finish_retry() {
     if (( rc == 0 || rc == 2 )); then ho_loop_set "$dir" finish.retried_for "$base"; else rmdir "$claim"; fi
     (( rc == 0 )) || { echo "could not message finish session $id"; return 1; }
   else
-    # A finish that ran in the implementer's worktree and now has worktree new moves there, with the branch; a
-    # move or an earlier open cut short is completed (ho_finish_worktree checks and rewrites both records).
-    local impl; impl="$(kv_get "$loop" implementer.worktree)"
-    if [[ "$(kv_get "$loop" finish_template.worktree 2>/dev/null)" == new && ( "$wt" == "$impl" || "$wt" == "$impl-finish" ) ]]; then
+    # A finish that ran in the implementer's worktree and now has worktree new moves there with the branch, from a
+    # commit that keeps the blocked finish's work (ho_finish_worktree also completes a move cut short). After a move,
+    # the finish worktree keeps the usual requirements, and its records are written again in case one was cut short.
+    local impl bh; impl="$(kv_get "$loop" implementer.worktree)"; bh="$(kv_get "$rec" head)"
+    if [[ "$(kv_get "$loop" finish_template.worktree 2>/dev/null)" == new && "$wt" == "$impl" ]]; then
+      if ! git -C "$wt" merge-base --is-ancestor "$bh" HEAD 2>/dev/null; then
+        rmdir "$claim"; echo "$wt is at $(ho_head "$wt"), which does not hold the blocked finish's commit $bh; not moved"; return 1
+      fi
       if ! wt="$(ho_finish_worktree "$dir" "$impl" "$change" "$(ho_head "$wt")" 2>&1)"; then
         rmdir "$claim"; echo "${wt##*$'\n'}"; return 1
       fi
       wt="${wt##*$'\n'}"
+    elif [[ "$(kv_get "$loop" finish_template.worktree 2>/dev/null)" == new && "$wt" == "$impl-finish" ]]; then
+      if ! err="$(ho_finish_record "$dir" "$wt" "$change" 2>&1)"; then rmdir "$claim"; echo "${err##*$'\n'}"; return 1; fi
     fi
     id="$(ho_open_role "$dir" finish_template "$wt" "$(ho_head "$wt")" "$(kv_get "$rec" round)" "")"; rc=$?
     if (( rc == 0 || rc == 2 )); then ho_loop_set "$dir" finish.retried_for "$base"; else rmdir "$claim"; fi
@@ -1131,6 +1139,9 @@ ho_finish_worktree() {
     git -C "$impl" checkout -q --detach "$head" || { ho_err "cannot detach the implementer worktree"; return 1; }
     git -C "$impl" worktree add -q "$wt" "feature/$change" 2>/dev/null \
       || { git -C "$impl" checkout -q "feature/$change"; ho_err "cannot create the finish worktree $wt"; return 1; }
+    # The branch may have moved between the check and the checkout: open only at the expected commit.
+    [[ "$(ho_head "$wt")" == "$head" ]] \
+      || { ho_err "the finish worktree $wt checked out $(ho_head "$wt"), not $head; not opened. Remove that worktree, then run handoff-finish again"; return 1; }
   fi
   ho_finish_record "$dir" "$wt" "$change" || return 1
   printf '%s\n' "$wt"

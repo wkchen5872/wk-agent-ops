@@ -183,8 +183,8 @@ handoff-role <change-id> review pi:openai/gpt-6.2-sol:medium:api --worktree new 
 
   **更換前先確認舊角色已停止**，避免它在被刪除前寫出交件單。
 - **自動改送等待中的交件單**：
-  - 審查：最新交件單是舊審查者已收到（見 `routing.log`）的 `implement`/`done`、之後沒有審查交件單時，在該交件單所在的 worktree 重新派送，新審查者依新範本開啟並收到這一輪。沒有開啟時交件單維持未處理，attention 通知會說明原因，排除後用 `handoff-route --foreground` 重試。host 收下 prompt 但未確認時不會重送，請依通知檢查該 session；交件單的處理標記無法清除時，指令會說明要從 `.routed` 移除哪一行再重試。
-  - 收尾：最新交件單是收尾 `blocked`，或者審查 pass 而且舊收尾 session 已開啟時，依 `handoff-finish` 的流程開新的收尾 session；開不起來時發 attention 通知，之後用 `handoff-finish` 重試。原本在實作者 worktree 的 `blocked` 收尾加上 `--worktree new` 時，會帶著 feature branch 移到 `<worktree>-finish`；只有 feature branch 停在收尾暫停的 commit 時才移動，中斷的移動由下一次 `handoff-finish` 補完。
+  - 審查：最新交件單是舊審查者已收到（見 `routing.log`）的 `implement`/`done`、之後沒有審查交件單時，在該交件單所在的 worktree 重新派送，新審查者依新範本開啟並收到這一輪。沒有開啟時交件單維持未處理，attention 通知會說明原因，排除後用 `handoff-route --foreground` 重試。新審查者 session 已收到、或可能已收到這一輪時（host 未確認 prompt，或結果無法寫入 log），都不會重送，請依訊息檢查該 session；交件單的處理標記無法清除時，指令會說明要從 `.routed` 移除哪一行再重試。
+  - 收尾：最新交件單是收尾 `blocked`，或者審查 pass 而且舊收尾 session 已開啟時，依 `handoff-finish` 的流程開新的收尾 session；開不起來時發 attention 通知，之後用 `handoff-finish` 重試。原本在實作者 worktree 的 `blocked` 收尾加上 `--worktree new` 時，會帶著 feature branch 移到 `<worktree>-finish`；原 worktree 必須仍包含收尾暫停的 commit、feature branch 必須停在它的 `HEAD`，新 worktree 也只在該 commit 開啟，中斷的移動由下一次 `handoff-finish` 補完。
   - 沒有交件單在等待時，只換設定；輪到這個角色時再依新範本開啟。更換與改送都記在 `routing.log`。
   - Pi 角色的 `.pi/settings.json`：迴圈替舊角色寫入、且之後沒被改過的檔案會被換掉；迴圈沒寫過或已被修改的檔案，若與新角色設定不同，會在刪除舊 session 之前拒絕；角色自己的 worktree 將 checkout 的 commit 若追蹤了 `.pi/settings.json`，也一樣在刪除前拒絕。
 - **不可更換的部分**：實作者不能更換，原始 `roles.yaml` 永不修改。

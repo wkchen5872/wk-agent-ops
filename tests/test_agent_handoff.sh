@@ -255,7 +255,7 @@ case "$1 $2" in
     json="$5"; n=$(( $(cat "$S/count" 2>/dev/null || echo 0) + 1 )); echo "$n" > "$S/count"
     printf '%s\n' "$json" > "$S/create-$n.json"
     jq -c --arg id "sess-$n" '{id:$id, name:.customName}' <<<"$json" >> "$S/sessions"; echo '{}' ;;
-  "session list") [[ -e "$S/list-fail" ]] && exit 1; [[ -e "$S/list-null" ]] && { echo '{"sessions":null}'; exit 0; }; if [[ -s "$S/sessions" ]]; then jq -s '.' "$S/sessions"; else echo '[]'; fi ;;
+  "session list") [[ -e "$S/list-fail" ]] && exit 1; [[ -e "$S/list-null" ]] && { echo '{"sessions":null}'; exit 0; }; [[ -e "$S/list-truncated" ]] && { printf '[]{"sessions":['; exit 0; }; if [[ -s "$S/sessions" ]]; then jq -s '.' "$S/sessions"; else echo '[]'; fi ;;
   "session get") [[ "$3" == missing-* || -e "$S/get-fail" ]] && exit 1
     if [[ -f "$S/session.json" ]]; then jq --arg id "$3" '. + {id:$id}' "$S/session.json"
     else jq -n --arg id "$3" '{id:$id, currentAgent:"claude", model:"fake-model", agentLaunchOptions:{agentName:"claude", options:{model:"opus", effort:"high"}}}'; fi ;;
@@ -870,6 +870,14 @@ fi
 exec /bin/mv "$@"
 SH
 chmod +x "$MVSHIM/mv"
+# git that moves feature/add-export to $FAKE_GIT_MOVE_TO just before "worktree add" (test-only race injection).
+REAL_GIT="$(command -v git)"; GITSHIM="$tmp/gitshim"; mkdir -p "$GITSHIM"
+cat > "$GITSHIM/git" <<SH
+#!/usr/bin/env bash
+if [[ -n "\${FAKE_GIT_MOVE_TO:-}" && "\$1" == -C && " \$* " == *" worktree add "* ]]; then "$REAL_GIT" -C "\$2" update-ref refs/heads/feature/add-export "\$FAKE_GIT_MOVE_TO"; fi
+exec "$REAL_GIT" "\$@"
+SH
+chmod +x "$GITSHIM/git"
 MV_KV='*/loop.yaml.[A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9]'  # kv_set's temporary file
 # wrpt <worktree>: an ignored review report r.md in a linked worktree
 wrpt() { local i; i="$(git -C "$1" rev-parse --path-format=absolute --git-common-dir)/info"; printf 'r\n' > "$1/r.md"; mkdir -p "$i"; printf '/r.md\n' >> "$i/exclude"; }
@@ -1161,6 +1169,16 @@ if run_section finish; then
   [[ "$rc" != 0 && "$frc" == 0 && "$(created)" == 1 && "$(kv_get "$R10/.agent-handoff/add-export/loop.yaml" finish.worktree)" == "$R10-finish" ]] \
     && jq -e --arg w "$R10-finish" '.worktreePath==$w' "$FAKE_XIRP_DIR/create-1.json" >/dev/null 2>&1 \
     && ok "a move whose loop.yaml pointer failed reuses its finish worktree on retry (codex-role-review-r02/F-08)" || { bad "a move whose loop.yaml pointer failed reuses its finish worktree on retry (codex-role-review-r02/F-08)"; printf '       %s\n' "$out" "$fout"; }
+
+  # Round 4 (codex-role-review-r03/F-08)
+  R11="$tmp/fin-move-back"; retry_loop "$R11" fin-9; use_project "$R11"; fresh_state f25; git -C "$R11" reset -q --hard HEAD~1
+  out="$(role_in "$R11" add-export finish claude:sonnet:high --worktree new --replace 2>&1)"; rc=$?
+  [[ "$rc" != 0 && "$(created)" == 0 && ! -d "$R11-finish" ]] && grep -q 'blocked finish' <<<"$out" \
+    && ok "a blocked finish is not moved from a worktree that no longer holds its commit (codex-role-review-r03/F-08)" || { bad "a blocked finish is not moved from a worktree that no longer holds its commit (codex-role-review-r03/F-08)"; printf '       %s\n' "$out"; }
+  R12="$tmp/fin-move-race"; retry_loop "$R12" fin-9; use_project "$R12"; fresh_state f26
+  out="$(PATH="$GITSHIM:$PATH" FAKE_GIT_MOVE_TO="$(git -C "$R12" rev-parse HEAD~2)" role_in "$R12" add-export finish claude:sonnet:high --worktree new --replace 2>&1)"; rc=$?
+  [[ "$rc" != 0 && "$(created)" == 0 ]] && grep -q 'not opened' <<<"$out" \
+    && ok "a finish worktree that checked out another commit is not opened (codex-role-review-r03/F-08)" || { bad "a finish worktree that checked out another commit is not opened (codex-role-review-r03/F-08)"; printf '       %s\n' "$out"; }
 
   # Pass recorded in a separate review worktree B; finish runs from A.
   SA="$tmp/fin-sep"; new_loop "$SA" new ask; use_project "$SA"; fresh_state f8; SB="$SA-review"
@@ -2428,6 +2446,43 @@ SH
   out="$(prole "$PW" add-export review pi:openai/gpt-6.2-sol:medium:api --worktree new --replace 2>&1)"; rc=$?
   [[ "$rc" != 0 && "$(sum "$rl")" == "$s0" && -z "$(deleted)" && ! -d "$PW-review" ]] && grep -q 'tracked' <<<"$out" \
     && ok "Pi settings tracked in the commit a new worktree will check out refuse the replacement first (codex-role-review-r02/F-06)" || { bad "Pi settings tracked in the commit a new worktree will check out refuse the replacement first (codex-role-review-r02/F-06)"; printf '       %s\n' "$out"; }
+
+  # Round 4 (codex-role-review-r03)
+  open_reviewer; s0="$(sum "$rl")"; touch "$FAKE_XIRP_DIR/delete-fail" "$FAKE_XIRP_DIR/list-truncated"
+  out="$(prole "$PW" add-export review codex:gpt-6.2-sol:high --replace 2>&1)"; rc=$?
+  rm -f "$FAKE_XIRP_DIR/delete-fail" "$FAKE_XIRP_DIR/list-truncated"
+  [[ "$rc" != 0 && "$(sum "$rl")" == "$s0" && "$(created)" == 2 ]] \
+    && ok "a Xirp list followed by unparsable output does not prove the old session gone (codex-role-review-r03/F-01)" || { bad "a Xirp list followed by unparsable output does not prove the old session gone (codex-role-review-r03/F-01)"; printf '       %s\n' "$out"; }
+  open_reviewer; chmod 444 "$PW/.agent-handoff/add-export/routing.log"
+  out="$(prole "$PW" add-export review codex:gpt-6.2-sol:high --replace 2>&1)"; rc=$?
+  chmod 644 "$PW/.agent-handoff/add-export/routing.log"; ROUTE_FG "$PW"
+  [[ "$rc" != 0 && "$(created)" == 3 && "$(kv_get "$rl" reviewer.session)" == sess-3 && -z "$(msgs | grep '^sess-3')" ]] && routed "$PW" 01-implement.yaml && grep -q 'sess-3' <<<"$out" \
+    && ok "a hand-off whose result could not be logged is never sent again (codex-role-review-r03/F-03)" || { bad "a hand-off whose result could not be logged is never sent again (codex-role-review-r03/F-03)"; printf '       %s\n' "$out"; msgs | sed 's/^/       /'; }
+  # F-06: the Pi pre-check reads the worktree and commit the route or finish will really use.
+  pi_project "$CX_IMPL" "$CX_REV" "$CX_FIN"; pstart "$PD" add-export >/dev/null 2>&1; rl="$PW/.agent-handoff/add-export/loop.yaml"
+  mkdir -p "$PW/.pi"; printf '{"defaultModel":"mine"}\n' > "$PW/.pi/settings.json"; git -C "$PW" add -f .pi/settings.json; git -C "$PW" commit -qm "own pi settings"
+  git -C "$PW" update-index --skip-worktree .pi/settings.json; rm -rf "$PW/.pi"
+  commit_in "$PW" impl; hw "$PW" --role implement --status done --head HEAD; HOME="$PI_HOME" route_in "$PW" >/dev/null 2>&1; s0="$(sum "$rl")"
+  out="$(prole "$PW" add-export review pi:openai/gpt-6.2-sol:medium:api --replace 2>&1)"; rc=$?
+  [[ "$rc" != 0 && "$(sum "$rl")" == "$s0" && -z "$(deleted)" ]] && grep -q 'tracked' <<<"$out" \
+    && ok "Pi settings the shared worktree's index tracks, even when not checked out, refuse the replacement first (codex-role-review-r03/F-06)" || { bad "Pi settings the shared worktree's index tracks, even when not checked out, refuse the replacement first (codex-role-review-r03/F-06)"; printf '       %s\n' "$out"; }
+  pi_project "$CX_IMPL" "$CX_REV" "$(role_block finish codex gpt-5.6-terra medium worktree=new)"; pstart "$PD" add-export >/dev/null 2>&1; rl="$PW/.agent-handoff/add-export/loop.yaml"
+  mkdir -p "$PW/.pi"; printf '{"defaultModel":"mine"}\n' > "$PW/.pi/settings.json"; git -C "$PW" add -f .pi/settings.json; git -C "$PW" commit -qm "own pi settings"
+  commit_in "$PW" impl; hw "$PW" --role implement --status done --head HEAD; HOME="$PI_HOME" route_in "$PW" >/dev/null 2>&1
+  wrpt "$PW"; hw "$PW" --role review --status done --verdict pass --head HEAD --report r.md; HOME="$PI_HOME" route_in "$PW" >/dev/null 2>&1
+  HOME="$PI_HOME" finish_in "$PW" add-export >/dev/null 2>&1; PF="$PW-finish"; f0="$(kv_get "$rl" finish.session)"
+  git -C "$PF" rm -q .pi/settings.json; git -C "$PF" commit -qm "drop pi settings"; hw "$PF" --role finish --status blocked --head HEAD --note quota
+  out="$(prole "$PW" add-export finish pi:openai/gpt-6.2-sol:high:api --replace 2>&1)"; rc=$?
+  [[ -n "$f0" && "$rc" == 0 && "$(deleted)" == "$f0" && -n "$(kv_get "$rl" finish.session)" && "$(kv_get "$rl" finish.session)" != "$f0" ]] \
+    && ok "a blocked finish in its own worktree is checked at that worktree's commit, not the implementer's (codex-role-review-r03/F-06)" || { bad "a blocked finish in its own worktree is checked at that worktree's commit, not the implementer's (codex-role-review-r03/F-06)"; printf '       %s\n' "$out"; }
+  pi_project "$CX_IMPL" "$(role_block review codex gpt-6.1-sol high worktree=new)" "$CX_FIN"; pstart "$PD" add-export >/dev/null 2>&1; rl="$PW/.agent-handoff/add-export/loop.yaml"
+  mkdir -p "$PW/.pi"; printf '{"defaultModel":"mine"}\n' > "$PW/.pi/settings.json"; git -C "$PW" add -f .pi/settings.json; git -C "$PW" commit -qm "own pi settings"
+  commit_in "$PW" impl; hw "$PW" --role implement --status done --head HEAD; HOME="$PI_HOME" route_in "$PW" >/dev/null 2>&1
+  wrpt "$PW-review"; hw "$PW-review" --role review --status done --verdict changes-required --head HEAD --report r.md
+  git -C "$PW" rm -q .pi/settings.json; git -C "$PW" commit -qm "drop pi settings"
+  out="$(prole "$PW" add-export review pi:openai/gpt-6.2-sol:medium:api --replace 2>&1)"; rc=$?
+  [[ "$rc" == 0 && "$(deleted)" == sess-2 && "$(created)" == 2 && "$(kv_get "$rl" review_template.harness)" == pi ]] \
+    && ok "with no round waiting, an earlier review's commit is not checked as the next checkout (codex-role-review-r03/F-06)" || { bad "with no round waiting, an earlier review's commit is not checked as the next checkout (codex-role-review-r03/F-06)"; printf '       %s\n' "$out"; }
 fi
 
 if [[ "$fail" -ne 0 ]]; then
