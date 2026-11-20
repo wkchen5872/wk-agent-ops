@@ -192,7 +192,8 @@ host: herdr-app        # every role; the Herdr app must be open
   the loop did not open is not closed: cleanup stops and keeps the worktrees. It then removes the roles'
   finished terminals with `hc rm`, all before the worktrees go. A role reopened because its earlier terminal
   finished keeps that tab and terminal as the loop's (`<role>.happ_stale_tabs`, `<role>.happ_stale_terms`),
-  so cleanup closes and removes them too. A reused `--reviewer-session` terminal is never closed.
+  so cleanup lists, closes and removes them too: the old tab alone, or with its whole space when that space
+  (for example one a `worktree: new` reviewer opened before) holds only the loop's tabs. A reused `--reviewer-session` terminal is never closed.
 - `handoff-role --replace` does not support herdr-app roles yet: it refuses and changes nothing.
 
 Possible later host: `ghostty + tmux` (tmux `send-keys` can type into a pane) is not supported yet.

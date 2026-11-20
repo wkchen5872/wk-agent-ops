@@ -712,11 +712,26 @@ ho_happ_close_target() {
   local tab sp
   tab="$(kv_get "$1/loop.yaml" "$2.happ_tab" 2>/dev/null)"; [[ -n "$tab" ]] || return 1
   sp="$(kv_get "$1/loop.yaml" "$2.happ_space" 2>/dev/null)"
-  if [[ -n "$sp" && " $(kv_get "$1/loop.yaml" herdr_app.spaces 2>/dev/null) " == *" $sp "* ]] \
-    && { [[ -z "${3:-}" ]] || jq -e --arg sp "$sp" --argjson own "$(ho_happ_owned "$1")" \
-      '[.spaces[]? | select(.id == $sp) | .tabs[]? | .id, .terminals[]?.terminal] | all(. as $x | $own | index($x) != null)' <<<"$3" >/dev/null 2>&1; }
-  then printf 'space %s\n' "$sp"
+  if [[ -n "$sp" ]] && ho_happ_space_closable "$1" "$sp" "${3:-}"; then printf 'space %s\n' "$sp"
   else printf 'tab %s\n' "$tab"; fi
+}
+
+# ho_happ_space_closable <loop-dir> <space> [app-ls-json]: the loop opened the space and, as far as the layout (when
+# given) shows, every tab and terminal in it is the loop's.
+ho_happ_space_closable() {
+  [[ " $(kv_get "$1/loop.yaml" herdr_app.spaces 2>/dev/null) " == *" $2 "* ]] || return 1
+  [[ -z "${3:-}" ]] || jq -e --arg sp "$2" --argjson own "$(ho_happ_owned "$1")" \
+    '[.spaces[]? | select(.id == $sp) | .tabs[]? | .id, .terminals[]?.terminal] | all(. as $x | $own | index($x) != null)' <<<"$3" >/dev/null 2>&1
+}
+
+# ho_happ_stale_target <loop-dir> <tab> <app-ls-json>: what closes for a role's earlier tab the app still shows
+# (r02/F-01, r03/F-01): "space <id>" when its whole space can close (a reopened role may have opened another
+# space), else "tab <id>". Nothing (status 1) when the app no longer shows it.
+ho_happ_stale_target() {
+  local sp
+  sp="$(jq -r --arg id "$2" '[.spaces[]? | select(any(.tabs[]?; .id == $id)) | .id][0] // empty' <<<"$3" 2>/dev/null)"
+  [[ -n "$sp" ]] || return 1
+  if ho_happ_space_closable "$1" "$sp" "$3"; then printf 'space %s\n' "$sp"; else printf 'tab %s\n' "$2"; fi
 }
 
 # ho_happ_ls: the app's layout, or nothing (status 1) when the app cannot answer.
@@ -737,7 +752,9 @@ ho_happ_close() {
   # Tabs the role had before it was reopened; the layout is read again, as closing a space removes them.
   for x in $(kv_get "$1/loop.yaml" "$2.happ_stale_tabs" 2>/dev/null); do
     ls="$(ho_happ_ls)" || { ho_err "the Herdr app stopped answering, so the $2's earlier tab $x was not closed; open the Herdr app and run this again"; return 1; }
-    ho_happ_close_tab "$1" "$2" "$x" "$ls" || return 1
+    t="$(ho_happ_stale_target "$1" "$x" "$ls")" || continue
+    if [[ "$t" == tab* ]]; then ho_happ_close_tab "$1" "$2" "$x" "$ls" || return 1
+    else out="$(ho_happ_do space.close --id "${t#* }" --confirmed true)" || { ho_err "the Herdr app could not close space ${t#* }: ${out##*$'\n'}"; return 1; }; fi
   done
   for x in $(kv_get "$1/loop.yaml" "$2.session" 2>/dev/null) $(kv_get "$1/loop.yaml" "$2.happ_stale_terms" 2>/dev/null); do
     ho_happ_rm "$x" || return 1

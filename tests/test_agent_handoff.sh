@@ -1896,8 +1896,12 @@ if run_section happ; then
     && ok "a role in a space the loop did not open has only its tab closed" || { bad "a role in a space the loop did not open has only its tab closed"; printf '       %s\n' "$out"; cat "$(HA)/closed"; }
   # codex-herdr-app-r02/F-01: a reviewer reopened after its waiting terminal finished leaves nothing behind
   # stale_loop <dir> <state>: the reviewer stopped at a dialog in t2/tb2, t2 finished, and the retry opened t3/tb3
-  stale_loop() {
-    happ_project "$1"; fresh_state "$2"; start_in "$1" add-export >/dev/null 2>&1; AL="$1-add-export"; ALL="$AL/.agent-handoff/add-export/loop.yaml"
+  stale_loop() {  # [new]: the review role has a worktree of its own, so the reopened reviewer opens a second space
+    happ_project "$1"; fresh_state "$2"
+    if [[ "${3:-}" == new ]]; then
+      awk '/^review:/{print; print "  worktree: new"; next} /^  worktree: shared/ && r==0 {r=1; next} {print}' "$1/.agent-handoff/roles.yaml" > "$1/r.tmp" && mv "$1/r.tmp" "$1/.agent-handoff/roles.yaml"
+    fi
+    start_in "$1" add-export >/dev/null 2>&1; AL="$1-add-export"; ALL="$AL/.agent-handoff/add-export/loop.yaml"
     commit_in "$AL" impl; hw "$AL" --role implement --status done --head HEAD; touch "$(HC)/blocked"; route_in "$AL"
     rm -f "$(HC)/blocked"; touch "$(HC)/finished-t2"; (cd "$AL" && PATH="$FAKES:$PATH" HANDOFF_NOTIFY="$FAKES/notify.sh" HANDOFF_CREATE_WAIT=2 "$ROUTE" --foreground </dev/null)
   }
@@ -1916,6 +1920,22 @@ if run_section happ; then
     && grep -q 'herdr-app tab tb2' <<<"$pv" && grep -qx t2 "$(HC)/removed" \
     && ok "with a user tab in the loop's space, the reopened reviewer's old tab is listed and closed too, and the user's tab stays (codex-herdr-app-r02/F-01)" \
     || { bad "with a user tab in the loop's space, the reopened reviewer's old tab is listed and closed too, and the user's tab stays (codex-herdr-app-r02/F-01)"; printf '       %s\n' "$pv" "$out"; cat "$(HA)/closed"; }
+  # codex-herdr-app-r03/F-01: the preview lists what an old reviewer in another space closes, and matches what closes
+  stale_loop "$tmp/happ-stale4" a15 new; sl="$(kv_get "$ALL" reviewer.session)"; (cd "$tmp" && PATH="$FAKES:$PATH" herdr-app do tab.new --space sp2 --name mine --argv '["zsh"]' >/dev/null)
+  pv="$(hclean "$tmp/happ-stale4" add-export --abandon 2>&1)"; out="$(hclean "$tmp/happ-stale4" add-export --abandon --yes 2>&1)"; rc=$?
+  want="space.close sp1,space.close sp3,tab.close tb2"
+  [[ "$sl" == t3 && "$rc" == 0 && "$(sed 's/ exists=.*//' "$(HA)/closed" | sort | paste -sd, -)" == "$want" \
+    && "$(grep '^    herdr-app ' <<<"$pv" | sed 's/^    herdr-app \([a-z]*\) /\1.close /' | sort | paste -sd, -)" == "$want" \
+    && "$(jq -r .state "$(HC)/term-t4")" == live ]] && grep -q $'^sp2\t' "$(HA)/spaces" && grep -qx t2 "$(HC)/removed" \
+    && ok "an old reviewer tab in another space with a user tab is previewed and closed alone (codex-herdr-app-r03/F-01)" \
+    || { bad "an old reviewer tab in another space with a user tab is previewed and closed alone (codex-herdr-app-r03/F-01)"; printf '       %s\n' "$pv" "$out"; cat "$(HA)/closed"; }
+  stale_loop "$tmp/happ-stale5" a16 new
+  pv="$(hclean "$tmp/happ-stale5" add-export --abandon 2>&1)"; out="$(hclean "$tmp/happ-stale5" add-export --abandon --yes 2>&1)"; rc=$?
+  want="space.close sp1,space.close sp2,space.close sp3"
+  [[ "$rc" == 0 && "$(sed 's/ exists=.*//' "$(HA)/closed" | sort | paste -sd, -)" == "$want" \
+    && "$(grep '^    herdr-app ' <<<"$pv" | sed 's/^    herdr-app \([a-z]*\) /\1.close /' | sort | paste -sd, -)" == "$want" && ! -s "$(HA)/spaces" ]] \
+    && ok "an old reviewer space holding only loop resources is previewed and closed, leaving no space behind (codex-herdr-app-r03/F-01)" \
+    || { bad "an old reviewer space holding only loop resources is previewed and closed, leaving no space behind (codex-herdr-app-r03/F-01)"; printf '       %s\n' "$pv" "$out"; cat "$(HA)/closed"; }
   # codex-herdr-app-r01/F-01: a tab the user added to the loop's space keeps the space and its terminal
   happ_loop "$tmp/happ-user" a10; (cd "$tmp" && PATH="$FAKES:$PATH" herdr-app do tab.new --space sp1 --name mine --argv '["zsh"]' >/dev/null)
   pv="$(hclean "$tmp/happ-user" add-export --abandon 2>&1)"; out="$(hclean "$tmp/happ-user" add-export --abandon --yes 2>&1)"; rc=$?
