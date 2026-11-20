@@ -5,6 +5,7 @@
 # (the pane runs a shell), no-integration-<kind> (panes: pane->tab; tablabels: tab->label), prompt-timeout (a prompt is taken, then the answer
 # times out), prompt-delay (seconds before a prompt is taken), native-<pane> (the native session ID now in that pane), gone-<id> (a closed workspace/tab),
 # stall (agent prompt --wait writes the text but answers agent_prompt_stalled), enter-ignored (agent wait after an extra Enter times out).
+# Records: argv-<pane> holds the arguments after -- of the latest agent start in that pane, as a JSON array.
 # As herdr 0.9.5, agent prompt refuses --timeout without --wait (exit 2).
 S="$FAKE_XIRP_DIR/herdr"; mkdir -p "$S"
 sess="default"; [[ "${1:-}" == --session ]] && { sess="$2"; shift 2; }
@@ -53,6 +54,8 @@ case "$1 ${2:-}" in
     jq -c --arg w "$3" 'select(.workspace_id == $w) | {type:"workspace_info", workspace:.}' "$S/workspaces" | ok ;;
   "agent start")
     name="$3"; shift 3; kind="$(opt --kind "$@")"; pane="$(opt --pane "$@")"
+    rest=(); seen=0; for a in "$@"; do (( seen )) && rest+=("$a"); [[ "$a" == -- ]] && seen=1; done
+    { (( ${#rest[@]} )) && printf '%s\0' "${rest[@]}"; } | jq -Rsc 'split("\u0000")[:-1]' > "$S/argv-$pane"
     if [[ -s "$S/busy" ]]; then b="$(cat "$S/busy")"; if (( b > 0 )); then echo $((b - 1)) > "$S/busy"; err agent_pane_busy; fi; fi
     printf '%s\n' "$kind" > "$S/pane-$pane"; rm -f "$S/shell-$pane"
     [[ -e "$S/not-ready" ]] && err agent_not_ready

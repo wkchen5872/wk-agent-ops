@@ -152,11 +152,70 @@ ho_harness_valid() { local h; for h in $HANDOFF_HARNESSES; do [[ "$1" == "$h" ]]
 # ho_override_valid <override>: claude|codex:<model>:<effort> or pi:<provider>/<model>:<effort>:<billing>.
 ho_override_valid() { [[ "$1" =~ ^(claude|codex):[^:]+:[^:]+$ || "$1" =~ ^pi:[^:/]+/[^:/]+:[^:]+:[^:]+$ ]]; }
 
+# ho_override_fields <override>: the harness, model, effort, provider and billing an override sets, one per line
+# (empty when the harness takes none). The caller checks the form with ho_override_valid first.
+ho_override_fields() {
+  local h m e b p=""
+  IFS=: read -r h m e b <<<"$1"
+  case "$h" in pi) p="${m%%/*}"; m="${m#*/}" ;; *) b="" ;; esac
+  printf '%s\n' "$h" "$m" "$e" "$p" "$b"
+}
+
+# Template fields only some harnesses take, in the order loop.yaml lists them.
+HANDOFF_HARNESS_KEYS="profile provider billing"
+
+# ho_harness_fields <harness>: the fields its template needs besides harness, model, effort, name and prompt.
+ho_harness_fields() { case "$1" in pi) echo provider billing ;; esac; }
+
+# ho_harness_template_check <file> <section>: the harness's own template rules, once the shared ones passed
+# (stderr says why it fails).
+ho_harness_template_check() {
+  local file="$1" sec="$2" h k v
+  h="$(kv_get "$file" "$sec.harness")"
+  case "$h" in
+    pi)
+      v="$(kv_get "$file" "$sec.billing")"
+      [[ "$v" == subscription || "$v" == api ]] || { ho_err "$sec template billing must be subscription or api, got '$v'"; return 1; }
+      v="$(kv_get "$file" "$sec.effort")"
+      [[ " $HANDOFF_PI_EFFORTS " == *" $v "* ]] || { ho_err "$sec template effort must be one of ${HANDOFF_PI_EFFORTS// /, } for Pi, got '$v'"; return 1; }
+      v="$(kv_get "$file" "$sec.model")"
+      [[ "$v" != */* ]] || { ho_err "$sec template model must be the model ID without a provider/ prefix, got '$v'"; return 1; } ;;
+    *)
+      for k in provider billing; do
+        [[ -z "$(kv_get "$file" "$sec.$k" 2>/dev/null || true)" ]] || { ho_err "$sec template sets $k, which only Pi supports"; return 1; }
+      done ;;
+  esac
+  # profile selects a Codex configuration profile (~/.codex/<profile>.config.toml).
+  [[ -z "$(kv_get "$file" "$sec.profile" 2>/dev/null || true)" || "$h" == codex ]] || { ho_err "$sec template sets profile, which only Codex supports"; return 1; }
+}
+
+# ho_harness_check_role <file> <section>: handoff-doctor's line for a role whose template passed ho_template_check;
+# the model, credential, billing and trust are checked where the harness allows it.
+ho_harness_check_role() {
+  local file="$1" sec="$2" role h m e p msg main
+  role="$(ho_sec_role "$sec")"; h="$(kv_get "$file" "$sec.harness")"; m="$(kv_get "$file" "$sec.model")"; e="$(kv_get "$file" "$sec.effort")"
+  case "$h" in
+    pi)
+      p="$(kv_get "$file" "$sec.provider")"; main="$(ho_main_worktree)"
+      if ! ho_pi_repo_trusted "$main"; then ho_line fail role "$role: Pi does not trust $main yet; open Pi in that directory and run /trust"; return 0; fi
+      if msg="$(ho_pi_verify "$role" "$p" "$m" "$e" "$(kv_get "$file" "$sec.billing")" warn 2>&1)"; then
+        ho_line ok role "$role: pi $p/$m at $e verified"
+        [[ -z "$msg" ]] || ho_line warn role "${msg#⚠️  }"
+      else
+        ho_line fail role "$msg"
+      fi ;;
+    *) ho_line ok role "$role: $h model $m at $e (model not verified)" ;;
+  esac
+}
+
 # ho_harness_tool <harness>: the tool name handoff-author records.
 ho_harness_tool() { case "$1" in claude) echo 'Claude Code' ;; codex) echo Codex ;; pi) echo Pi ;; *) return 1 ;; esac; }
 
 # ho_harness_skill <harness> <skill>: how a prompt calls a skill; an empty skill gives the prefix alone.
 ho_harness_skill() { case "$1" in claude) printf '/%s' "$2" ;; codex) printf '$%s' "$2" ;; pi) printf '/skill:%s' "$2" ;; *) return 1 ;; esac; }
+
+# ho_harness_xirp_label <agent>: how a notice names the agent Xirp reports as currentAgent.
+ho_harness_xirp_label() { case "$1" in claude) echo Claude ;; codex) echo Codex ;; *) printf '%s\n' "$1" ;; esac; }
 
 # ho_harness_xirp_effort_key <harness>: the option Xirp's session:create takes the effort as.
 ho_harness_xirp_effort_key() { case "$1" in claude) echo effort ;; codex) echo reasoning_effort ;; pi) echo thinking ;; *) return 1 ;; esac; }
@@ -222,9 +281,16 @@ ho_harness_prepare_worktree() {
   (( existed )) || printf '%s\n' "$3/.pi/settings.json"
 }
 
-# ho_harness_worktree_ready <file> <section> <worktree> <main-worktree>: the harness will start in that worktree
-# without waiting at a prompt (Pi: its trigger trusts it).
-ho_harness_worktree_ready() { ! ho_sec_is_pi "$1" "$2" || ho_pi_worktree_ready "$3" "$4"; }
+# ho_harness_ready <file> <section> <role> <main-worktree> [warn]: everything the harness needs before the role opens
+# (Pi: its trigger, the user's trust in the repository, the model and the credential; stderr says what failed).
+ho_harness_ready() { ! ho_sec_is_pi "$1" "$2" || ho_pi_ready "$@"; }
+
+# ho_harness_worktree_error <file> <section> <worktree> <main-worktree>: the harness would wait at a prompt in that
+# worktree instead of starting (Pi: its trigger does not trust it).
+ho_harness_worktree_error() {
+  ! ho_sec_is_pi "$1" "$2" || ho_pi_worktree_ready "$3" "$4" && return 0
+  printf '%s\n' "the Pi trigger would not trust $3 (its loop.yaml does not list it)"; return 1
+}
 
 # ho_harness_role_change_files <loop.yaml> <new-settings> <section> <role-key> <role> <old-session> <record> <record-state>:
 # for handoff-role, before anything changes. Prints the file of the old role to delete once its session is closed
@@ -272,6 +338,8 @@ ho_harness_role_change_files() {
 # each mismatch and fails. ho_harness_record_label <record>: the record's own agent label, or fails when it has none.
 ho_harness_record_check() { ho_pi_record_check "$@"; }
 ho_harness_record_label() { ho_pi_record_label "$@"; }
+# ho_harness_record_model <record>: the model the record's own agent block names, for the routing log.
+ho_harness_record_model() { printf '%s/%s\n' "$(kv_get "$1" agent.provider)" "$(kv_get "$1" agent.model)"; }
 
 # ho_harness_owned_files <loop.yaml> <worktree>: files the loop's roles created there that cleanup removes (printed);
 # ho_harness_cleanup_files removes them and says so.
@@ -283,7 +351,9 @@ ho_xirp_session() { [[ -n "$1" ]] && xirp session get "$1" --json 2>/dev/null; }
 
 # ho_agent_label <session-json>: "<tool> / <model> / <effort>", leaving out what Xirp does not report.
 ho_agent_label() {
-  jq -r '[(.currentAgent // "" | if . == "claude" then "Claude" elif . == "codex" then "Codex" else . end),
+  local a
+  a="$(jq -r '.currentAgent // "" | strings' <<<"$1" 2>/dev/null)"
+  jq -r --arg a "$(ho_harness_xirp_label "$a")" '[$a,
           (.model // ""),
           (.agentLaunchOptions.options.effort // .agentLaunchOptions.options.reasoning_effort // "")]
          | map(select(type == "string" and . != "")) | join(" / ")' <<<"$1" 2>/dev/null
@@ -568,8 +638,10 @@ ho_herdr_open() {
   fi
   if (( fresh )) || ! ho_herdr_agent_get "$hs" "$pane" "$h" >/dev/null; then
     # herdr starts the program itself (--kind), so only the arguments after it; none holds a newline.
+    # Decoded in full before anything starts: a decoder that stops part-way must not start the agent with some of them.
     argv="$(ho_harness_argv "$tf" "$sec" "$name")" || return 1
-    while IFS= read -r a; do args+=("$a"); done < <(jq -r '.[1:][]' <<<"$argv")
+    argv="$(jq -r '.[1:][]' <<<"$argv")" || { ho_err "cannot read the $role's agent arguments; pane $pane is kept for a retry"; return 1; }
+    while IFS= read -r a; do args+=("$a"); done <<<"$argv"
     # herdr agent names must match [a-z][a-z0-9_-]{0,31}; they are labels only, the pane identifies the role.
     case "$role" in implementer) aname=impl ;; reviewer) aname=review ;; *) aname="$role" ;; esac
     aname="$aname-$(printf '%s' "$pane$$$RANDOM" | shasum | cut -c1-6)"
@@ -925,11 +997,12 @@ ho_render() {
   printf '%s' "$text"
 }
 
-# ho_template_check <file> <section>: every role needs these fields and a supported harness.
+# ho_template_check <file> <section>: every role needs these fields, a supported harness and host, and what its
+# harness requires (ho_harness_template_check).
 ho_template_check() {
   local file="$1" sec="$2" k v h missing=""
   h="$(kv_get "$file" "$sec.harness" 2>/dev/null)"
-  for k in harness model effort name prompt $([[ "$h" == pi ]] && echo provider billing); do
+  for k in harness model effort name prompt $(ho_harness_fields "$h"); do
     v="$(kv_get "$file" "$sec.$k" 2>/dev/null)"
     [[ -n "$v" ]] || missing="$missing $k"
   done
@@ -937,22 +1010,7 @@ ho_template_check() {
   ho_harness_valid "$h" || { ho_err "$sec template harness must be claude, codex or pi, got '$h'"; return 1; }
   v="$(ho_sec_host "$file" "$sec")"
   case "$v" in xirp|herdr|herdr-app) ;; *) ho_err "$sec host must be one of ${HANDOFF_HOSTS// /, }, got '$v'"; return 1 ;; esac
-  if [[ "$h" == pi ]]; then
-    v="$(kv_get "$file" "$sec.billing")"
-    [[ "$v" == subscription || "$v" == api ]] || { ho_err "$sec template billing must be subscription or api, got '$v'"; return 1; }
-    v="$(kv_get "$file" "$sec.effort")"
-    [[ " $HANDOFF_PI_EFFORTS " == *" $v "* ]] || { ho_err "$sec template effort must be one of ${HANDOFF_PI_EFFORTS// /, } for Pi, got '$v'"; return 1; }
-    v="$(kv_get "$file" "$sec.model")"
-    [[ "$v" != */* ]] || { ho_err "$sec template model must be the model ID without a provider/ prefix, got '$v'"; return 1; }
-  else
-    for k in provider billing; do
-      [[ -z "$(kv_get "$file" "$sec.$k" 2>/dev/null || true)" ]] || { ho_err "$sec template sets $k, which only Pi supports"; return 1; }
-    done
-  fi
-  # profile selects a Codex configuration profile (~/.codex/<profile>.config.toml).
-  if [[ -n "$(kv_get "$file" "$sec.profile" 2>/dev/null || true)" && "$(kv_get "$file" "$sec.harness")" != codex ]]; then
-    ho_err "$sec template sets profile, which only Codex supports"; return 1
-  fi
+  ho_harness_template_check "$file" "$sec" || return 1
   if [[ "$sec" == review* || "$sec" == finish* ]]; then
     v="$(kv_get "$file" "$sec.worktree" 2>/dev/null || true)"
     [[ -z "$v" || "$v" == shared || "$v" == new ]] || { ho_err "$sec worktree must be shared or new, got '$v'"; return 1; }
@@ -963,7 +1021,7 @@ ho_template_check() {
 # Copy one role template from a roles file into loop.yaml under <dest-section>.
 ho_copy_template() {
   local src="$1" sec="$2" loop="$3" dest="$4" k v
-  for k in worktree harness model effort name prompt profile provider billing; do
+  for k in worktree harness model effort name prompt $HANDOFF_HARNESS_KEYS; do
     v="$(kv_get "$src" "$sec.$k" 2>/dev/null)" || continue
     [[ "$k" == worktree && -z "$v" ]] && v=shared
     [[ ( "$k" == provider || "$k" == billing ) && -z "$v" ]] && continue
@@ -996,9 +1054,8 @@ ho_retool() {
 # claude|codex:<model>:<effort> or pi:<provider>/<model>:<effort>:<billing> (the caller checks the form).
 # Fails when the file could not be written.
 ho_apply_override() {
-  local file="$1" sec="$2" ov="$3" h m e b="" p="" old k v
-  IFS=: read -r h m e b <<<"$ov"
-  if [[ "$h" == pi ]]; then p="${m%%/*}"; m="${m#*/}"; else b=""; fi
+  local file="$1" sec="$2" ov="$3" h m e b p old k v
+  { IFS= read -r h; IFS= read -r m; IFS= read -r e; IFS= read -r p; IFS= read -r b; } <<<"$(ho_override_fields "$ov")"
   old="$(kv_get "$file" "$sec.harness" 2>/dev/null || true)"
   kv_set "$file" "$sec.harness" "\"$h\"" && kv_set "$file" "$sec.model" "\"$m\"" && kv_set "$file" "$sec.effort" "\"$e\"" \
     && kv_set "$file" "$sec.provider" "${p:+\"$p\"}" && kv_set "$file" "$sec.billing" "${b:+\"$b\"}" || return 1
@@ -1012,19 +1069,16 @@ ho_apply_override() {
 # Open a role session from the template stored in loop.yaml. Prints the session id.
 ho_open_role() {
   local dir="$1" tsec="$2" wt="$3" head="$4" round="$5" report="$6"
-  local loop="$dir/loop.yaml" change main name prompt delivery role
+  local loop="$dir/loop.yaml" change main name prompt delivery role why owned
   change="$(kv_get "$loop" change)"
   delivery="$(kv_get "$loop" finish.delivery 2>/dev/null || echo local)"
   main="$(ho_main_worktree "$wt")"
   role="$(ho_role_key "$tsec")"
-  if [[ "$(kv_get "$loop" "$tsec.harness")" == pi ]]; then
-    ho_pi_ready "$loop" "$tsec" "${tsec%_template}" "$main" || return 1
-    ho_pi_worktree_ready "$wt" "$main" \
-      || { ho_err "${tsec%_template}: the Pi trigger would not trust $wt (its loop.yaml does not list it); not opened"; return 1; }
-    local existed=0; [[ -e "$wt/.pi/settings.json" ]] && existed=1
-    ho_pi_settings "$wt" "$(kv_get "$loop" "$tsec.provider")" "$(kv_get "$loop" "$tsec.model")" "$(kv_get "$loop" "$tsec.effort")" || return 1
-    (( existed )) || ho_loop_set "$dir" "$(ho_role_key "$tsec").pi_settings" "$wt/.pi/settings.json"
-  fi
+  # What the harness needs, in the same order as handoff-start; a file it creates in the worktree is the role's.
+  ho_harness_ready "$loop" "$tsec" "${tsec%_template}" "$main" || return 1
+  why="$(ho_harness_worktree_error "$loop" "$tsec" "$wt" "$main")" || { ho_err "${tsec%_template}: $why; not opened"; return 1; }
+  owned="$(ho_harness_prepare_worktree "$loop" "$tsec" "$wt")" || return 1
+  [[ -z "$owned" ]] || ho_loop_set "$dir" "$role.pi_settings" "$owned"
   name="$(ho_render "$(kv_get "$loop" "$tsec.name")" "$change" "$head" "$round" "$report" "$delivery")"
   prompt="$(ho_render "$(kv_get "$loop" "$tsec.prompt")" "$change" "$head" "$round" "$report" "$delivery" \
     "$(kv_get "$loop" "$tsec.harness")" "$(kv_get "$loop" "$tsec.model")")"
@@ -1319,21 +1373,6 @@ ho_check_herdr_integration() {
   fi
 }
 
-# ho_check_role <file> <section>: the template passed ho_template_check; check the model where possible.
-ho_check_role() {
-  local file="$1" sec="$2" role h m e p msg main
-  role="$(ho_sec_role "$sec")"; h="$(kv_get "$file" "$sec.harness")"; m="$(kv_get "$file" "$sec.model")"; e="$(kv_get "$file" "$sec.effort")"
-  if [[ "$h" != pi ]]; then ho_line ok role "$role: $h model $m at $e (model not verified)"; return 0; fi
-  p="$(kv_get "$file" "$sec.provider")"; main="$(ho_main_worktree)"
-  if ! ho_pi_repo_trusted "$main"; then ho_line fail role "$role: Pi does not trust $main yet; open Pi in that directory and run /trust"; return 0; fi
-  if msg="$(ho_pi_verify "$role" "$p" "$m" "$e" "$(kv_get "$file" "$sec.billing")" warn 2>&1)"; then
-    ho_line ok role "$role: pi $p/$m at $e verified"
-    [[ -z "$msg" ]] || ho_line warn role "${msg#⚠️  }"
-  else
-    ho_line fail role "$msg"
-  fi
-}
-
 ho_check_notify() {
   if [[ -f "$HANDOFF_NOTIFY" ]]; then ho_line ok notify "notifier $HANDOFF_NOTIFY"
   else ho_line warn notify "no notifier at $HANDOFF_NOTIFY; loop notices will not be delivered (see /notify-setup)"; fi
@@ -1351,7 +1390,7 @@ ho_preflight() {
   out="$(
     if (( ${#valid[@]} )); then ho_check_host "$file" "${valid[@]}"; ho_check_harness "$file" "${valid[@]}"; fi
     printf '%s' "$tfail"
-    for sec in "${valid[@]+"${valid[@]}"}"; do ho_check_role "$file" "$sec"; done
+    for sec in "${valid[@]+"${valid[@]}"}"; do ho_harness_check_role "$file" "$sec"; done
     ho_check_notify
   )"
   printf '%s\n' "$out"

@@ -260,4 +260,16 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
   [[ -n "$fp" && "$rc" == 0 && -n "$np" && "$np" != "$fp" && ! -e "$Q11W/.agent-handoff/add-export/finish-unconfirmed.txt" \
     && "$(herdr_prompts | grep -c "^$np"$'\t')" == 1 ]] && grep -q '^tab close' "$(HS)/closed"; check "replacing a finish role whose prompt herdr did not confirm opens the new one with one prompt (codex-role-review-r01/F-05)" || { printf '       %s\n' "$out"; }
 
+  # codex-extract-handoff-r01/F-02: the agent's arguments reach herdr whole, or the agent is not started
+  Q12="$tmp/herdr-argv"; herdr_project "$Q12"; fresh_state h-argv; q12l="$Q12-add-export/.agent-handoff/add-export/loop.yaml"
+  start_in "$Q12" add-export >/dev/null 2>&1
+  [[ "$(cat "$(HS)/argv-w2:p1" 2>/dev/null)" == '["--model","opus","--effort","high","--name","claude - impl - add-export"]' ]]; check "a name with spaces reaches herdr as one argument (codex-extract-handoff-r01/F-02)" || { cat "$(HS)/argv-w2:p1"; }
+  Q13="$tmp/herdr-argv-fail"; herdr_project "$Q13"; fresh_state h-argv-fail; q13l="$Q13-add-export/.agent-handoff/add-export/loop.yaml"
+  JQS="$tmp/jq-cut"; mkdir -p "$JQS"
+  # jq that stops part-way through decoding the arguments (two lines, then exit 42); every other call is the real jq.
+  printf '#!/usr/bin/env bash\nif [[ "$*" == "-r .[1:][]" ]]; then printf "%%s\\n" --model opus; exit 42; fi\nexec %q "$@"\n' "$(command -v jq)" > "$JQS/jq"; chmod +x "$JQS/jq"
+  out="$(PF_PATH="$JQS:$FAKES:$PATH" start_in "$Q13" add-export 2>&1)"; rc=$?
+  [[ "$rc" != 0 && "$(kv_get "$q13l" implementer.pending_prompt 2>/dev/null)" == true ]] && grep -q 'pane is kept' <<<"$out" \
+    && ! herdr_calls | grep -q 'agent start\|agent prompt'; check "arguments that cannot be decoded in full start no agent and keep the pane for a retry (codex-extract-handoff-r01/F-02)" || { printf '       %s\n' "$out"; herdr_calls | sed 's/^/       /'; }
+
 finish_section herdr

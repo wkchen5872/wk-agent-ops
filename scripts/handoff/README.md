@@ -575,22 +575,26 @@ only those blocks:
   `ho_host_close` dispatch to each host's functions. A prompt a host cannot confirm goes through
   the host-neutral `ho_unconfirmed_keep`, `ho_unconfirmed_file` and `ho_unconfirmed_guard`, with the
   reason in `HO_HOST_CODE`.
-- **Harnesses** — the `# --- harness` block. It is the only place that cases on `claude`, `codex`
-  or `pi`: valid names (`HANDOFF_HARNESSES`, `ho_harness_valid`), the override form
-  (`ho_override_valid`), the author tool name, the skill call syntax, the command line
-  (`ho_harness_argv`, a JSON array shared by herdr and the Herdr app), Xirp's effort option, and the
-  `handoff-doctor` trigger check. The hooks after them (`ho_harness_shared_worktree_error`,
-  `ho_harness_prepare_worktree`, `ho_harness_record_check`, …) are what the commands call instead of
-  checking for Pi; Pi's parts are the `ho_pi_*` functions.
+- **Harnesses** — the `# --- harness` block. Outside it and Pi's own `# --- Pi roles` block, no code
+  compares a value with `claude`, `codex` or `pi`, cases on one, or calls a `ho_pi_*` function; a
+  test in `tests/handoff/harness.sh` checks this. The block holds valid names (`HANDOFF_HARNESSES`,
+  `ho_harness_valid`), the override form and its fields (`ho_override_valid`, `ho_override_fields`),
+  the template fields and rules of each harness (`ho_harness_fields`, `ho_harness_template_check`),
+  the author tool name, the skill call syntax, the command line (`ho_harness_argv`, a JSON array
+  shared by herdr and the Herdr app), Xirp's effort option and agent label, and the `handoff-doctor`
+  trigger and role checks. The hooks after them (`ho_harness_ready`, `ho_harness_worktree_error`,
+  `ho_harness_prepare_worktree`, `ho_harness_shared_worktree_error`, `ho_harness_record_check`, …)
+  are what the commands and the shared flow call instead of checking for Pi.
 
 To add a harness:
 
 1. Add it to `HANDOFF_HARNESSES` and a branch to each `ho_harness_*` function that cases on the
-   name; extend `ho_override_valid` if its override has another form.
+   name; extend `ho_override_valid` and `ho_override_fields` if its override has another form, and
+   `HANDOFF_HARNESS_KEYS` if its template takes a field no other harness does.
 2. Update the texts that list the harnesses: the harness error in `ho_template_check` and the
    override usage in `handoff-start` and `handoff-role`.
-3. Give the hooks a branch only if the harness needs files in its worktree or an agent block in its
-   records, as Pi does.
+3. Give the hooks a branch only if the harness needs checks before a role opens, files in its
+   worktree or an agent block in its records, as Pi does.
 4. Add its rows to `tests/handoff/harness.sh` and run `bash tests/test_agent_handoff.sh harness`,
    then the full `bash tests/test_agent_handoff.sh`.
 

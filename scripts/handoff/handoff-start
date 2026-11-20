@@ -136,9 +136,7 @@ for sec in implement review finish; do
 done
 impl_host="$(ho_role_host "$loop" implementer)"
 
-if ! ho_harness_worktree_ready "$scratch" implement "$wt" "$main"; then
-  die "the Pi trigger would not trust $wt (its loop.yaml does not list it); the implementer was not opened"
-fi
+why="$(ho_harness_worktree_error "$scratch" implement "$wt" "$main")" || die "$why; the implementer was not opened"
 head="$(ho_head "$wt")"
 name="$(ho_render "$(kv_get "$scratch" implement.name)" "$change" "$head" 1 "（無）" "$delivery")"
 prompt="$(ho_render "$(kv_get "$scratch" implement.prompt)" "$change" "$head" 1 "（無）" "$delivery" \

@@ -132,7 +132,7 @@ route_dir() {
   # herdr and the Herdr app do not report the model: the log shows the role template's, marked as such (design D8).
   from="$(ho_role_key "$role")"
   [[ -n "$from" && "$(ho_role_host "$loop" "$from")" == herdr* ]] && model="$(kv_get "$loop" "$(ho_role_tsec "$from").model" 2>/dev/null)(template)"
-  if label="$(ho_harness_record_label "$rec")"; then model="$(kv_get "$rec" agent.provider)/$(kv_get "$rec" agent.model)"; fi
+  if label="$(ho_harness_record_label "$rec")"; then model="$(ho_harness_record_model "$rec")"; fi
   # The stopping session's identifiers, each in its own namespace: Xirp's, herdr's pane or the Herdr app's
   # terminal, and the native session ID from the hook input (codex-herdr-r03/F-01; herdr-app design D9).
   local who="session=${xsid:-unknown}" trig=""
