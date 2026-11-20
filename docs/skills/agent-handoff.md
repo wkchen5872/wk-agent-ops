@@ -132,8 +132,8 @@ herdr_session: work
 - herdr 配置：迴圈掛在主 repo 的 workspace 之下（沒有就自動開，不搶焦點）。新 worktree 開一個 linked workspace，標籤是 change ID；主工作區的迴圈在主 repo workspace 開 tab。每個角色一個 tab，名稱用範本的 `name`。
 - 啟動方式：`herdr agent start` 帶入範本的模型與 effort（Pi 另帶 provider，並照常寫入 worktree 的 `.pi/settings.json`），第一則 prompt 另外用 `herdr agent prompt` 送出，不帶 `--wait`（herdr 的 `--timeout` 只能搭配 `--wait`）。`loop.yaml` 記錄 pane ID、tab、herdr session、原生 Session ID 與迴圈開的 workspace；傳訊前確認 pane 裡仍是同一個 agent。
 - **對話框與重試**：新 worktree 會讓 Claude Code、Codex 跳出信任資料夾的對話框。迴圈不替你回答：保留 pane、記 `pending_prompt`、發一次 attention 通知寫明 herdr 的 workspace、tab 與 pane；你處理完後執行通知裡的 `handoff-route --foreground`，只補送 prompt 到同一個 pane。實作者在 `handoff-start` 時卡住，就處理後再跑一次 `handoff-start <change-id>`。
-- **送出結果不明**：herdr 明確回報沒送出（`agent_blocked`、`agent_not_found`、`pane_not_found`、`server_not_running`）時照常重試；其他錯誤（例如逾時）無法確定 agent 有沒有收到，迴圈不重送，把訊息存成 `.agent-handoff/<change-id>/<role>-unconfirmed.txt`，發一次通知後把交件單標為已處理，由你到該 pane 確認。
-- routing log：herdr 不回報模型，所以 herdr 角色記成 `model=<範本模型>(template)`。
+- **送出結果不明**：herdr 明確回報沒送出（`agent_blocked`、`agent_not_found`、`pane_not_found`、`server_not_running`）時照常重試；其他錯誤（例如逾時）無法確定 agent 有沒有收到，迴圈不重送，把訊息存成 `.agent-handoff/<change-id>/<role>-unconfirmed.txt` 並發一次通知。檔案存在期間，hook、`handoff-start`、`handoff-finish` 都不會再傳訊給這個角色，已開的收尾 Session 也不會被當成已開始；到該 pane 確認，沒收到就貼上檔案內容，再刪掉檔案即可繼續。
+- routing log：herdr 不回報模型，所以 herdr 角色記成 `model=<範本模型>(template)`；停止端在 herdr pane 中記成 `session=herdr:<pane ID> native=<原生 Session ID>`，不採用繼承的 Xirp ID。對話框通知的 workspace 與 tab 由 herdr 即時查詢，重用的審查者 pane 也適用。
 - 之後可能支援的 host：`ghostty + tmux`（目前不支援）。
 
 ---

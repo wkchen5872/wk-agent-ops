@@ -277,11 +277,28 @@ ho_herdr_prompt() {
 }
 
 # ho_herdr_unconfirmed <loop-dir> <role> <pane> <text>: keep a prompt herdr did not confirm in a file the
-# user can check against the pane, and say where it is.
+# user can check against the pane, and say where it is. While the file exists the role gets no prompt
+# and is never taken as started (ho_herdr_held): the user checks the pane, pastes the text if it is
+# missing, and deletes the file.
 ho_herdr_unconfirmed() {
   local f="$1/$2-unconfirmed.txt"
   printf '%s\n' "$4" > "$f"
-  ho_err "herdr did not confirm the prompt to pane $3 (${HO_HERDR_CODE:-no answer}); it may have arrived, so it is not sent again. The text is in $f"
+  ho_err "herdr did not confirm the prompt to pane $3 (${HO_HERDR_CODE:-no answer}); it may have arrived, so it is not sent again. Check that pane, paste the text from $f if it is missing, then delete $f"
+}
+
+# ho_herdr_held <loop-dir> <role>: a prompt to the role still waits for the user's check; prints the file.
+ho_herdr_held() {
+  local d dirs
+  dirs="$(ho_loop_dirs "$1")"
+  while IFS= read -r d; do [[ -f "$d/$2-unconfirmed.txt" ]] && { printf '%s\n' "$d/$2-unconfirmed.txt"; return 0; }; done <<<"$dirs"
+  return 1
+}
+
+# ho_herdr_hold_error <loop-dir> <role> <pane>: refuse while ho_herdr_held; fails (status 1) only then.
+ho_herdr_hold_error() {
+  local f; f="$(ho_herdr_held "$1" "$2")" || return 0
+  ho_err "herdr did not confirm an earlier prompt to the $2 (pane $3); nothing is sent until you check that pane, paste the text from $f if it is missing, and delete $f"
+  return 1
 }
 
 ho_herdr_session_of() { local s; s="$(kv_get "$1/loop.yaml" "$2.herdr_session" 2>/dev/null)"; printf '%s\n' "${s:-default}"; }
@@ -340,11 +357,17 @@ ho_herdr_agent_get() {
 }
 
 # ho_herdr_dialog <loop-dir> <role> <pane>: where the user finds a role that waits on a dialog.
+# Asks herdr where the pane is now, so a reused pane the loop did not open is named correctly too.
 ho_herdr_dialog() {
-  local tab name
-  tab="$(kv_get "$1/loop.yaml" "$2.herdr_tab" 2>/dev/null)"
-  name="$(ho_render "$(kv_get "$1/loop.yaml" "$(ho_role_tsec "$2").name" 2>/dev/null)" "$(kv_get "$1/loop.yaml" change 2>/dev/null)" "" "" "" "")"
-  printf '%s waits on a dialog in herdr workspace %s, tab %s ("%s"), pane %s; answer it there' "$2" "${tab%%:*}" "$tab" "$name" "$3"
+  local hs tab ws tl wl
+  hs="$(ho_herdr_session_of "$1" "$2")"
+  tab="$(ho_herdr "$hs" pane get "$3" | jq -r '.result.pane.tab_id // empty' 2>/dev/null)"
+  [[ -n "$tab" ]] || tab="$(kv_get "$1/loop.yaml" "$2.herdr_tab" 2>/dev/null)"
+  ws="${tab%%:*}"
+  tl="$(ho_herdr "$hs" tab get "$tab" | jq -r '.result.tab.label // empty' 2>/dev/null)"
+  wl="$(ho_herdr "$hs" workspace get "$ws" | jq -r '.result.workspace.label // empty' 2>/dev/null)"
+  printf '%s waits on a dialog in herdr workspace %s%s, tab %s%s, pane %s; answer it there' \
+    "$2" "${ws:-unknown}" "${wl:+ (\"$wl\")}" "${tab:-unknown}" "${tl:+ (\"$tl\")}" "$3"
 }
 
 # ho_role_pending <loop-dir> <role>: an earlier open left the role's pane waiting for its first prompt.
@@ -359,6 +382,7 @@ ho_herdr_open() {
   hs="$(ho_herdr_session_of "$dir" "$role")"
   h="$(kv_get "$tf" "$sec.harness")"; m="$(kv_get "$tf" "$sec.model")"; e="$(kv_get "$tf" "$sec.effort")"
   pane="$(kv_get "$loop" "$role.session" 2>/dev/null)"
+  ho_herdr_hold_error "$dir" "$role" "$pane" || return 1
   if [[ -z "$pane" || "$(kv_get "$loop" "$role.pending_prompt" 2>/dev/null)" != true ]]; then
     pane="$(ho_herdr_place "$dir" "$role" "$hs" "$wt" "$name")" || return 1
     ho_loop_set "$dir" "$role.pending_prompt" true; fresh=1
@@ -416,6 +440,7 @@ ho_herdr_exists() {
 # nothing was sent (retried later) and 2 when herdr did not confirm the submission (never resent).
 ho_herdr_message() {
   local rc
+  ho_herdr_hold_error "$1" "$2" "$3" || return 1
   if ! ho_herdr_exists "$1" "$2" "$3"; then
     ho_err "herdr pane $3 no longer runs the $2's agent (tab $(kv_get "$1/loop.yaml" "$2.herdr_tab" 2>/dev/null)); nothing was sent"; return 1
   fi
@@ -996,7 +1021,11 @@ ho_finish_open() {
   # No finish record yet, so a recorded session that still exists is the finish in progress.
   # ponytail: an idle one that died without a record is reused too; delete it in Xirp for a new one.
   id="$(kv_get "$loop" finish.session 2>/dev/null)"
-  if [[ -n "$id" ]] && ! ho_role_pending "$dir" finish && ho_host_exists "$(ho_role_host "$loop" finish)" "$dir" finish "$id"; then printf '%s\n' "$id"; return 0; fi
+  if [[ -n "$id" ]] && ! ho_role_pending "$dir" finish && ho_host_exists "$(ho_role_host "$loop" finish)" "$dir" finish "$id"; then
+    # An open finish whose first prompt herdr did not confirm is not taken as started until the user checks it.
+    ho_herdr_hold_error "$dir" finish "$id" || return 1
+    printf '%s\n' "$id"; return 0
+  fi
   impl="$(kv_get "$loop" implementer.worktree)"; change="$(kv_get "$loop" change)"
   mode="$(kv_get "$loop" finish_template.worktree 2>/dev/null || echo shared)"
   wt="$impl"

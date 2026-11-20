@@ -281,7 +281,7 @@ printf '#!/usr/bin/env bash\necho "codex-cli 0.130.0"\n' > "$FAKES/codex"
 # Fake herdr 0.9.5 (state in $FAKE_XIRP_DIR/herdr). Success JSON on stdout, error JSON on stderr with exit 1,
 # as the real CLI. Switches (files in the state dir): server-down, busy (count of agent_pane_busy answers),
 # not-ready (agent start stops at a dialog), blocked (agent prompt refused), no-native, shell-<pane>
-# (the pane runs a shell), no-integration-<kind>, prompt-timeout (a prompt is taken, then the answer
+# (the pane runs a shell), no-integration-<kind> (panes: pane->tab; tablabels: tab->label), prompt-timeout (a prompt is taken, then the answer
 # times out), native-<pane> (the native session ID now in that pane), gone-<id> (a closed workspace/tab).
 # As herdr 0.9.5, agent prompt refuses --timeout without --wait (exit 2).
 cat > "$FAKES/herdr" <<'SH'
@@ -304,7 +304,8 @@ fi
 [[ -e "$S/server-down" ]] && err server_not_running
 ws_json() { jq -nc --arg w "$1" --arg l "$2" --arg p "$3" '{workspace_id:$w, label:$l, worktree:{checkout_path:$p}}'; }
 new_ws() {  # <path> <label> -> ws id; also makes tab and pane 1
-  local w="w$(n ws)"; ws_json "$w" "$2" "$1" >> "$S/workspaces"; echo "$w:t1" >> "$S/tabs"; echo "$w"
+  local w="w$(n ws)"; ws_json "$w" "$2" "$1" >> "$S/workspaces"; echo "$w:t1" >> "$S/tabs"
+  printf '%s\t%s\n' "$w:p1" "$w:t1" >> "$S/panes"; printf '%s\t1\n' "$w:t1" >> "$S/tablabels"; echo "$w"
 }
 case "$1 ${2:-}" in
   "workspace list") touch "$S/workspaces"; jq -sc '{type:"workspace_list", workspaces:.}' "$S/workspaces" | ok ;;
@@ -318,9 +319,18 @@ case "$1 ${2:-}" in
     jq -nc --arg w "$w" --arg p "$p" --argjson a "$already" \
       '{type:"worktree_opened", already_open:$a, workspace:{workspace_id:$w, worktree:{checkout_path:$p}}, tab:{tab_id:($w+":t1")}, root_pane:{pane_id:($w+":p1")}}' | ok ;;
   "tab create")
-    w="$(opt --workspace "$@")"; t="$w:t$(( $(n "tab-$w") + 1 ))"; echo "$t" >> "$S/tabs"
-    jq -nc --arg t "$t" --arg p "$w:p$(( $(n "pane-$w") + 1 ))" '{type:"tab_created", tab:{tab_id:$t}, root_pane:{pane_id:$p}}' | ok ;;
-  "tab rename") printf '%s\t%s\n' "$3" "$4" >> "$S/renamed"; jq -nc '{type:"ok"}' | ok ;;
+    w="$(opt --workspace "$@")"; t="$w:t$(( $(n "tab-$w") + 1 ))"; p="$w:p$(( $(n "pane-$w") + 1 ))"; echo "$t" >> "$S/tabs"
+    printf '%s\t%s\n' "$p" "$t" >> "$S/panes"; printf '%s\t%s\n' "$t" "$(opt --label "$@")" >> "$S/tablabels"
+    jq -nc --arg t "$t" --arg p "$p" '{type:"tab_created", tab:{tab_id:$t}, root_pane:{pane_id:$p}}' | ok ;;
+  "tab rename") printf '%s\t%s\n' "$3" "$4" >> "$S/renamed"; printf '%s\t%s\n' "$3" "$4" >> "$S/tablabels"; jq -nc '{type:"ok"}' | ok ;;
+  "pane get")
+    t="$(awk -F'\t' -v p="$3" '$1 == p {t = $2} END {print t}' "$S/panes" 2>/dev/null)"; [[ -n "$t" ]] || err pane_not_found
+    jq -nc --arg p "$3" --arg t "$t" --arg w "${t%%:*}" '{type:"pane_info", pane:{pane_id:$p, tab_id:$t, workspace_id:$w}}' | ok ;;
+  "tab get")
+    l="$(awk -F'\t' -v t="$3" '$1 == t {l = $2} END {print l}' "$S/tablabels" 2>/dev/null)"
+    jq -nc --arg t "$3" --arg l "$l" '{type:"tab_info", tab:{tab_id:$t, label:$l}}' | ok ;;
+  "workspace get")
+    jq -c --arg w "$3" 'select(.workspace_id == $w) | {type:"workspace_info", workspace:.}' "$S/workspaces" | ok ;;
   "agent start")
     name="$3"; shift 3; kind="$(opt --kind "$@")"; pane="$(opt --pane "$@")"
     if [[ -s "$S/busy" ]]; then b="$(cat "$S/busy")"; if (( b > 0 )); then echo $((b - 1)) > "$S/busy"; err agent_pane_busy; fi; fi
@@ -1375,6 +1385,41 @@ if run_section herdr; then
   dout="$(doctor_in "$F6" 2>&1)"; drc=$?; out="$(start_in "$F6" add-export 2>&1)"; rc=$?
   [[ "$drc" != 0 && "$rc" != 0 && ! -e "$F6-add-export" && "$(created)" == 0 ]] && grep -q '^fail role implement' <<<"$dout" && grep -q 'fail role implement' <<<"$out" \
     && ok "a host that is not exactly xirp or herdr fails doctor and start, and nothing is created (codex-herdr-r01/F-06)" || { bad "a host that is not exactly xirp or herdr fails doctor and start, and nothing is created (codex-herdr-r01/F-06)"; printf '       %s\n' "$dout" "$out"; }
+  # codex-herdr-r03 regressions
+  # r01/F-03 in finish: an unconfirmed finish prompt is neither resent nor taken as delivered until the user checks it
+  herdr_loop "$tmp/herdr-r3a" h21; lset "$HLL" finish.trigger auto; hw "$HL" --role review --status done --verdict pass --head HEAD --report r.md
+  touch "$(HS)/prompt-timeout"; route_in "$HL"; rm -f "$(HS)/prompt-timeout"; route_in "$HL"; nf="$(herdr_prompts | grep -c '^w2:p3')"
+  uf="$HL/.agent-handoff/add-export/finish-unconfirmed.txt"
+  [[ "$nf" == 1 && -f "$uf" ]] && ! routed "$HL" 02-review.yaml && ! grep -q 'finish:opened' "$HL/.agent-handoff/add-export/routing.log" \
+    && jt '.kind=="attention" and (.detail|test("finish-unconfirmed.txt"))' \
+    && ok "an unconfirmed automatic finish prompt is shown, kept and not taken as opened on the next hook (codex-herdr-r03, r01/F-03)" \
+    || { bad "an unconfirmed automatic finish prompt is shown, kept and not taken as opened on the next hook (codex-herdr-r03, r01/F-03)"; cat "$HL/.agent-handoff/add-export/routing.log"; jl | tail -1; }
+  rm -f "$uf"; (cd "$HL" && PATH="$FAKES:$PATH" HANDOFF_NOTIFY="$FAKES/notify.sh" HANDOFF_CREATE_WAIT=2 "$ROUTE" --foreground </dev/null)
+  [[ "$(herdr_prompts | grep -c '^w2:p3')" == 1 ]] && routed "$HL" 02-review.yaml && grep -q 'finish:opened:w2:p3' "$HL/.agent-handoff/add-export/routing.log" \
+    && ok "after the user removes the file, the finish counts as opened without sending the prompt again" || { bad "after the user removes the file, the finish counts as opened without sending the prompt again"; cat "$HL/.agent-handoff/add-export/routing.log"; }
+  herdr_loop "$tmp/herdr-r3b" h22; hw "$HL" --role review --status done --verdict pass --head HEAD --report r.md
+  finish_in "$HL" add-export >/dev/null 2>&1; commit_in "$HL" archive; hw "$HL" --role finish --status blocked --head HEAD --note "push rejected"
+  touch "$(HS)/prompt-timeout"; out1="$(finish_in "$HL" add-export 2>&1)"; rc1=$?; rm -f "$(HS)/prompt-timeout"
+  n1="$(herdr_prompts | grep -c '^w2:p3')"; out2="$(finish_in "$HL" add-export 2>&1)"; rc2=$?
+  [[ "$rc1" != 0 && "$rc2" != 0 && "$(herdr_prompts | grep -c '^w2:p3')" == "$n1" ]] && grep -q 'finish-unconfirmed.txt' <<<"$out1" && grep -q 'finish-unconfirmed.txt' <<<"$out2" \
+    && ok "a finish retry whose prompt herdr did not confirm is not sent again by the next handoff-finish (codex-herdr-r03, r01/F-03)" \
+    || { bad "a finish retry whose prompt herdr did not confirm is not sent again by the next handoff-finish (codex-herdr-r03, r01/F-03)"; printf '       %s\n' "$out1" "$out2"; }
+  # r01/F-05: a reused reviewer waiting on a dialog is named by its real workspace and tab
+  RB="$tmp/herdr-r3c"; herdr_project "$RB"; fresh_state h23; printf 'codex\n' > "$(HS)/pane-w9:p1"
+  printf 'w9:p1\tw9:t4\n' >> "$(HS)/panes"; printf 'w9:t4\tmy review\n' >> "$(HS)/tablabels"
+  start_in "$RB" add-export --reviewer-session w9:p1 >/dev/null 2>&1; commit_in "$RB-add-export" impl; hw "$RB-add-export" --role implement --status done --head HEAD
+  touch "$(HS)/blocked"; route_in "$RB-add-export"
+  [[ "$(ncount)" == 1 ]] && jt '(.detail|test("workspace w9")) and (.detail|test("tab w9:t4")) and (.detail|test("my review"))' && ! routed "$RB-add-export" 01-implement.yaml \
+    && ok "a reused reviewer waiting on a dialog gets one notice naming its actual workspace and tab (codex-herdr-r03, r01/F-05)" || { bad "a reused reviewer waiting on a dialog gets one notice naming its actual workspace and tab (codex-herdr-r03, r01/F-05)"; jl | tail -1; }
+  rm -f "$(HS)/blocked"; hclean "$RB" add-export --abandon --yes >/dev/null 2>&1
+  ! grep -q 'w9' "$(HS)/closed" 2>/dev/null && ok "cleanup never closes a reused reviewer's tab" || bad "cleanup never closes a reused reviewer's tab"
+  # r03/F-01: a herdr stop is logged with its herdr pane and native session, never an inherited Xirp ID
+  herdr_loop "$tmp/herdr-r3d" h24; commit_in "$HL" two; hw "$HL" --role implement --status done --head HEAD
+  (cd "$HL" && printf '{"session_id":"native-w2:p1"}' | PATH="$FAKES:$PATH" HANDOFF_NOTIFY="$FAKES/notify.sh" HANDOFF_CREATE_WAIT=2 HANDOFF_ROUTE_WAIT=1 \
+    HERDR_ENV=1 HERDR_PANE_ID=w2:p1 CHIRP_SESSION_ID=chirp-inherited "$ROUTE")
+  grep -q '02-implement.yaml action=reviewer:messaged:w2:p2 session=herdr:w2:p1 native=native-w2:p1 model=opus(template)' "$HL/.agent-handoff/add-export/routing.log" \
+    && ! grep -q chirp-inherited "$HL/.agent-handoff/add-export/routing.log" \
+    && ok "a herdr stop is logged with its herdr pane and native session, not the inherited Xirp ID (codex-herdr-r03/F-01)" || { bad "a herdr stop is logged with its herdr pane and native session, not the inherited Xirp ID (codex-herdr-r03/F-01)"; tail -1 "$HL/.agent-handoff/add-export/routing.log"; }
   Q3="$tmp/herdr-busy"; herdr_project "$Q3"; fresh_state h3; echo 1 > "$(HS)/busy"
   printf '%s\n' "{\"workspace_id\":\"w9\",\"label\":\"repo\",\"worktree\":{\"checkout_path\":\"$Q3\"}}" > "$(HS)/workspaces"
   out="$(start_in "$Q3" add-export --impl codex:gpt-x:low 2>&1)"; rc=$?

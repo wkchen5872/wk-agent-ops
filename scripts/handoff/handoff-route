@@ -129,7 +129,11 @@ route_dir() {
   from="$(ho_pi_role_key "$role")"
   [[ -n "$from" && "$(ho_role_host "$loop" "$from")" == herdr ]] && model="$(kv_get "$loop" "$(ho_role_tsec "$from").model" 2>/dev/null)(template)"
   if label="$(ho_pi_record_label "$rec")"; then model="$(kv_get "$rec" agent.provider)/$(kv_get "$rec" agent.model)"; fi
-  ho_log "$dir" "$base action=$action session=${xsid:-unknown} model=$model"
+  # The stopping session's identifiers, each in its own namespace: Xirp's, or herdr's pane and the
+  # native session ID from the hook input (codex-herdr-r03/F-01).
+  local who="session=${xsid:-unknown}"
+  [[ "${HERDR_ENV:-}" == 1 ]] && who="session=herdr:${HERDR_PANE_ID:-unknown} native=${native_session:-unknown}"
+  ho_log "$dir" "$base action=$action $who model=$model"
   # Other records do not say who wrote them: only an agent's own stop on a first attempt names it.
   # A manual run or a retry may be triggered by someone else, so it names nobody.
   local agent_json="$sess_json" sid="$native_session"
@@ -157,7 +161,7 @@ host_missing() { ! command -v "$(ho_role_host "$1" "$2")" >/dev/null 2>&1; }
 unconfirmed() {
   action="$1:send-unconfirmed:$2"; outcome="stop"
   detail="無法確認${3:+（${3}）}交給 $1 的訊息是否送達（Session $2），未重送，迴圈已停住。"
-  next="到該 Session 確認是否收到；沒收到就把檔案裡的訊息貼給它，之後的交接照常。"
+  next="到該 Session 確認是否收到；沒收到就把檔案裡的訊息貼給它，再刪掉該檔案。刪除前不會再傳訊給這個角色。"
 }
 
 # to_reviewer and to_implementer set the caller's action, outcome, kind, next and detail.

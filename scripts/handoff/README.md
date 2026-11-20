@@ -127,14 +127,17 @@ session it ran when `handoff-start` checked it.
 `agent_not_found`, `pane_not_found`, `server_not_running`), the record is retried as above. Any other
 error, such as a timeout, leaves it unknown whether the agent got the text, and sending it again could
 start the same work twice. The hook then sends nothing more: it keeps the text in
-`.agent-handoff/<change-id>/<role>-unconfirmed.txt`, sends one attention notice naming the pane and
-the file, and marks the record processed. Check the pane; paste the text if it did not arrive.
+`.agent-handoff/<change-id>/<role>-unconfirmed.txt` and sends one attention notice naming the pane and
+the file. While that file exists, the role gets no prompt from the hook, `handoff-start` or
+`handoff-finish`, and an open finish session is not taken as started. Check the pane, paste the text
+if it did not arrive, then delete the file; the next hook or retry continues as usual.
 
 **Dialogs and retry.** A new worktree makes Claude Code and Codex ask whether to trust the folder,
 and other prompts (approvals, a Codex usage notice) can appear too. The loop never answers them:
 trusting a folder is your decision. When a role stops at a dialog as it opens or when a message is
 due, its pane is kept (`<role>.pending_prompt: true` when it was just opened), you get one attention
-notice naming the herdr workspace, tab and pane, and the record stays unprocessed. Answer the dialog there, then run
+notice naming the herdr workspace, tab and pane as herdr reports them (also for a reused
+`--reviewer-session` pane), and the record stays unprocessed. Answer the dialog there, then run
 the retry command from the notice (`handoff-route --foreground` in that worktree); only the missing
 prompt is sent, to the same pane. When the implementer stops at a dialog, `handoff-start` keeps its
 pane and tells you so: answer it and run `handoff-start <change-id>` again. Trusting the parent
@@ -287,7 +290,9 @@ otherwise you are notified. Each record is logged in `.agent-handoff/<change-id>
 with the stopping session's model: the model Xirp reports for Claude Code and Codex (for example
 `model=claude-opus-5-5`), and `provider/model` from the record's `agent` section for Pi (for
 example `model=openai/gpt-6.2-sol`). herdr reports no model, so a Claude Code or Codex role on
-herdr shows its template's model, marked `model=gpt-6.1-sol(template)`. The hook never writes to GitHub and never pushes, and it
+herdr shows its template's model, marked `model=gpt-6.1-sol(template)`. The stopping session is
+`session=<Xirp session ID>`, or inside a herdr pane `session=herdr:<pane ID> native=<native session ID>`
+(an Xirp ID inherited by herdr panes is never used). The hook never writes to GitHub and never pushes, and it
 always exits successfully.
 
 **Continuing after `blocked`.** A blocked record stops the loop until you act; nothing resumes it

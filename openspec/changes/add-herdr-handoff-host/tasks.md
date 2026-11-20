@@ -36,10 +36,13 @@
 
 - [x] 5.1 實作 `ho_herdr_message` 與 `ho_herdr_exists`：傳訊前確認 pane 的 agent kind 與已知的原生 Session ID；`agent prompt` 不帶 `--wait`（herdr 0.9.5 的 `--timeout` 需要 `--wait`，所以也不帶 `--timeout`）；不符、不存在或 `agent_blocked` 都算傳送失敗；送出結果不明（例如 `timeout`）時不重送，停下通知使用者。
   - 測試要求：先寫失敗測試：pane 已換成 shell 時沒有送出任何文字且交件單維持未處理；`agent_blocked` 時發一次 attention 通知；正常時審查 prompt 送進記錄的 pane。
+  - 審查修正（codex-herdr-r01 F-03、codex-herdr-r03）：送出結果不明的 prompt 存成 `<role>-unconfirmed.txt`；檔案存在期間，開啟、傳訊與收尾的「已開啟」判斷都不送出也不視為成功，使用者核對後刪檔才繼續。驗證：`tests/test_agent_handoff.sh herdr` 的自動收尾與 `handoff-finish` 重試兩個情境。
 - [x] 5.2 開啟時遇到 `agent_not_ready` 或第一則 prompt 被拒：保留 pane、記 `pending_prompt`，route 走 retry，通知寫出 workspace 與 tab；重試時只補送 prompt，不開新 pane；不送任何回答對話框的按鍵。
   - 測試要求：先寫失敗測試：信任對話框情境只發一次通知、交件單未處理、假 `herdr` 沒收到 `send-keys`；`handoff-route --foreground` 重試時對同一個 pane 補送 prompt，並把交件單標為已處理。
+  - 審查修正（codex-herdr-r01 F-05、codex-herdr-r03）：對話框通知改向 herdr 查 pane 實際所在的 workspace 與 tab（含標籤），重用的 reviewer 也適用；cleanup 不關閉重用 reviewer 的 tab。驗證：`tests/test_agent_handoff.sh herdr` 的重用 reviewer 情境。
 - [x] 5.3 routing log 對 herdr 角色記 `model=<範本模型>(template)`；混用 host 的迴圈中，hook 依角色的 host 傳訊。
   - 測試要求：先寫失敗測試：herdr 審查者的 log 行帶 `(template)`；實作者在 xirp、審查者在 herdr 時，兩個方向的訊息分別送到對應的假 CLI。
+  - 審查修正（codex-herdr-r03/F-01）：在 herdr pane 中，routing log 記 `session=herdr:<HERDR_PANE_ID> native=<hook 輸入的原生 Session ID>`，不採用繼承的 `CHIRP_SESSION_ID`；Xirp 的寫法不變。驗證：`tests/test_agent_handoff.sh herdr` 與 `route`。
 - [x] 5.4 文件：README 新增「host」段落（`host`、`herdr_session`、角色覆寫、herdr 的 workspace／tab 配置、信任對話框與 retry、`ghostty + tmux` 為之後可能支援的 host）；`roles.example.yaml` 加上 `host`、`herdr_session` 的註解範例；`SKILL.md` 說明 herdr pane 中的 `XIRP-SESSION-ID`。
   - 測試要求：文件類；hookinstall 測試確認 README 提到 `host:` 與 `herdr_session`，`roles.example.yaml` 仍能被範本檢查接受。
 
