@@ -99,7 +99,7 @@ printf '  worktrees to remove:\n'
 for wt in "${wts[@]}"; do [[ "$wt" == "$main" ]] && printf '    %s (main worktree: kept)\n' "$wt" || printf '    %s\n' "$wt"; done
 for wt in "${wts[@]}"; do
   [[ "$wt" == "$main" ]] || continue
-  pis="$(ho_pi_settings_owned "$main/.agent-handoff/$change/loop.yaml" "$main")" && printf '  Pi settings to remove: %s\n' "$pis"
+  pis="$(ho_harness_owned_files "$main/.agent-handoff/$change/loop.yaml" "$main")" && printf '  Pi settings to remove: %s\n' "$pis"
 done
 printf '  records archived to: %s/.agent-handoff/archive/%s/\n' "$main" "$change"
 if (( ${#wis[@]} )); then
@@ -158,7 +158,7 @@ done
 rc=0
 for wt in "${wts[@]}"; do
   if [[ "$wt" == "$main" ]]; then
-    ho_pi_settings_cleanup "$main/.agent-handoff/$change/loop.yaml" "$main"
+    ho_harness_cleanup_files "$main/.agent-handoff/$change/loop.yaml" "$main"
     rm -rf "$main/.agent-handoff/$change"; continue
   fi
   if git -C "$main" worktree remove "$wt"; then printf 'Removed worktree %s\n' "$wt"

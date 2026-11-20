@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Offline tests for the agent handoff loop: record parser, handoff-write, routing hook, and launcher.
-# Usage: bash tests/test_agent_handoff.sh [kv|write|skill|install|route|notify|mixed|start|finish|doctor|herdr|happ|hookinstall|cleanup|pi|all]
+# Usage: bash tests/test_agent_handoff.sh [kv|write|skill|install|route|notify|mixed|start|finish|doctor|herdr|happ|hookinstall|cleanup|pi|harness|all]
 #   <section>      runs tests/handoff/<section>.sh alone.
 #   all (default)  runs every section in parallel, HANDOFF_TEST_JOBS at a time (default: CPU count, at most 8;
 #                  1 runs them one by one), then prints each section's output in the order above.
@@ -8,9 +8,9 @@
 set -u
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/handoff" && pwd)"
-SECTIONS=(kv write skill install route notify mixed start finish doctor herdr happ hookinstall cleanup pi)
+SECTIONS=(kv write skill install route notify mixed start finish doctor herdr happ hookinstall cleanup pi harness)
 # Launch order for all: slowest first (measured 2026-11-20), so the longest section never waits for a free slot.
-LAUNCH=(pi herdr happ finish notify start mixed route doctor cleanup install write hookinstall skill kv)
+LAUNCH=(pi herdr happ finish notify start mixed route doctor cleanup install write hookinstall skill kv harness)
 section="${1:-all}"
 export HANDOFF_TEST_RUNNER=1
 fail=0

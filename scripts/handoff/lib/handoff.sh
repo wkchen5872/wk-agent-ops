@@ -142,6 +142,142 @@ ho_log() {
   printf '%s %s\n' "$(date +%Y-%m-%dT%H:%M:%S%z)" "$*" >> "$dir/routing.log" 2>/dev/null || true
 }
 
+# --- harness -------------------------------------------------------------------------
+# What differs between the agent CLIs a role runs (design D1, D2). Nothing outside this block cases on a harness
+# name: a new harness adds a branch to each function here and its rows to tests/handoff/harness.sh.
+HANDOFF_HARNESSES="claude codex pi"
+
+ho_harness_valid() { local h; for h in $HANDOFF_HARNESSES; do [[ "$1" == "$h" ]] && return 0; done; return 1; }
+
+# ho_override_valid <override>: claude|codex:<model>:<effort> or pi:<provider>/<model>:<effort>:<billing>.
+ho_override_valid() { [[ "$1" =~ ^(claude|codex):[^:]+:[^:]+$ || "$1" =~ ^pi:[^:/]+/[^:/]+:[^:]+:[^:]+$ ]]; }
+
+# ho_harness_tool <harness>: the tool name handoff-author records.
+ho_harness_tool() { case "$1" in claude) echo 'Claude Code' ;; codex) echo Codex ;; pi) echo Pi ;; *) return 1 ;; esac; }
+
+# ho_harness_skill <harness> <skill>: how a prompt calls a skill; an empty skill gives the prefix alone.
+ho_harness_skill() { case "$1" in claude) printf '/%s' "$2" ;; codex) printf '$%s' "$2" ;; pi) printf '/skill:%s' "$2" ;; *) return 1 ;; esac; }
+
+# ho_harness_xirp_effort_key <harness>: the option Xirp's session:create takes the effort as.
+ho_harness_xirp_effort_key() { case "$1" in claude) echo effort ;; codex) echo reasoning_effort ;; pi) echo thinking ;; *) return 1 ;; esac; }
+
+# ho_harness_argv <template-file> <section> <name>: the agent's command line as a JSON array, program first.
+ho_harness_argv() {
+  local tf="$1" sec="$2" m e p
+  m="$(kv_get "$tf" "$sec.model")"; e="$(kv_get "$tf" "$sec.effort")"
+  case "$(kv_get "$tf" "$sec.harness")" in
+    claude) jq -cn --arg m "$m" --arg e "$e" --arg n "$3" '["claude","--model",$m,"--effort",$e,"--name",$n]' ;;
+    codex) p="$(kv_get "$tf" "$sec.profile" 2>/dev/null || true)"
+      jq -cn --arg m "$m" --arg e "$e" --arg p "$p" '["codex","-m",$m,"-c","model_reasoning_effort=\($e)"] + (if $p == "" then [] else ["-p",$p] end)' ;;
+    pi) jq -cn --arg p "$(kv_get "$tf" "$sec.provider")" --arg m "$m" --arg e "$e" '["pi","--provider",$p,"--model",$m,"--thinking",$e]' ;;
+    *) ho_err "unsupported harness: $(kv_get "$tf" "$sec.harness")"; return 1 ;;
+  esac
+}
+
+# ho_harness_check_trigger <harness> <roles>: handoff-doctor lines for what hands off when the harness's agent stops.
+ho_harness_check_trigger() {
+  case "$1" in
+    claude) ho_hook_registered "$HOME/.claude/settings.json" && ho_line ok harness "$2: Claude Code Stop hook registered" \
+      || ho_line fail harness "$2: handoff-route is not a Stop hook in ~/.claude/settings.json (run scripts/handoff/install.sh)" ;;
+    codex)
+      ho_hook_registered "$HOME/.codex/hooks.json" && ho_line ok harness "$2: Codex Stop hook registered" \
+        || ho_line fail harness "$2: handoff-route is not a Stop hook in ~/.codex/hooks.json (run scripts/handoff/install.sh)"
+      ho_line warn harness "$2: codex hook trust cannot be checked from outside Codex; confirm \"Agent 交接派送\" is trusted and enabled in /hooks" ;;
+    pi) [[ -f "$(ho_pi_extension)" ]] && ho_line ok harness "$2: Pi trigger $(ho_pi_extension) installed" \
+      || ho_line fail harness "$2: the Pi handoff trigger $(ho_pi_extension) is not installed; run scripts/handoff/install.sh" ;;
+  esac
+}
+
+# Hooks the commands call instead of checking for a harness themselves (design D4). Only Pi needs any of them so far;
+# its parts are the ho_pi_* functions below. A hook whose name ends in _error prints why on stdout and fails.
+ho_sec_is_pi() { [[ "$(kv_get "$1" "$2.harness" 2>/dev/null)" == pi ]]; }
+
+# ho_harness_shared_worktree_error <file> <section-suffix>: a worktree holds one Pi role (design decisions 1, 2, 8):
+# the implementer, plus every review or finish role not in a worktree of its own. The suffix is "" for roles.yaml
+# and _template for loop.yaml.
+ho_harness_shared_worktree_error() {
+  local file="$1" x="$2" sec shared=()
+  for sec in implement review finish; do
+    ho_sec_is_pi "$file" "$sec$x" || continue
+    [[ "$sec" == implement || "$(kv_get "$file" "$sec$x.worktree" 2>/dev/null || true)" != new ]] && shared+=("$sec")
+  done
+  (( ${#shared[@]} > 1 )) || return 0
+  x="${shared[*]}"
+  printf 'Pi roles %s would share the implementer worktree; a worktree holds one Pi role, so set worktree: new for the Pi review or finish role\n' "${x// / and }"
+  return 1
+}
+
+# ho_harness_branch_error <file> <section> <repo> <branch>: the implementer's harness cannot work on a checkout of <branch>.
+ho_harness_branch_error() {
+  ho_sec_is_pi "$1" "$2" && git -C "$3" cat-file -e "$4:.pi/settings.json" 2>/dev/null || return 0
+  printf "%s tracks .pi/settings.json; a Pi implementer cannot use this branch's worktree\n" "$4"; return 1
+}
+
+# ho_harness_prepare_worktree <file> <section> <worktree>: what the role's harness needs in its worktree before it
+# opens (Pi: its project settings). Prints a file it created, which the loop then owns; fails (stderr says why).
+ho_harness_prepare_worktree() {
+  ho_sec_is_pi "$1" "$2" || return 0
+  local existed=0; [[ -e "$3/.pi/settings.json" ]] && existed=1
+  ho_pi_settings "$3" "$(kv_get "$1" "$2.provider")" "$(kv_get "$1" "$2.model")" "$(kv_get "$1" "$2.effort")" || return 1
+  (( existed )) || printf '%s\n' "$3/.pi/settings.json"
+}
+
+# ho_harness_worktree_ready <file> <section> <worktree> <main-worktree>: the harness will start in that worktree
+# without waiting at a prompt (Pi: its trigger trusts it).
+ho_harness_worktree_ready() { ! ho_sec_is_pi "$1" "$2" || ho_pi_worktree_ready "$3" "$4"; }
+
+# ho_harness_role_change_files <loop.yaml> <new-settings> <section> <role-key> <role> <old-session> <record> <record-state>:
+# for handoff-role, before anything changes. Prints the file of the old role to delete once its session is closed
+# (nothing when none); fails when the new role cannot use its worktree.
+# Pi settings: the old role's file is replaced only when the loop wrote it and nobody changed it since; any
+# other file in the worktree the new Pi role opens in must already match, as ho_pi_settings requires.
+ho_harness_role_change_files() {
+  local loop="$1" scratch="$2" tsec="$3" key="$4" role="$5" old="$6" rec="$7" rstate="$8"
+  local drop_pi="" f impl nmode rhead twt tcommit
+  if [[ -n "$old" ]]; then
+    f="$(kv_get "$loop" "$key.pi_settings" 2>/dev/null)"
+    [[ -n "$f" && "$(ho_pi_settings_owned "$loop" "${f%/.pi/settings.json}" 2>/dev/null)" == "$f" ]] && drop_pi="$f"
+  fi
+  if ho_sec_is_pi "$scratch" "$tsec"; then
+    # Where the route or handoff-finish will open the role: twt, used as it is (tcommit "-"), or first checked out at
+    # tcommit, or at a commit not known yet (tcommit ""; checked when it opens).
+    impl="$(kv_get "$loop" implementer.worktree)" nmode="$(kv_get "$scratch" "$tsec.worktree" 2>/dev/null)" rhead=""
+    [[ -n "$rec" ]] && rhead="$(kv_get "$rec" head 2>/dev/null)"
+    twt="$impl" tcommit="-"
+    if [[ "$role" == review && "$nmode" == new ]]; then
+      twt="$impl-review" tcommit=""; [[ "$rstate" == implement/done/* ]] && tcommit="$rhead"
+    elif [[ "$role" == finish && "$rstate" == finish/blocked/* ]]; then
+      twt="$(kv_get "$loop" finish.worktree 2>/dev/null)"; twt="${twt:-$impl}"
+      [[ "$nmode" == new && "$twt" == "$impl" ]] && { twt="$impl-finish" tcommit="$(ho_head "$impl")"; }
+    elif [[ "$role" == finish && "$nmode" == new ]]; then
+      twt="$impl-finish" tcommit=""; [[ "$rstate" == review/done/pass ]] && tcommit="$rhead"
+    fi
+    if [[ "$tcommit" == - ]]; then
+      # The index decides, so a file hidden with skip-worktree still counts.
+      [[ -z "$(git -C "$twt" ls-files -- .pi/settings.json 2>/dev/null)" ]] \
+        || { printf '%s\n' "$twt/.pi/settings.json is tracked by Git; a Pi role cannot use $twt; nothing was changed"; return 1; }
+    elif [[ -n "$tcommit" ]] && git -C "$impl" cat-file -e "$tcommit:.pi/settings.json" 2>/dev/null; then
+      printf '%s\n' "$twt would check out ${tcommit:0:7}, where .pi/settings.json is tracked by Git; a Pi role cannot use it; nothing was changed"; return 1
+    fi
+    f="$twt/.pi/settings.json"
+    if [[ -e "$f" && "$f" != "$drop_pi" && -z "$(git -C "$twt" ls-files -- .pi/settings.json 2>/dev/null)" ]]; then
+      [[ "$(jq -cS . "$f" 2>/dev/null)" == "$(ho_pi_settings_json "$(kv_get "$scratch" "$tsec.provider")" "$(kv_get "$scratch" "$tsec.model")" "$(kv_get "$scratch" "$tsec.effort")")" ]] \
+        || { printf '%s\n' "$f already exists with other settings that this loop did not write; remove it or use --worktree new; nothing was changed"; return 1; }
+    fi
+  fi
+  [[ -z "$drop_pi" ]] || printf '%s\n' "$drop_pi"
+}
+
+# ho_harness_record_check <loop.yaml> <record>: the record's agent block matches the template it answers to; prints
+# each mismatch and fails. ho_harness_record_label <record>: the record's own agent label, or fails when it has none.
+ho_harness_record_check() { ho_pi_record_check "$@"; }
+ho_harness_record_label() { ho_pi_record_label "$@"; }
+
+# ho_harness_owned_files <loop.yaml> <worktree>: files the loop's roles created there that cleanup removes (printed);
+# ho_harness_cleanup_files removes them and says so.
+ho_harness_owned_files() { ho_pi_settings_owned "$@"; }
+ho_harness_cleanup_files() { ho_pi_settings_cleanup "$@"; }
+
 # --- Xirp ----------------------------------------------------------------------
 ho_xirp_session() { [[ -n "$1" ]] && xirp session get "$1" --json 2>/dev/null; }
 
@@ -184,12 +320,7 @@ ho_xirp_ids_named() {
 ho_xirp_create() {
   local project="$1" wt="$2" harness="$3" model="$4" effort="$5" name="$6" prompt="$7" profile="${8:-}" provider="${9:-}"
   local effort_key before json id waited=0
-  case "$harness" in
-    claude) effort_key="effort" ;;
-    codex) effort_key="reasoning_effort" ;;
-    pi) effort_key="thinking" ;;
-    *) ho_err "unsupported harness: $harness"; return 1 ;;
-  esac
+  effort_key="$(ho_harness_xirp_effort_key "$harness")" || { ho_err "unsupported harness: $harness"; return 1; }
   before="$(ho_xirp_ids_named "$name")"
   json="$(jq -n --arg p "$project" --arg w "$wt" --arg n "$name" --arg g "$prompt" --arg h "$harness" \
     --arg m "$model" --arg ek "$effort_key" --arg e "$effort" --arg pr "$profile" --arg pv "$provider" \
@@ -210,6 +341,9 @@ ho_xirp_create() {
 # without one is an xirp loop. Each host implements four actions; callers never call a host directly.
 ho_role_tsec() { case "$1" in implementer) echo implement_template ;; reviewer) echo review_template ;; finish) echo finish_template ;; esac; }
 ho_role_host() { ho_sec_host "$1" "$(ho_role_tsec "$2")"; }
+# ho_role_key <section|role>: the loop.yaml key of a role (implementer, reviewer, finish) from a template section
+# (implement, review_template, ...) or a record's role.
+ho_role_key() { case "$1" in implement*) echo implementer ;; review*) echo reviewer ;; finish*) echo finish ;; esac; }
 HANDOFF_HOSTS="xirp herdr herdr-app"
 
 # ho_sec_host <file> <section>: the section's host, else the file's top-level host, else xirp.
@@ -302,44 +436,46 @@ ho_herdr_code() { jq -r '.error.code // empty' <<<"$1" 2>/dev/null; }
 # the text in its composer (herdr answers agent_prompt_stalled): Enter is sent once more, never the text.
 # Returns 0 when the agent took it, 1 when herdr says nothing was sent, 2 when the result is unknown
 # (a timeout, or still no activity after the extra Enter): such a prompt may have arrived and is never
-# sent again. Sets HO_HERDR_CODE.
+# sent again. Sets HO_HOST_CODE.
 HANDOFF_SUBMIT_TIMEOUT_MS="${HANDOFF_SUBMIT_TIMEOUT_MS:-15000}"
 ho_herdr_prompt() {
   local out rc until=(--until working --until blocked --timeout "$HANDOFF_SUBMIT_TIMEOUT_MS")
-  out="$(ho_herdr "$1" agent prompt "$2" "$3" --wait "${until[@]}")"; rc=$?; HO_HERDR_CODE=""
+  out="$(ho_herdr "$1" agent prompt "$2" "$3" --wait "${until[@]}")"; rc=$?; HO_HOST_CODE=""
   (( rc == 0 )) && return 0
-  HO_HERDR_CODE="$(ho_herdr_code "$out")"
-  case "$HO_HERDR_CODE" in agent_blocked|agent_not_found|pane_not_found|server_not_running) return 1 ;; esac
-  (( rc == 2 )) && { HO_HERDR_CODE="usage error"; return 1; }  # a command-line error sends nothing
-  if [[ "$HO_HERDR_CODE" == agent_prompt_stalled ]]; then
+  HO_HOST_CODE="$(ho_herdr_code "$out")"
+  case "$HO_HOST_CODE" in agent_blocked|agent_not_found|pane_not_found|server_not_running) return 1 ;; esac
+  (( rc == 2 )) && { HO_HOST_CODE="usage error"; return 1; }  # a command-line error sends nothing
+  if [[ "$HO_HOST_CODE" == agent_prompt_stalled ]]; then
     ho_herdr "$1" agent send-keys "$2" enter >/dev/null \
-      && ho_herdr "$1" agent wait "$2" "${until[@]}" >/dev/null && { HO_HERDR_CODE=""; return 0; }
-    HO_HERDR_CODE="agent_prompt_stalled, still idle after one more Enter"
+      && ho_herdr "$1" agent wait "$2" "${until[@]}" >/dev/null && { HO_HOST_CODE=""; return 0; }
+    HO_HOST_CODE="agent_prompt_stalled, still idle after one more Enter"
   fi
   return 2
 }
 
-# ho_herdr_unconfirmed <loop-dir> <role> <pane> <text>: keep a prompt herdr did not confirm in a file the
-# user can check against the pane, and say where it is. While the file exists the role gets no prompt
-# and is never taken as started (ho_herdr_held): the user checks the pane, pastes the text if it is
+# Unconfirmed prompts, shared by every host and handoff-finish: a host that cannot confirm a prompt sets HO_HOST_CODE to why and calls ho_unconfirmed_keep; the message
+# still says herdr on every host (a known wording issue, left for a later change).
+# ho_unconfirmed_keep <loop-dir> <role> <session> <text>: keep a prompt the host did not confirm in a file the
+# user can check against the session, and say where it is. While the file exists the role gets no prompt
+# and is never taken as started (ho_unconfirmed_file): the user checks the session, pastes the text if it is
 # missing, and deletes the file.
-ho_herdr_unconfirmed() {
+ho_unconfirmed_keep() {
   local f="$1/$2-unconfirmed.txt"
   printf '%s\n' "$4" > "$f"
-  ho_err "herdr did not confirm the prompt to pane $3 (${HO_HERDR_CODE:-no answer}); it may have arrived, so it is not sent again. Check that pane, paste the text from $f if it is missing, then delete $f"
+  ho_err "herdr did not confirm the prompt to pane $3 (${HO_HOST_CODE:-no answer}); it may have arrived, so it is not sent again. Check that pane, paste the text from $f if it is missing, then delete $f"
 }
 
-# ho_herdr_held <loop-dir> <role>: a prompt to the role still waits for the user's check; prints the file.
-ho_herdr_held() {
+# ho_unconfirmed_file <loop-dir> <role>: a prompt to the role still waits for the user's check; prints the file.
+ho_unconfirmed_file() {
   local d dirs
   dirs="$(ho_loop_dirs "$1")"
   while IFS= read -r d; do [[ -f "$d/$2-unconfirmed.txt" ]] && { printf '%s\n' "$d/$2-unconfirmed.txt"; return 0; }; done <<<"$dirs"
   return 1
 }
 
-# ho_herdr_hold_error <loop-dir> <role> <pane>: refuse while ho_herdr_held; fails (status 1) only then.
-ho_herdr_hold_error() {
-  local f; f="$(ho_herdr_held "$1" "$2")" || return 0
+# ho_unconfirmed_guard <loop-dir> <role> <session>: refuse while ho_unconfirmed_file; fails (status 1) only then.
+ho_unconfirmed_guard() {
+  local f; f="$(ho_unconfirmed_file "$1" "$2")" || return 0
   ho_err "herdr did not confirm an earlier prompt to the $2 (pane $3); nothing is sent until you check that pane, paste the text from $f if it is missing, and delete $f"
   return 1
 }
@@ -421,23 +557,19 @@ ho_role_pending() { [[ "$(kv_get "$1/loop.yaml" "$2.pending_prompt" 2>/dev/null)
 # stopped at a dialog (<role>.pending_prompt) is reused: only what is missing is done again (D5).
 ho_herdr_open() {
   local dir="$1" role="$2" wt="$3" name="$4" prompt="$5" tf="$6" sec="$7" loop="$1/loop.yaml"
-  local hs h m e pane out code aname waited=0 native fresh=0 args=()
+  local hs h argv a pane out code aname waited=0 native fresh=0 args=()
   hs="$(ho_herdr_session_of "$dir" "$role")"
-  h="$(kv_get "$tf" "$sec.harness")"; m="$(kv_get "$tf" "$sec.model")"; e="$(kv_get "$tf" "$sec.effort")"
+  h="$(kv_get "$tf" "$sec.harness")"
   pane="$(kv_get "$loop" "$role.session" 2>/dev/null)"
-  ho_herdr_hold_error "$dir" "$role" "$pane" || return 1
+  ho_unconfirmed_guard "$dir" "$role" "$pane" || return 1
   if [[ -z "$pane" || "$(kv_get "$loop" "$role.pending_prompt" 2>/dev/null)" != true ]]; then
     pane="$(ho_herdr_place "$dir" "$role" "$hs" "$wt" "$name")" || return 1
     ho_loop_set "$dir" "$role.pending_prompt" true; fresh=1
   fi
   if (( fresh )) || ! ho_herdr_agent_get "$hs" "$pane" "$h" >/dev/null; then
-    case "$h" in
-      claude) args=(--model "$m" --effort "$e" --name "$name") ;;
-      codex) args=(-m "$m" -c "model_reasoning_effort=$e")
-        [[ -z "$(kv_get "$tf" "$sec.profile" 2>/dev/null)" ]] || args+=(-p "$(kv_get "$tf" "$sec.profile")") ;;
-      pi) args=(--provider "$(kv_get "$tf" "$sec.provider")" --model "$m" --thinking "$e") ;;
-      *) ho_err "unsupported harness: $h"; return 1 ;;
-    esac
+    # herdr starts the program itself (--kind), so only the arguments after it; none holds a newline.
+    argv="$(ho_harness_argv "$tf" "$sec" "$name")" || return 1
+    while IFS= read -r a; do args+=("$a"); done < <(jq -r '.[1:][]' <<<"$argv")
     # herdr agent names must match [a-z][a-z0-9_-]{0,31}; they are labels only, the pane identifies the role.
     case "$role" in implementer) aname=impl ;; reviewer) aname=review ;; *) aname="$role" ;; esac
     aname="$aname-$(printf '%s' "$pane$$$RANDOM" | shasum | cut -c1-6)"
@@ -451,12 +583,12 @@ ho_herdr_open() {
   fi
   ho_herdr_prompt "$hs" "$pane" "$prompt"; code=$?
   if (( code == 1 )); then
-    if [[ "$HO_HERDR_CODE" == agent_blocked ]]; then ho_err "$(ho_herdr_dialog "$dir" "$role" "$pane")"
-    else ho_err "herdr agent prompt failed in pane $pane: $HO_HERDR_CODE"; fi
+    if [[ "$HO_HOST_CODE" == agent_blocked ]]; then ho_err "$(ho_herdr_dialog "$dir" "$role" "$pane")"
+    else ho_err "herdr agent prompt failed in pane $pane: $HO_HOST_CODE"; fi
     return 1
   fi
   ho_loop_set "$dir" "$role.pending_prompt" ""
-  (( code == 2 )) && { ho_herdr_unconfirmed "$dir" "$role" "$pane" "$prompt"; return 2; }
+  (( code == 2 )) && { ho_unconfirmed_keep "$dir" "$role" "$pane" "$prompt"; return 2; }
   # The native session ID arrives through herdr's integration hook, a little later (design D4 step 5).
   for ((waited = 0; waited <= HANDOFF_NATIVE_WAIT; waited++)); do
     native="$(ho_herdr "$hs" agent get "$pane" | jq -r '.result.agent.agent_session.value // empty' 2>/dev/null)"
@@ -483,17 +615,17 @@ ho_herdr_exists() {
 # nothing was sent (retried later) and 2 when herdr did not confirm the submission (never resent).
 ho_herdr_message() {
   local rc
-  ho_herdr_hold_error "$1" "$2" "$3" || return 1
+  ho_unconfirmed_guard "$1" "$2" "$3" || return 1
   if ! ho_herdr_exists "$1" "$2" "$3"; then
     ho_err "herdr pane $3 no longer runs the $2's agent (tab $(kv_get "$1/loop.yaml" "$2.herdr_tab" 2>/dev/null)); nothing was sent"; return 1
   fi
   ho_herdr_prompt "$(ho_herdr_session_of "$1" "$2")" "$3" "$4"; rc=$?
   case "$rc" in
     0) return 0 ;;
-    1) if [[ "$HO_HERDR_CODE" == agent_blocked ]]; then ho_err "$(ho_herdr_dialog "$1" "$2" "$3")"
-       else ho_err "herdr agent prompt failed in pane $3: $HO_HERDR_CODE"; fi
+    1) if [[ "$HO_HOST_CODE" == agent_blocked ]]; then ho_err "$(ho_herdr_dialog "$1" "$2" "$3")"
+       else ho_err "herdr agent prompt failed in pane $3: $HO_HOST_CODE"; fi
        return 1 ;;
-    *) ho_herdr_unconfirmed "$1" "$2" "$3" "$4"; return 2 ;;
+    *) ho_unconfirmed_keep "$1" "$2" "$3" "$4"; return 2 ;;
   esac
 }
 
@@ -556,19 +688,6 @@ ho_hc_kind() { jq -r '.error.kind // empty' <<<"$1" 2>/dev/null; }
 # ho_happ_do <command> <args...>: the app's JSON answer; fails with the app's error (or its message when no window).
 ho_happ_do() { local out; out="$(herdr-app do "$@" </dev/null 2>&1)" || { jq -r '.error // empty' <<<"$out" 2>/dev/null | grep . || printf '%s\n' "$out"; return 1; }; printf '%s\n' "$out"; }
 
-# ho_happ_argv <template-file> <section> <name>: the agent's argv as JSON (the same arguments as the herdr host).
-ho_happ_argv() {
-  local tf="$1" sec="$2" m e p
-  m="$(kv_get "$tf" "$sec.model")"; e="$(kv_get "$tf" "$sec.effort")"
-  case "$(kv_get "$tf" "$sec.harness")" in
-    claude) jq -cn --arg m "$m" --arg e "$e" --arg n "$3" '["claude","--model",$m,"--effort",$e,"--name",$n]' ;;
-    codex) p="$(kv_get "$tf" "$sec.profile" 2>/dev/null || true)"
-      jq -cn --arg m "$m" --arg e "$e" --arg p "$p" '["codex","-m",$m,"-c","model_reasoning_effort=\($e)"] + (if $p == "" then [] else ["-p",$p] end)' ;;
-    pi) jq -cn --arg p "$(kv_get "$tf" "$sec.provider")" --arg m "$m" --arg e "$e" '["pi","--provider",$p,"--model",$m,"--thinking",$e]' ;;
-    *) ho_err "unsupported harness: $(kv_get "$tf" "$sec.harness")"; return 1 ;;
-  esac
-}
-
 # ho_happ_runs <terminal-json> <harness>: the terminal is live and its foreground program is that harness (a Node
 # CLI such as pi shows as node with the script next). The status report is not evidence: hc keeps an agent's last
 # status when a nested shell takes over (codex-herdr-app-r01/F-02).
@@ -605,7 +724,7 @@ ho_happ_open() {
   local dir="$1" role="$2" wt="$3" name="$4" prompt="$5" tf="$6" sec="$7" loop="$1/loop.yaml"
   local t argv sp out label cur json waited reopen=1 kind
   t="$(kv_get "$loop" "$role.session" 2>/dev/null)"
-  ho_herdr_hold_error "$dir" "$role" "$t" || return 1
+  ho_unconfirmed_guard "$dir" "$role" "$t" || return 1
   if [[ -n "$t" ]] && ho_role_pending "$dir" "$role"; then
     # A new tab only when hc says the waiting one is gone; an unknown answer keeps it and its task (r01/F-05).
     if json="$(ho_hc get --json "$t")"; then [[ "$(jq -r '.state // empty' <<<"$json")" == finished ]] || reopen=0
@@ -615,7 +734,7 @@ ho_happ_open() {
     fi
   fi
   if (( reopen )); then
-    argv="$(ho_happ_argv "$tf" "$sec" "$name")" || return 1
+    argv="$(ho_harness_argv "$tf" "$sec" "$name")" || return 1
     # A tab and terminal the role had before stay the loop's, so cleanup still closes and removes them (r02/F-01).
     if [[ -n "$(kv_get "$loop" "$role.happ_tab" 2>/dev/null)" ]]; then
       cur="$(kv_get "$loop" "$role.happ_stale_tabs" 2>/dev/null)"
@@ -652,7 +771,7 @@ ho_happ_open() {
     sleep 1
   done
   ho_loop_set "$dir" "$role.pending_prompt" ""
-  HO_HERDR_CODE="no turn started within ${HANDOFF_CREATE_WAIT}s"; ho_herdr_unconfirmed "$dir" "$role" "$t" "$prompt"; return 2
+  HO_HOST_CODE="no turn started within ${HANDOFF_CREATE_WAIT}s"; ho_unconfirmed_keep "$dir" "$role" "$t" "$prompt"; return 2
 }
 
 # ho_happ_exists <loop-dir> <role> <terminal>: the terminal is live and runs the role's harness (D5).
@@ -666,7 +785,7 @@ ho_happ_exists() {
 # nothing was sent (retried later) and 2 when hc did not confirm that a turn started (never resent).
 ho_happ_message() {
   local dir="$1" role="$2" t="$3" json st out kind
-  ho_herdr_hold_error "$dir" "$role" "$t" || return 1
+  ho_unconfirmed_guard "$dir" "$role" "$t" || return 1
   json="$(ho_hc get --json "$t")"
   if ! ho_happ_runs "$json" "$(kv_get "$dir/loop.yaml" "$(ho_role_tsec "$role").harness" 2>/dev/null)"; then
     ho_err "terminal $t no longer runs the $role's agent (Herdr app tab $(kv_get "$dir/loop.yaml" "$role.happ_tab" 2>/dev/null)); nothing was sent"; return 1
@@ -680,16 +799,16 @@ ho_happ_message() {
   esac
   if out="$(ho_hc send --json -- "$t" "$4")"; then
     [[ "$(jq -r '.started' <<<"$out" 2>/dev/null)" == true ]] && return 0
-    HO_HERDR_CODE="started: $(jq -r '.started' <<<"$out" 2>/dev/null)"
+    HO_HOST_CODE="started: $(jq -r '.started' <<<"$out" 2>/dev/null)"
   else
     kind="$(ho_hc_kind "$out")"
     case "$kind" in
       blocked) ho_err "$(ho_happ_dialog "$role" "$t" "$(ho_hc get --json "$t")")"; return 1 ;;
       not_found|finished|unavailable|status_mismatch|invalid_params|machine_unknown) ho_err "hc send to terminal $t failed: $kind; nothing was sent"; return 1 ;;
     esac
-    HO_HERDR_CODE="${kind:-no answer}"
+    HO_HOST_CODE="${kind:-no answer}"
   fi
-  ho_herdr_unconfirmed "$dir" "$role" "$t" "$4"; return 2
+  ho_unconfirmed_keep "$dir" "$role" "$t" "$4"; return 2
 }
 
 # ho_happ_owned <loop-dir>: the tabs and terminals the loop opened, as a JSON array.
@@ -789,7 +908,8 @@ ho_happ_rm() {
 # both session IDs from the agent's environment, so no model retypes them.
 ho_author() {
   local tool
-  case "$1" in claude) tool="'Claude Code'" ;; codex) tool="Codex" ;; pi) tool="Pi" ;; *) tool="$1" ;; esac
+  tool="$(ho_harness_tool "$1")" || tool="$1"
+  [[ "$tool" != *" "* ]] || tool="'$tool'"
   printf 'Author 區塊（GitHub 回覆、報告，或交給專用 Agent 的 author_file）一律用 %s/handoff-author --tool %s --model %s 產生，' \
     "$(dirname "$HANDOFF_WRITE_REL")" "$tool" "$2"
   printf '把輸出原樣附加在 ## Author 標題下（例如 >> body.md），不要手抄或改寫 Session ID。'
@@ -814,7 +934,7 @@ ho_template_check() {
     [[ -n "$v" ]] || missing="$missing $k"
   done
   [[ -z "$missing" ]] || { ho_err "$sec template is missing:$missing"; return 1; }
-  [[ "$h" == claude || "$h" == codex || "$h" == pi ]] || { ho_err "$sec template harness must be claude, codex or pi, got '$h'"; return 1; }
+  ho_harness_valid "$h" || { ho_err "$sec template harness must be claude, codex or pi, got '$h'"; return 1; }
   v="$(ho_sec_host "$file" "$sec")"
   case "$v" in xirp|herdr|herdr-app) ;; *) ho_err "$sec host must be one of ${HANDOFF_HOSTS// /, }, got '$v'"; return 1 ;; esac
   if [[ "$h" == pi ]]; then
@@ -857,19 +977,18 @@ ho_copy_template() {
 # ho_retool <old-tool> <new-tool> <name|prompt> <text>: a session name that starts with "<old-tool> - "
 # and a prompt that starts with a skill call (/x Claude Code, $x Codex, /skill:x Pi) follow the new tool.
 ho_retool() {
-  local old="$1" new="$2" kind="$3" text="$4" skill=""
+  local old="$1" new="$2" kind="$3" text="$4" skill="" h p best=""
   if [[ "$kind" == name ]]; then
     [[ "$text" == "$old - "* ]] && text="$new - ${text#"$old - "}"
     printf '%s' "$text"; return 0
   fi
-  case "$text" in
-    /skill:*) skill="${text#/skill:}" ;;
-    \$*) skill="${text#\$}" ;;
-    /*) skill="${text#/}" ;;
-  esac
-  if [[ "$skill" =~ ^[a-z0-9] ]]; then
-    case "$new" in claude) text="/$skill" ;; codex) text="\$$skill" ;; pi) text="/skill:$skill" ;; esac
-  fi
+  # The longest skill prefix the text starts with (/skill: before /), whichever harness it was written for.
+  for h in $HANDOFF_HARNESSES; do
+    p="$(ho_harness_skill "$h" "")"
+    [[ "$text" == "$p"* && ${#p} -gt ${#best} ]] && best="$p"
+  done
+  [[ -n "$best" ]] && skill="${text#"$best"}"
+  if [[ "$skill" =~ ^[a-z0-9] ]]; then text="$(ho_harness_skill "$new" "$skill")" || text="$4"; fi
   printf '%s' "$text"
 }
 
@@ -897,14 +1016,14 @@ ho_open_role() {
   change="$(kv_get "$loop" change)"
   delivery="$(kv_get "$loop" finish.delivery 2>/dev/null || echo local)"
   main="$(ho_main_worktree "$wt")"
-  role="$(ho_pi_role_key "$tsec")"
+  role="$(ho_role_key "$tsec")"
   if [[ "$(kv_get "$loop" "$tsec.harness")" == pi ]]; then
     ho_pi_ready "$loop" "$tsec" "${tsec%_template}" "$main" || return 1
     ho_pi_worktree_ready "$wt" "$main" \
       || { ho_err "${tsec%_template}: the Pi trigger would not trust $wt (its loop.yaml does not list it); not opened"; return 1; }
     local existed=0; [[ -e "$wt/.pi/settings.json" ]] && existed=1
     ho_pi_settings "$wt" "$(kv_get "$loop" "$tsec.provider")" "$(kv_get "$loop" "$tsec.model")" "$(kv_get "$loop" "$tsec.effort")" || return 1
-    (( existed )) || ho_loop_set "$dir" "$(ho_pi_role_key "$tsec").pi_settings" "$wt/.pi/settings.json"
+    (( existed )) || ho_loop_set "$dir" "$(ho_role_key "$tsec").pi_settings" "$wt/.pi/settings.json"
   fi
   name="$(ho_render "$(kv_get "$loop" "$tsec.name")" "$change" "$head" "$round" "$report" "$delivery")"
   prompt="$(ho_render "$(kv_get "$loop" "$tsec.prompt")" "$change" "$head" "$round" "$report" "$delivery" \
@@ -1026,8 +1145,6 @@ ho_pi_settings() {
   [[ -e "$f" ]] || { mkdir -p "$wt/.pi" && printf '%s\n' "$want" > "$f"; }
 }
 
-# A role that creates the settings file records it as <implementer|reviewer|finish>.pi_settings in loop.yaml.
-ho_pi_role_key() { case "$1" in implement*) echo implementer ;; review*) echo reviewer ;; finish*) echo finish ;; esac; }
 
 # ho_pi_settings_owned <loop.yaml> <worktree>: print the worktree's settings file when this loop recorded
 # it as written and it still holds what the loop wrote; a file that existed before the loop is never recorded.
@@ -1036,7 +1153,7 @@ ho_pi_settings_owned() {
   [[ -f "$f" && -z "$(git -C "$2" ls-files -- .pi/settings.json 2>/dev/null)" ]] || return 1
   have="$(jq -cS . "$f" 2>/dev/null)" || return 1
   for sec in implement_template review_template finish_template; do
-    role="$(ho_pi_role_key "$sec")"
+    role="$(ho_role_key "$sec")"
     [[ "$(kv_get "$loop" "$sec.harness" 2>/dev/null)" == pi && "$(kv_get "$loop" "$role.pi_settings" 2>/dev/null)" == "$f" ]] || continue
     if [[ "$have" == "$(ho_pi_settings_json "$(kv_get "$loop" "$sec.provider")" "$(kv_get "$loop" "$sec.model")" "$(kv_get "$loop" "$sec.effort")")" ]]; then
       printf '%s\n' "$f"; return 0
@@ -1136,7 +1253,7 @@ ho_check_host() {
 # ho_sec_herdr_session <file> <section>: the herdr session recorded for the role in loop.yaml, or the
 # one a loop started now would choose (design D4).
 ho_sec_herdr_session() {
-  local s; s="$(kv_get "$1" "$(ho_pi_role_key "$2").herdr_session" 2>/dev/null)"
+  local s; s="$(kv_get "$1" "$(ho_role_key "$2").herdr_session" 2>/dev/null)"
   [[ -n "$s" ]] && printf '%s\n' "$s" || ho_herdr_session_choice "$1"
 }
 
@@ -1177,21 +1294,12 @@ ho_hook_registered() {
 
 ho_check_harness() {
   local file="$1" h roles ver; shift
-  for h in claude codex pi; do
+  for h in $HANDOFF_HARNESSES; do
     roles="$(ho_secs_with "$file" ho_sec_harness "$h" "$@")"; [[ -n "$roles" ]] || continue
     if ! command -v "$h" >/dev/null 2>&1; then ho_line fail harness "$roles: the $h command was not found"; continue; fi
     ver="$("$h" --version </dev/null 2>/dev/null | head -1)"
     ho_line ok harness "$roles: $h ${ver:-(version unknown)}"
-    case "$h" in
-      claude) ho_hook_registered "$HOME/.claude/settings.json" && ho_line ok harness "$roles: Claude Code Stop hook registered" \
-        || ho_line fail harness "$roles: handoff-route is not a Stop hook in ~/.claude/settings.json (run scripts/handoff/install.sh)" ;;
-      codex)
-        ho_hook_registered "$HOME/.codex/hooks.json" && ho_line ok harness "$roles: Codex Stop hook registered" \
-          || ho_line fail harness "$roles: handoff-route is not a Stop hook in ~/.codex/hooks.json (run scripts/handoff/install.sh)"
-        ho_line warn harness "$roles: codex hook trust cannot be checked from outside Codex; confirm \"Agent 交接派送\" is trusted and enabled in /hooks" ;;
-      pi) [[ -f "$(ho_pi_extension)" ]] && ho_line ok harness "$roles: Pi trigger $(ho_pi_extension) installed" \
-        || ho_line fail harness "$roles: the Pi handoff trigger $(ho_pi_extension) is not installed; run scripts/handoff/install.sh" ;;
-    esac
+    ho_harness_check_trigger "$h" "$roles"
     ho_check_herdr_integration "$file" "$h" "$@"
   done
 }
@@ -1269,7 +1377,7 @@ ho_finish_check() {
   if [[ "$(kv_get "$rec" status)" != done || "$(kv_get "$rec" verdict)" != pass ]]; then
     echo "the newest review is status $(kv_get "$rec" status), verdict $(kv_get "$rec" verdict)"; return 1
   fi
-  if ! why="$(ho_pi_record_check "$loop" "$rec")"; then
+  if ! why="$(ho_harness_record_check "$loop" "$rec")"; then
     echo "the passing review $(basename "$rec") does not match the Pi review template: $why"; return 1
   fi
   head="$(kv_get "$rec" head)"
@@ -1306,7 +1414,7 @@ ho_finish_retry() {
   while IFS= read -r d; do
     for f in "$d"/[0-9][0-9]-review.yaml; do
       [[ -e "$f" && "$(kv_get "$f" status)" == done && "$(kv_get "$f" verdict)" == pass ]] || continue
-      ho_pi_record_check "$loop" "$f" >/dev/null || continue
+      ho_harness_record_check "$loop" "$f" >/dev/null || continue
       n=$((10#$(basename "$f" | cut -c1-2))); (( n > pn )) && { pn=$n; pass="$(kv_get "$f" head)"; }
     done
   done < <(ho_loop_dirs "$dir")
@@ -1320,7 +1428,7 @@ ho_finish_retry() {
   id="$(kv_get "$loop" finish.session 2>/dev/null)"; base="$(basename "$rec")"; claim="$dir/.finish-retry-$base"
   existing=0
   if [[ -n "$id" ]] && ! ho_role_pending "$dir" finish && ho_host_exists "$(ho_role_host "$loop" finish)" "$dir" finish "$id"; then
-    existing=1; ho_herdr_hold_error "$dir" finish "$id" || return 1
+    existing=1; ho_unconfirmed_guard "$dir" finish "$id" || return 1
   fi
   if [[ "$(kv_get "$loop" finish.retried_for 2>/dev/null)" != "$base" ]] && ! err="$(mkdir "$claim" 2>&1)"; then
     # Only an existing claim means another run took it; any other failure sent nothing and stays retryable.
@@ -1423,7 +1531,7 @@ ho_finish_open() {
   id="$(kv_get "$loop" finish.session 2>/dev/null)"
   if [[ -n "$id" ]] && ! ho_role_pending "$dir" finish && ho_host_exists "$(ho_role_host "$loop" finish)" "$dir" finish "$id"; then
     # An open finish whose first prompt herdr did not confirm is not taken as started until the user checks it.
-    ho_herdr_hold_error "$dir" finish "$id" || return 1
+    ho_unconfirmed_guard "$dir" finish "$id" || return 1
     printf '%s\n' "$id"; return 0
   fi
   impl="$(kv_get "$loop" implementer.worktree)"; change="$(kv_get "$loop" change)"

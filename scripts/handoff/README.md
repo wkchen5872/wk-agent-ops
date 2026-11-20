@@ -564,3 +564,35 @@ unaffected; only usage moves.
 - **A Pi role is refused**: the message names the role and the check. Run
   `pi --list-models <model>` and `pi auth check --provider <provider> --json` to compare, run
   `scripts/handoff/install.sh` for a missing trigger, or `/trust` in Pi in the main worktree.
+
+## For maintainers
+
+The loop has three axes: the session host, the harness (the agent CLI a role runs) and the model.
+`scripts/handoff/lib/handoff.sh` keeps each axis's knowledge in one block, and the commands call
+only those blocks:
+
+- **Hosts** — the `# --- session hosts` block: `ho_host_open`, `ho_host_message`, `ho_host_exists`,
+  `ho_host_close` dispatch to each host's functions. A prompt a host cannot confirm goes through
+  the host-neutral `ho_unconfirmed_keep`, `ho_unconfirmed_file` and `ho_unconfirmed_guard`, with the
+  reason in `HO_HOST_CODE`.
+- **Harnesses** — the `# --- harness` block. It is the only place that cases on `claude`, `codex`
+  or `pi`: valid names (`HANDOFF_HARNESSES`, `ho_harness_valid`), the override form
+  (`ho_override_valid`), the author tool name, the skill call syntax, the command line
+  (`ho_harness_argv`, a JSON array shared by herdr and the Herdr app), Xirp's effort option, and the
+  `handoff-doctor` trigger check. The hooks after them (`ho_harness_shared_worktree_error`,
+  `ho_harness_prepare_worktree`, `ho_harness_record_check`, …) are what the commands call instead of
+  checking for Pi; Pi's parts are the `ho_pi_*` functions.
+
+To add a harness:
+
+1. Add it to `HANDOFF_HARNESSES` and a branch to each `ho_harness_*` function that cases on the
+   name; extend `ho_override_valid` if its override has another form.
+2. Update the texts that list the harnesses: the harness error in `ho_template_check` and the
+   override usage in `handoff-start` and `handoff-role`.
+3. Give the hooks a branch only if the harness needs files in its worktree or an agent block in its
+   records, as Pi does.
+4. Add its rows to `tests/handoff/harness.sh` and run `bash tests/test_agent_handoff.sh harness`,
+   then the full `bash tests/test_agent_handoff.sh`.
+
+Known issue: the unconfirmed-prompt messages still say `herdr did not confirm the prompt to pane …`
+on the Herdr app too; the wording is left for a later change.

@@ -47,13 +47,13 @@ done
 [[ "$mode" == new || "$mode" == here ]] || die "--worktree must be new or here"
 [[ -z "$finish_ov" || "$finish_ov" == ask || "$finish_ov" == auto ]] || die "--finish must be ask or auto"
 for ov in "$impl_ov" "$review_ov"; do
-  [[ -z "$ov" || "$ov" =~ ^(claude|codex):[^:]+:[^:]+$ || "$ov" =~ ^pi:[^:/]+/[^:/]+:[^:]+:[^:]+$ ]] \
+  [[ -z "$ov" ]] || ho_override_valid "$ov" \
     || die "override must be claude|codex:<model>:<effort> or pi:<provider>/<model>:<effort>:<billing>, got '$ov'"
 done
 main="$(ho_main_worktree)" || die "not inside a Git repository"
 roles="$main/.agent-handoff/roles.yaml"
 # Work on a scratch copy so overrides never touch roles.yaml; check the environment before anything else.
-scratch="$(mktemp)"; trap 'rm -f "$scratch"' EXIT
+scratch="$(mktemp)"; trap 'rm -f "$scratch" "$scratch.err"' EXIT
 tfile="$roles"
 if [[ -f "$roles" ]]; then
   cp "$roles" "$scratch"; tfile="$scratch"
@@ -82,20 +82,9 @@ if [[ -n "$reviewer" ]]; then
   (( found == 0 )) || die "the review role's $rh session '$reviewer' was not found"
 fi
 
-# One Pi role per worktree, before any worktree or session (design decisions 1, 2 and 8).
-pi_in_impl=()
-for sec in implement review finish; do
-  [[ "$(kv_get "$scratch" "$sec.harness")" == pi ]] || continue
-  [[ "$sec" == implement || "$(kv_get "$scratch" "$sec.worktree" 2>/dev/null || true)" != new ]] && pi_in_impl+=("$sec")
-done
-if (( ${#pi_in_impl[@]} > 1 )); then
-  roles_txt="${pi_in_impl[*]}"
-  die "Pi roles ${roles_txt// / and } would share the implementer worktree; a worktree holds one Pi role, so set worktree: new for the Pi review or finish role"
-fi
-impl_pi=0; [[ "$(kv_get "$scratch" implement.harness)" == pi ]] && impl_pi=1
-if (( impl_pi )) && [[ "$mode" == new ]] && git -C "$main" cat-file -e "feature/$change:.pi/settings.json" 2>/dev/null; then
-  die "feature/$change tracks .pi/settings.json; a Pi implementer cannot use this branch's worktree"
-fi
+# What the harnesses require of the worktrees, before any worktree or session (design decisions 1, 2 and 8).
+why="$(ho_harness_shared_worktree_error "$scratch" "")" || die "$why"
+if [[ "$mode" == new ]]; then why="$(ho_harness_branch_error "$scratch" implement "$main" "feature/$change")" || die "$why"; fi
 
 # An implementer that stopped at a dialog when this loop started: send the prompt to the same pane.
 if dir="$(ho_find_loop_dir "$change" "$main")" && ho_role_pending "$dir" implementer; then
@@ -124,12 +113,9 @@ else
 fi
 dir="$wt/.agent-handoff/$change"; loop="$dir/loop.yaml"
 [[ ! -e "$loop" ]] || die "a loop already exists: $loop"
-pi_new=0
-if (( impl_pi )); then
-  [[ -e "$wt/.pi/settings.json" ]] || pi_new=1
-  ho_pi_settings "$wt" "$(kv_get "$scratch" implement.provider)" "$(kv_get "$scratch" implement.model)" "$(kv_get "$scratch" implement.effort)" 2>&1 \
-    | sed 's/^/handoff-start: /' >&2; [[ ${PIPESTATUS[0]} -eq 0 ]] || exit 1
-fi
+# A file the harness creates there is the loop's (handoff-cleanup removes it); its messages carry this command's name.
+owned="$(ho_harness_prepare_worktree "$scratch" implement "$wt" 2>"$scratch.err")"; rc=$?
+sed 's/^/handoff-start: /' "$scratch.err" >&2; (( rc == 0 )) || exit 1
 
 mkdir -p "$dir"
 {
@@ -138,7 +124,7 @@ mkdir -p "$dir"
   printf 'reviewer:\n  session: %s\n  worktree:\n' "$reviewer"
   printf 'finish:\n  session:\n  worktree:\n  trigger: %s\n  delivery: %s\n' "$trigger" "$delivery"
 } > "$loop" || die "cannot write $loop"
-(( pi_new )) && kv_set "$loop" implementer.pi_settings "$wt/.pi/settings.json"
+[[ -n "$owned" ]] && kv_set "$loop" implementer.pi_settings "$owned"
 # A reused herdr reviewer is known by the native session it ran when checked; a later different one is not it.
 [[ -n "$reviewer_native" ]] && kv_set "$loop" reviewer.native_session "$reviewer_native"
 ho_copy_template "$scratch" implement "$loop" implement_template
@@ -146,11 +132,11 @@ ho_copy_template "$scratch" review "$loop" review_template
 ho_copy_template "$scratch" finish "$loop" finish_template
 for sec in implement review finish; do
   h="$(ho_sec_host "$scratch" "$sec")"; kv_set "$loop" "${sec}_template.host" "$h"
-  [[ "$h" == herdr ]] && kv_set "$loop" "$(ho_pi_role_key "$sec").herdr_session" "$(ho_herdr_session_choice "$scratch")"
+  [[ "$h" == herdr ]] && kv_set "$loop" "$(ho_role_key "$sec").herdr_session" "$(ho_herdr_session_choice "$scratch")"
 done
 impl_host="$(ho_role_host "$loop" implementer)"
 
-if (( impl_pi )) && ! ho_pi_worktree_ready "$wt" "$main"; then
+if ! ho_harness_worktree_ready "$scratch" implement "$wt" "$main"; then
   die "the Pi trigger would not trust $wt (its loop.yaml does not list it); the implementer was not opened"
 fi
 head="$(ho_head "$wt")"
