@@ -37,5 +37,5 @@
 
 - [x] 6.1 完整執行 `bash tests/test_agent_handoff.sh`，全部通過。
   - 測試要求：指令輸出全部通過。
-- [ ] 6.2 用真實 Herdr app 跑一次實作、審查、收尾演練（`finish.trigger: auto`），確認 space 與 tab 出現在 app、prompt 都有送出、cleanup 後沒有殘留的 space 或 terminal。
+- [x] 6.2 用真實 Herdr app 跑一次實作、審查、收尾演練（`finish.trigger: auto`），確認 space 與 tab 出現在 app、prompt 都有送出、cleanup 後沒有殘留的 space 或 terminal。
   - 測試要求：無法自動化；把重播步驟、預期結果與實際結果記在 Work Item `WI-20261120-handoff-session-hosts`。
