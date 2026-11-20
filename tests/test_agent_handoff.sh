@@ -283,7 +283,8 @@ printf '#!/usr/bin/env bash\necho "codex-cli 0.130.0"\n' > "$FAKES/codex"
 # as the real CLI. Switches (files in the state dir): server-down, busy (count of agent_pane_busy answers),
 # not-ready (agent start stops at a dialog), blocked (agent prompt refused), no-native, shell-<pane>
 # (the pane runs a shell), no-integration-<kind> (panes: pane->tab; tablabels: tab->label), prompt-timeout (a prompt is taken, then the answer
-# times out), prompt-delay (seconds before a prompt is taken), native-<pane> (the native session ID now in that pane), gone-<id> (a closed workspace/tab).
+# times out), prompt-delay (seconds before a prompt is taken), native-<pane> (the native session ID now in that pane), gone-<id> (a closed workspace/tab),
+# stall (agent prompt --wait writes the text but answers agent_prompt_stalled), enter-ignored (agent wait after an extra Enter times out).
 # As herdr 0.9.5, agent prompt refuses --timeout without --wait (exit 2).
 cat > "$FAKES/herdr" <<'SH'
 #!/usr/bin/env bash
@@ -349,7 +350,12 @@ case "$1 ${2:-}" in
     [[ -e "$S/blocked" || -e "$S/not-ready" ]] && err agent_blocked  # an agent at a startup dialog stays blocked
     [[ -s "$S/prompt-delay" ]] && sleep "$(cat "$S/prompt-delay")"  # a slow answer, to overlap two callers
     printf '%s\t%s\n' "$p" "$4" >> "$S/prompts"; [[ -e "$S/prompt-timeout" ]] && err timeout
+    [[ -e "$S/stall" && " $* " == *" --wait "* ]] && err agent_prompt_stalled  # text written, the agent never started
     jq -nc --arg p "$p" '{type:"agent_prompted", agent:{pane_id:$p}}' | ok ;;
+  "agent send-keys") [[ -f "$S/pane-$3" ]] || err agent_not_found; jq -nc '{type:"keys_sent"}' | ok ;;
+  "agent wait")
+    [[ -f "$S/pane-$3" ]] || err agent_not_found; [[ -e "$S/enter-ignored" ]] && err timeout
+    jq -nc --arg p "$3" '{type:"agent_waited", agent:{pane_id:$p, agent_status:"working"}}' | ok ;;
   "workspace close"|"tab close"|"pane close")
     [[ -e "$S/gone-$3" ]] && err "${1}_not_found"
     path="$(jq -r --arg w "${3%%:*}" 'select(.workspace_id == $w) | .worktree.checkout_path' "$S/workspaces" 2>/dev/null | head -1)"
@@ -1342,8 +1348,10 @@ if run_section herdr; then
     && ok "the implementer's tab is named after the template" || bad "the implementer's tab is named after the template"
   herdr_calls | grep 'agent start' | grep -qE 'agent start impl-[a-z0-9]+ --kind claude --pane w2:p1 -- --model opus --effort high --name claude - impl - add-export$' \
     && ok "Claude Code starts with the template's model, effort and name" || { bad "Claude Code starts with the template's model, effort and name"; herdr_calls | grep 'agent start' | sed 's/^/       /'; }
-  herdr_prompts | grep -q $'^w2:p1\t.*openspec-apply-change add-export' && ! herdr_calls | grep 'agent prompt' | grep -q -- '--wait\|--timeout' \
-    && ok "the implement prompt is sent separately, without waiting" || bad "the implement prompt is sent separately, without waiting"
+  herdr_prompts | grep -q $'^w2:p1\t.*openspec-apply-change add-export' \
+    && herdr_calls | grep 'agent prompt' | grep -q -- '--wait --until working --until blocked --timeout [0-9]' \
+    && ok "the implement prompt is sent separately and waits only until the agent starts working" \
+    || { bad "the implement prompt is sent separately and waits only until the agent starts working"; herdr_calls | grep 'agent prompt' | sed 's/^/       /'; }
   [[ -z "$(herdr_calls | grep -E 'workspace create|worktree open|tab create' | grep -v -- '--no-focus')" ]] \
     && ok "every workspace and tab opens without focus" || bad "every workspace and tab opens without focus"
   [[ "$(kv_get "$ql" implementer.session)" == w2:p1 && "$(kv_get "$ql" implementer.native_session)" == native-w2:p1 && "$(kv_get "$ql" implementer.herdr_session)" == default \
@@ -1375,7 +1383,8 @@ if run_section herdr; then
   [[ "$(herdr_prompts | wc -l)" == "$np" ]] && ! routed "$QW" 03-implement.yaml \
     && ok "a pane whose agent has another native session is treated as gone" || bad "a pane whose agent has another native session is treated as gone"
   lset "$ql" reviewer.native_session native-w2:p2; route_in "$QW"
-  herdr_prompts | tail -1 | grep -q $'^w2:p2\t.*第 2 輪' && routed "$QW" 03-implement.yaml && ! herdr_calls | grep -q -- '--wait' \
+  herdr_prompts | tail -1 | grep -q $'^w2:p2\t.*第 2 輪' && routed "$QW" 03-implement.yaml \
+    && [[ "$(herdr_prompts | grep -c $'^w2:p2\t.*第 2 輪')" == 1 ]] && herdr_calls | grep 'agent prompt w2:p2' | tail -1 | grep -q -- '--wait --until working' \
     && ok "a retry sends the review message to the recorded pane once" || bad "a retry sends the review message to the recorded pane once"
   # 5.2 an agent that stops at a dialog when it opens: keep the pane, notify once, retry only the prompt
   Q5="$tmp/herdr-trust"; herdr_project "$Q5"; fresh_state h5; Q5W="$Q5-add-export"; q5l="$Q5W/.agent-handoff/add-export/loop.yaml"
@@ -1466,6 +1475,20 @@ if run_section herdr; then
     && grep -q 'changes-required' "$HL/.agent-handoff/add-export/implementer-unconfirmed.txt" 2>/dev/null \
     && ok "an unconfirmed submission is not resent: one notice, the message kept in a file, the record processed (codex-herdr-r01/F-03)" \
     || { bad "an unconfirmed submission is not resent: one notice, the message kept in a file, the record processed (codex-herdr-r01/F-03)"; jl | tail -1; }
+  # A prompt left in the composer (Enter swallowed while the agent was still starting) is submitted once more.
+  herdr_loop "$tmp/herdr-stall" h14s; commit_in "$HL" two; hw "$HL" --role review --status done --verdict changes-required --head HEAD --report r.md
+  touch "$(HS)/stall"; np="$(herdr_prompts | wc -l)"; nn="$(ncount)"; route_in "$HL"; rm -f "$(HS)/stall"
+  (( $(herdr_prompts | wc -l) == np + 1 && $(ncount) == nn + 1 )) && herdr_calls | grep -q 'agent send-keys w2:p1 enter' \
+    && herdr_calls | grep -q 'agent wait w2:p1 --until working --until blocked --timeout' && routed "$HL" 02-review.yaml \
+    && [[ ! -e "$HL/.agent-handoff/add-export/implementer-unconfirmed.txt" ]] && jt '.kind=="review"' \
+    && ok "a stalled prompt gets one more Enter and counts as delivered once the agent starts working" \
+    || { bad "a stalled prompt gets one more Enter and counts as delivered once the agent starts working"; herdr_calls | grep agent | sed 's/^/       /'; jl | tail -1; }
+  herdr_loop "$tmp/herdr-stall2" h14t; commit_in "$HL" two; hw "$HL" --role review --status done --verdict changes-required --head HEAD --report r.md
+  touch "$(HS)/stall" "$(HS)/enter-ignored"; np="$(herdr_prompts | wc -l)"; nn="$(ncount)"; route_in "$HL"; route_in "$HL"; rm -f "$(HS)/stall" "$(HS)/enter-ignored"
+  (( $(herdr_prompts | wc -l) == np + 1 && $(ncount) == nn + 1 && $(herdr_calls | grep -c 'agent send-keys') == 1 )) && routed "$HL" 02-review.yaml \
+    && grep -q 'changes-required' "$HL/.agent-handoff/add-export/implementer-unconfirmed.txt" 2>/dev/null && jt '.kind=="attention" and (.detail|test("w2:p1"))' \
+    && ok "a prompt still not taken after the extra Enter is kept unconfirmed: one notice, never resent" \
+    || { bad "a prompt still not taken after the extra Enter is kept unconfirmed: one notice, never resent"; herdr_calls | grep agent | sed 's/^/       /'; jl | tail -1; }
   # F-05: a role already open that waits on a dialog is named by workspace and tab
   herdr_loop "$tmp/herdr-f5" h15; commit_in "$HL" two; hw "$HL" --role implement --status done --head HEAD; touch "$(HS)/blocked"; route_in "$HL"
   jt '.kind=="attention" and (.detail|test("workspace w2")) and (.detail|test("w2:t2")) and (.detail|test("codex - review - add-export"))' && ! routed "$HL" 03-implement.yaml \

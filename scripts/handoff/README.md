@@ -115,8 +115,11 @@ the main worktree), opening it without focus when herdr has none:
 Each role starts as `herdr agent start` with the template's model and effort (Codex `-m`,
 `-c model_reasoning_effort=`, `-p <profile>`; Pi `--provider`, `--model`, `--thinking`, plus the
 worktree's `.pi/settings.json` as with Xirp). The first prompt is then submitted separately with
-`herdr agent prompt`, without `--wait` (the command returns once the text is written; herdr accepts
-`--timeout` only together with `--wait`). `loop.yaml` records the role's pane ID as its
+`herdr agent prompt --wait --until working --until blocked --timeout <ms>`: it returns as soon as the
+agent starts working (or stops at a dialog), not when the turn ends (`HANDOFF_SUBMIT_TIMEOUT_MS`,
+default 15000). An agent that is still starting can swallow the Enter and leave the text in its
+composer; herdr then answers `agent_prompt_stalled`, and the loop presses Enter once more (never resends
+the text) and waits again. Still no activity counts as an unconfirmed submission (below). `loop.yaml` records the role's pane ID as its
 session, its tab, the herdr session, the native session ID once herdr's integration reports it, and
 the workspaces the loop opened. Before each message the hook checks that the pane still runs the
 role's tool and, once known, the same native session; otherwise nothing is sent and the record is

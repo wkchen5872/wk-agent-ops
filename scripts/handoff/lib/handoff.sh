@@ -293,16 +293,25 @@ HANDOFF_NATIVE_WAIT="${HANDOFF_NATIVE_WAIT:-5}"
 # ho_herdr <session> <args...>: herdr's JSON answer (stdout on success, stderr on error) and its status.
 ho_herdr() { local s="$1"; shift; herdr --session "$s" "$@" </dev/null 2>&1; }
 ho_herdr_code() { jq -r '.error.code // empty' <<<"$1" 2>/dev/null; }
-# ho_herdr_prompt <session> <pane> <text>: submit without waiting (herdr 0.9.5 accepts --timeout only
-# with --wait). Returns 0 when sent, 1 when herdr says nothing was sent, 2 when the result is unknown
-# (for example a timeout): such a prompt may have arrived and is never sent again. Sets HO_HERDR_CODE.
+# ho_herdr_prompt <session> <pane> <text>: submit and wait only until the agent starts working (or stops
+# at a dialog), not for the whole turn. An agent that was still starting can swallow the Enter and leave
+# the text in its composer (herdr answers agent_prompt_stalled): Enter is sent once more, never the text.
+# Returns 0 when the agent took it, 1 when herdr says nothing was sent, 2 when the result is unknown
+# (a timeout, or still no activity after the extra Enter): such a prompt may have arrived and is never
+# sent again. Sets HO_HERDR_CODE.
+HANDOFF_SUBMIT_TIMEOUT_MS="${HANDOFF_SUBMIT_TIMEOUT_MS:-15000}"
 ho_herdr_prompt() {
-  local out rc
-  out="$(ho_herdr "$1" agent prompt "$2" "$3")"; rc=$?; HO_HERDR_CODE=""
+  local out rc until=(--until working --until blocked --timeout "$HANDOFF_SUBMIT_TIMEOUT_MS")
+  out="$(ho_herdr "$1" agent prompt "$2" "$3" --wait "${until[@]}")"; rc=$?; HO_HERDR_CODE=""
   (( rc == 0 )) && return 0
   HO_HERDR_CODE="$(ho_herdr_code "$out")"
   case "$HO_HERDR_CODE" in agent_blocked|agent_not_found|pane_not_found|server_not_running) return 1 ;; esac
   (( rc == 2 )) && { HO_HERDR_CODE="usage error"; return 1; }  # a command-line error sends nothing
+  if [[ "$HO_HERDR_CODE" == agent_prompt_stalled ]]; then
+    ho_herdr "$1" agent send-keys "$2" enter >/dev/null \
+      && ho_herdr "$1" agent wait "$2" "${until[@]}" >/dev/null && { HO_HERDR_CODE=""; return 0; }
+    HO_HERDR_CODE="agent_prompt_stalled, still idle after one more Enter"
+  fi
   return 2
 }
 
