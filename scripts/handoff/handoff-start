@@ -21,6 +21,13 @@ source "$lib" || { echo "handoff-start: cannot load $lib" >&2; exit 1; }
 
 usage() { sed -n '2,13p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 die() { printf 'handoff-start: %s\n' "$1" >&2; exit 1; }
+# unconfirmed <loop-dir> <session> <worktree> <head>: the host did not confirm the implementer's first prompt. It is
+# not sent again (the host's message names the file holding it); one attention notice says so (codex-herdr-app-r01/F-04).
+unconfirmed() {
+  ho_notify "$(jq -nc --arg c "$change" --arg h "${4:0:7}" --arg w "$3" '{change:$c, round:"1", commit:$h, agent:"", session_id:"", cwd:$w}')" \
+    attention "" "到該 Session 確認是否收到；沒收到就把 $1/implementer-unconfirmed.txt 的內容貼給它，再刪掉該檔案。" \
+    "無法確認交給 implementer 的第一則 prompt 是否送達（Session ${2}），未重送。"
+}
 
 change="" mode="new" impl_ov="" review_ov="" finish_ov="" reviewer="" reviewer_native=""
 while [[ $# -gt 0 ]]; do
@@ -93,8 +100,12 @@ fi
 # An implementer that stopped at a dialog when this loop started: send the prompt to the same pane.
 if dir="$(ho_find_loop_dir "$change" "$main")" && ho_role_pending "$dir" implementer; then
   wt="$(kv_get "$dir/loop.yaml" implementer.worktree)"
-  id="$(ho_open_role "$dir" implement_template "$wt" "$(ho_head "$wt")" 1 "（無）")" \
-    || die "the implementer still waits; answer the dialog, then run handoff-start $change again"
+  id="$(ho_open_role "$dir" implement_template "$wt" "$(ho_head "$wt")" 1 "（無）")"; rc=$?
+  if (( rc == 2 )); then
+    id="$(kv_get "$dir/loop.yaml" implementer.session)"; unconfirmed "$dir" "$id" "$wt" "$(ho_head "$wt")"
+    printf 'Implement prompt not confirmed for %s (not sent again)\n  implementer: %s\n  worktree:    %s\n' "$change" "$id" "$wt"; exit 0
+  fi
+  (( rc == 0 )) || die "the implementer still waits; answer the dialog, then run handoff-start $change again"
   kv_set "$dir/loop.yaml" implementer.session "$id"
   printf 'Implement prompt sent for %s\n  implementer: %s\n  worktree:    %s\n' "$change" "$id" "$wt"
   exit 0
@@ -148,12 +159,7 @@ prompt="$(ho_render "$(kv_get "$scratch" implement.prompt)" "$change" "$head" 1 
   "$(kv_get "$scratch" implement.harness)" "$(kv_get "$scratch" implement.model)")"
 id="$(ho_host_open "$impl_host" "$dir" implementer "$wt" "$name" "$prompt" "$scratch" implement)"; rc=$?
 if (( rc == 2 )); then
-  # The host did not confirm the prompt: it is not sent again; the message above names the file holding it,
-  # and one attention notice says so, as for any role (codex-herdr-app-r01/F-04).
-  id="$(kv_get "$loop" implementer.session)"
-  ho_notify "$(jq -nc --arg c "$change" --arg h "${head:0:7}" --arg w "$wt" '{change:$c, round:"1", commit:$h, agent:"", session_id:"", cwd:$w}')" \
-    attention "" "到該 Session 確認是否收到；沒收到就把 $dir/implementer-unconfirmed.txt 的內容貼給它，再刪掉該檔案。" \
-    "無法確認交給 implementer 的第一則 prompt 是否送達（Session ${id}），未重送。"
+  id="$(kv_get "$loop" implementer.session)"; unconfirmed "$dir" "$id" "$wt" "$head"
 elif (( rc != 0 )); then
   ho_role_pending "$dir" implementer && die "the implementer's pane is kept; fix the cause above (for a dialog, answer it there), then run handoff-start $change again"
   die "could not open the implementer session"

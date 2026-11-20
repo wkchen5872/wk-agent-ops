@@ -438,7 +438,7 @@ case "$1" in
     [[ -e "$H/finished-$t" || "$(jq -r .state "$f")" == finished ]] && err finished; [[ -e "$H/blocked" ]] && err blocked
     printf '%s\t%s\n' "$t" "$3" >> "$H/sends"; turn="$(jq .turn "$f")"; jq '.turn += 1' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
     jq -nc --argjson n "$turn" --argjson s "$([[ -e "$H/send-unstarted" ]] && echo false || echo true)" '{started:$s, status:"idle", turn:$n}' ;;
-  rm) [[ -f "$f" ]] || err not_found; [[ "$(jq -r .state "$f")" == finished ]] || err live
+  rm) [[ -f "$f" ]] || err not_found; [[ "$(jq -r .state "$f")" == finished || -e "$H/finished-$t" ]] || err live
     printf '%s\n' "$t" >> "$H/removed"; rm -f "$f"; jq -nc --arg t "$t" '{removed:$t}' ;;
   *) err invalid_params ;;
 esac
@@ -1838,6 +1838,14 @@ if run_section happ; then
     && jt '.kind=="attention" and (.detail|test("implementer")) and (.detail|test("t1")) and (.next|test("implementer-unconfirmed.txt"))' \
     && ok "an implementer first prompt handoff-start cannot confirm gets one attention notice and is not resent (codex-herdr-app-r01/F-04)" \
     || { bad "an implementer first prompt handoff-start cannot confirm gets one attention notice and is not resent (codex-herdr-app-r01/F-04)"; printf '       %s\n' "$out"; jl | tail -1; }
+  # codex-herdr-app-r02 (r01/F-04): after the start dialog is answered, a retry whose prompt is still not observed notifies once
+  happ_project "$tmp/happ-nostart-retry"; fresh_state a3c; touch "$(HC)/blocked" "$(HC)/no-start"; rl3="$tmp/happ-nostart-retry-add-export/.agent-handoff/add-export"
+  HANDOFF_NOTIFY="$FAKES/notify.sh" start_in "$tmp/happ-nostart-retry" add-export >/dev/null 2>&1; rc1=$?; n1="$(ncount)"; p1="$(kv_get "$rl3/loop.yaml" implementer.pending_prompt)"
+  rm -f "$(HC)/blocked"; out="$(HANDOFF_NOTIFY="$FAKES/notify.sh" start_in "$tmp/happ-nostart-retry" add-export 2>&1)"; rc2=$?
+  [[ "$rc1" != 0 && "$p1" == true && "$n1" == 0 && "$rc2" == 0 && "$(ncount)" == 1 && -f "$rl3/implementer-unconfirmed.txt" && "$(kv_get "$rl3/loop.yaml" implementer.session)" == t1 \
+    && "$(happ_do space.new | wc -l | tr -d ' ')" == 1 && -z "$(happ_do tab.new)" && ! -s "$(HC)/sends" ]] && jt '.kind=="attention" and (.next|test("implementer-unconfirmed.txt"))' \
+    && ok "a handoff-start retry after the dialog whose prompt is still not observed keeps the terminal and notifies once (codex-herdr-app-r02, r01/F-04)" \
+    || { bad "a handoff-start retry after the dialog whose prompt is still not observed keeps the terminal and notifies once (codex-herdr-app-r02, r01/F-04)"; printf '       %s\n' "rc1=$rc1 p1=$p1 n1=$n1 rc2=$rc2 n=$(ncount)" "$out"; }
   # first prompt waits on a dialog: the tab is kept, one notice names it, a retry opens nothing new
   happ_project "$tmp/happ-dialog"; fresh_state a4; start_in "$tmp/happ-dialog" add-export >/dev/null 2>&1; BW="$tmp/happ-dialog-add-export"; bwl="$BW/.agent-handoff/add-export/loop.yaml"
   commit_in "$BW" impl; hw "$BW" --role implement --status done --head HEAD; touch "$(HC)/blocked"
@@ -1886,6 +1894,28 @@ if run_section happ; then
   out="$(hclean "$tmp/happ-other" add-export --abandon --yes 2>&1)"; rc=$?
   [[ "$rc" == 0 && "$(sort "$(HA)/closed" | paste -sd, -)" == "space.close sp1 exists=yes,tab.close tb2 exists=yes" ]] && grep -q $'^spU\t' "$(HA)/spaces" \
     && ok "a role in a space the loop did not open has only its tab closed" || { bad "a role in a space the loop did not open has only its tab closed"; printf '       %s\n' "$out"; cat "$(HA)/closed"; }
+  # codex-herdr-app-r02/F-01: a reviewer reopened after its waiting terminal finished leaves nothing behind
+  # stale_loop <dir> <state>: the reviewer stopped at a dialog in t2/tb2, t2 finished, and the retry opened t3/tb3
+  stale_loop() {
+    happ_project "$1"; fresh_state "$2"; start_in "$1" add-export >/dev/null 2>&1; AL="$1-add-export"; ALL="$AL/.agent-handoff/add-export/loop.yaml"
+    commit_in "$AL" impl; hw "$AL" --role implement --status done --head HEAD; touch "$(HC)/blocked"; route_in "$AL"
+    rm -f "$(HC)/blocked"; touch "$(HC)/finished-t2"; (cd "$AL" && PATH="$FAKES:$PATH" HANDOFF_NOTIFY="$FAKES/notify.sh" HANDOFF_CREATE_WAIT=2 "$ROUTE" --foreground </dev/null)
+  }
+  stale_loop "$tmp/happ-stale" a12; sl="$(kv_get "$ALL" reviewer.session)"
+  out="$(hclean "$tmp/happ-stale" add-export --abandon --yes 2>&1)"; rc=$?
+  [[ "$sl" == t3 && "$rc" == 0 && "$(cat "$(HA)/closed")" == "space.close sp1 exists=yes" && "$(sort "$(HC)/removed" | paste -sd, -)" == "t1,t2,t3" && ! -e "$AL" ]] \
+    && ok "cleanup after a reviewer was reopened closes the loop's space with the old tab and removes the old terminal (codex-herdr-app-r02/F-01)" \
+    || { bad "cleanup after a reviewer was reopened closes the loop's space with the old tab and removes the old terminal (codex-herdr-app-r02/F-01)"; printf '       %s\n' "session=$sl" "$out"; cat "$(HA)/closed" "$(HC)/removed" 2>/dev/null; }
+  stale_loop "$tmp/happ-stale2" a13; awk -F'\t' '$1 != "tb2"' "$(HA)/tabs" > "$tmp/t.tmp" && cat "$tmp/t.tmp" > "$(HA)/tabs"
+  out="$(hclean "$tmp/happ-stale2" add-export --abandon --yes 2>&1)"; rc=$?
+  [[ "$rc" == 0 && ! -f "$(HC)/term-t2" && ! -e "$AL" ]] && grep -qx t2 "$(HC)/removed" \
+    && ok "an old reviewer terminal the app no longer shows is still removed from herdr-core (codex-herdr-app-r02/F-01)" || { bad "an old reviewer terminal the app no longer shows is still removed from herdr-core (codex-herdr-app-r02/F-01)"; printf '       %s\n' "$out"; }
+  stale_loop "$tmp/happ-stale3" a14; (cd "$tmp" && PATH="$FAKES:$PATH" herdr-app do tab.new --space sp1 --name mine --argv '["zsh"]' >/dev/null)
+  pv="$(hclean "$tmp/happ-stale3" add-export --abandon 2>&1)"; out="$(hclean "$tmp/happ-stale3" add-export --abandon --yes 2>&1)"; rc=$?
+  [[ "$rc" == 0 && "$(sort "$(HA)/closed" | paste -sd, -)" == "tab.close tb1 exists=yes,tab.close tb2 exists=yes,tab.close tb3 exists=yes" && "$(jq -r .state "$(HC)/term-t4")" == live ]] \
+    && grep -q 'herdr-app tab tb2' <<<"$pv" && grep -qx t2 "$(HC)/removed" \
+    && ok "with a user tab in the loop's space, the reopened reviewer's old tab is listed and closed too, and the user's tab stays (codex-herdr-app-r02/F-01)" \
+    || { bad "with a user tab in the loop's space, the reopened reviewer's old tab is listed and closed too, and the user's tab stays (codex-herdr-app-r02/F-01)"; printf '       %s\n' "$pv" "$out"; cat "$(HA)/closed"; }
   # codex-herdr-app-r01/F-01: a tab the user added to the loop's space keeps the space and its terminal
   happ_loop "$tmp/happ-user" a10; (cd "$tmp" && PATH="$FAKES:$PATH" herdr-app do tab.new --space sp1 --name mine --argv '["zsh"]' >/dev/null)
   pv="$(hclean "$tmp/happ-user" add-export --abandon 2>&1)"; out="$(hclean "$tmp/happ-user" add-export --abandon --yes 2>&1)"; rc=$?

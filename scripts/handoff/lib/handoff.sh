@@ -616,6 +616,13 @@ ho_happ_open() {
   fi
   if (( reopen )); then
     argv="$(ho_happ_argv "$tf" "$sec" "$name")" || return 1
+    # A tab and terminal the role had before stay the loop's, so cleanup still closes and removes them (r02/F-01).
+    if [[ -n "$(kv_get "$loop" "$role.happ_tab" 2>/dev/null)" ]]; then
+      cur="$(kv_get "$loop" "$role.happ_stale_tabs" 2>/dev/null)"
+      ho_loop_set "$dir" "$role.happ_stale_tabs" "${cur:+$cur }$(kv_get "$loop" "$role.happ_tab")" || return 1
+      cur="$(kv_get "$loop" "$role.happ_stale_terms" 2>/dev/null)"
+      [[ -z "$t" ]] || ho_loop_set "$dir" "$role.happ_stale_terms" "${cur:+$cur }$t" || return 1
+    fi
     if sp="$(ho_happ_space_for "$dir" "$role" "$wt")"; then
       out="$(ho_happ_do tab.new --space "$sp" --name "$name" --argv "$argv" --task "$prompt" --focus false)" \
         || { ho_err "the Herdr app could not open a tab in space $sp: ${out##*$'\n'}"; return 1; }
@@ -687,10 +694,13 @@ ho_happ_message() {
 
 # ho_happ_owned <loop-dir>: the tabs and terminals the loop opened, as a JSON array.
 ho_happ_owned() {
-  local r ids=()
+  local r k x ids=()
   for r in implementer reviewer finish; do
     [[ -n "$(kv_get "$1/loop.yaml" "$r.happ_tab" 2>/dev/null)" ]] || continue
     ids+=("$(kv_get "$1/loop.yaml" "$r.happ_tab")" "$(kv_get "$1/loop.yaml" "$r.session" 2>/dev/null)")
+    for k in happ_stale_tabs happ_stale_terms; do
+      for x in $(kv_get "$1/loop.yaml" "$r.$k" 2>/dev/null); do ids+=("$x"); done
+    done
   done
   jq -cn '$ARGS.positional' --args "${ids[@]+"${ids[@]}"}"
 }
@@ -716,26 +726,44 @@ ho_happ_ls() { local out; out="$(herdr-app ls </dev/null 2>/dev/null)" && jq -e 
 # earlier role of this cleanup), then remove the role's finished terminal from herdr-core. Fails unless both
 # are confirmed, so cleanup keeps the worktrees.
 ho_happ_close() {
-  local t kind id ls out term i foreign
+  local t kind id ls out x
   ho_happ_close_target "$1" "$2" >/dev/null || return 0
   ls="$(ho_happ_ls)" || { ho_err "the Herdr app is not open, so the $2's $(ho_happ_close_target "$1" "$2") was not closed; open the Herdr app and run this again"; return 1; }
   t="$(ho_happ_close_target "$1" "$2" "$ls")"; kind="${t% *}"; id="${t#* }"
-  if [[ "$kind" == tab ]]; then
-    # Closing a tab ends every terminal in it: refuse when one is not the loop's.
-    foreign="$(jq -r --arg id "$id" --argjson own "$(ho_happ_owned "$1")" \
-      '[.spaces[]?.tabs[]? | select(.id == $id) | .terminals[]?.terminal | select(. as $x | $own | index($x) == null)] | join(" ")' <<<"$ls" 2>/dev/null)"
-    [[ -z "$foreign" ]] || { ho_err "the $2's tab $id also holds terminal(s) $foreign, which the loop did not open; nothing was closed. Move or close them yourself, then run this again"; return 1; }
+  if [[ "$kind" == tab ]]; then ho_happ_close_tab "$1" "$2" "$id" "$ls" || return 1
+  elif jq -e --arg id "$id" '[.spaces[]?.id] | index($id) != null' <<<"$ls" >/dev/null 2>&1; then
+    out="$(ho_happ_do space.close --id "$id" --confirmed true)" || { ho_err "the Herdr app could not close space $id: ${out##*$'\n'}"; return 1; }
   fi
-  if jq -e --arg id "$id" '[.spaces[]? | .id, (.tabs[]?.id)] | index($id) != null' <<<"$ls" >/dev/null 2>&1; then
-    out="$(ho_happ_do "$kind.close" --id "$id" --confirmed true)" || { ho_err "the Herdr app could not close $kind $id: ${out##*$'\n'}"; return 1; }
-  fi
-  term="$(kv_get "$1/loop.yaml" "$2.session" 2>/dev/null)"; [[ -n "$term" ]] || return 0
-  # The closed terminals finish a moment later.
+  # Tabs the role had before it was reopened; the layout is read again, as closing a space removes them.
+  for x in $(kv_get "$1/loop.yaml" "$2.happ_stale_tabs" 2>/dev/null); do
+    ls="$(ho_happ_ls)" || { ho_err "the Herdr app stopped answering, so the $2's earlier tab $x was not closed; open the Herdr app and run this again"; return 1; }
+    ho_happ_close_tab "$1" "$2" "$x" "$ls" || return 1
+  done
+  for x in $(kv_get "$1/loop.yaml" "$2.session" 2>/dev/null) $(kv_get "$1/loop.yaml" "$2.happ_stale_terms" 2>/dev/null); do
+    ho_happ_rm "$x" || return 1
+  done
+}
+
+# ho_happ_close_tab <loop-dir> <role> <tab> <app-ls-json>: close a loop tab the app still shows. Closing a tab ends
+# every terminal in it, so a tab that also holds a terminal the loop did not open is refused (r01/F-01).
+ho_happ_close_tab() {
+  local foreign out
+  jq -e --arg id "$3" '[.spaces[]?.tabs[]?.id] | index($id) != null' <<<"$4" >/dev/null 2>&1 || return 0
+  foreign="$(jq -r --arg id "$3" --argjson own "$(ho_happ_owned "$1")" \
+    '[.spaces[]?.tabs[]? | select(.id == $id) | .terminals[]?.terminal | select(. as $x | $own | index($x) == null)] | join(" ")' <<<"$4" 2>/dev/null)"
+  [[ -z "$foreign" ]] || { ho_err "the $2's tab $3 also holds terminal(s) $foreign, which the loop did not open; nothing was closed. Move or close them yourself, then run this again"; return 1; }
+  out="$(ho_happ_do tab.close --id "$3" --confirmed true)" || { ho_err "the Herdr app could not close tab $3: ${out##*$'\n'}"; return 1; }
+}
+
+# ho_happ_rm <terminal>: remove a finished terminal from herdr-core; one already gone needs nothing.
+ho_happ_rm() {
+  local out i
+  # Closed terminals finish a moment later.
   for i in 1 2 3 4 5; do
-    out="$(ho_hc rm --json "$term")" && return 0
+    out="$(ho_hc rm --json "$1")" && return 0
     case "$(ho_hc_kind "$out")" in not_found) return 0 ;; live) sleep 1 ;; *) break ;; esac
   done
-  ho_err "herdr-core did not remove terminal $term: $(ho_hc_kind "$out")"; return 1
+  ho_err "herdr-core did not remove terminal $1: $(ho_hc_kind "$out")"; return 1
 }
 
 # --- templates -------------------------------------------------------------------

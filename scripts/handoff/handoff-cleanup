@@ -62,8 +62,11 @@ while IFS= read -r d; do
       t="$(ho_happ_close_target "$d" "$k" "$happ_ls")" || continue
       for x in "${happ_roles[@]-}"; do [[ "$x" == "$k" ]] && continue 2; done
       happ_dirs+=("$d"); happ_roles+=("$k")
-      for x in "${happ_items[@]-}"; do [[ "$x" == "$t" ]] && continue 2; done
-      happ_items+=("$t")
+      # Tabs the role had before it was reopened close with it, unless its whole space closes.
+      [[ "$t" == tab* ]] && for x in $(kv_get "$d/loop.yaml" "$k.happ_stale_tabs" 2>/dev/null); do t="$t"$'\n'"tab $x"; done
+      while IFS= read -r y; do
+        case $'\n'"$(printf '%s\n' "${happ_items[@]-}")"$'\n' in *$'\n'"$y"$'\n'*) ;; *) happ_items+=("$y") ;; esac
+      done <<<"$t"
     else
       case " ${sessions[*]-} " in *" $s "*) ;; *) sessions+=("$s") ;; esac
     fi
