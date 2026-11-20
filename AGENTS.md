@@ -402,6 +402,9 @@ not edit it here. Keep project-specific rules in this file or under `docs/`.
 - `tests/test_github_handoff.sh` — 自足的 GitHub 入口、整合說明與 managed 安裝的測試
 - `tests/acceptance/` — Skill 的可重播驗收題庫（不隨安裝散布）
 - `tests/test_acceptance_bank.sh` — 題庫結構與舊題庫副本退役的測試
+- `tests/test_agent_handoff.sh` — handoff 迴圈離線測試的執行器（`[section|all]`；`all` 平行執行，
+  並發數用 `HANDOFF_TEST_JOBS` 調整）；各區段在 `tests/handoff/<section>.sh`，共用 helper 在
+  `tests/handoff/lib.sh`，假 CLI 在 `tests/handoff/fakes/`（檔頭註明模擬的版本與可切換的狀態檔）
 - `docs/architecture.md` — 專案架構與模組邊界
 - `docs/conventions.md` — Bash 腳本規範
 - `docs/workflow/guide.md` — PM/RD 協作完整指南

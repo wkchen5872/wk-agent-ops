@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Fake xirp CLI: only the subcommands handoff calls (api send, session list|get|message|delete, project list);
+# not pinned to a real xirp version. State: $FAKE_XIRP_DIR (calls, count, create-<n>.json, sessions, messages, deleted).
+# Switches (files in the state dir): create-fail, list-fail, list-null, list-truncated, get-fail, msg-fail, delete-fail;
+# session.json replaces the answer of session get; IDs named missing-* fail session get and session delete.
+# project list answers one project at $FAKE_PROJECT_PATH.
+S="$FAKE_XIRP_DIR"; mkdir -p "$S"; printf '%s\n' "$*" >> "$S/calls"
+case "$1 $2" in
+  "api send")
+    [[ -e "$S/create-fail" ]] && exit 1
+    json="$5"; n=$(( $(cat "$S/count" 2>/dev/null || echo 0) + 1 )); echo "$n" > "$S/count"
+    printf '%s\n' "$json" > "$S/create-$n.json"
+    jq -c --arg id "sess-$n" '{id:$id, name:.customName}' <<<"$json" >> "$S/sessions"; echo '{}' ;;
+  "session list") [[ -e "$S/list-fail" ]] && exit 1; [[ -e "$S/list-null" ]] && { echo '{"sessions":null}'; exit 0; }; [[ -e "$S/list-truncated" ]] && { printf '[]{"sessions":['; exit 0; }; if [[ -s "$S/sessions" ]]; then jq -s '.' "$S/sessions"; else echo '[]'; fi ;;
+  "session get") [[ "$3" == missing-* || -e "$S/get-fail" ]] && exit 1
+    if [[ -f "$S/session.json" ]]; then jq --arg id "$3" '. + {id:$id}' "$S/session.json"
+    else jq -n --arg id "$3" '{id:$id, currentAgent:"claude", model:"fake-model", agentLaunchOptions:{agentName:"claude", options:{model:"opus", effort:"high"}}}'; fi ;;
+  "session message") [[ -e "$S/msg-fail" ]] && exit 1; printf '%s\t%s\n' "$3" "$4" >> "$S/messages" ;;
+  "session delete") [[ "$3" == missing-* || -e "$S/delete-fail" ]] && exit 1; printf '%s\n' "$3" >> "$S/deleted" ;;
+  "project list") jq -n --arg p "$FAKE_PROJECT_PATH" '[{id:"proj-1", path:$p}]' ;;
+esac
+exit 0

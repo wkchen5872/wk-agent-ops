@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Fake gh: routing must never call it. Records gh-called in $FAKE_XIRP_DIR and fails.
+touch "$FAKE_XIRP_DIR/gh-called"
+exit 1

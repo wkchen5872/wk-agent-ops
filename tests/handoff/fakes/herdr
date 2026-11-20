@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+# Fake herdr 0.9.5 (state in $FAKE_XIRP_DIR/herdr). Success JSON on stdout, error JSON on stderr with exit 1,
+# as the real CLI. Switches (files in the state dir): server-down, busy (count of agent_pane_busy answers),
+# not-ready (agent start stops at a dialog), blocked (agent prompt refused), no-native, shell-<pane>
+# (the pane runs a shell), no-integration-<kind> (panes: pane->tab; tablabels: tab->label), prompt-timeout (a prompt is taken, then the answer
+# times out), prompt-delay (seconds before a prompt is taken), native-<pane> (the native session ID now in that pane), gone-<id> (a closed workspace/tab),
+# stall (agent prompt --wait writes the text but answers agent_prompt_stalled), enter-ignored (agent wait after an extra Enter times out).
+# As herdr 0.9.5, agent prompt refuses --timeout without --wait (exit 2).
+S="$FAKE_XIRP_DIR/herdr"; mkdir -p "$S"
+sess="default"; [[ "${1:-}" == --session ]] && { sess="$2"; shift 2; }
+printf '%s\t%s\n' "$sess" "$*" >> "$S/calls"
+ok() { jq -c '{id:"1", result:.}'; }
+err() { printf '{"id":"1","error":{"code":"%s","message":"%s"}}\n' "$1" "$1" >&2; exit 1; }
+opt() { local k="$1"; shift; while [[ $# -gt 0 ]]; do [[ "$1" == "$k" ]] && { printf '%s' "$2"; return; }; shift; done; }
+n() { local c; c=$(( $(cat "$S/n-$1" 2>/dev/null || echo 0) + 1 )); echo "$c" > "$S/n-$1"; echo "$c"; }
+[[ "$1" == --version ]] && { echo "herdr 0.9.5"; exit 0; }
+if [[ "$1 ${2:-}" == "status server" ]]; then
+  if [[ -e "$S/server-down" ]]; then jq -nc --arg s "$sess" '{status:"not_running", running:false, session:$s}'
+  else jq -nc --arg s "$sess" '{status:"running", running:true, version:"0.9.5", session:$s}'; fi; exit 0
+fi
+if [[ "$1 ${2:-}" == "integration status" ]]; then
+  for k in pi claude codex; do [[ -e "$S/no-integration-$k" ]] && echo "$k: not installed (x)" || echo "$k: current (v1) (x)"; done; exit 0
+fi
+[[ -e "$S/server-down" ]] && err server_not_running
+ws_json() { jq -nc --arg w "$1" --arg l "$2" --arg p "$3" '{workspace_id:$w, label:$l, worktree:{checkout_path:$p}}'; }
+new_ws() {  # <path> <label> -> ws id; also makes tab and pane 1
+  local w="w$(n ws)"; ws_json "$w" "$2" "$1" >> "$S/workspaces"; echo "$w:t1" >> "$S/tabs"
+  printf '%s\t%s\n' "$w:p1" "$w:t1" >> "$S/panes"; printf '%s\t1\n' "$w:t1" >> "$S/tablabels"; echo "$w"
+}
+case "$1 ${2:-}" in
+  "workspace list") touch "$S/workspaces"; jq -sc '{type:"workspace_list", workspaces:.}' "$S/workspaces" | ok ;;
+  "workspace create")
+    w="$(new_ws "$(opt --cwd "$@")" "$(opt --label "$@")")"
+    jq -nc --arg w "$w" --arg l "$(opt --label "$@")" --arg p "$(opt --cwd "$@")" \
+      '{type:"workspace_created", workspace:{workspace_id:$w, label:$l, worktree:{checkout_path:$p}}, tab:{tab_id:($w+":t1")}, root_pane:{pane_id:($w+":p1")}}' | ok ;;
+  "worktree open")
+    p="$(opt --path "$@")"; w="$(jq -r --arg p "$p" 'select(.worktree.checkout_path == $p) | .workspace_id' "$S/workspaces" 2>/dev/null | head -1)"
+    if [[ -n "$w" ]]; then already=true; else already=false; w="$(new_ws "$p" "$(opt --label "$@")")"; fi
+    jq -nc --arg w "$w" --arg p "$p" --argjson a "$already" \
+      '{type:"worktree_opened", already_open:$a, workspace:{workspace_id:$w, worktree:{checkout_path:$p}}, tab:{tab_id:($w+":t1")}, root_pane:{pane_id:($w+":p1")}}' | ok ;;
+  "tab create")
+    w="$(opt --workspace "$@")"; t="$w:t$(( $(n "tab-$w") + 1 ))"; p="$w:p$(( $(n "pane-$w") + 1 ))"; echo "$t" >> "$S/tabs"
+    printf '%s\t%s\n' "$p" "$t" >> "$S/panes"; printf '%s\t%s\n' "$t" "$(opt --label "$@")" >> "$S/tablabels"
+    jq -nc --arg t "$t" --arg p "$p" '{type:"tab_created", tab:{tab_id:$t}, root_pane:{pane_id:$p}}' | ok ;;
+  "tab rename") printf '%s\t%s\n' "$3" "$4" >> "$S/renamed"; printf '%s\t%s\n' "$3" "$4" >> "$S/tablabels"; jq -nc '{type:"ok"}' | ok ;;
+  "pane get")
+    t="$(awk -F'\t' -v p="$3" '$1 == p {t = $2} END {print t}' "$S/panes" 2>/dev/null)"; [[ -n "$t" ]] || err pane_not_found
+    jq -nc --arg p "$3" --arg t "$t" --arg w "${t%%:*}" '{type:"pane_info", pane:{pane_id:$p, tab_id:$t, workspace_id:$w}}' | ok ;;
+  "tab get")
+    l="$(awk -F'\t' -v t="$3" '$1 == t {l = $2} END {print l}' "$S/tablabels" 2>/dev/null)"
+    jq -nc --arg t "$3" --arg l "$l" '{type:"tab_info", tab:{tab_id:$t, label:$l}}' | ok ;;
+  "workspace get")
+    jq -c --arg w "$3" 'select(.workspace_id == $w) | {type:"workspace_info", workspace:.}' "$S/workspaces" | ok ;;
+  "agent start")
+    name="$3"; shift 3; kind="$(opt --kind "$@")"; pane="$(opt --pane "$@")"
+    if [[ -s "$S/busy" ]]; then b="$(cat "$S/busy")"; if (( b > 0 )); then echo $((b - 1)) > "$S/busy"; err agent_pane_busy; fi; fi
+    printf '%s\n' "$kind" > "$S/pane-$pane"; rm -f "$S/shell-$pane"
+    [[ -e "$S/not-ready" ]] && err agent_not_ready
+    jq -nc --arg p "$pane" --arg k "$kind" --arg n "$name" '{type:"agent_started", agent:{pane_id:$p, agent:$k, name:$n, agent_status:"idle"}, argv:[]}' | ok ;;
+  "agent get")
+    p="$3"; [[ -f "$S/pane-$p" && ! -e "$S/shell-$p" ]] || err agent_not_found
+    v="native-$p"; [[ -f "$S/native-$p" ]] && v="$(cat "$S/native-$p")"
+    jq -nc --arg p "$p" --arg k "$(cat "$S/pane-$p")" --arg v "$v" --argjson nn "$([[ -e "$S/no-native" ]] && echo true || echo false)" \
+      '{type:"agent_info", agent:{pane_id:$p, agent:$k, agent_status:"idle", agent_session:(if $nn then null else {agent:$k, kind:"id", source:"herdr", value:$v} end)}}' | ok ;;
+  "agent prompt")
+    if [[ " $* " == *" --timeout "* && " $* " != *" --wait "* ]]; then echo "--timeout requires --wait" >&2; exit 2; fi
+    p="$3"; [[ -f "$S/pane-$p" && ! -e "$S/shell-$p" ]] || err agent_not_found
+    [[ -e "$S/blocked" || -e "$S/not-ready" ]] && err agent_blocked  # an agent at a startup dialog stays blocked
+    [[ -s "$S/prompt-delay" ]] && sleep "$(cat "$S/prompt-delay")"  # a slow answer, to overlap two callers
+    printf '%s\t%s\n' "$p" "$4" >> "$S/prompts"; [[ -e "$S/prompt-timeout" ]] && err timeout
+    [[ -e "$S/stall" && " $* " == *" --wait "* ]] && err agent_prompt_stalled  # text written, the agent never started
+    jq -nc --arg p "$p" '{type:"agent_prompted", agent:{pane_id:$p}}' | ok ;;
+  "agent send-keys") [[ -f "$S/pane-$3" ]] || err agent_not_found; jq -nc '{type:"keys_sent"}' | ok ;;
+  "agent wait")
+    [[ -f "$S/pane-$3" ]] || err agent_not_found; [[ -e "$S/enter-ignored" ]] && err timeout
+    jq -nc --arg p "$3" '{type:"agent_waited", agent:{pane_id:$p, agent_status:"working"}}' | ok ;;
+  "workspace close"|"tab close"|"pane close")
+    [[ -e "$S/gone-$3" ]] && err "${1}_not_found"
+    path="$(jq -r --arg w "${3%%:*}" 'select(.workspace_id == $w) | .worktree.checkout_path' "$S/workspaces" 2>/dev/null | head -1)"
+    printf '%s %s %s exists=%s\n' "$1" "$2" "$3" "$([[ -d "$path" ]] && echo yes || echo no)" >> "$S/closed"; jq -nc '{type:"ok"}' | ok ;;
+  *) err "unsupported: $*" ;;
+esac

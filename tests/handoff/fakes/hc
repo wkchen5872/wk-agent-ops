@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Fake herdr-core hc 0.1.21 (terminals in $FAKE_XIRP_DIR/hc/term-<t>, made by the fake herdr-app). Errors are
+# {"error":{"kind":...}} with exit 3. Switches: core-down, blocked (status blocked, kind permission; send refuses),
+# no-start (the app's --task is never taken: turn stays 0), send-unstarted (send answers started:false),
+# finished-<t> (the terminal has finished), shell-<t> (it runs a shell; the agent's last status stays, as hc does
+# not see a nested shell clear it), no-status (the agent reports no status), get-unavailable (get cannot answer).
+H="$FAKE_XIRP_DIR/hc"; mkdir -p "$H"; printf '%s\n' "$*" >> "$H/calls"
+[[ "$1" == --version || "$1" == -V ]] && { echo "hc 0.1.21"; exit 0; }
+err() { jq -nc --arg k "$1" '{error:{kind:$k, message:$k}}'; exit 3; }
+sw() { [[ -e "$H/$1" ]] && echo true || echo false; }
+args=(); for a in "$@"; do [[ "$a" == --json || "$a" == -- ]] || args+=("$a"); done; set -- "${args[@]}"
+if [[ "$1 ${2:-}" == "server status" ]]; then
+  [[ -e "$H/core-down" ]] && { echo "hc: herdr-core is not running" >&2; exit 1; }; jq -nc '{version:"0.1.21", live:1}'; exit 0
+fi
+[[ -e "$H/core-down" ]] && err unavailable
+t="${2:-}"; f="$H/term-$t"
+case "$1" in
+  get) [[ -e "$H/get-unavailable" ]] && err unavailable; [[ -f "$f" ]] || err not_found
+    jq -c --argjson fin "$(sw "finished-$t")" --argjson sh "$(sw "shell-$t")" --argjson bl "$(sw blocked)" --argjson ns "$(sw no-status)" '.argv[0] as $h
+      | if $fin or .state == "finished" then .state = "finished" | .foreground = null | .status = null
+        else .foreground = (if $sh then {name:"zsh", argv:["zsh"]} elif $h == "pi" then {name:"node", argv:["node", "/x/bin/pi"]} else {name:$h, argv:[$h]} end)
+          | .status = (if $ns then null elif $bl then {app:$h, state:"blocked", kind:"permission"} else {app:$h, state:"idle"} end) end' "$f" ;;
+  send) [[ -f "$f" ]] || err not_found
+    [[ -e "$H/finished-$t" || "$(jq -r .state "$f")" == finished ]] && err finished; [[ -e "$H/blocked" ]] && err blocked
+    printf '%s\t%s\n' "$t" "$3" >> "$H/sends"; turn="$(jq .turn "$f")"; jq '.turn += 1' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+    jq -nc --argjson n "$turn" --argjson s "$([[ -e "$H/send-unstarted" ]] && echo false || echo true)" '{started:$s, status:"idle", turn:$n}' ;;
+  rm) [[ -f "$f" ]] || err not_found; [[ "$(jq -r .state "$f")" == finished || -e "$H/finished-$t" ]] || err live
+    printf '%s\n' "$t" >> "$H/removed"; rm -f "$f"; jq -nc --arg t "$t" '{removed:$t}' ;;
+  *) err invalid_params ;;
+esac

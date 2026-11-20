@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# Fake Herdr desktop app CLI 0.1.16 (state in $FAKE_XIRP_DIR/happ). Each call is recorded as a JSON array in happ/calls.
+# do space.new|tab.new answer {space, tab, pane, terminal} and create the terminal for the fake hc; an errors is
+# { "error": "..." } with exit 1. Switches: app-closed (no window: a message on stderr, exit 2, as the real CLI),
+# status-fail-json (status prints a JSON object but exits 2). A fifth column in happ/tabs is a second terminal in that tab.
+A="$FAKE_XIRP_DIR/happ"; H="$FAKE_XIRP_DIR/hc"; mkdir -p "$A" "$H"; touch "$A/spaces" "$A/tabs"
+printf '%s\0' "$@" | jq -Rsc 'split("\u0000")[:-1]' >> "$A/calls"
+[[ "$1" == --version ]] && { echo "herdr-app 0.1.16"; exit 0; }
+[[ -e "$A/app-closed" ]] && { echo "herdr-app: no Herdr window at x/herdr-app.sock: No such file or directory (os error 2)" >&2; exit 2; }
+opt() { local k="--$1"; shift; while [[ $# -gt 0 ]]; do [[ "$1" == "$k" ]] && { printf '%s' "$2"; return; }; shift; done; }
+n() { local c; c=$(( $(cat "$A/n-$1" 2>/dev/null || echo 0) + 1 )); echo "$c" > "$A/n-$1"; echo "$c"; }
+col() { awk -F'\t' -v k="$2" -v c="$3" '$1 == k {print $c}' "$A/$1"; }
+case "$1" in
+  status) jq -n '{space:"spU", tab:"tbU", errors:[]}'; if [[ -e "$A/status-fail-json" ]]; then exit 2; fi ;;
+  ls) jq -n --rawfile s "$A/spaces" --rawfile t "$A/tabs" '($t | split("\n") | map(select(length > 0) | split("\t"))) as $tabs
+        | {spaces: [$s | split("\n")[] | select(length > 0) | split("\t") as $sp | {id:$sp[0], name:$sp[1], folder:$sp[2],
+           tabs: [$tabs[] | select(.[1] == $sp[0]) | {id:.[0], name:.[2], terminals:([{terminal:.[3]}] + (if (.[4] // "") != "" then [{terminal:.[4]}] else [] end))}]}]}' ;;
+  do)
+    cmd="$2"; shift 2
+    case "$cmd" in
+      space.new|tab.new)
+        if [[ "$cmd" == space.new ]]; then sp="sp$(n space)"; printf '%s\t%s\t%s\n' "$sp" "$(opt name "$@")" "$(opt folder "$@")" >> "$A/spaces"; tn="$(opt tab "$@")"
+        else sp="$(opt space "$@")"; [[ -n "$(col spaces "$sp" 1)" ]] || { echo "{ \"error\": \"no space $sp\" }"; exit 1; }; tn="$(opt name "$@")"; fi
+        tb="tb$(n tab)"; t="t$(n term)"; printf '%s\t%s\t%s\t%s\n' "$tb" "$sp" "$tn" "$t" >> "$A/tabs"
+        turn=1; [[ -e "$H/no-start" || -z "$(opt task "$@")" ]] && turn=0
+        jq -n --arg t "$t" --argjson argv "$(opt argv "$@")" --arg w "$(col spaces "$sp" 2) / $tn" --arg sp "$sp" --arg tb "$tb" --argjson turn "$turn" \
+          '{address:$t, state:"live", argv:$argv, turn:$turn, labels:{"herdr.space":$sp, "herdr.tab":$tb, where:$w}}' > "$H/term-$t"
+        jq -n --arg sp "$sp" --arg tb "$tb" --arg t "$t" '{space:$sp, tab:$tb, pane:"p1", terminal:$t}' ;;
+      space.close|tab.close)
+        id="$(opt id "$@")"; f=spaces; [[ "$cmd" == tab.close ]] && f=tabs
+        [[ -n "$(col "$f" "$id" 1)" ]] || { echo "{ \"error\": \"no ${cmd%.close} $id\" }"; exit 1; }
+        [[ "$(opt confirmed "$@")" == true ]] || { echo '{ "error": "not confirmed" }'; exit 1; }
+        sp="$id"; [[ "$f" == tabs ]] && sp="$(col tabs "$id" 2)"; folder="$(col spaces "$sp" 3)"
+        for t in $(awk -F'\t' -v id="$id" '$1 == id || $2 == id {print $4}' "$A/tabs"); do
+          jq '.state = "finished"' "$H/term-$t" > "$H/term-$t.tmp" && mv "$H/term-$t.tmp" "$H/term-$t"
+        done
+        awk -F'\t' -v id="$id" '$1 != id && $2 != id' "$A/tabs" > "$A/tabs.tmp" && mv "$A/tabs.tmp" "$A/tabs"
+        [[ "$f" == spaces ]] && { awk -F'\t' -v id="$id" '$1 != id' "$A/spaces" > "$A/spaces.tmp" && mv "$A/spaces.tmp" "$A/spaces"; }
+        printf '%s %s exists=%s\n' "$cmd" "$id" "$([[ -d "$folder" ]] && echo yes || echo no)" >> "$A/closed"; echo '"ok"' ;;
+      *) echo "{ \"error\": \"unsupported $cmd\" }"; exit 1 ;;
+    esac ;;
+  *) exit 2 ;;
+esac

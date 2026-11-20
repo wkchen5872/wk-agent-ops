@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Fake Codex CLI 0.130.0: only its version is ever asked for. No state.
+echo "codex-cli 0.130.0"

@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Fake Pi CLI 0.80.0 (state in $FAKE_PI_DIR, which must be set). Models come from $FAKE_PI_DIR/models
+# ("provider model thinking"), credentials from auth-<provider>.json. Switches: auth-tail (extra output after the
+# credentials), auth-rc (exit code of auth check). Every call is recorded in $FAKE_PI_DIR/calls.
+D="${FAKE_PI_DIR:?}"; printf '%s\n' "$*" >> "$D/calls"
+[[ "$1" == --version ]] && { echo "0.80.0"; exit 0; }
+if [[ "$1" == --list-models ]]; then
+  printf 'provider  model  context  max-out  thinking  images\n'
+  awk -v q="$2" 'index($2, q) {printf "%s  %s  200K  64K  %s  yes\n", $1, $2, $3}' "$D/models"; exit 0
+fi
+if [[ "$1 $2" == "auth check" ]]; then
+  if [[ -f "$D/auth-$4.json" ]]; then cat "$D/auth-$4.json"; cat "$D/auth-tail" 2>/dev/null; exit "$(cat "$D/auth-rc" 2>/dev/null || echo 0)"; fi
+  printf '{"status":"not_ready","provider":"%s","reason":"provider_not_found"}\n' "$4"; exit 1
+fi
+exit 2
