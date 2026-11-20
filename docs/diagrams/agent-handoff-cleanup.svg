@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1400" height="1200" viewBox="0 0 1400 1200" role="img" aria-labelledby="title desc">
 <title id="title">交接迴圈收尾與清理：安全歸檔與資源回收</title>
-<desc id="desc">展示 handoff-cleanup 指令的執行邏輯與安全防護：分為正常完成（finish/done）與中途放棄（--abandon）兩種入口；必須通過所有 worktree clean 檢查；執行歸檔交件單、審查報告與被移除 worktree 的 work-items/WI-* 至主 worktree 的 .agent-handoff/archive/，刪除 Xirp sessions、關閉迴圈在 herdr 開的 workspace 或 tab，再移除臨時 worktrees，並嚴格保留主 worktree 與 feature 分支。</desc>
+<desc id="desc">展示 handoff-cleanup 指令的執行邏輯與安全防護：分為正常完成（finish/done）與中途放棄（--abandon）兩種入口；必須通過所有 worktree clean 檢查；執行歸檔交件單、審查報告與被移除 worktree 的 work-items/WI-* 至主 worktree 的 .agent-handoff/archive/，刪除 Xirp sessions、關閉迴圈在 herdr 開的 workspace 或在 Herdr app 開的 space／tab，最後才移除臨時 worktrees，並嚴格保留主 worktree 與 feature 分支。</desc>
 <defs>
 <marker id="arrow" markerUnits="userSpaceOnUse" markerWidth="14" markerHeight="14" refX="12" refY="7" orient="auto"><path d="M0 0 L14 7 L0 14 Z" fill="#647a94"/></marker>
 <marker id="arrow-green" markerUnits="userSpaceOnUse" markerWidth="14" markerHeight="14" refX="12" refY="7" orient="auto"><path d="M0 0 L14 7 L0 14 Z" fill="#1f7a4d"/></marker>
@@ -73,7 +73,7 @@
 <rect x="560" y="470" width="780" height="96" rx="10" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
 <text x="580" y="500" font-size="17" fill="#19344c" font-weight="700">步驟 ②：刪除 Sessions（依角色的 host）</text>
 <text x="580" y="526" font-size="14" fill="#42556d">• Xirp 角色：xirp session delete &lt;session-id&gt; --yes 關閉並釋放背景 Agent 程序</text>
-<text x="580" y="548" font-size="14" fill="#42556d">• herdr 角色：關閉迴圈開的 workspace（主工作區的迴圈只關角色的 tab），一定在移除 worktree 之前</text>
+<text x="580" y="548" font-size="13" fill="#42556d">• herdr / herdr-app：僅關閉迴圈建立的 workspace／space 或 tab，並先終止迴圈建立的 terminal</text>
 
 <!-- 步驟 3 -->
 <rect x="560" y="580" width="780" height="96" rx="10" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>

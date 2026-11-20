@@ -133,7 +133,7 @@ opsx-branch <change-id>              以自選工具開啟 Session／Worktree
 | `.claude/skills/github-issue/`、`.claude/skills/github-pr/` | Issue／PR 交接入口 skill |
 | `.claude/skills/change-review/`、`.agents/skills/change-review/` | PR 審查、修正交接與複審 skill（含報告範例、檢查清單與流程圖） |
 | `.agents/skills/github-issue/`、`.agents/skills/github-pr/` | 同兩個入口的跨 Provider 副本 |
-| `.claude/skills/agent-handoff/`、`.agents/skills/agent-handoff/` | 交接單 Skill 與 `handoff-write` 腳本（交接迴圈用，支援 Xirp 與 Herdr TUI 雙宿主） |
+| `.claude/skills/agent-handoff/`、`.agents/skills/agent-handoff/` | 交接單 Skill 與 `handoff-write` 腳本（交接迴圈用，支援 Xirp、Herdr TUI 與 Herdr 桌面 app） |
 | `.claude/agents/github-pr-agent.md`、`.claude/agents/github-issue-agent.md` | 代呼叫端執行一次 PR／Issue 操作的專用 Agent（Claude Sonnet），Author 沿用呼叫端身分 |
 | `.codex/agents/github-pr-agent.toml`、`.codex/agents/github-issue-agent.toml` | 同兩個 Agent 的 Codex 版本（`gpt-5.6-terra`、medium） |
 | `.gitignore` 的 `/.agent-handoff/`、主 worktree 的 `.agent-handoff/roles.yaml` | 交件單不進 Git；角色範本只在缺少時建立，不覆寫 |
@@ -211,8 +211,8 @@ commit／push，也不走 PR 的 create／update／close。
 實作、Review、收尾的 Agent 透過交件單互相交接，不需要你轉貼訊息。每個 Agent 結束一輪時以
 `agent-handoff` Skill 的 `handoff-write` 寫入 `.agent-handoff/<change-id>/NN-<role>.yaml`；Agent 停下時，
 交接 hook 讀最新的交件單，透過接收角色的 host 通知下一個 Agent，或經既有 Telegram 通知你。
-hook 不用模型、不輪詢、不寫 GitHub。Xirp 是預設 host；若要使用 herdr，可在 `roles.yaml` 設定
-`host: herdr`，也可按角色選用不同 host。
+hook 不用模型、不輪詢、不寫 GitHub。Xirp 是預設 host；也可在 `roles.yaml` 設定
+`host: herdr`（Herdr TUI）或 `host: herdr-app`（Herdr 桌面 app，需開啟 app 與 herdr-core），並可按角色選用不同 host。
 
 - `handoff-start <change-id>` 只開實作者；實作者第一次交件時，hook 依範本開審查者。
 - 審查與收尾的 worktree 可設 `shared`（預設，與實作者共用）或 `new`（另開），兩種並行可用。

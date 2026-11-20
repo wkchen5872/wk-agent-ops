@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1400" height="1760" viewBox="0 0 1400 1760" role="img" aria-labelledby="title desc">
 <title id="title">啟動一個交接迴圈：誰開什麼</title>
-<desc id="desc">上方是三份角色範本：implement 由使用者的指令觸發，review 與 finish 由 Stop hook 觸發；每份範本定義工具、模型、effort、Session 名稱與 prompt，prompt 最後都要求執行 handoff-write 寫交件單。下方四欄：使用者下 handoff-start 指令；啟動腳本確認 Change 與分支、準備實作者 worktree、用核心加 implement 範本開實作者 Session 並送出 prompt、寫 loop.yaml；實作者第一次停下時，Stop hook 用核心加 review 範本開審查 Session（review 的 worktree 預設 shared，設為 new 時先開停在交件單 head 的審查 worktree），或沿用指定的 Session；之後每輪只通知切到新 head 或退回修正；pass 後通知使用者執行 handoff-finish，或在 trigger 為 auto 時由 hook 用 finish 範本開收尾 Session。腳本遇到分支問題時停下說明，hook 遇到卡住或超過三輪時透過 Telegram 找使用者。</desc>
+<desc id="desc">上方是三份角色範本：implement 由使用者的指令觸發，review 與 finish 由 Stop hook 觸發；每份範本定義工具、模型、effort、Session 名稱與 prompt，prompt 最後都要求執行 handoff-write 寫交件單。下方四欄：使用者下 handoff-start 指令；啟動腳本確認 Change 與分支、準備實作者 worktree、依 Xirp、herdr 或 Herdr 桌面 app host 用核心加 implement 範本開實作者 Session 並送出 prompt、寫 loop.yaml；實作者第一次停下時，Stop hook 用核心加 review 範本開審查 Session（review 的 worktree 預設 shared，設為 new 時先開停在交件單 head 的審查 worktree），或沿用該 host 的指定 Session；之後每輪只通知切到新 head 或退回修正；pass 後通知使用者執行 handoff-finish，或在 trigger 為 auto 時由 hook 用 finish 範本開收尾 Session。腳本遇到分支問題時停下說明，hook 遇到卡住或超過三輪時透過 Telegram 找使用者。</desc>
 <defs>
 <marker id="arrow" markerUnits="userSpaceOnUse" markerWidth="14" markerHeight="14" refX="12" refY="7" orient="auto"><path d="M0 0 L14 7 L0 14 Z" fill="#647a94"/></marker>
 <marker id="arrow-red" markerUnits="userSpaceOnUse" markerWidth="14" markerHeight="14" refX="12" refY="7" orient="auto"><path d="M0 0 L14 7 L0 14 Z" fill="#b42318"/></marker>
@@ -46,7 +46,7 @@
 <text x="700" y="418" font-size="14" fill="#19344c" font-weight="400" text-anchor="start" font-family="SF Mono, Menlo, monospace" xml:space="preserve">  --impl claude:fable:xhigh</text>
 <text x="1010" y="418" font-size="14" fill="#5f7186" font-weight="400" text-anchor="start">覆寫 implement 範本的模型與 effort</text>
 <text x="700" y="444" font-size="14" fill="#19344c" font-weight="400" text-anchor="start" font-family="SF Mono, Menlo, monospace" xml:space="preserve">  --reviewer-session &lt;id&gt;</text>
-<text x="1010" y="444" font-size="14" fill="#5f7186" font-weight="400" text-anchor="start">沿用 Xirp Session 或 herdr pane</text>
+<text x="1010" y="444" font-size="14" fill="#5f7186" font-weight="400" text-anchor="start">沿用該 host 的既有 Session</text>
 <rect x="40" y="490" width="250" height="1030" rx="18" fill="#eef1f6"/>
 <rect x="40" y="490" width="250" height="50" rx="18" fill="#19344c"/>
 <text x="58" y="522" font-size="18" fill="#ffffff" font-weight="700" text-anchor="start">你</text>
