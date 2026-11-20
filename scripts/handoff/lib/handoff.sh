@@ -258,12 +258,32 @@ ho_host_close() {
 # --- herdr host (design D3–D6) ---------------------------------------------------------
 # A herdr role is identified by its pane ID (<role>.session) and, once herdr reports it, the agent's
 # native session ID (<role>.native_session). Every call names the role's herdr session explicitly.
-HANDOFF_HERDR_TIMEOUT_MS="${HANDOFF_HERDR_TIMEOUT_MS:-30000}"
 HANDOFF_NATIVE_WAIT="${HANDOFF_NATIVE_WAIT:-5}"
 
 # ho_herdr <session> <args...>: herdr's JSON answer (stdout on success, stderr on error) and its status.
 ho_herdr() { local s="$1"; shift; herdr --session "$s" "$@" </dev/null 2>&1; }
 ho_herdr_code() { jq -r '.error.code // empty' <<<"$1" 2>/dev/null; }
+# ho_herdr_prompt <session> <pane> <text>: submit without waiting (herdr 0.9.5 accepts --timeout only
+# with --wait). Returns 0 when sent, 1 when herdr says nothing was sent, 2 when the result is unknown
+# (for example a timeout): such a prompt may have arrived and is never sent again. Sets HO_HERDR_CODE.
+ho_herdr_prompt() {
+  local out rc
+  out="$(ho_herdr "$1" agent prompt "$2" "$3")"; rc=$?; HO_HERDR_CODE=""
+  (( rc == 0 )) && return 0
+  HO_HERDR_CODE="$(ho_herdr_code "$out")"
+  case "$HO_HERDR_CODE" in agent_blocked|agent_not_found|pane_not_found|server_not_running) return 1 ;; esac
+  (( rc == 2 )) && { HO_HERDR_CODE="usage error"; return 1; }  # a command-line error sends nothing
+  return 2
+}
+
+# ho_herdr_unconfirmed <loop-dir> <role> <pane> <text>: keep a prompt herdr did not confirm in a file the
+# user can check against the pane, and say where it is.
+ho_herdr_unconfirmed() {
+  local f="$1/$2-unconfirmed.txt"
+  printf '%s\n' "$4" > "$f"
+  ho_err "herdr did not confirm the prompt to pane $3 (${HO_HERDR_CODE:-no answer}); it may have arrived, so it is not sent again. The text is in $f"
+}
+
 ho_herdr_session_of() { local s; s="$(kv_get "$1/loop.yaml" "$2.herdr_session" 2>/dev/null)"; printf '%s\n' "${s:-default}"; }
 
 # ho_herdr_main_ws <session> <main-worktree>: the repository's workspace, opened when herdr has none.
@@ -362,13 +382,14 @@ ho_herdr_open() {
       return 1
     done
   fi
-  if ! out="$(ho_herdr "$hs" agent prompt "$pane" "$prompt" --timeout "$HANDOFF_HERDR_TIMEOUT_MS")"; then
-    code="$(ho_herdr_code "$out")"
-    if [[ "$code" == agent_blocked ]]; then ho_err "$(ho_herdr_dialog "$dir" "$role" "$pane")"
-    else ho_err "herdr agent prompt failed in pane $pane: ${code:-no answer}"; fi
+  ho_herdr_prompt "$hs" "$pane" "$prompt"; code=$?
+  if (( code == 1 )); then
+    if [[ "$HO_HERDR_CODE" == agent_blocked ]]; then ho_err "$(ho_herdr_dialog "$dir" "$role" "$pane")"
+    else ho_err "herdr agent prompt failed in pane $pane: $HO_HERDR_CODE"; fi
     return 1
   fi
   ho_loop_set "$dir" "$role.pending_prompt" ""
+  (( code == 2 )) && { ho_herdr_unconfirmed "$dir" "$role" "$pane" "$prompt"; return 2; }
   # The native session ID arrives through herdr's integration hook, a little later (design D4 step 5).
   for ((waited = 0; waited <= HANDOFF_NATIVE_WAIT; waited++)); do
     native="$(ho_herdr "$hs" agent get "$pane" | jq -r '.result.agent.agent_session.value // empty' 2>/dev/null)"
@@ -391,11 +412,21 @@ ho_herdr_exists() {
   return 0
 }
 
-# ho_herdr_message <loop-dir> <role> <pane> <text>: submit only to the role's own agent. A timeout does
-# not prove the text was not delivered, so there is no --wait and no resend here.
+# ho_herdr_message <loop-dir> <role> <pane> <text>: submit only to the role's own agent. Returns 1 when
+# nothing was sent (retried later) and 2 when herdr did not confirm the submission (never resent).
 ho_herdr_message() {
-  ho_herdr_exists "$1" "$2" "$3" || return 1
-  ho_herdr "$(ho_herdr_session_of "$1" "$2")" agent prompt "$3" "$4" --timeout "$HANDOFF_HERDR_TIMEOUT_MS" >/dev/null
+  local rc
+  if ! ho_herdr_exists "$1" "$2" "$3"; then
+    ho_err "herdr pane $3 no longer runs the $2's agent (tab $(kv_get "$1/loop.yaml" "$2.herdr_tab" 2>/dev/null)); nothing was sent"; return 1
+  fi
+  ho_herdr_prompt "$(ho_herdr_session_of "$1" "$2")" "$3" "$4"; rc=$?
+  case "$rc" in
+    0) return 0 ;;
+    1) if [[ "$HO_HERDR_CODE" == agent_blocked ]]; then ho_err "$(ho_herdr_dialog "$1" "$2" "$3")"
+       else ho_err "herdr agent prompt failed in pane $3: $HO_HERDR_CODE"; fi
+       return 1 ;;
+    *) ho_herdr_unconfirmed "$1" "$2" "$3" "$4"; return 2 ;;
+  esac
 }
 
 # ho_herdr_close_target <loop-dir> <role>: what cleanup closes for a herdr role (design D3): the workspace
@@ -408,10 +439,15 @@ ho_herdr_close_target() {
   else printf 'tab %s\n' "$tab"; fi
 }
 
-# ho_herdr_close <loop-dir> <role>: close that target; closing it ends the agents in it.
+# ho_herdr_close <loop-dir> <role>: close that target; closing it ends the agents in it. Succeeds only
+# when herdr confirms the close or reports the target gone (closed earlier), so cleanup can stop otherwise.
 ho_herdr_close() {
-  local t; t="$(ho_herdr_close_target "$1" "$2")" || return 1
-  ho_herdr "$(ho_herdr_session_of "$1" "$2")" ${t% *} close "${t#* }" >/dev/null
+  local t out code
+  t="$(ho_herdr_close_target "$1" "$2")" || return 0
+  out="$(ho_herdr "$(ho_herdr_session_of "$1" "$2")" "${t% *}" close "${t#* }")" && return 0
+  code="$(ho_herdr_code "$out")"
+  [[ "$code" == "${t% *}_not_found" ]] && return 0
+  ho_err "herdr could not close $t: ${code:-no answer}"; return 1
 }
 
 # --- templates -------------------------------------------------------------------
@@ -447,7 +483,7 @@ ho_template_check() {
   [[ -z "$missing" ]] || { ho_err "$sec template is missing:$missing"; return 1; }
   [[ "$h" == claude || "$h" == codex || "$h" == pi ]] || { ho_err "$sec template harness must be claude, codex or pi, got '$h'"; return 1; }
   v="$(ho_sec_host "$file" "$sec")"
-  [[ " $HANDOFF_HOSTS " == *" $v "* ]] || { ho_err "$sec host must be xirp or herdr, got '$v'"; return 1; }
+  case "$v" in xirp|herdr) ;; *) ho_err "$sec host must be xirp or herdr, got '$v'"; return 1 ;; esac
   if [[ "$h" == pi ]]; then
     v="$(kv_get "$file" "$sec.billing")"
     [[ "$v" == subscription || "$v" == api ]] || { ho_err "$sec template billing must be subscription or api, got '$v'"; return 1; }

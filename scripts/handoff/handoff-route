@@ -39,7 +39,7 @@ route() {
 #   retry     — sending or opening failed: one attention notice (.notified), left unprocessed
 #               so a later hook run or `handoff-route --foreground` tries again.
 route_dir() {
-  local dir="$1" root="$2" rec base change role status verdict head round report loop max to from
+  local dir="$1" root="$2" rec base change role status verdict head round report loop max from
   local action="" outcome="stop" kind="attention" out_verdict="" next="" detail="" why sess_json ctx
   loop="$dir/loop.yaml"
   rec="$(ho_newest_in "$dir")" || return 0
@@ -50,9 +50,6 @@ route_dir() {
   verdict="$(kv_get "$rec" verdict 2>/dev/null || true)"; head="$(kv_get "$rec" head)"
   round="$(kv_get "$rec" round)"; report="$(kv_get "$rec" report 2>/dev/null || true)"
   max="$(kv_get "$loop" max_rounds 2>/dev/null || echo 3)"
-  # The host this record would be routed through must be installed; otherwise do nothing for it.
-  case "$role" in implement) to=reviewer ;; review) [[ "$verdict" == changes-required ]] && to=implementer || to=finish ;; *) to=finish ;; esac
-  command -v "$(ho_role_host "$loop" "$to")" >/dev/null 2>&1 || return 0
 
   if [[ "$(ho_head "$root")" != "$head" ]]; then
     action="user:unclean-head"
@@ -89,7 +86,9 @@ route_dir() {
       to_implementer "$dir" "$root" "$change" "$head" "$round" "$report"
     fi
   elif [[ "$verdict" == pass ]]; then
-    if [[ "$(kv_get "$loop" finish.trigger 2>/dev/null || echo ask)" == auto ]]; then
+    if [[ "$(kv_get "$loop" finish.trigger 2>/dev/null || echo ask)" == auto ]] && host_missing "$loop" finish; then
+      action="skip"
+    elif [[ "$(kv_get "$loop" finish.trigger 2>/dev/null || echo ask)" == auto ]]; then
       local impl_dir
       impl_dir="$(kv_get "$loop" implementer.worktree)/.agent-handoff/$change"
       if ! why="$(ho_finish_check "$impl_dir")"; then
@@ -114,6 +113,9 @@ route_dir() {
     detail="無法判讀交件單 ${base}。"
     next="請 Agent 依 agent-handoff Skill 寫新的交件單。"
   fi
+
+  # A record whose next session's host is not installed is left alone, as if the hook were not installed.
+  [[ "$action" == skip ]] && return 0
 
   # One Xirp query serves the routing log and the agent label. Inside a herdr pane CHIRP_SESSION_ID
   # is inherited from the shell that started herdr, never this agent's (design D7).
@@ -146,9 +148,22 @@ route_dir() {
 # The installed hook is not on PATH, so the retry line names its full path.
 retry_next() { printf '原因排除後在 %s 執行：bash ~/.config/wk-workflow/handoff/handoff-route --foreground' "$1"; }
 
+# host_missing <loop.yaml> <role>: the command of the role's host is not installed. Only a step that opens or
+# messages a session needs it; notices to the user never do.
+host_missing() { ! command -v "$(ho_role_host "$1" "$2")" >/dev/null 2>&1; }
+
+# unconfirmed <who> <session> <host message>: the host may have delivered the text but did not confirm it.
+# Sending again could start the same work twice, so the loop stops for the user (outcome stop).
+unconfirmed() {
+  action="$1:send-unconfirmed:$2"; outcome="stop"
+  detail="無法確認${3:+（${3}）}交給 $1 的訊息是否送達（Session $2），未重送，迴圈已停住。"
+  next="到該 Session 確認是否收到；沒收到就把檔案裡的訊息貼給它，之後的交接照常。"
+}
+
 # to_reviewer and to_implementer set the caller's action, outcome, kind, next and detail.
 to_reviewer() {
-  local dir="$1" root="$2" change="$3" head="$4" round="$5" loop="$1/loop.yaml" sess wt mode id out
+  local dir="$1" root="$2" change="$3" head="$4" round="$5" loop="$1/loop.yaml" sess wt mode id out rc
+  host_missing "$loop" reviewer && { action="skip"; return; }
   outcome="retry"; next="$(retry_next "$root")"
   sess="$(kv_get "$loop" reviewer.session 2>/dev/null || true)"
   wt="$(kv_get "$loop" reviewer.worktree 2>/dev/null || true)"
@@ -183,7 +198,9 @@ to_reviewer() {
       action="reviewer:opened:$id"; outcome="delivered"; kind="implement"
       next="已開啟審查者的 Session，請其審查第 ${round} 輪。"
     else
-      action="reviewer:open-failed"; detail="無法開啟審查 Session（${out##*$'\n'}），第 $round 輪未交給審查者，迴圈已停住。"
+      rc=$?
+      if (( rc == 2 )); then unconfirmed reviewer "$(kv_get "$loop" reviewer.session 2>/dev/null)" "${out##*$'\n'}"
+      else action="reviewer:open-failed"; detail="無法開啟審查 Session（${out##*$'\n'}），第 $round 輪未交給審查者，迴圈已停住。"; fi
     fi
     return
   fi
@@ -198,25 +215,32 @@ to_reviewer() {
     git -C "$wt" checkout -q --detach "$head" 2>/dev/null \
       || { action="user:review-move-failed"; detail="無法把審查 worktree $wt 移到 ${head:0:7}，第 $round 輪未交給審查者，迴圈已停住。"; return; }
   fi
-  if ho_host_message "$(ho_role_host "$loop" reviewer)" "$dir" reviewer "$sess" "[agent-handoff] $change 第 $round 輪：請以 change-review 審查 commit ${head}（worktree ${wt}）。完成後依 agent-handoff Skill 寫 review 交件單。"; then
+  out="$(ho_host_message "$(ho_role_host "$loop" reviewer)" "$dir" reviewer "$sess" "[agent-handoff] $change 第 $round 輪：請以 change-review 審查 commit ${head}（worktree ${wt}）。完成後依 agent-handoff Skill 寫 review 交件單。" 2>&1)"; rc=$?
+  if (( rc == 0 )); then
     action="reviewer:messaged:$sess"; outcome="delivered"; kind="implement"
     next="已請審查者審查第 $round 輪。"
+  elif (( rc == 2 )); then
+    unconfirmed reviewer "$sess" "${out##*$'\n'}"
   else
     action="reviewer:send-failed:$sess"
-    detail="無法把第 $round 輪交給審查者（Session ${sess}），迴圈已停住。"
+    detail="無法把第 $round 輪交給審查者（Session ${sess}${out:+；${out##*$'\n'}}），迴圈已停住。"
   fi
 }
 
 to_implementer() {
-  local dir="$1" root="$2" change="$3" head="$4" round="$5" report="$6" loop="$1/loop.yaml" sess abs
+  local dir="$1" root="$2" change="$3" head="$4" round="$5" report="$6" loop="$1/loop.yaml" sess abs out rc
+  host_missing "$loop" implementer && { action="skip"; return; }
   sess="$(kv_get "$loop" implementer.session)"
   abs="$root/$report"
-  if ho_host_message "$(ho_role_host "$loop" implementer)" "$dir" implementer "$sess" "[agent-handoff] $change 第 $round 輪審查結果為 changes-required。受審 commit：${head}。報告：${abs}。請依報告修正，測試通過後本機 commit，再寫 implement 交件單。"; then
+  out="$(ho_host_message "$(ho_role_host "$loop" implementer)" "$dir" implementer "$sess" "[agent-handoff] $change 第 $round 輪審查結果為 changes-required。受審 commit：${head}。報告：${abs}。請依報告修正，測試通過後本機 commit，再寫 implement 交件單。" 2>&1)"; rc=$?
+  if (( rc == 0 )); then
     action="implementer:messaged:$sess"; outcome="delivered"; kind="review"; out_verdict="changes-required"
     next="已把第 $round 輪的審查報告交給實作者修正。"
+  elif (( rc == 2 )); then
+    unconfirmed implementer "$sess" "${out##*$'\n'}"
   else
     action="implementer:send-failed:$sess"; outcome="retry"
-    detail="無法把第 $round 輪的審查報告交給實作者（Session ${sess}），迴圈已停住。"
+    detail="無法把第 $round 輪的審查報告交給實作者（Session ${sess}${out:+；${out##*$'\n'}}），迴圈已停住。"
     next="$(retry_next "$root")"
   fi
 }

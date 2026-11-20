@@ -130,8 +130,9 @@ herdr_session: work
 - 設定的 host 不能用（指令不存在，或 herdr 的 server 沒在跑）時，`handoff-start`、`handoff-role`、`handoff-finish` 直接拒絕，不會改用其他 host。
 - herdr session：在 herdr pane 裡執行時沿用該 pane 的 session，否則用 `herdr_session`，再否則用 herdr 的預設 session。
 - herdr 配置：迴圈掛在主 repo 的 workspace 之下（沒有就自動開，不搶焦點）。新 worktree 開一個 linked workspace，標籤是 change ID；主工作區的迴圈在主 repo workspace 開 tab。每個角色一個 tab，名稱用範本的 `name`。
-- 啟動方式：`herdr agent start` 帶入範本的模型與 effort（Pi 另帶 provider，並照常寫入 worktree 的 `.pi/settings.json`），第一則 prompt 另外用 `herdr agent prompt --timeout` 送出。`loop.yaml` 記錄 pane ID、tab、herdr session、原生 Session ID 與迴圈開的 workspace；傳訊前確認 pane 裡仍是同一個 agent。
+- 啟動方式：`herdr agent start` 帶入範本的模型與 effort（Pi 另帶 provider，並照常寫入 worktree 的 `.pi/settings.json`），第一則 prompt 另外用 `herdr agent prompt` 送出，不帶 `--wait`（herdr 的 `--timeout` 只能搭配 `--wait`）。`loop.yaml` 記錄 pane ID、tab、herdr session、原生 Session ID 與迴圈開的 workspace；傳訊前確認 pane 裡仍是同一個 agent。
 - **對話框與重試**：新 worktree 會讓 Claude Code、Codex 跳出信任資料夾的對話框。迴圈不替你回答：保留 pane、記 `pending_prompt`、發一次 attention 通知寫明 herdr 的 workspace、tab 與 pane；你處理完後執行通知裡的 `handoff-route --foreground`，只補送 prompt 到同一個 pane。實作者在 `handoff-start` 時卡住，就處理後再跑一次 `handoff-start <change-id>`。
+- **送出結果不明**：herdr 明確回報沒送出（`agent_blocked`、`agent_not_found`、`pane_not_found`、`server_not_running`）時照常重試；其他錯誤（例如逾時）無法確定 agent 有沒有收到，迴圈不重送，把訊息存成 `.agent-handoff/<change-id>/<role>-unconfirmed.txt`，發一次通知後把交件單標為已處理，由你到該 pane 確認。
 - routing log：herdr 不回報模型，所以 herdr 角色記成 `model=<範本模型>(template)`。
 - 之後可能支援的 host：`ghostty + tmux`（目前不支援）。
 
@@ -211,7 +212,7 @@ handoff-cleanup <change-id> --abandon --yes
 
 **執行清理動作：**
 1. **歷史證據歸檔**：將 `.agent-handoff/<change-id>/` 內的交件單與審查報告拷貝至主工作區 `.agent-handoff/archive/<change-id>/` 保存；即將移除的 worktree 中的 `work-items/WI-*` 也整個複製到 `archive/<change-id>/<worktree>/work-items/`，避免審查引用的驗收證據隨 worktree 消失。主工作區的 Work Item 留在原處；預覽（不加 `--yes`）會列出將歸檔的 Work Item，以及若由本次迴圈寫入則將從保留的主工作區中移除的 `.pi/settings.json`。
-2. **刪除 Sessions**：Xirp 角色呼叫 `xirp session delete`；herdr 角色關閉迴圈自己開的東西——迴圈為 worktree 開的 workspace，或（主工作區的迴圈）只關角色的 tab；不是迴圈開的 workspace、tab、pane 一律不碰。這一步在移除 worktree 之前，因為 herdr server 重啟時會自動恢復仍開著的 pane 裡的 agent。
+2. **刪除 Sessions**：Xirp 角色呼叫 `xirp session delete`；herdr 角色關閉迴圈自己開的東西——迴圈為 worktree 開的 workspace，或（主工作區的迴圈）只關角色的 tab；不是迴圈開的 workspace、tab、pane 一律不碰。這一步在移除 worktree 之前，因為 herdr server 重啟時會自動恢復仍開著的 pane 裡的 agent。herdr 回報目標已不存在視為已關閉；herdr 不在、server 沒在跑或關閉失敗時，cleanup 以非零狀態停下，不移除任何 worktree，修好後再跑一次。
 3. **移除臨時 Worktrees**：安全移除額外建立的實作與收尾 worktree。
 4. **保留分支**：`feature/<change-id>` 分支與已提交 commit 永遠保留，由團隊另行授權 merge 與清理。
 

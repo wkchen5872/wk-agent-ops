@@ -281,7 +281,9 @@ printf '#!/usr/bin/env bash\necho "codex-cli 0.130.0"\n' > "$FAKES/codex"
 # Fake herdr 0.9.5 (state in $FAKE_XIRP_DIR/herdr). Success JSON on stdout, error JSON on stderr with exit 1,
 # as the real CLI. Switches (files in the state dir): server-down, busy (count of agent_pane_busy answers),
 # not-ready (agent start stops at a dialog), blocked (agent prompt refused), no-native, shell-<pane>
-# (the pane runs a shell), no-integration-<kind>.
+# (the pane runs a shell), no-integration-<kind>, prompt-timeout (a prompt is taken, then the answer
+# times out), native-<pane> (the native session ID now in that pane), gone-<id> (a closed workspace/tab).
+# As herdr 0.9.5, agent prompt refuses --timeout without --wait (exit 2).
 cat > "$FAKES/herdr" <<'SH'
 #!/usr/bin/env bash
 S="$FAKE_XIRP_DIR/herdr"; mkdir -p "$S"
@@ -327,13 +329,17 @@ case "$1 ${2:-}" in
     jq -nc --arg p "$pane" --arg k "$kind" --arg n "$name" '{type:"agent_started", agent:{pane_id:$p, agent:$k, name:$n, agent_status:"idle"}, argv:[]}' | ok ;;
   "agent get")
     p="$3"; [[ -f "$S/pane-$p" && ! -e "$S/shell-$p" ]] || err agent_not_found
-    jq -nc --arg p "$p" --arg k "$(cat "$S/pane-$p")" --arg v "native-$p" --argjson nn "$([[ -e "$S/no-native" ]] && echo true || echo false)" \
+    v="native-$p"; [[ -f "$S/native-$p" ]] && v="$(cat "$S/native-$p")"
+    jq -nc --arg p "$p" --arg k "$(cat "$S/pane-$p")" --arg v "$v" --argjson nn "$([[ -e "$S/no-native" ]] && echo true || echo false)" \
       '{type:"agent_info", agent:{pane_id:$p, agent:$k, agent_status:"idle", agent_session:(if $nn then null else {agent:$k, kind:"id", source:"herdr", value:$v} end)}}' | ok ;;
   "agent prompt")
+    if [[ " $* " == *" --timeout "* && " $* " != *" --wait "* ]]; then echo "--timeout requires --wait" >&2; exit 2; fi
     p="$3"; [[ -f "$S/pane-$p" && ! -e "$S/shell-$p" ]] || err agent_not_found
     [[ -e "$S/blocked" || -e "$S/not-ready" ]] && err agent_blocked  # an agent at a startup dialog stays blocked
-    printf '%s\t%s\n' "$p" "$4" >> "$S/prompts"; jq -nc --arg p "$p" '{type:"agent_prompted", agent:{pane_id:$p}}' | ok ;;
+    printf '%s\t%s\n' "$p" "$4" >> "$S/prompts"; [[ -e "$S/prompt-timeout" ]] && err timeout
+    jq -nc --arg p "$p" '{type:"agent_prompted", agent:{pane_id:$p}}' | ok ;;
   "workspace close"|"tab close"|"pane close")
+    [[ -e "$S/gone-$3" ]] && err "${1}_not_found"
     path="$(jq -r --arg w "${3%%:*}" 'select(.workspace_id == $w) | .worktree.checkout_path' "$S/workspaces" 2>/dev/null | head -1)"
     printf '%s %s %s exists=%s\n' "$1" "$2" "$3" "$([[ -d "$path" ]] && echo yes || echo no)" >> "$S/closed"; jq -nc '{type:"ok"}' | ok ;;
   *) err "unsupported: $*" ;;
@@ -1229,8 +1235,8 @@ if run_section herdr; then
     && ok "the implementer's tab is named after the template" || bad "the implementer's tab is named after the template"
   herdr_calls | grep 'agent start' | grep -qE 'agent start impl-[a-z0-9]+ --kind claude --pane w2:p1 -- --model opus --effort high --name claude - impl - add-export$' \
     && ok "Claude Code starts with the template's model, effort and name" || { bad "Claude Code starts with the template's model, effort and name"; herdr_calls | grep 'agent start' | sed 's/^/       /'; }
-  herdr_prompts | grep -q $'^w2:p1\t.*openspec-apply-change add-export' && herdr_calls | grep 'agent prompt' | grep -q -- '--timeout [0-9]' && ! herdr_calls | grep 'agent prompt' | grep -q -- '--wait' \
-    && ok "the implement prompt is sent separately, with a timeout and without waiting" || bad "the implement prompt is sent separately, with a timeout and without waiting"
+  herdr_prompts | grep -q $'^w2:p1\t.*openspec-apply-change add-export' && ! herdr_calls | grep 'agent prompt' | grep -q -- '--wait\|--timeout' \
+    && ok "the implement prompt is sent separately, without waiting" || bad "the implement prompt is sent separately, without waiting"
   [[ -z "$(herdr_calls | grep -E 'workspace create|worktree open|tab create' | grep -v -- '--no-focus')" ]] \
     && ok "every workspace and tab opens without focus" || bad "every workspace and tab opens without focus"
   [[ "$(kv_get "$ql" implementer.session)" == w2:p1 && "$(kv_get "$ql" implementer.native_session)" == native-w2:p1 && "$(kv_get "$ql" implementer.herdr_session)" == default \
@@ -1262,7 +1268,7 @@ if run_section herdr; then
   [[ "$(herdr_prompts | wc -l)" == "$np" ]] && ! routed "$QW" 03-implement.yaml \
     && ok "a pane whose agent has another native session is treated as gone" || bad "a pane whose agent has another native session is treated as gone"
   lset "$ql" reviewer.native_session native-w2:p2; route_in "$QW"
-  herdr_prompts | tail -1 | grep -q $'^w2:p2\t.*第 2 輪' && routed "$QW" 03-implement.yaml && herdr_calls | grep 'agent prompt w2:p2' | grep -q -- '--timeout' && ! herdr_calls | grep -q -- '--wait' \
+  herdr_prompts | tail -1 | grep -q $'^w2:p2\t.*第 2 輪' && routed "$QW" 03-implement.yaml && ! herdr_calls | grep -q -- '--wait' \
     && ok "a retry sends the review message to the recorded pane once" || bad "a retry sends the review message to the recorded pane once"
   # 5.2 an agent that stops at a dialog when it opens: keep the pane, notify once, retry only the prompt
   Q5="$tmp/herdr-trust"; herdr_project "$Q5"; fresh_state h5; Q5W="$Q5-add-export"; q5l="$Q5W/.agent-handoff/add-export/loop.yaml"
@@ -1319,6 +1325,56 @@ if run_section herdr; then
   out="$(hclean "$MX" add-export --abandon --yes 2>&1)"; rc=$?
   [[ "$rc" == 0 ]] && grep -qx 'impl-1' "$FAKE_XIRP_DIR/deleted" 2>/dev/null && grep -q 'tab close w1:t2' "$(HS)/closed" 2>/dev/null \
     && ok "cleanup of a loop on both hosts deletes the Xirp session and closes the herdr tab" || { bad "cleanup of a loop on both hosts deletes the Xirp session and closes the herdr tab"; printf '       %s\n' "$out"; }
+  # codex-herdr-r01 regressions
+  # herdr_loop <dir> <state>: a herdr loop with the reviewer opened for round 1; sets HL (worktree) and HLL (loop.yaml)
+  herdr_loop() {
+    herdr_project "$1"; fresh_state "$2"; start_in "$1" add-export >/dev/null 2>&1; HL="$1-add-export"; HLL="$HL/.agent-handoff/add-export/loop.yaml"
+    local c; c="$(git -C "$HL" rev-parse --path-format=absolute --git-common-dir)"; mkdir -p "$c/info"; printf '/r.md\n' >> "$c/info/exclude"; printf 'r\n' > "$HL/r.md"
+    commit_in "$HL" impl; hw "$HL" --role implement --status done --head HEAD; route_in "$HL"
+  }
+  # F-01: cleanup removes no worktree until herdr confirms the close, or that the target is gone
+  herdr_loop "$tmp/herdr-f1" h11; hw "$HL" --role review --status done --verdict pass --head HEAD --report r.md; hw "$HL" --role finish --status done --head HEAD
+  touch "$(HS)/server-down"; out="$(hclean "$tmp/herdr-f1" add-export --yes 2>&1)"; rc=$?
+  [[ "$rc" != 0 && -d "$HL" && -f "$HLL" ]] && grep -q 'herdr workspace w2' <<<"$out" \
+    && ok "cleanup keeps the worktrees and fails when herdr cannot close the loop's workspace (codex-herdr-r01/F-01)" || { bad "cleanup keeps the worktrees and fails when herdr cannot close the loop's workspace (codex-herdr-r01/F-01)"; printf '       %s\n' "$out"; }
+  rm -f "$(HS)/server-down"; touch "$(HS)/gone-w2"; out="$(hclean "$tmp/herdr-f1" add-export --yes 2>&1)"; rc=$?
+  [[ "$rc" == 0 && ! -e "$HL" ]] \
+    && ok "a rerun of cleanup treats a workspace herdr no longer has as closed" || { bad "a rerun of cleanup treats a workspace herdr no longer has as closed"; printf '       %s\n' "$out"; }
+  mkdir -p "$tmp/herdr sp"; herdr_loop "$tmp/herdr sp/p" h12; hw "$HL" --role review --status done --verdict pass --head HEAD --report r.md; hw "$HL" --role finish --status done --head HEAD
+  out="$(hclean "$tmp/herdr sp/p" add-export --yes 2>&1)"; rc=$?
+  [[ "$rc" == 0 && ! -e "$HL" ]] && grep -q 'workspace close w2 exists=yes' "$(HS)/closed" 2>/dev/null \
+    && ok "cleanup closes the herdr workspace of a loop whose path has spaces" || { bad "cleanup closes the herdr workspace of a loop whose path has spaces"; printf '       %s\n' "$out"; }
+  # F-02: a reused herdr reviewer keeps the native session ID read when the loop started
+  RV="$tmp/herdr-f2"; herdr_project "$RV"; fresh_state h13; printf 'codex\n' > "$(HS)/pane-w9:p1"
+  out="$(start_in "$RV" add-export --reviewer-session w9:p1 2>&1)"; rc=$?; RVL="$RV-add-export/.agent-handoff/add-export/loop.yaml"
+  [[ "$rc" == 0 && "$(kv_get "$RVL" reviewer.session)" == w9:p1 && "$(kv_get "$RVL" reviewer.native_session)" == native-w9:p1 ]] \
+    && ok "a reused herdr reviewer's native session ID is recorded (codex-herdr-r01/F-02)" || { bad "a reused herdr reviewer's native session ID is recorded (codex-herdr-r01/F-02)"; printf '       %s\n' "$out"; }
+  printf 'native-replacement\n' > "$(HS)/native-w9:p1"; commit_in "$RV-add-export" impl; hw "$RV-add-export" --role implement --status done --head HEAD; route_in "$RV-add-export"
+  ! herdr_prompts | grep -q '^w9:p1' && ! routed "$RV-add-export" 01-implement.yaml \
+    && ok "a reused pane now running another session of the same tool gets no prompt" || bad "a reused pane now running another session of the same tool gets no prompt"
+  # F-03: a submission whose result is unknown is never sent again
+  herdr_loop "$tmp/herdr-f3" h14; commit_in "$HL" two; hw "$HL" --role review --status done --verdict changes-required --head HEAD --report r.md
+  touch "$(HS)/prompt-timeout"; np="$(herdr_prompts | wc -l)"; nn="$(ncount)"; route_in "$HL"; route_in "$HL"; rm -f "$(HS)/prompt-timeout"; route_in "$HL"
+  (( $(herdr_prompts | wc -l) == np + 1 && $(ncount) == nn + 1 )) && routed "$HL" 02-review.yaml && jt '.kind=="attention" and (.detail|test("w2:p1"))' \
+    && grep -q 'changes-required' "$HL/.agent-handoff/add-export/implementer-unconfirmed.txt" 2>/dev/null \
+    && ok "an unconfirmed submission is not resent: one notice, the message kept in a file, the record processed (codex-herdr-r01/F-03)" \
+    || { bad "an unconfirmed submission is not resent: one notice, the message kept in a file, the record processed (codex-herdr-r01/F-03)"; jl | tail -1; }
+  # F-05: a role already open that waits on a dialog is named by workspace and tab
+  herdr_loop "$tmp/herdr-f5" h15; commit_in "$HL" two; hw "$HL" --role implement --status done --head HEAD; touch "$(HS)/blocked"; route_in "$HL"
+  jt '.kind=="attention" and (.detail|test("workspace w2")) and (.detail|test("w2:t2")) and (.detail|test("codex - review - add-export"))' && ! routed "$HL" 03-implement.yaml \
+    && ok "an open reviewer waiting on a dialog gets one notice naming its workspace and tab (codex-herdr-r01/F-05)" || { bad "an open reviewer waiting on a dialog gets one notice naming its workspace and tab (codex-herdr-r01/F-05)"; jl | tail -1; }
+  # F-04: the host is needed only to open or message a session
+  F4="$tmp/herdr-f4"; new_loop "$F4"; use_project "$F4"; fresh_state h16; rpt "$F4"; lset "$F4/.agent-handoff/add-export/loop.yaml" finish_template.host herdr
+  hw "$F4" --role implement --status done --head HEAD; hw "$F4" --role review --status done --verdict pass --head HEAD --report r.md
+  (cd "$F4" && PATH="$(path_without herdr)" HANDOFF_NOTIFY="$FAKES/notify.sh" HANDOFF_ROUTE_WAIT=1 CHIRP_SESSION_ID=chirp-1 "$ROUTE" </dev/null)
+  [[ "$(ncount)" == 1 ]] && routed "$F4" 02-review.yaml && jt '.kind=="attention" and (.next|test("handoff-finish add-export"))' \
+    && ok "a pass waiting for handoff-finish is notified when the finish host is not installed (codex-herdr-r01/F-04)" || { bad "a pass waiting for handoff-finish is notified when the finish host is not installed (codex-herdr-r01/F-04)"; notes; }
+  # F-06: a host value is matched exactly
+  F6="$tmp/herdr-f6"; new_project "$F6"; use_project "$F6"; fresh_state h17
+  awk '/^implement:/{print; print "  host: \"xirp herdr\""; next} {print}' "$F6/.agent-handoff/roles.yaml" > "$F6/r.tmp" && mv "$F6/r.tmp" "$F6/.agent-handoff/roles.yaml"
+  dout="$(doctor_in "$F6" 2>&1)"; drc=$?; out="$(start_in "$F6" add-export 2>&1)"; rc=$?
+  [[ "$drc" != 0 && "$rc" != 0 && ! -e "$F6-add-export" && "$(created)" == 0 ]] && grep -q '^fail role implement' <<<"$dout" && grep -q 'fail role implement' <<<"$out" \
+    && ok "a host that is not exactly xirp or herdr fails doctor and start, and nothing is created (codex-herdr-r01/F-06)" || { bad "a host that is not exactly xirp or herdr fails doctor and start, and nothing is created (codex-herdr-r01/F-06)"; printf '       %s\n' "$dout" "$out"; }
   Q3="$tmp/herdr-busy"; herdr_project "$Q3"; fresh_state h3; echo 1 > "$(HS)/busy"
   printf '%s\n' "{\"workspace_id\":\"w9\",\"label\":\"repo\",\"worktree\":{\"checkout_path\":\"$Q3\"}}" > "$(HS)/workspaces"
   out="$(start_in "$Q3" add-export --impl codex:gpt-x:low 2>&1)"; rc=$?

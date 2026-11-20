@@ -67,7 +67,7 @@ spike 確認的 herdr 行為：
    - claude：`--model <m> --effort <e> --name <name>`
    - codex：`-m <m> -c model_reasoning_effort=<e>`，有 profile 時加 `-p <profile>`
    - pi：`--provider <p> --model <m> --thinking <e>`；`.pi/settings.json` 照常寫入，和 Xirp 的行為一致
-4. 第一則 prompt 用 `agent prompt <pane> <prompt> --timeout <ms>` 另外送，不放在 `agent start` 的參數裡。
+4. 第一則 prompt 用 `agent prompt <pane> <prompt>` 另外送（不帶 `--wait`），不放在 `agent start` 的參數裡。
    macOS 終端機對單行輸入有長度上限，而角色的 prompt 可能超過。
 5. 輪詢 `agent get <pane>` 取得 `agent_session.value`，寫進 `native_session`；等不到時留空，下一次傳訊再補。
 - agent 名稱用 `<role>-<短雜湊>`：herdr 要求名稱符合 `[a-z][a-z0-9_-]{0,31}`，而且 agent 結束就會清掉，所以只當方便用的標籤，識別一律用 pane ID。
@@ -82,7 +82,7 @@ spike 確認的 herdr 行為：
 ### D6：傳訊前確認 pane 裡仍是同一個 agent
 `ho_herdr_message` 先跑 `agent get <pane>`，確認 agent 的 kind 等於角色的 harness；`native_session` 已知時，
 `agent_session.value` 也要相同。不符或 pane 不存在，就當作傳送失敗，進入既有的 retry 流程。
-`agent prompt` 一律帶 `--timeout`，不帶 `--wait`：route 只需要確認送出，而且 timeout 不代表沒送到，不能盲目重送。
+`agent prompt` 不帶 `--wait`：route 只需要確認送出。herdr 0.9.5 的 `--timeout` 只能搭配 `--wait`（單獨使用是語法錯誤，exit 2），不等待時指令在寫入後就返回，所以也不帶 `--timeout`。herdr 明確回報沒送出（`agent_blocked`、`agent_not_found`、`pane_not_found`、`server_not_running`，或送出前的 pane 確認失敗）時，進入既有的 retry；其他錯誤（例如 `timeout`）無法確定是否送到，不能盲目重送：迴圈停下、發一次 attention 通知並把這則訊息存成檔案，交件單標為已處理，由使用者確認後處理。
 
 ### D7：Xirp 變數只在非 herdr pane 採用
 `handoff-author` 與 `handoff-route` 只在 `HERDR_ENV` 不等於 `1` 時讀 `CHIRP_SESSION_ID`。

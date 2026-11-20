@@ -34,7 +34,7 @@
 
 ## 5. herdr host：傳訊與 retry
 
-- [x] 5.1 實作 `ho_herdr_message` 與 `ho_herdr_exists`：傳訊前確認 pane 的 agent kind 與已知的原生 Session ID；`agent prompt` 一律帶 `--timeout`、不帶 `--wait`；不符、不存在或 `agent_blocked` 都算傳送失敗。
+- [x] 5.1 實作 `ho_herdr_message` 與 `ho_herdr_exists`：傳訊前確認 pane 的 agent kind 與已知的原生 Session ID；`agent prompt` 不帶 `--wait`（herdr 0.9.5 的 `--timeout` 需要 `--wait`，所以也不帶 `--timeout`）；不符、不存在或 `agent_blocked` 都算傳送失敗；送出結果不明（例如 `timeout`）時不重送，停下通知使用者。
   - 測試要求：先寫失敗測試：pane 已換成 shell 時沒有送出任何文字且交件單維持未處理；`agent_blocked` 時發一次 attention 通知；正常時審查 prompt 送進記錄的 pane。
 - [x] 5.2 開啟時遇到 `agent_not_ready` 或第一則 prompt 被拒：保留 pane、記 `pending_prompt`，route 走 retry，通知寫出 workspace 與 tab；重試時只補送 prompt，不開新 pane；不送任何回答對話框的按鍵。
   - 測試要求：先寫失敗測試：信任對話框情境只發一次通知、交件單未處理、假 `herdr` 沒收到 `send-keys`；`handoff-route --foreground` 重試時對同一個 pane 補送 prompt，並把交件單標為已處理。

@@ -115,17 +115,26 @@ the main worktree), opening it without focus when herdr has none:
 Each role starts as `herdr agent start` with the template's model and effort (Codex `-m`,
 `-c model_reasoning_effort=`, `-p <profile>`; Pi `--provider`, `--model`, `--thinking`, plus the
 worktree's `.pi/settings.json` as with Xirp). The first prompt is then submitted separately with
-`herdr agent prompt … --timeout`, never `--wait`. `loop.yaml` records the role's pane ID as its
+`herdr agent prompt`, without `--wait` (the command returns once the text is written; herdr accepts
+`--timeout` only together with `--wait`). `loop.yaml` records the role's pane ID as its
 session, its tab, the herdr session, the native session ID once herdr's integration reports it, and
 the workspaces the loop opened. Before each message the hook checks that the pane still runs the
 role's tool and, once known, the same native session; otherwise nothing is sent and the record is
-retried like a failed Xirp message.
+retried like a failed Xirp message. A reused reviewer (`--reviewer-session <pane>`) keeps the native
+session it ran when `handoff-start` checked it.
+
+**Unconfirmed submissions.** When herdr says a prompt was not sent (`agent_blocked`,
+`agent_not_found`, `pane_not_found`, `server_not_running`), the record is retried as above. Any other
+error, such as a timeout, leaves it unknown whether the agent got the text, and sending it again could
+start the same work twice. The hook then sends nothing more: it keeps the text in
+`.agent-handoff/<change-id>/<role>-unconfirmed.txt`, sends one attention notice naming the pane and
+the file, and marks the record processed. Check the pane; paste the text if it did not arrive.
 
 **Dialogs and retry.** A new worktree makes Claude Code and Codex ask whether to trust the folder,
 and other prompts (approvals, a Codex usage notice) can appear too. The loop never answers them:
 trusting a folder is your decision. When a role stops at a dialog as it opens or when a message is
-due, its pane is kept (`<role>.pending_prompt: true`), you get one attention notice naming the
-herdr workspace, tab and pane, and the record stays unprocessed. Answer the dialog there, then run
+due, its pane is kept (`<role>.pending_prompt: true` when it was just opened), you get one attention
+notice naming the herdr workspace, tab and pane, and the record stays unprocessed. Answer the dialog there, then run
 the retry command from the notice (`handoff-route --foreground` in that worktree); only the missing
 prompt is sent, to the same pane. When the implementer stops at a dialog, `handoff-start` keeps its
 pane and tells you so: answer it and run `handoff-start <change-id>` again. Trusting the parent
@@ -209,7 +218,9 @@ file it would remove from a kept main worktree. With `--yes` it:
    workspace it opened for a loop worktree, or only the role's tab in the repository workspace
    (a loop in the main worktree). It never closes a workspace, tab or pane the loop did not open.
    This happens before the worktrees go, because herdr resumes the agents of open panes when its
-   server restarts;
+   server restarts. A target herdr reports as already gone counts as closed. If herdr is missing, its
+   server is not running, or a close fails, cleanup stops with a non-zero status and removes no
+   worktree; start herdr and run it again;
 3. removes every loop worktree except the main worktree, without `--force`. In a kept main worktree
    it removes the `.pi/settings.json` the loop created for a Pi role (recorded in `loop.yaml` and
    unchanged); a file that existed before the loop is kept.
