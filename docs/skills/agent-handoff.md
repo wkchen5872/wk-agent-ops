@@ -162,22 +162,95 @@ herdr agent prompt (--wait --until working/blocked)
                    └─► [仍無動靜] 產生 <role>-unconfirmed.txt 鎖定防護，發送通知
 ```
 
-### Herdr App 空間與 Tab 拓撲（`host: herdr-app`）
+### Herdr App 空間與架構（`host: herdr-app`）
 
 Herdr 桌面 app 的 terminal 跑在 herdr-core（`hc`），和 Herdr TUI 是不同的 runtime：TUI server 的 session 不會出現在 app 裡，所以是獨立的 host 值，可以和其他 host 混用。
 
+#### 1. Herdr App 雙層執行架構
+
 ```text
-┌────────────────────────────────────────────────────────────────────────┐
-│ Herdr 桌面 App（herdr-core 執行 terminal）                             │
-│  └─ Space: <change-id>   (資料夾 = 迴圈 worktree)                      │
-│      ├─ Tab 1: claude - impl - <change-id>   (實作者 terminal t1t)     │
-│      ├─ Tab 2: codex - review - <change-id>  (審查者 terminal)         │
-│      └─ Tab 3: codex - finish - <change-id>  (收尾者 terminal)         │
-│  (審查或收尾用 worktree: new 時，另開 <change-id> review / finish)     │
-└────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                      Herdr 桌面 App 架構與分層職責                              │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│  【桌面 GUI 視窗層 (Herdr Desktop App)】                                        │
+│   • 由 herdr-app CLI 操控 (space.new / tab.new / space.close)                   │
+│   • 呈現可視化的 Space (Worktree 目錄) 與 Tab (角色分頁)                         │
+│   • 首則提示透過 --task 交由 App 管理，於 Agent 就緒後自動送入                  │
+│                                      │                                          │
+│                                      ▼                                          │
+│  【核心執行引擎層 (herdr-core / hc)】                                           │
+│   • 管理底層 Terminal 程序 (如 t1t, t2r, t3f)                                   │
+│   • 提供 hc send (派送提示)、hc get (輪詢狀態)、hc rm (銷毀 Terminal)          │
+│   • 監聽 OSC 7501 狀態：working (工作中) / blocked (對話框) / idle / done       │
+│                                      │                                          │
+│                                      ▼                                          │
+│  【Agent 行程層 (Login Shell 啟動)】                                            │
+│   • 繼承完整登入 Shell 環境 (PATH 包含 nvm / node / pi 等相依套件)               │
+│   • 支援 Claude Code (--argv)、Codex (-m, -c) 與 Pi (--provider, --thinking)    │
+│                                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-- **App 必須開著**：`handoff-doctor` 依序檢查 `herdr-app` 與 `hc` 指令、herdr-core 在跑（`hc server status`）、app 視窗開著（`herdr-app status`），缺一項就是 `fail host`；start、role、finish 與 cleanup 都直接拒絕，不改用 app 看不到的 `hc run`。
+#### 2. Herdr 桌面 App 空間與 Tab 拓撲
+
+```text
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│ Herdr 桌面 App 空間與分頁配置拓撲                                               │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│  Space: <change-id>  [目錄: ../<repo>-<change-id>]                              │
+│    ├── Tab 1: claude - impl - <change-id>    (實作者 Terminal: t1t)             │
+│    ├── Tab 2: codex - review - <change-id>   (審查者 Terminal: t2r, shared)     │
+│    └── Tab 3: codex - finish - <change-id>   (收尾者 Terminal: t3f, shared)     │
+│                                                                                 │
+│  (若設定 review.worktree: new 或 finish.worktree: new，則自動另開獨立 Space)   │
+│  Space: <change-id> review  [目錄: ../<repo>-<change-id>-review]                 │
+│    └── Tab 1: pi - review - <change-id>      (審查者 Terminal: t4r, new worktree)│
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### 3. Herdr App 生命週期與訊息傳遞流程
+
+```text
+                Herdr App 交接生命週期與訊息調度流程
+                                   │
+ 1. 啟動與分頁建立                 │
+ ┌─────────────────────────────────┴─────────────────────────────────┐
+ │ handoff-start ──► herdr-app do space.new (--argv, --task <prompt>)│
+ │   │                                                               │
+ │   ├─► App 登入 Shell 啟動 Agent，就緒後自動送出 --task 提示詞     │
+ │   └─► 輪詢 hc get <terminal> ──┬─► [working/turn增] ──► 成功啟動  │
+ │                                └─► [等不到working]  ──► unconfirmed│
+ └─────────────────────────────────┬─────────────────────────────────┘
+                                   │ 實作完成，寫入交件單
+ 2. Stop Hook 訊息派送             │
+ ┌─────────────────────────────────┴─────────────────────────────────┐
+ │ 讀取交件單 ──► hc get <terminal> 驗證 (state: live, harness 前景) │
+ │   │                                                               │
+ │   ├─► 狀態正常 (idle/done) ──► hc send <terminal> <prompt>        │
+ │   │     └─► 回傳 started: true ──► 派送成功，發送進度通知         │
+ │   │                                                               │
+ │   └─► 偵測到對話框 (status.state: blocked, permission/question)   │
+ │         │                                                         │
+ │         ▼                                                         │
+ │       【🚨 停點處置】：hc 拒絕送出，交件單維持未處理              │
+ │         • 發送 Telegram Attention 通知，標註 Space 與 Tab 名稱    │
+ │         • 人工前往 Herdr App 該分頁點選授權或回答問題             │
+ │         • 執行 handoff-route --foreground 恢復派送                │
+ └─────────────────────────────────┬─────────────────────────────────┘
+                                   │ 收尾完成或放棄
+ 3. 清理與資源回收                 │
+ ┌─────────────────────────────────┴─────────────────────────────────┐
+ │ handoff-cleanup --yes                                             │
+ │   ├─► Space 僅含迴圈 Tab：herdr-app do space.close --confirmed    │
+ │   ├─► Space 含有使用者 Tab：herdr-app do tab.close                │
+ │   ├─► 銷毀底層 Terminal：hc rm <terminal>                         │
+ │   └─► 安全移除臨時 Worktree 目錄                                  │
+ └───────────────────────────────────────────────────────────────────┘
+```
+
+**行為與安全規範要點：**
+- **App 必須開著**：`handoff-doctor` 依序檢查 `herdr-app` 與 `hc` 指令、herdr-core 在跑（`hc server status`）、app 視窗開著（`herdr-app status`），缺一項就是 `fail host`；start、role、finish 與 cleanup 都直接拒絕，絕不改用 app 外部看不到的 `hc run` 啟動。
 - **開啟走 app，其餘走 hc**：worktree 的第一個角色用 `herdr-app do space.new` 開 space，後續角色用 `tab.new --space` 加 tab，一律不搶焦點；`--argv` 帶入範本的模型與 effort（Pi 照常寫入 `.pi/settings.json`），由登入 shell 啟動。第一則 prompt 用 `--task` 交給 app，由 app 等 agent 準備好再送；之後輪詢 `hc get`，等不到 agent 開始工作就當作送出結果不明（存 unconfirmed 檔、通知一次、不重送）。`loop.yaml` 記錄 terminal 位址、`happ_space`、`happ_tab` 與迴圈開的 space。
 - **傳訊**：先用 `hc get` 確認 terminal 還在、前景仍是該角色的工具、狀態是 idle 或 done，再 `hc send`；只有回傳 `started: true` 才算送達。agent 回報 `blocked`（permission、question、auth）時不替你回答，發一次通知寫出 space 與 tab，交件單維持未處理，處理完後執行 `handoff-route --foreground`。
 - **清理**：迴圈開的 space 裡只有迴圈的 tab 時關整個 space（`space.close --confirmed true`），你自己加了 tab 時只關迴圈的 tab；接著 `hc rm` 移除已結束的 terminal，都在移除 worktree 之前。角色重開過時，舊的 tab 與 terminal（`happ_stale_tabs`、`happ_stale_terms`）一併列出與清除；重用的 `--reviewer-session` terminal 不會被關。`handoff-role --replace` 尚不支援 herdr-app 角色。
@@ -534,6 +607,10 @@ author:
   ```text
   Agent Handoff (Claude / claude-opus-5-5(template) / high) (herdr:w2:p1)
   ```
+- **Herdr App 角色**：模型標記為範本設定值（如 `model=gpt-6.1-sol(template)`），Session 標註 Herdr terminal ID（`herdr-app:<HC_TERMINAL_ID>`）與原生 Session ID：
+  ```text
+  Agent Handoff (Claude / claude-opus-5-5(template) / high) (herdr-app:t1k)
+  ```
 通知內容並附帶 7 碼短 commit SHA 以及清晰的「下一步」指引（如：下一位 Agent 誰接手，或提示你執行 `handoff-finish <change>`）。
 
 ### 4. 傳訊失敗重試保障 (Retry)
@@ -598,6 +675,20 @@ Pi 角色在背景工作或等待時，Xirp 介面可能暫時標記其為 `fini
 1. 迴圈內建自動防卡死機制：當 Herdr 回報 `agent_prompt_stalled` 時，會自動補按一次 Enter（不重送文字）並再次等待。
 2. 若仍然沒有動靜，迴圈不會盲目重送，而是將該提示保存為 `.agent-handoff/<change-id>/<role>-unconfirmed.txt` 並發送通知。此時 hook 與啟動命令會進入防護鎖定，避免重複發送。
 3. 前往該 Herdr Pane 查看：若文字停在輸入框，手動按 Enter 送出；若完全沒收到，貼上該檔案內容。確認 Agent 開始工作後，手動刪除該 `<role>-unconfirmed.txt` 檔案即可解除保護繼續迴圈。
+
+### Q11: 使用 `host: herdr-app` 時出現 `fail host` 且提示請先開啟 Herdr app？
+Herdr App host 規定桌面應用程式視窗必須處於開啟狀態：
+1. `handoff-doctor` 嚴格依序檢查 `herdr-app` 與 `hc` 指令、herdr-core 在跑（`hc server status`）以及 Herdr app 視窗開著（`herdr-app status`）。
+2. 若 app 沒開，系統絕不改用畫面外看不到的 `hc run` 啟動，因為那違背了在桌面應用中直觀監控 Agent 的設計原則。請手動開啟 Herdr 桌面應用程式後再次執行。
+
+### Q12: Herdr App 角色卡在對話框（`status.state: blocked`）該如何處理？
+當 Agent 遇到資料夾信任、權限詢問或輸入提示時，`hc` 會捕獲該狀態並阻止提示送出：
+1. 迴圈不會替你代答，交件單維持未處理，並發送 Telegram Attention 通知，內容寫出該 Terminal 所在的 Space 與 Tab 名稱。
+2. 前往 Herdr 桌面 App 切換至該 Space 與 Tab，手動確認對話框或回答問題。
+3. 處理完畢後，執行通知提示的 `~/.config/wk-workflow/handoff/handoff-route --foreground` 即可立即恢復訊息派送。
+
+### Q13: 可以使用 `handoff-role --replace` 將現有角色換成 `herdr-app` 嗎？
+目前 `handoff-role --replace` 尚未支援 `herdr-app` 角色更換（執行時會直接拒絕並保持狀態不變）。若需要使用 Herdr 桌面 App 執行交接，請在初始的 `roles.yaml` 設定 `host: herdr-app`，或在 `handoff-start` 時指定。
 
 [^handoff-scripts]: [Agent Handoff Loop Scripts](/scripts/handoff/README.md)
 [^handoff-skill]: [Agent Handoff Skill](/template/common/skills/agent-handoff/SKILL.md)
