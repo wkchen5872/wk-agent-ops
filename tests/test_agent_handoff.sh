@@ -1450,6 +1450,17 @@ if run_section herdr; then
   touch "$(HS)/blocked"; finish_in "$HL" add-export >/dev/null 2>&1; rc1=$?; rm -f "$(HS)/blocked"; finish_in "$HL" add-export >/dev/null 2>&1; rc2=$?
   [[ "$rc1" != 0 && "$rc2" == 0 && "$(herdr_prompts | grep '^w2:p3' | grep -c '重試收尾')" == 1 ]] \
     && ok "a finish retry herdr did not send (a dialog) can be retried once the dialog is answered" || bad "a finish retry herdr did not send (a dialog) can be retried once the dialog is answered"
+  # codex-herdr-r06/F-01: a claim that cannot be created is an error, not "already sent"
+  MKF="$tmp/mkdir-fail-bin"; mkdir -p "$MKF"
+  printf '#!/usr/bin/env bash\nfor last; do :; done\nif [[ -e "$FAKE_XIRP_DIR/mkdir-fail" && "$last" == *.finish-retry-* ]]; then echo "mkdir: $last: Permission denied" >&2; exit 1; fi\nexec /bin/mkdir "$@"\n' > "$MKF/mkdir"; chmod +x "$MKF/mkdir"
+  herdr_loop "$tmp/herdr-r6a" h51; hw "$HL" --role review --status done --verdict pass --head HEAD --report r.md
+  finish_in "$HL" add-export >/dev/null 2>&1; commit_in "$HL" archive; hw "$HL" --role finish --status blocked --head HEAD --note "push rejected"
+  touch "$FAKE_XIRP_DIR/mkdir-fail"; out="$(PF_PATH="$MKF:$FAKES:$PATH" finish_in "$HL" add-export 2>&1)"; rc=$?; rm -f "$FAKE_XIRP_DIR/mkdir-fail"
+  n1="$(herdr_prompts | grep '^w2:p3' | grep -c '重試收尾')"
+  out2="$(finish_in "$HL" add-export 2>&1)"; rc2=$?
+  [[ "$rc" != 0 && "$n1" == 0 && "$rc2" == 0 && "$(herdr_prompts | grep '^w2:p3' | grep -c '重試收尾')" == 1 ]] && grep -q 'Permission denied' <<<"$out" && ! grep -q 'already sent' <<<"$out" \
+    && ok "a finish retry claim that cannot be created fails, sends nothing, and can be retried (codex-herdr-r06/F-01)" \
+    || { bad "a finish retry claim that cannot be created fails, sends nothing, and can be retried (codex-herdr-r06/F-01)"; printf '       %s\n' "$out" | grep -v warn; }
   # r03/F-01: a manual run does not name whoever ran it as the stopping session
   herdr_loop "$tmp/herdr-r4c" h33; commit_in "$HL" two; hw "$HL" --role implement --status done --head HEAD
   (cd "$HL" && PATH="$FAKES:$PATH" HANDOFF_NOTIFY="$FAKES/notify.sh" HANDOFF_CREATE_WAIT=2 HERDR_ENV=1 HERDR_PANE_ID=w1:p9 CHIRP_SESSION_ID=chirp-inherited "$ROUTE" --foreground </dev/null)

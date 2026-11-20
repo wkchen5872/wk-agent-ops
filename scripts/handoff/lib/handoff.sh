@@ -964,7 +964,7 @@ ho_delivery_text() {
 # The gate is a claim directory, created atomically before anything is sent; it is removed only when the
 # host reports that nothing was sent, so that case can be retried. finish.retried_for records the result.
 ho_finish_retry() {
-  local dir="$1" loop="$1/loop.yaml" rec d f pass="" pn=-1 n wt change id msg note base rc claim existing
+  local dir="$1" loop="$1/loop.yaml" rec d f pass="" pn=-1 n wt change id msg note base rc claim existing err retried=0
   rec="$(ho_newest_in_loop "$dir")" || { echo "the loop has no records"; return 1; }
   if [[ "$(kv_get "$rec" role)" != finish || "$(kv_get "$rec" status)" != blocked ]]; then
     echo "the newest record is $(basename "$rec"), not a blocked finish"; return 1
@@ -988,7 +988,12 @@ ho_finish_retry() {
   if [[ -n "$id" ]] && ! ho_role_pending "$dir" finish && ho_host_exists "$(ho_role_host "$loop" finish)" "$dir" finish "$id"; then
     existing=1; ho_herdr_hold_error "$dir" finish "$id" || return 1
   fi
-  if [[ "$(kv_get "$loop" finish.retried_for 2>/dev/null)" == "$base" ]] || ! mkdir "$claim" 2>/dev/null; then
+  if [[ "$(kv_get "$loop" finish.retried_for 2>/dev/null)" != "$base" ]] && ! err="$(mkdir "$claim" 2>&1)"; then
+    # Only an existing claim means another run took it; any other failure sent nothing and stays retryable.
+    [[ -d "$claim" ]] || { echo "cannot claim the finish retry for $base ($err); nothing was sent"; return 1; }
+    retried=1
+  fi
+  if [[ "$(kv_get "$loop" finish.retried_for 2>/dev/null)" == "$base" ]] || (( retried )); then
     echo "Finish retry already sent (or being sent) for $base${id:+ to session $id}; nothing was sent again. Wait for its new record"; return 3
   fi
   if (( existing )); then

@@ -39,6 +39,7 @@
   - 審查修正（codex-herdr-r01 F-03、codex-herdr-r03）：送出結果不明的 prompt 存成 `<role>-unconfirmed.txt`；檔案存在期間，開啟、傳訊與收尾的「已開啟」判斷都不送出也不視為成功，使用者核對後刪檔才繼續。驗證：`tests/test_agent_handoff.sh herdr` 的自動收尾與 `handoff-finish` 重試兩個情境。
   - 審查修正（codex-herdr-r04，r01/F-03）：收尾重試對每筆 blocked 交件單只送一次（`finish.retried_for`），不論是否確認送達；使用者刪掉待確認檔後再跑 `handoff-finish`，只回報已送過。驗證：`tests/test_agent_handoff.sh herdr` 的「清除待確認後不重送」與「每筆 blocked 交件單只送一次」。
   - 審查修正（codex-herdr-r05，r01/F-03）：送出收尾重試前，先以 `mkdir` 原子地建立該筆交件單的 claim（迴圈資料夾的 `.finish-retry-<交件單>`），重疊的第二次執行拿不到 claim 就只回報、不送出；host 回報沒送出時移除 claim 以便重試。驗證：`tests/test_agent_handoff.sh herdr` 的「兩次重疊執行只送一次」與「被對話框擋住後仍可重試」。
+  - 審查修正（codex-herdr-r06/F-01）：只有 claim 目錄已存在才回報「已送出或正在送出」；`mkdir` 因其他原因失敗時印出錯誤、以非零結束、不送出，恢復後可重試。驗證：`tests/test_agent_handoff.sh herdr` 的「claim 無法建立」情境（以只讓該路徑 `mkdir` 失敗的 PATH shim 注入）。
 - [x] 5.2 開啟時遇到 `agent_not_ready` 或第一則 prompt 被拒：保留 pane、記 `pending_prompt`，route 走 retry，通知寫出 workspace 與 tab；重試時只補送 prompt，不開新 pane；不送任何回答對話框的按鍵。
   - 測試要求：先寫失敗測試：信任對話框情境只發一次通知、交件單未處理、假 `herdr` 沒收到 `send-keys`；`handoff-route --foreground` 重試時對同一個 pane 補送 prompt，並把交件單標為已處理。
   - 審查修正（codex-herdr-r01 F-05、codex-herdr-r03）：對話框通知改向 herdr 查 pane 實際所在的 workspace 與 tab（含標籤），重用的 reviewer 也適用；cleanup 不關閉重用 reviewer 的 tab。驗證：`tests/test_agent_handoff.sh herdr` 的重用 reviewer 情境。

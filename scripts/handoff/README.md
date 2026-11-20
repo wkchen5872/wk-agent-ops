@@ -208,7 +208,9 @@ finish session resumes from the stopped stage, or a new one opens if it is gone.
 once per blocked record (recorded as `finish.retried_for` in `loop.yaml`), whether or not herdr
 confirmed it: running `handoff-finish` again before the finish session writes a new record — even
 while the first run is still sending — reports that the retry was already sent and sends nothing.
-Only a retry the host reports as not sent (for example a dialog in the way) can be run again.
+Only a retry the host reports as not sent (for example a dialog in the way), or one whose
+claim in the loop directory could not be created (the command fails and names the error), can be
+run again.
 
 ### `handoff-cleanup <change-id> [--abandon] [--yes]`
 
