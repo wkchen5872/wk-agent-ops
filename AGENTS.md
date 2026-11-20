@@ -271,7 +271,7 @@ Checkpoint 或 Closure 回覆（也用來代記人類的設計批准），close 
 
 **位置：** `template/common/skills/agent-handoff/`
 
-**用途：** 交接迴圈中每個 Agent 結束一輪時，以 `handoff-write` 寫入 `.agent-handoff/<change-id>/NN-<role>.yaml` 交件單，作者欄位由 `handoff-author` 產生。迴圈本身（`handoff-start`／`finish`／`cleanup`）在 `scripts/handoff/`，為選用，見 `scripts/handoff/README.md`。
+**用途：** 交接迴圈中每個 Agent 結束一輪時，以 `handoff-write` 寫入 `.agent-handoff/<change-id>/NN-<role>.yaml` 交件單，作者欄位由 `handoff-author` 產生。迴圈本身（`handoff-start`／`handoff-role`／`handoff-finish`／`handoff-cleanup`／`handoff-doctor`）在 `scripts/handoff/`，為選用，支援 `xirp` 與 `herdr`（Terminal UI agent session manager）雙宿主，見 `scripts/handoff/README.md`。
 
 `github-pr-agent`、`github-issue-agent`（Claude `.md` 與 Codex `.toml`）讓呼叫端 Session 把 PR／Issue 文案與寫入委派給較輕量的模型；仍遵循對應 Skill，並寫入呼叫端提供的 Author。
 

@@ -98,6 +98,7 @@ opsx-branch <change-id>              以自選工具開啟 Session／Worktree
 |---|---|
 | `opsx-branch <change-id>` | 在建立 artifacts 前建立或切換 planning branch；分支已被其他 Worktree checkout 時停止 |
 | `handoff-start <change-id>` | 開啟實作 → Review → 收尾的交接迴圈：準備實作者 worktree、開實作者 Session、寫 `loop.yaml`（選用；`bash scripts/handoff/install.sh` 安裝） |
+| `handoff-role <change-id> <review|finish> [<override>] [--worktree new] [--replace]` | 迴圈中動態置換尚未開啟或執行中的審查/收尾角色，支援獨立 worktree 與原單改送 |
 | `handoff-doctor [change-id]` | 檢查交接迴圈的 host、工具與角色範本，不開啟 Session 或修改檔案 |
 | `handoff-finish <change-id>` | 最新交件單是目前乾淨 head 的 pass 時開收尾 Session（選用） |
 | `handoff-cleanup <change-id> [--abandon] [--yes]` | 收尾完成（或以 `--abandon` 放棄）後封存交件單與報告，刪除迴圈的 Session 與 worktree，保留分支（選用） |
@@ -132,7 +133,7 @@ opsx-branch <change-id>              以自選工具開啟 Session／Worktree
 | `.claude/skills/github-issue/`、`.claude/skills/github-pr/` | Issue／PR 交接入口 skill |
 | `.claude/skills/change-review/`、`.agents/skills/change-review/` | PR 審查、修正交接與複審 skill（含報告範例、檢查清單與流程圖） |
 | `.agents/skills/github-issue/`、`.agents/skills/github-pr/` | 同兩個入口的跨 Provider 副本 |
-| `.claude/skills/agent-handoff/`、`.agents/skills/agent-handoff/` | 交接單 Skill 與 `handoff-write` 腳本（交接迴圈用） |
+| `.claude/skills/agent-handoff/`、`.agents/skills/agent-handoff/` | 交接單 Skill 與 `handoff-write` 腳本（交接迴圈用，支援 Xirp 與 Herdr TUI 雙宿主） |
 | `.claude/agents/github-pr-agent.md`、`.claude/agents/github-issue-agent.md` | 代呼叫端執行一次 PR／Issue 操作的專用 Agent（Claude Sonnet），Author 沿用呼叫端身分 |
 | `.codex/agents/github-pr-agent.toml`、`.codex/agents/github-issue-agent.toml` | 同兩個 Agent 的 Codex 版本（`gpt-5.6-terra`、medium） |
 | `.gitignore` 的 `/.agent-handoff/`、主 worktree 的 `.agent-handoff/roles.yaml` | 交件單不進 Git；角色範本只在缺少時建立，不覆寫 |

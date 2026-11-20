@@ -311,7 +311,8 @@ All functions require `jq`.
 - **停點不可關閉保護 (Safety Anchor)**：
   - 當迴圈遇到 blocked、達輪數上限、工作區不乾淨、或審查通過等待使用者執行 `handoff-finish` 時，`handoff-attention` 永遠強制發送，不受一般開關影響，防止迴圈靜默掛起。
 - **Agent 資訊提取**：
-  - 透過 `xirp session get <id> --json` 提取停下 Session 的工具（`.currentAgent`）、當下模型（`.model`）與推理強度（`.agentLaunchOptions.options.effort` 或 `reasoning_effort`），組合為 `Agent Handoff (Claude / claude-opus-5-5 / high)`。
+  - Xirp 宿主：透過 `xirp session get <id> --json` 提取停下 Session 的工具（`.currentAgent`）、當下模型（`.model`）與推理強度（`.agentLaunchOptions.options.effort` 或 `reasoning_effort`），組合為 `Agent Handoff (Claude / claude-opus-5-5 / high)`。
+  - Herdr 宿主：因 Herdr 不主動回報執行模型，由 `loop.yaml` 角色範本提取工具與模型（標記 `(template)`），並標註 Herdr pane ID 與原生 Session ID。
 - **傳訊失敗重試保障**：
   - 對審查者或實作者傳訊失敗時，交件單不標記為已處理，而是改發一則「需要你處理」提醒，保留交件單待下次 hook 或手動執行重試。
 

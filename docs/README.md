@@ -28,7 +28,7 @@ docs/
 │   └── provider-worktrees.md← 各 AI 工具原生 Worktree 行為比較
 │
 ├── 📂 skills/              ← 擴充工具與自動化技能手冊
-│   ├── agent-handoff.md    ← 多 Agent 自動化實作、審查與收尾交接迴圈
+│   ├── agent-handoff.md    ← 多 Agent 自動化實作、審查與收尾交接迴圈（支援 Xirp 與 Herdr TUI）
 │   ├── github-issue.md     ← 建立、更新與關閉 GitHub Issue
 │   ├── github-pr.md        ← 開立 Draft PR、更新說明、回覆審查與結案
 │   ├── change-review.md    ← 發起代碼審查、三種結論判定與報告產出

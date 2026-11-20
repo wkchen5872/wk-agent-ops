@@ -50,7 +50,7 @@ sources:
 │    - 第一輪：開啟 Reviewer Session                │
 │    - 後續輪：切換 Reviewer worktree 至新 commit   │
 └───────────────────────┬───────────────────────────┘
-                        │ 透過 Xirp 傳遞訊息
+                        │ 透過 Session Host (Xirp / Herdr TUI) 傳遞訊息
                         ▼
 ┌───────────────────────────────────────────────────┐
 │ 3. 審查者 (Reviewer)                              │
@@ -95,6 +95,8 @@ sources:
 
 | 欄位 | 說明與預設值 |
 |---|---|
+| `host` | `xirp`（預設）或 `herdr`：Session 跑在哪裡。可寫在頂層套用至所有角色，或由個別角色覆寫 |
+| `herdr_session` | 在 herdr 外部啟動時指定 herdr session 名稱（預設使用 herdr default session） |
 | `max_rounds` | 最大退回修復輪數，預設為 `3`。達上限時 Stop hook 停止自動調度並通知你 |
 | `review.worktree` | `shared`（預設）：審查者與實作者共用同一個 worktree；`new`：另開獨立 detached worktree 停在該 commit |
 | `finish.worktree` | `shared`（預設）：收尾者沿用實作者 worktree；`new`：實作者 worktree 脫鉤，另開新 worktree 接手分支 |
@@ -113,7 +115,7 @@ sources:
 - `{report}`：審查報告的相對/絕對路徑（供退回修正時傳遞）
 - `{delivery}`：交付模式（`local` 或 `pr`）
 - `{handoff_write}`：寫入交件單的相對腳本路徑
-- `{author}`：自動產生之身分說明區塊（包含工具、模型與 Xirp Session ID）
+- `{author}`：自動產生之身分說明區塊（包含工具、模型、Session ID；Herdr pane 內因變數隔離不帶 Xirp Session ID，而是記錄原生 Session ID）
 
 ---
 
@@ -356,19 +358,24 @@ Pi 會在有 `.pi/settings.json` 或 `.agents/skills` 的資料夾詢問是否�
 
 ### 3. Agent 身分標記格式
 
-交件單通知會自動從 Xirp session 提取當前停下 Agent 的工具名稱、模型與推理強度，標註格式如下：
-```text
-Agent Handoff (Claude / claude-opus-5-5 / high) (#6ec9b3e2)
-Agent Handoff (Codex / gpt-6.1-sol / medium) (#9a8b7c6d)
-```
+交件單通知會自動從當前 Session 宿主提取停下 Agent 的工具名稱、模型與推理強度：
+- **Xirp 角色**：從 Xirp session API 提取動態模型與 effort，標註格式如：
+  ```text
+  Agent Handoff (Claude / claude-opus-5-5 / high) (#6ec9b3e2)
+  Agent Handoff (Codex / gpt-6.1-sol / medium) (#9a8b7c6d)
+  ```
+- **Herdr 角色**：因 Herdr 不主動回報模型，模型標記為範本設定值（如 `model=gpt-6.1-sol(template)`），Session 標註 Herdr pane ID 與原生 Session ID：
+  ```text
+  Agent Handoff (Claude / claude-opus-5-5(template) / high) (herdr:w2:p1)
+  ```
 通知內容並附帶 7 碼短 commit SHA 以及清晰的「下一步」指引（如：下一位 Agent 誰接手，或提示你執行 `handoff-finish <change>`）。
 
 ### 4. 傳訊失敗重試保障 (Retry)
 
-當 Stop 鉤子向審查者或實作者傳遞訊息（Xirp send）失敗，或開啟新 Session 失敗時：
+當 Stop 鉤子向審查者或實作者傳遞訊息（Xirp send 或 herdr agent prompt）失敗，或開啟新 Session 失敗時：
 1. **交件單保留未處理**：交件單不會被標記為 `.routed`。
 2. **發送 Attention 警報**：發送一次 `🔴 需要你處理` 通知，指明傳訊或開啟失敗原因。
-3. **安全重試**：排解原因（如重啟 Xirp 服務）後，下次 hook 觸發或手動執行 `~/.config/wk-workflow/handoff/handoff-route --foreground` 即可立即重試，傳送成功後隨即補發進度通知。
+3. **安全重試**：排解原因（如重啟 Session 宿主服務）後，下次 hook 觸發或手動執行 `~/.config/wk-workflow/handoff/handoff-route --foreground` 即可立即重試，傳送成功後隨即補發進度通知。
 
 ---
 
@@ -407,6 +414,24 @@ handoff-role <change-id> review pi:openai/gpt-6.2-sol:medium:api --worktree new 
 
 ### Q7: Xirp 顯示 Pi 角色為 `finished`，但工作似乎還沒完成？
 Pi 角色在背景工作或等待時，Xirp 介面可能暫時標記其為 `finished`，但實際執行程序仍在進行，Stop hook 發送的訊息依然能正常送達。請以交件單記錄及 `.agent-handoff/<change-id>/routing.log` 的實際進度為準。
+
+### Q8: Herdr 角色啟動後停在對話框（如資料夾信任、權限詢問），迴圈停下？
+在新的 Linked Worktree 中，Claude Code 或 Codex 可能會跳出資料夾信任或權限對話框：
+1. 迴圈不會替你自動點選，而是保留該 Pane、標記 `pending_prompt`，並發送一則 `🔴 需要你處理` 的 Attention 通知，註明 Herdr 的 workspace、tab 與 pane ID。
+2. 前往該 Tab / Pane 依指示確認並信任資料夾。
+3. 執行通知提示的 `handoff-route --foreground`（若在實作者啟動時遇到，則重新執行 `handoff-start <change-id>`），迴圈會直接向原 Pane 補送提示，無需重新建立環境。
+
+### Q9: 迴圈移除 worktree 後，出現幾乎空白的殘留目錄（只剩 `.codex/config.toml` 或 `.claude/settings.local.json`）？
+這是因為 TokenEconomizer 快取了該 checkout 路徑，並於背景將設定寫回已移除的目錄：
+1. 在本專案根目錄執行清理預覽：`python3 -I scripts/user/te-prune-stale-checkouts.py --dry-run`。
+2. 確認無誤後正式清除快取：`python3 -I scripts/user/te-prune-stale-checkouts.py`。
+3. 刪除該殘留目錄即可。
+
+### Q10: Herdr 提示文字停在輸入框（Composer）沒有自動執行？
+剛啟動的 Agent 在初始化過程中偶爾會遺漏 Enter 觸發訊號：
+1. 迴圈內建自動防卡死機制：當 Herdr 回報 `agent_prompt_stalled` 時，會自動補按一次 Enter（不重送文字）並再次等待。
+2. 若仍然沒有動靜，迴圈不會盲目重送，而是將該提示保存為 `.agent-handoff/<change-id>/<role>-unconfirmed.txt` 並發送通知。此時 hook 與啟動命令會進入防護鎖定，避免重複發送。
+3. 前往該 Herdr Pane 查看：若文字停在輸入框，手動按 Enter 送出；若完全沒收到，貼上該檔案內容。確認 Agent 開始工作後，手動刪除該 `<role>-unconfirmed.txt` 檔案即可解除保護繼續迴圈。
 
 [^handoff-scripts]: [Agent Handoff Loop Scripts](/scripts/handoff/README.md)
 [^handoff-skill]: [Agent Handoff Skill](/template/common/skills/agent-handoff/SKILL.md)
