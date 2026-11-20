@@ -28,7 +28,7 @@
 驗收條件：
 - 改寫前後，完整執行所列出的斷言名稱與數量完全相同（以 `ok`／`FAIL` 行比對，基線 495 項 ok、0 FAIL）。
 - 每個區段都能單獨執行（`bash tests/test_agent_handoff.sh <section>`），結果和該區段在基線中的結果相同。
-- 完整執行在本機 180 秒內完成（基線 449 秒），實測時間記在 tasks。
+- 完整平行執行在本機 200 秒內完成，並把實測值記在 tasks（基線 449 秒；原訂 180 秒，實作後實測約 185 秒，使用者決定接受並改為 200 秒，不拆 pi 區段）。
 - `git diff main -- scripts template` 為空。
 
 ## Capabilities
