@@ -19,16 +19,19 @@ if [[ "$section" == all ]]; then
   jobs="${HANDOFF_TEST_JOBS:-}"
   if [[ -z "$jobs" ]]; then jobs="$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)"; (( jobs > 8 )) && jobs=8; fi
   logs="$(mktemp -d "${TMPDIR:-/tmp}/wk-handoff-run.XXXXXX")"; trap 'rm -rf "$logs"' EXIT
-  printf '%s\n' "${LAUNCH[@]}" | xargs -P "$jobs" -I{} bash -c 'bash "$1/$2.sh" > "$3/$2.log" 2>&1; echo $? > "$3/$2.rc"' _ "$DIR" {} "$logs"
+  # The section name is the last argument, so the paths are passed as they are (no {} substitution).
+  printf '%s\n' "${LAUNCH[@]}" | xargs -n 1 -P "$jobs" bash -c 'bash "$1/$3.sh" > "$2/$3.log" 2>&1; echo $? > "$2/$3.rc"' _ "$DIR" "$logs"
   for s in "${SECTIONS[@]}"; do
     cat "$logs/$s.log" 2>/dev/null
     [[ "$(cat "$logs/$s.rc" 2>/dev/null)" == 0 ]] || fail=1
   done
-elif [[ " ${SECTIONS[*]} " == *" $section "* ]]; then
-  bash "$DIR/$section.sh" || fail=1
 else
-  printf 'test_agent_handoff: unknown section "%s"; choose one of: %s all\n' "$section" "${SECTIONS[*]}" >&2
-  exit 2
+  known=0; for s in "${SECTIONS[@]}"; do [[ "$s" == "$section" ]] && known=1; done
+  if (( ! known )); then
+    printf 'test_agent_handoff: unknown section "%s"; choose one of: %s all\n' "$section" "${SECTIONS[*]}" >&2
+    exit 2
+  fi
+  bash "$DIR/$section.sh" || fail=1
 fi
 
 if [[ "$fail" -ne 0 ]]; then
