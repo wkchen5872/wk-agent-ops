@@ -177,11 +177,16 @@ handoff-role <change-id> review pi:openai/gpt-6.2-sol:medium:api --worktree new 
 - **自動適應工具寫法**：重寫 Prompt 開頭的 Skill 呼叫與 Session 名稱，使其符合新工具慣例。
 - **嚴格關卡驗證**：對該角色執行 `handoff-doctor` 的檢查（範本欄位、工具與觸發器、host、Pi 模型/憑證/計費與信任狀態），再加上一個 worktree 最多一個 Pi 角色的限制；任何一項失敗，舊 session、`loop.yaml` 與交件單都不變。
 - **`--worktree new`**：讓角色改用自己的 worktree（`<worktree>-review` 或 `<worktree>-finish`），例如讓 Pi 審查者與共用實作者 worktree 的 Pi 收尾並存。可以單獨使用，也可以和 override 一起用；不支援改回共用 worktree。
-- **`--replace`**：角色的 Session 已經開啟時，沒有 `--replace` 會直接拒絕並提示這個選項。加上後，先透過舊角色的 host 刪除舊 session（Xirp 刪除 session；herdr 只關閉該角色的 tab），清空 `loop.yaml` 中該角色的 session，再寫入新設定。**更換前先確認舊角色已停止**，避免它在被刪除前寫出交件單。
+- **`--replace`**：角色的 Session 已經開啟時，沒有 `--replace` 會直接拒絕並提示這個選項。加上後依序：
+  1. 透過舊角色的 host 結束舊 session，host 確認後才繼續，否則什麼都不改。Xirp 必須刪除成功，或回覆已不再列出該 session；herdr 只關閉迴圈為該角色開的 tab，而且 pane 仍執行該角色的 agent（相同工具與原生 session）或沒有 agent 時才關，herdr 回報 pane 已不存在則不需關閉。舊 pane 未確認的提示不再擋住新角色。
+  2. 清空每一份 `loop.yaml` 中該角色的 session，再寫入新設定。既有交件單仍依寫入當時的角色設定驗證，例如審查者改成 Pi 後，先前 Codex 的 pass 仍然有效。舊 session 刪除後若寫入失敗，指令會說明並以非零結束；排除原因後再執行同一個指令即可。
+
+  **更換前先確認舊角色已停止**，避免它在被刪除前寫出交件單。
 - **自動改送等待中的交件單**：
-  - 審查：最新交件單是 `implement`/`done`、之後沒有審查交件單時，重新派送這張交件單，新審查者依新範本開啟並收到這一輪。開啟失敗時交件單維持未處理，發一次 attention 通知，之後用 `handoff-route --foreground` 重試。
-  - 收尾：最新交件單是收尾 `blocked`，或者審查 pass 而且舊收尾 session 已開啟時，依 `handoff-finish` 的流程開新的收尾 session。收尾 `blocked` 時會沿用原本存放收尾 commit 的 worktree，因此不接受 `--worktree new`。
+  - 審查：最新交件單是舊審查者已收到（見 `routing.log`）的 `implement`/`done`、之後沒有審查交件單時，在該交件單所在的 worktree 重新派送，新審查者依新範本開啟並收到這一輪。沒有開啟時交件單維持未處理，attention 通知會說明原因，排除後用 `handoff-route --foreground` 重試。
+  - 收尾：最新交件單是收尾 `blocked`，或者審查 pass 而且舊收尾 session 已開啟時，依 `handoff-finish` 的流程開新的收尾 session；開不起來時發 attention 通知，之後用 `handoff-finish` 重試。原本在實作者 worktree 的 `blocked` 收尾加上 `--worktree new` 時，會帶著 feature branch 移到 `<worktree>-finish`。
   - 沒有交件單在等待時，只換設定；輪到這個角色時再依新範本開啟。更換與改送都記在 `routing.log`。
+  - Pi 角色的 `.pi/settings.json`：迴圈替舊角色寫入、且之後沒被改過的檔案會被換掉；迴圈沒寫過或已被修改的檔案，若與新角色設定不同，會在刪除舊 session 之前拒絕。
 - **不可更換的部分**：實作者不能更換，原始 `roles.yaml` 永不修改。
 
 ### 3. `handoff-finish <change-id>`

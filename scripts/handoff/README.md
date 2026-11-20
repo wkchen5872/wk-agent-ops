@@ -195,20 +195,33 @@ one-Pi-role-per-worktree check first, and changes nothing unless all of them pas
 `roles.yaml` or the implementer: only `review` and `finish` can be changed.
 
 A role whose session is open is refused unless `--replace` is given. Make sure the old session has
-stopped first: `--replace` deletes it through its host (Xirp deletes the session; herdr closes only
-the role's tab), clears the role's session in `loop.yaml`, writes the new settings, and then hands
-the new role the record that waited for the old one:
+stopped first. `--replace` then:
 
-- review: when the newest record is an `implement`/`done` record with no review after it, the record
-  is routed again (as `handoff-route --foreground` does), so the new reviewer opens from the new
-  settings and receives that round. If it cannot open, the record stays unprocessed, you get one
-  attention notice, and `handoff-route --foreground` retries it.
-- finish: when the newest record is a blocked finish, or a passing review whose finish session had
-  opened, a new finish session opens as `handoff-finish` would open it.
+1. Ends the old session through its host, and changes nothing unless the host confirms it. Xirp
+   must delete the session, or answer that it no longer lists it. herdr closes only the role's tab,
+   and only while that tab is the one the loop opened and its pane still runs the role's agent (the
+   same tool and native session) or no agent; a pane herdr reports gone needs nothing. A prompt to
+   the old pane that herdr did not confirm no longer holds back the new role.
+2. Clears the role's session in every copy of `loop.yaml` and writes the new settings. Records
+   written so far are still checked against the settings they were written under, so an earlier
+   pass stays valid when the reviewer becomes a Pi role. If a write fails after the old session was
+   deleted, the command says so and exits non-zero; fix the cause and run the same command again.
+3. Hands the new role the record that waited for the old one:
+   - review: when the newest record is an `implement`/`done` record that the old reviewer received
+     (`routing.log`) and no review followed, it is routed again in its own worktree, so the new
+     reviewer opens from the new settings and receives that round. If it does not open, the record
+     stays unprocessed (an attention notice tells you why) and `handoff-route --foreground` retries
+     it once the cause is fixed.
+   - finish: when the newest record is a blocked finish, or a passing review whose finish session
+     had opened, a new finish session opens as `handoff-finish` would open it; if it cannot, you get
+     an attention notice and `handoff-finish` retries it. A blocked finish that ran in the
+     implementer's worktree and is given `--worktree new` moves to `<worktree>-finish` with the
+     feature branch, as `handoff-finish` does for a new finish worktree.
 
 With no record waiting, only the settings change, and the new role opens when its turn comes. The
-replacement and the hand-off are written to `routing.log`. A blocked finish keeps its worktree, so
-`--worktree new` is refused when replacing one that ran in the implementer's worktree.
+replacement and the hand-off are written to `routing.log`. A Pi role's `.pi/settings.json` that the
+loop wrote for the old role is replaced; one the loop did not write, or one changed since, refuses
+the replacement before anything is deleted unless it already matches the new role.
 
 ### `handoff-finish <change-id>`
 

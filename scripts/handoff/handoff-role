@@ -41,26 +41,32 @@ esac
   || die "override must be claude|codex:<model>:<effort> or pi:<provider>/<model>:<effort>:<billing>, got '$ov'"
 
 dir="$(ho_find_loop_dir "$change")" || die "no loop for '$change' in this repository's worktrees"
-loop="$dir/loop.yaml"
+loop="$dir/loop.yaml" tsec="${role}_template"
 old="$(kv_get "$loop" "$key.session" 2>/dev/null || true)"
 (( replace )) || [[ -z "$old" ]] || die "the $role session is already open ($old); add --replace to delete it and use the new role in its place"
 rec="$(ho_newest_in_loop "$dir")" || rec=""
-rstate=""; [[ -n "$rec" ]] && rstate="$(kv_get "$rec" role)/$(kv_get "$rec" status)/$(kv_get "$rec" verdict 2>/dev/null)"
-# A blocked finish retries in the worktree that holds its commits (ho_finish_retry), whatever the template says.
-if [[ -n "$old" && "$role" == finish && -n "$wtmode" && "$rstate" == finish/blocked/* \
-  && "$(kv_get "$loop" finish_template.worktree 2>/dev/null)" != new ]]; then
-  die "the blocked finish continues in the implementer's worktree, which holds its commits; replace it without --worktree new"
+rstate="" until=""
+if [[ -n "$rec" ]]; then
+  rstate="$(kv_get "$rec" role)/$(kv_get "$rec" status)/$(kv_get "$rec" verdict 2>/dev/null)"
+  # Records written so far answer to the template being replaced (ho_record_tsec).
+  until="$(printf '%02d' $((10#$(basename "$rec" | cut -c1-2) + 1)))"
 fi
 
-# change_role <loop.yaml>: apply the requested settings to one copy of loop.yaml.
+# change_role <loop.yaml>: keep the current template for the records so far, then apply the new settings.
 change_role() {
-  [[ -z "$ov" ]] || ho_apply_override "$1" "${role}_template" "$ov"
-  [[ -z "$wtmode" ]] || kv_set "$1" "${role}_template.worktree" new
+  local f="$1" k v snap="${tsec}_until_$until"
+  if [[ -n "$until" ]] && ! kv_get "$f" "$snap.harness" >/dev/null 2>&1; then
+    for k in harness provider model effort billing; do
+      v="$(kv_get "$f" "$tsec.$k" 2>/dev/null)"; kv_set "$f" "$snap.$k" "${v:+\"$v\"}" || return 1
+    done
+  fi
+  [[ -z "$ov" ]] || ho_apply_override "$f" "$tsec" "$ov" || return 1
+  [[ -z "$wtmode" ]] || kv_set "$f" "$tsec.worktree" new
 }
-scratch="$(mktemp)"; trap 'rm -f "$scratch"' EXIT
-cp "$loop" "$scratch"
-change_role "$scratch"
-ho_preflight_or_refuse handoff-role "$scratch" "${role}_template" || exit 1
+scratch="$(mktemp)" || die "cannot create a temporary file; nothing was changed"
+trap 'rm -f "$scratch"' EXIT
+cp "$loop" "$scratch" && change_role "$scratch" || die "cannot prepare the new settings from $loop; nothing was changed"
+ho_preflight_or_refuse handoff-role "$scratch" "$tsec" || exit 1
 
 # One Pi role per worktree: the implementer, plus every review or finish role not in a worktree of its own.
 pi_in_impl=()
@@ -73,49 +79,79 @@ if (( ${#pi_in_impl[@]} > 1 )); then
   die "Pi roles ${roles_txt// / and } would share the implementer worktree; a worktree holds one Pi role, so set worktree: new for the Pi review or finish role"
 fi
 
-# Delete the old session before writing: an old reviewer must not record a review after the change (design D2).
+# Pi settings: the old role's file is replaced only when the loop wrote it and nobody changed it since; any
+# other file in the worktree the new Pi role opens in must already match, as ho_pi_settings requires.
+drop_pi=""
 if [[ -n "$old" ]]; then
-  host="$(ho_role_host "$loop" "$key")"
-  if [[ "$host" == herdr ]] || ho_host_exists "$host" "$dir" "$key" "$old"; then
-    ho_host_close "$host" "$dir" "$key" "$old" tab || die "could not delete the old $role session $old through $host; nothing was changed"
+  f="$(kv_get "$loop" "$key.pi_settings" 2>/dev/null)"
+  [[ -n "$f" && "$(ho_pi_settings_owned "$loop" "${f%/.pi/settings.json}" 2>/dev/null)" == "$f" ]] && drop_pi="$f"
+fi
+if [[ "$(kv_get "$scratch" "$tsec.harness")" == pi ]]; then
+  impl="$(kv_get "$loop" implementer.worktree)"
+  if [[ "$role" == finish && "$rstate" == finish/blocked/* ]]; then twt="$(kv_get "$loop" finish.worktree 2>/dev/null)"; twt="${twt:-$impl}"; fi
+  [[ "$(kv_get "$scratch" "$tsec.worktree" 2>/dev/null)" == new ]] && twt="$impl-$role" || twt="${twt:-$impl}"
+  f="$twt/.pi/settings.json"
+  if [[ -e "$f" && "$f" != "$drop_pi" ]]; then
+    [[ -z "$(git -C "$twt" ls-files -- .pi/settings.json 2>/dev/null)" ]] || die "$f is tracked by Git; a Pi role cannot use $twt; nothing was changed"
+    [[ "$(jq -cS . "$f" 2>/dev/null)" == "$(ho_pi_settings_json "$(kv_get "$scratch" "$tsec.provider")" "$(kv_get "$scratch" "$tsec.model")" "$(kv_get "$scratch" "$tsec.effort")")" ]] \
+      || die "$f already exists with other settings that this loop did not write; remove it or use --worktree new; nothing was changed"
   fi
 fi
 
-dirs="$(ho_loop_dirs "$dir")"
-oldmode="$(kv_get "$loop" "${role}_template.worktree" 2>/dev/null || echo shared)"
-cat "$scratch" > "$loop" || die "could not write $loop"
-while IFS= read -r d; do
-  [[ "$d" == "$dir" ]] || change_role "$d/loop.yaml"
-  [[ -n "$old" ]] || continue
-  clear="session native_session herdr_tab pending_prompt"
+# Delete the old session before writing: an old reviewer must not record a review after the change (design D2).
+if [[ -n "$old" ]]; then
+  host="$(ho_role_host "$loop" "$key")"
+  why="$(ho_role_close "$host" "$dir" "$key" "$old" "$(kv_get "$loop" "$tsec.harness")" 2>&1)" \
+    || die "the old $role session $old was not closed (${why##*$'\n'}); nothing was changed"
+  if [[ -n "$drop_pi" ]]; then rm -f "$drop_pi"; rmdir "${drop_pi%/settings.json}" 2>/dev/null; fi
+fi
+
+# Write every other copy first and the implementer's loop.yaml last: until it is written it still names the old
+# session, so running the same command again finishes the job.
+clear=""
+if [[ -n "$old" ]]; then
+  clear="session native_session herdr_tab pending_prompt pi_settings"
   [[ "$key" == finish ]] && clear+=" retried_for"
   # A reviewer moving out of the implementer's worktree gets <root>-review from the route.
-  [[ "$key" == reviewer && "$oldmode" != new && -n "$wtmode" ]] && clear+=" worktree"
-  for k in $clear; do kv_get "$d/loop.yaml" "$key.$k" >/dev/null 2>&1 && kv_set "$d/loop.yaml" "$key.$k" ""; done
+  [[ "$key" == reviewer && "$(kv_get "$loop" "$tsec.worktree" 2>/dev/null)" != new && -n "$wtmode" ]] && clear+=" worktree"
+fi
+clear_role() { local k; for k in $clear; do kv_get "$1" "$key.$k" >/dev/null 2>&1 && { kv_set "$1" "$key.$k" "" || return 1; }; done; return 0; }
+rerun="fix that, then run the same handoff-role command again (with --replace)"
+dirs="$(ho_loop_dirs "$dir")"
+while IFS= read -r d; do
+  [[ "$d" == "$dir" ]] && continue
+  change_role "$d/loop.yaml" && clear_role "$d/loop.yaml" \
+    || die "${old:+the old $role session $old was deleted, but }$d/loop.yaml could not be written; $rerun"
 done <<<"$dirs"
-printf '%s role for %s: %s / %s / %s (worktree %s)\n' "$role" "$change" "$(kv_get "$loop" "${role}_template.harness")" \
-  "$(kv_get "$loop" "${role}_template.model")" "$(kv_get "$loop" "${role}_template.effort")" \
-  "$(kv_get "$loop" "${role}_template.worktree" 2>/dev/null || echo shared)"
+clear_role "$scratch" && cat "$scratch" > "$loop.new.$$" && mv "$loop.new.$$" "$loop" \
+  || { rm -f "$loop.new.$$"; die "${old:+the old $role session $old was deleted, but }$loop could not be written; $rerun"; }
+printf '%s role for %s: %s / %s / %s (worktree %s)\n' "$role" "$change" "$(kv_get "$loop" "$tsec.harness")" \
+  "$(kv_get "$loop" "$tsec.model")" "$(kv_get "$loop" "$tsec.effort")" "$(kv_get "$loop" "$tsec.worktree" 2>/dev/null || echo shared)"
 [[ -n "$old" ]] || exit 0
+# A prompt to the old session that herdr did not confirm no longer holds back the new one.
+while IFS= read -r d; do rm -f "$d/$key-unconfirmed.txt"; done <<<"$dirs"
 ho_log "$dir" "handoff-role replaced the $role session $old"
 printf 'Deleted the old %s session %s\n' "$role" "$old"
 
 # Hand the new role the record that waited for the old one (design D3), through the usual paths.
 [[ -n "$rec" ]] || exit 0
-base="$(basename "$rec")"
-if [[ "$role" == review && "$rstate" == implement/done/* ]]; then
-  rdir="$(dirname "$rec")"; wt="$(cd "$rdir/../.." && pwd)"
+base="$(basename "$rec")" rdir="$(dirname "$rec")"
+if [[ "$role" == review && "$rstate" == implement/done/* ]] && grep -qxF "$base" "$rdir/.routed" 2>/dev/null \
+  && grep -qE " $base action=reviewer:(opened|messaged):$old( |\$)" "$rdir/routing.log" 2>/dev/null; then
+  wt="$(cd "$rdir/../.." && pwd)"
   for f in .routed .notified; do
     [[ -f "$rdir/$f" ]] || continue
     grep -vxF "$base" "$rdir/$f" > "$rdir/$f.tmp"; mv "$rdir/$f.tmp" "$rdir/$f"
   done
   if [[ -f "$here/handoff-route" ]]; then route="$here/handoff-route"; else route="$HOME/.config/wk-workflow/handoff/handoff-route"; fi
-  (cd "$wt" && bash "$route" --foreground </dev/null >/dev/null 2>&1)
-  action="$(grep -F " $base action=" "$rdir/routing.log" 2>/dev/null | tail -1 | sed 's/.* action=\([^ ]*\).*/\1/')"
-  case "$action" in
-    reviewer:opened:*) printf 'Handed %s to the new reviewer (%s)\n' "$base" "$action" ;;
-    *) die "the review role was replaced, but $base did not reach the new reviewer (${action:-no route result}); see $rdir/routing.log, then retry in $wt with: bash $route --foreground" ;;
-  esac
+  n0="$(wc -l < "$rdir/routing.log" 2>/dev/null || echo 0)"
+  # The route finds its worktree in CLAUDE_PROJECT_DIR before the working directory: point both at the record's.
+  (cd "$wt" && CLAUDE_PROJECT_DIR="$wt" bash "$route" --foreground </dev/null >/dev/null 2>&1)
+  action="$(tail -n +$((n0 + 1)) "$rdir/routing.log" 2>/dev/null | grep -F " $base action=" | tail -1 | sed 's/.* action=\([^ ]*\).*/\1/')"
+  if [[ "$action" == reviewer:opened:* ]]; then printf 'Handed %s to the new reviewer (%s)\n' "$base" "$action"; exit 0; fi
+  # Whatever stopped it, the record stays unprocessed so that a retry hands it over.
+  [[ -f "$rdir/.routed" ]] && { grep -vxF "$base" "$rdir/.routed" > "$rdir/.routed.tmp"; mv "$rdir/.routed.tmp" "$rdir/.routed"; }
+  die "the review role was replaced, but $base did not reach the new reviewer (${action:-no route result}); see $rdir/routing.log, then retry in $wt with: bash $route --foreground"
 elif [[ "$role" == finish && ( "$rstate" == finish/blocked/* || "$rstate" == review/done/pass ) ]]; then
   rmdir "$dir"/.finish-retry-* 2>/dev/null
   if out="$("$here/handoff-finish" "$change" 2>&1)"; then
@@ -123,6 +159,9 @@ elif [[ "$role" == finish && ( "$rstate" == finish/blocked/* || "$rstate" == rev
     printf '%s\n' "$out"
   else
     ho_log "$dir" "$base action=finish:open-failed trigger=handoff-role"
+    ho_notify "$(jq -nc --arg c "$change" --arg r "$(kv_get "$rec" round)" --arg h "$(kv_get "$rec" head | cut -c1-7)" --arg w "$dir" \
+      '{change:$c, round:$r, commit:$h, agent:"", session_id:"", cwd:$w}')" attention "" "原因排除後執行：handoff-finish $change" \
+      "已更換收尾角色，但無法開啟新的收尾 Session：${out##*$'\n'}"
     die "the finish role was replaced, but no finish session opened (${out##*$'\n'}); retry with: handoff-finish $change"
   fi
 fi

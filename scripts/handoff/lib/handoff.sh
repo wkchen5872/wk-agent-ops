@@ -162,6 +162,15 @@ ho_xirp_project_id() {
   xirp project list --json 2>/dev/null | jq -r --arg p "$path" '[.[] | select(.path == $p)][0].id // empty' 2>/dev/null
 }
 
+# ho_xirp_listed <id>: 0 when Xirp lists the session, 1 when it answers without it, 2 when it cannot answer.
+ho_xirp_listed() {
+  local out
+  out="$(xirp session list --json 2>/dev/null)" || return 2
+  jq -e 'type == "array" or (type == "object" and has("sessions"))' <<<"$out" >/dev/null 2>&1 || return 2
+  jq -e --arg id "$1" '(if type == "array" then . else .sessions end) | any(.id == $id)' <<<"$out" >/dev/null 2>&1 && return 0
+  return 1
+}
+
 ho_xirp_ids_named() {
   xirp session list --search "$1" --json 2>/dev/null \
     | jq -r --arg n "$1" '(if type == "array" then . else (.sessions // []) end)[] | select((.name // "") == $n) | .id' 2>/dev/null
@@ -246,13 +255,29 @@ ho_host_exists() {
   esac
 }
 
-# ho_host_close <host> <loop-dir> <role> <session> [tab]: delete or close what the loop opened for the role.
-# With "tab", herdr closes only the role's tab: replacing one role must not end the others in its workspace.
+# ho_host_close <host> <loop-dir> <role> <session>: delete or close what the loop opened for the role.
 ho_host_close() {
   case "$1" in
     xirp) xirp session delete "$4" --yes >/dev/null 2>&1 ;;
-    herdr) ho_herdr_close "$2" "$3" "${5:-}" ;;
+    herdr) ho_herdr_close "$2" "$3" ;;
     *) return 1 ;;
+  esac
+}
+
+# ho_role_close <host> <loop-dir> <role> <session> <harness>: end one role's session for handoff-role. Succeeds
+# only when the host deleted or closed it, or confirms it is gone; anything it cannot confirm fails (stderr says why).
+ho_role_close() {
+  local rc
+  case "$1" in
+    xirp)
+      xirp session delete "$4" --yes >/dev/null 2>&1 && return 0
+      ho_xirp_listed "$4"; rc=$?
+      (( rc == 1 )) && return 0
+      if (( rc == 0 )); then ho_err "Xirp did not delete session $4 and still lists it"
+      else ho_err "Xirp did not delete session $4 and could not say whether it still exists"; fi
+      return 1 ;;
+    herdr) ho_herdr_close_role "$2" "$3" "$4" "$5" ;;
+    *) ho_err "unknown host: $1"; return 1 ;;
   esac
 }
 
@@ -465,17 +490,44 @@ ho_herdr_close_target() {
   else printf 'tab %s\n' "$tab"; fi
 }
 
-# ho_herdr_close <loop-dir> <role> [tab]: close that target (with "tab", only the role's tab); closing it ends
-# the agents in it. Succeeds only when herdr confirms the close or reports the target gone (closed earlier),
-# so cleanup can stop otherwise.
+# ho_herdr_close <loop-dir> <role>: close that target; closing it ends the agents in it. Succeeds only
+# when herdr confirms the close or reports the target gone (closed earlier), so cleanup can stop otherwise.
 ho_herdr_close() {
   local t out code
   t="$(ho_herdr_close_target "$1" "$2")" || return 0
-  [[ "${3:-}" == tab ]] && t="tab $(kv_get "$1/loop.yaml" "$2.herdr_tab")"
   out="$(ho_herdr "$(ho_herdr_session_of "$1" "$2")" "${t% *}" close "${t#* }")" && return 0
   code="$(ho_herdr_code "$out")"
   [[ "$code" == "${t% *}_not_found" ]] && return 0
   ho_err "herdr could not close $t: ${code:-no answer}"; return 1
+}
+
+# ho_herdr_close_role <loop-dir> <role> <pane> <harness>: close only the role's own tab, the one the loop opened,
+# and only while its pane still runs the role's agent (same harness and, when recorded, native session) or no
+# agent. Another workspace's roles are left alone. A pane herdr reports gone needs nothing.
+ho_herdr_close_role() {
+  local dir="$1" role="$2" pane="$3" h="$4" hs tab out code have want
+  hs="$(ho_herdr_session_of "$dir" "$role")"
+  if ! out="$(ho_herdr "$hs" pane get "$pane")"; then
+    code="$(ho_herdr_code "$out")"; [[ "$code" == pane_not_found ]] && return 0
+    ho_err "herdr could not say where pane $pane is (${code:-no answer}); nothing was closed"; return 1
+  fi
+  tab="$(kv_get "$dir/loop.yaml" "$role.herdr_tab" 2>/dev/null)"
+  if [[ -z "$tab" || "$(jq -r '.result.pane.tab_id // empty' <<<"$out")" != "$tab" ]]; then
+    ho_err "pane $pane is not in a tab the loop opened for the $role (recorded tab: ${tab:-none}); nothing was closed. Stop or close it yourself, then run this again"
+    return 1
+  fi
+  if out="$(ho_herdr "$hs" agent get "$pane")"; then
+    have="$(jq -r '.result.agent.agent // empty' <<<"$out")"
+    [[ "$have" == "$h" ]] || { ho_err "pane $pane now runs ${have:-an unknown agent}, not the $role's $h; nothing was closed"; return 1; }
+    want="$(kv_get "$dir/loop.yaml" "$role.native_session" 2>/dev/null)"; have="$(jq -r '.result.agent.agent_session.value // empty' <<<"$out")"
+    [[ -z "$want" || "$have" == "$want" ]] \
+      || { ho_err "pane $pane runs native session ${have:-unknown}, not the $role's $want; nothing was closed"; return 1; }
+  elif [[ "$(ho_herdr_code "$out")" != agent_not_found ]]; then
+    ho_err "herdr could not say what pane $pane runs ($(ho_herdr_code "$out")); nothing was closed"; return 1
+  fi
+  out="$(ho_herdr "$hs" tab close "$tab")" && return 0
+  code="$(ho_herdr_code "$out")"; [[ "$code" == tab_not_found ]] && return 0
+  ho_err "herdr could not close tab $tab: ${code:-no answer}"; return 1
 }
 
 # --- templates -------------------------------------------------------------------
@@ -570,17 +622,18 @@ ho_retool() {
 
 # ho_apply_override <file> <section> <override>: set a role's tool, model, effort, provider and billing from
 # claude|codex:<model>:<effort> or pi:<provider>/<model>:<effort>:<billing> (the caller checks the form).
+# Fails when the file could not be written.
 ho_apply_override() {
   local file="$1" sec="$2" ov="$3" h m e b="" p="" old k v
   IFS=: read -r h m e b <<<"$ov"
   if [[ "$h" == pi ]]; then p="${m%%/*}"; m="${m#*/}"; else b=""; fi
   old="$(kv_get "$file" "$sec.harness" 2>/dev/null || true)"
-  kv_set "$file" "$sec.harness" "\"$h\""; kv_set "$file" "$sec.model" "\"$m\""; kv_set "$file" "$sec.effort" "\"$e\""
-  kv_set "$file" "$sec.provider" "${p:+\"$p\"}"; kv_set "$file" "$sec.billing" "${b:+\"$b\"}"
+  kv_set "$file" "$sec.harness" "\"$h\"" && kv_set "$file" "$sec.model" "\"$m\"" && kv_set "$file" "$sec.effort" "\"$e\"" \
+    && kv_set "$file" "$sec.provider" "${p:+\"$p\"}" && kv_set "$file" "$sec.billing" "${b:+\"$b\"}" || return 1
   [[ -n "$old" && "$old" != "$h" ]] || return 0
   for k in name prompt; do
     v="$(kv_get "$file" "$sec.$k" 2>/dev/null)" || continue
-    kv_set "$file" "$sec.$k" "\"$(ho_retool "$old" "$h" "$k" "$v")\""
+    kv_set "$file" "$sec.$k" "\"$(ho_retool "$old" "$h" "$k" "$v")\"" || return 1
   done
 }
 
@@ -746,11 +799,22 @@ ho_pi_settings_cleanup() {
   rm -f "$f"; rmdir "$2/.pi" 2>/dev/null; printf 'Removed %s\n' "$f"
 }
 
-# ho_pi_record_check <loop.yaml> <record>: a record of a Pi role must match its template.
+# ho_record_tsec <loop.yaml> <record>: the template a record answers to. handoff-role keeps the template it
+# replaces as <role>_template_until_<NN> for the records numbered below NN; later records use the current one.
+ho_record_tsec() {
+  local sec n k
+  sec="$(kv_get "$2" role 2>/dev/null)_template"; n=$((10#$(basename "$2" | cut -c1-2)))
+  for k in $(sed -n "s/^${sec}_until_\([0-9][0-9]\):[[:space:]]*\$/\1/p" "$1" | sort); do
+    (( 10#$k > n )) && { printf '%s_until_%s\n' "$sec" "$k"; return 0; }
+  done
+  printf '%s\n' "$sec"
+}
+
+# ho_pi_record_check <loop.yaml> <record>: a record of a Pi role must match the template it answers to.
 # Prints each mismatch and fails; other harnesses always pass.
 ho_pi_record_check() {
   local loop="$1" rec="$2" sec k want got out=""
-  sec="$(kv_get "$rec" role 2>/dev/null)_template"
+  sec="$(ho_record_tsec "$loop" "$rec")"
   [[ "$(kv_get "$loop" "$sec.harness" 2>/dev/null)" == pi ]] || return 0
   if [[ "$(kv_get "$rec" agent.harness 2>/dev/null)" != pi ]]; then echo "交件單沒有 Pi 的 agent 區塊"; return 1; fi
   for k in provider model effort billing; do
@@ -1007,6 +1071,13 @@ ho_finish_retry() {
     if (( rc == 0 || rc == 2 )); then ho_loop_set "$dir" finish.retried_for "$base"; else rmdir "$claim"; fi
     (( rc == 0 )) || { echo "could not message finish session $id"; return 1; }
   else
+    # A finish that ran in the implementer's worktree and now has worktree new moves there, with the branch.
+    if [[ "$(kv_get "$loop" finish_template.worktree 2>/dev/null)" == new && "$wt" == "$(kv_get "$loop" implementer.worktree)" ]]; then
+      if ! wt="$(ho_finish_worktree "$dir" "$wt" "$change" "$(ho_head "$wt")" 2>&1)"; then
+        rmdir "$claim"; echo "${wt##*$'\n'}"; return 1
+      fi
+      wt="${wt##*$'\n'}"
+    fi
     id="$(ho_open_role "$dir" finish_template "$wt" "$(ho_head "$wt")" "$(kv_get "$rec" round)" "")"; rc=$?
     if (( rc == 0 || rc == 2 )); then ho_loop_set "$dir" finish.retried_for "$base"; else rmdir "$claim"; fi
     (( rc == 0 )) || { echo "could not open a finish session"; return 1; }
@@ -1038,6 +1109,25 @@ ho_finish_prepared() {
     && "$(kv_get "$copy" finish.worktree 2>/dev/null)" == "$wt" ]]
 }
 
+# ho_finish_worktree <loop-dir> <implementer-worktree> <change> <head>: the finish worktree of a finish role with
+# worktree new; prints its path. A new one takes over feature/<change> while the implementer worktree is detached
+# at <head>. A retry after a failed open reuses only the clean finish worktree this loop prepared on the feature
+# branch at <head>; anything else is left untouched. The record and the copy are written (again) either way.
+ho_finish_worktree() {
+  local dir="$1" impl="$2" change="$3" head="$4" wt="$2-finish"
+  if [[ -d "$wt" ]]; then
+    ho_finish_prepared "$dir/loop.yaml" "$wt" "$change" "$impl" && [[ "$(git -C "$wt" branch --show-current 2>/dev/null)" == "feature/$change" \
+      && "$(ho_head "$wt")" == "$head" ]] && ho_clean "$wt" \
+      || { ho_err "cannot reuse the finish worktree $wt"; return 1; }
+  else
+    git -C "$impl" checkout -q --detach "$head" || { ho_err "cannot detach the implementer worktree"; return 1; }
+    git -C "$impl" worktree add -q "$wt" "feature/$change" 2>/dev/null \
+      || { git -C "$impl" checkout -q "feature/$change"; ho_err "cannot create the finish worktree $wt"; return 1; }
+  fi
+  ho_finish_record "$dir" "$wt" "$change" || return 1
+  printf '%s\n' "$wt"
+}
+
 ho_finish_open() {
   local dir="$1" loop="$1/loop.yaml" head impl mode wt change id round
   head="$(ho_finish_check "$dir")" || { ho_err "cannot finish: $head"; return 1; }
@@ -1052,22 +1142,7 @@ ho_finish_open() {
   impl="$(kv_get "$loop" implementer.worktree)"; change="$(kv_get "$loop" change)"
   mode="$(kv_get "$loop" finish_template.worktree 2>/dev/null || echo shared)"
   wt="$impl"
-  if [[ "$mode" == new && -d "${impl}-finish" ]]; then
-    # A retry after a failed open: reuse only the clean finish worktree this loop prepared
-    # on the feature branch at the passing commit; anything else is left untouched.
-    wt="${impl}-finish"
-    ho_finish_prepared "$loop" "$wt" "$change" "$impl" && [[ "$(git -C "$wt" branch --show-current 2>/dev/null)" == "feature/$change" \
-      && "$(ho_head "$wt")" == "$head" ]] && ho_clean "$wt" \
-      || { ho_err "cannot reuse the finish worktree $wt"; return 1; }
-    # An earlier attempt may have left the record or the copy incomplete: write both again.
-    ho_finish_record "$dir" "$wt" "$change" || return 1
-  elif [[ "$mode" == new ]]; then
-    wt="${impl}-finish"
-    git -C "$impl" checkout -q --detach "$head" || { ho_err "cannot detach the implementer worktree"; return 1; }
-    git -C "$impl" worktree add -q "$wt" "feature/$change" 2>/dev/null \
-      || { git -C "$impl" checkout -q "feature/$change"; ho_err "cannot create the finish worktree $wt"; return 1; }
-    ho_finish_record "$dir" "$wt" "$change" || return 1
-  fi
+  if [[ "$mode" == new ]]; then wt="$(ho_finish_worktree "$dir" "$impl" "$change" "$head")" || return 1; fi
   round="$(kv_get "$(ho_newest_in_loop "$dir")" round)"
   id="$(ho_open_role "$dir" finish_template "$wt" "$head" "$round" "")" || return 1
   ho_loop_set "$dir" finish.session "$id"

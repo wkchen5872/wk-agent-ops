@@ -255,8 +255,8 @@ case "$1 $2" in
     json="$5"; n=$(( $(cat "$S/count" 2>/dev/null || echo 0) + 1 )); echo "$n" > "$S/count"
     printf '%s\n' "$json" > "$S/create-$n.json"
     jq -c --arg id "sess-$n" '{id:$id, name:.customName}' <<<"$json" >> "$S/sessions"; echo '{}' ;;
-  "session list") if [[ -s "$S/sessions" ]]; then jq -s '.' "$S/sessions"; else echo '[]'; fi ;;
-  "session get") [[ "$3" == missing-* ]] && exit 1
+  "session list") [[ -e "$S/list-fail" ]] && exit 1; if [[ -s "$S/sessions" ]]; then jq -s '.' "$S/sessions"; else echo '[]'; fi ;;
+  "session get") [[ "$3" == missing-* || -e "$S/get-fail" ]] && exit 1
     if [[ -f "$S/session.json" ]]; then jq --arg id "$3" '. + {id:$id}' "$S/session.json"
     else jq -n --arg id "$3" '{id:$id, currentAgent:"claude", model:"fake-model", agentLaunchOptions:{agentName:"claude", options:{model:"opus", effort:"high"}}}'; fi ;;
   "session message") [[ -e "$S/msg-fail" ]] && exit 1; printf '%s\t%s\n' "$3" "$4" >> "$S/messages" ;;
@@ -1117,6 +1117,18 @@ if run_section finish; then
   [[ "$rc" == 0 && "$(created)" == 0 && "$(kv_get "$RP/.agent-handoff/add-export/loop.yaml" finish_template.harness)" == claude ]] \
     && ok "a passing review whose finish has not opened only changes the finish role" || { bad "a passing review whose finish has not opened only changes the finish role"; printf '       %s\n' "$out"; }
 
+  RW="$tmp/fin-replace-move"; retry_loop "$RW" fin-9; use_project "$RW"; fresh_state f20; XW="$(git -C "$RW" rev-parse HEAD)"
+  out="$(role_in "$RW" add-export finish claude:sonnet:high --worktree new --replace 2>&1)"; rc=$?
+  [[ "$rc" == 0 && -d "$RW-finish" && "$(git -C "$RW-finish" branch --show-current)" == feature/add-export && "$(git -C "$RW-finish" rev-parse HEAD)" == "$XW" \
+    && "$(kv_get "$RW/.agent-handoff/add-export/loop.yaml" finish.worktree)" == "$RW-finish" && "$(created)" == 1 ]] \
+    && jq -e --arg w "$RW-finish" '.worktreePath==$w' "$FAKE_XIRP_DIR/create-1.json" >/dev/null 2>&1 \
+    && ok "a blocked shared finish moved to its own worktree resumes there on the feature branch (codex-role-review-r01/F-08)" || { bad "a blocked shared finish moved to its own worktree resumes there on the feature branch (codex-role-review-r01/F-08)"; printf '       %s\n' "$out"; }
+  RF="$tmp/fin-replace-fail"; retry_loop "$RF" fin-9; use_project "$RF"; fresh_state f21; touch "$FAKE_XIRP_DIR/create-fail"; n0="$(ncount)"
+  out="$(role_in "$RF" add-export finish claude:sonnet:high --replace 2>&1)"; rc=$?
+  rm -f "$FAKE_XIRP_DIR/create-fail"
+  [[ "$rc" != 0 && "$(( $(ncount) - n0 ))" == 1 ]] && jt '.kind=="attention"' && grep -q 'handoff-finish add-export' <<<"$out" \
+    && ok "a finish that cannot open after a replacement sends one attention notice" || { bad "a finish that cannot open after a replacement sends one attention notice"; printf '       %s\n' "$out"; }
+
   # Pass recorded in a separate review worktree B; finish runs from A.
   SA="$tmp/fin-sep"; new_loop "$SA" new ask; use_project "$SA"; fresh_state f8; SB="$SA-review"
   commit_in "$SA" impl; hw "$SA" --role implement --status done --head HEAD
@@ -1508,6 +1520,26 @@ if run_section herdr; then
   [[ "$rc" == 0 && -z "$(kv_get "$q9l" reviewer.session)" && -z "$(kv_get "$q9l" reviewer.herdr_tab)" && -z "$(kv_get "$q9l" reviewer.native_session)" ]] \
     && grep -q '^tab close w2:t2 ' "$(HS)/closed" 2>/dev/null && ! grep -q '^workspace close' "$(HS)/closed" \
     && ok "replacing a herdr reviewer closes only its tab and clears its session" || { bad "replacing a herdr reviewer closes only its tab and clears its session"; printf '       %s\n' "$out"; cat "$(HS)/closed" 2>/dev/null | sed 's/^/       /'; }
+  Q10="$tmp/herdr-replace-other"; herdr_project "$Q10"; fresh_state h10; Q10W="$Q10-add-export"; q10l="$Q10W/.agent-handoff/add-export/loop.yaml"
+  start_in "$Q10" add-export >/dev/null 2>&1; commit_in "$Q10W" impl; hw "$Q10W" --role implement --status done --head HEAD; route_in "$Q10W" >/dev/null 2>&1
+  wrpt "$Q10W"; hw "$Q10W" --role review --status done --verdict changes-required --head HEAD --report r.md
+  printf 'other-session\n' > "$(HS)/native-w2:p2"; s0="$(cksum < "$q10l")"
+  out="$(role_in "$Q10W" add-export review codex:gpt-6.2-sol:high --replace 2>&1)"; rc=$?
+  [[ "$rc" != 0 && "$(cksum < "$q10l")" == "$s0" && ! -s "$(HS)/closed" ]] && grep -q 'native' <<<"$out" \
+    && ok "a herdr reviewer pane that now runs another session is not closed (codex-role-review-r01/F-02)" || { bad "a herdr reviewer pane that now runs another session is not closed (codex-role-review-r01/F-02)"; printf '       %s\n' "$out"; }
+  rm -f "$(HS)/native-w2:p2"; lset "$q10l" reviewer.herdr_tab ""; s0="$(cksum < "$q10l")"
+  out="$(role_in "$Q10W" add-export review codex:gpt-6.2-sol:high --replace 2>&1)"; rc=$?
+  [[ "$rc" != 0 && "$(cksum < "$q10l")" == "$s0" && ! -s "$(HS)/closed" ]] && grep -q 'tab' <<<"$out" \
+    && ok "a herdr reviewer without a recorded tab is not closed (codex-role-review-r01/F-02)" || { bad "a herdr reviewer without a recorded tab is not closed (codex-role-review-r01/F-02)"; printf '       %s\n' "$out"; }
+  Q11="$tmp/herdr-fin-replace"; herdr_project "$Q11"; fresh_state h11; Q11W="$Q11-add-export"; q11l="$Q11W/.agent-handoff/add-export/loop.yaml"
+  start_in "$Q11" add-export >/dev/null 2>&1; commit_in "$Q11W" impl; hw "$Q11W" --role implement --status done --head HEAD
+  wrpt "$Q11W"; hw "$Q11W" --role review --status done --verdict pass --head HEAD --report r.md
+  touch "$(HS)/prompt-timeout"; finish_in "$Q11W" add-export >/dev/null 2>&1; rm -f "$(HS)/prompt-timeout"; fp="$(kv_get "$q11l" finish.session)"
+  out="$(role_in "$Q11W" add-export finish codex:gpt-6.2-sol:high --replace 2>&1)"; rc=$?
+  np="$(kv_get "$q11l" finish.session)"
+  [[ -n "$fp" && "$rc" == 0 && -n "$np" && "$np" != "$fp" && ! -e "$Q11W/.agent-handoff/add-export/finish-unconfirmed.txt" \
+    && "$(herdr_prompts | grep -c "^$np"$'\t')" == 1 ]] && grep -q '^tab close' "$(HS)/closed" \
+    && ok "replacing a finish role whose prompt herdr did not confirm opens the new one with one prompt (codex-role-review-r01/F-05)" || { bad "replacing a finish role whose prompt herdr did not confirm opens the new one with one prompt (codex-role-review-r01/F-05)"; printf '       %s\n' "$out"; }
 fi
 
 # ---------------------------------------------------------------- user-level installer and README
@@ -2243,6 +2275,71 @@ SH
   [[ "$rc" == 0 && "$(kv_get "$rl" finish_template.worktree)" == new && "$(kv_get "$rl" finish_template.harness)" == pi \
     && "$(kv_get "$rl" finish_template.model)" == gpt-6.2-sol && "$(kv_get "$rl" finish_template.provider)" == openai-codex ]] \
     && ok "--worktree new alone changes only the role's worktree" || { bad "--worktree new alone changes only the role's worktree"; printf '       %s\n' "$out"; }
+
+  # Round 2 (codex-role-review-r01)
+  ROUTE_FG() { (cd "$1" && HOME="$PI_HOME" PATH="$FAKES:$PATH" HANDOFF_NOTIFY="$FAKES/notify.sh" HANDOFF_CREATE_WAIT=2 CLAUDE_PROJECT_DIR="$1" "$ROUTE" --foreground </dev/null >/dev/null 2>&1); }
+  open_reviewer; s0="$(sum "$rl")"; touch "$FAKE_XIRP_DIR/get-fail" "$FAKE_XIRP_DIR/delete-fail" "$FAKE_XIRP_DIR/list-fail"
+  out="$(prole "$PW" add-export review pi:openai/gpt-6.2-sol:medium:api --worktree new --replace 2>&1)"; rc=$?
+  rm -f "$FAKE_XIRP_DIR/get-fail" "$FAKE_XIRP_DIR/delete-fail" "$FAKE_XIRP_DIR/list-fail"
+  [[ "$rc" != 0 && "$(sum "$rl")" == "$s0" && "$(created)" == 2 ]] && grep -q 'sess-2' <<<"$out" \
+    && ok "a replacement whose old session Xirp neither deletes nor confirms gone keeps loop.yaml (codex-role-review-r01/F-01)" \
+    || { bad "a replacement whose old session Xirp neither deletes nor confirms gone keeps loop.yaml (codex-role-review-r01/F-01)"; printf '       %s\n' "$out"; }
+  open_reviewer; wrpt "$PW"; hw "$PW" --role review --status done --verdict changes-required --head HEAD --report r.md; touch "$FAKE_XIRP_DIR/get-fail"
+  out="$(prole "$PW" add-export review codex:gpt-6.2-sol:high --replace 2>&1)"; rc=$?; rm -f "$FAKE_XIRP_DIR/get-fail"
+  [[ "$rc" == 0 && "$(deleted)" == sess-2 && -z "$(kv_get "$rl" reviewer.session)" ]] \
+    && ok "a failed Xirp lookup does not skip deleting the old session (codex-role-review-r01/F-01)" || { bad "a failed Xirp lookup does not skip deleting the old session (codex-role-review-r01/F-01)"; printf '       %s\n' "$out"; }
+  open_reviewer; wrpt "$PW"; hw "$PW" --role review --status done --verdict changes-required --head HEAD --report r.md; lset "$rl" reviewer.session missing-9
+  out="$(prole "$PW" add-export review codex:gpt-6.2-sol:high --replace 2>&1)"; rc=$?
+  [[ "$rc" == 0 && -z "$(kv_get "$rl" reviewer.session)" && -z "$(deleted)" ]] \
+    && ok "a replacement goes ahead when Xirp no longer lists the old session (codex-role-review-r01/F-01)" || { bad "a replacement goes ahead when Xirp no longer lists the old session (codex-role-review-r01/F-01)"; printf '       %s\n' "$out"; }
+  open_reviewer; OTHER="$tmp/pi-elsewhere"; rm -rf "$OTHER"; new_repo "$OTHER"
+  out="$(export CLAUDE_PROJECT_DIR="$OTHER"; prole "$PW" add-export review pi:openai/gpt-6.2-sol:medium:api --worktree new --replace 2>&1)"; rc=$?
+  [[ "$rc" == 0 && "$(created)" == 3 && "$(kv_get "$rl" reviewer.session)" == sess-3 ]] \
+    && ok "the hand-off routes the record's own worktree when CLAUDE_PROJECT_DIR names another (codex-role-review-r01/F-03)" || { bad "the hand-off routes the record's own worktree when CLAUDE_PROJECT_DIR names another (codex-role-review-r01/F-03)"; printf '       %s\n' "$out"; }
+  open_reviewer; commit_in "$PW" impl2; printf 'x\n' > "$PW/dirty.txt"; hw "$PW" --role implement --status done --head HEAD; HOME="$PI_HOME" route_in "$PW" >/dev/null 2>&1; rm -f "$PW/dirty.txt"
+  out="$(prole "$PW" add-export review codex:gpt-6.2-sol:high --replace 2>&1)"; rc=$?
+  [[ "$rc" == 0 && "$(created)" == 2 && -z "$(kv_get "$rl" reviewer.session)" ]] && routed "$PW" 02-implement.yaml \
+    && ok "a record that never reached the old reviewer is not handed to the new one (codex-role-review-r01/F-03)" || { bad "a record that never reached the old reviewer is not handed to the new one (codex-role-review-r01/F-03)"; printf '       %s\n' "$out"; }
+  open_reviewer; git -C "$PW" worktree add -q --detach "$PW-review" HEAD; printf 'x\n' > "$PW-review/stray.txt"
+  out="$(prole "$PW" add-export review pi:openai/gpt-6.2-sol:medium:api --worktree new --replace 2>&1)"; rc=$?
+  rm -f "$PW-review/stray.txt"; r1="$rc"; ROUTE_FG "$PW"
+  [[ "$r1" != 0 && "$(kv_get "$rl" reviewer.session)" == sess-3 ]] && grep -q 'handoff-route --foreground' <<<"$out" \
+    && ok "a hand-off stopped by an unclean review worktree is retried after the worktree is cleaned (codex-role-review-r01/F-03)" || { bad "a hand-off stopped by an unclean review worktree is retried after the worktree is cleaned (codex-role-review-r01/F-03)"; printf '       %s\n' "$out"; }
+  open_reviewer; chmod 555 "$PW/.agent-handoff/add-export"
+  out="$(prole "$PW" add-export review pi:openai/gpt-6.2-sol:medium:api --worktree new --replace 2>&1)"; rc=$?
+  chmod 755 "$PW/.agent-handoff/add-export"
+  [[ "$rc" != 0 && "$(deleted)" == sess-2 && "$(created)" == 2 ]] && grep -qF -- '--replace' <<<"$out" \
+    && ok "a loop.yaml write that fails after the deletion exits non-zero and names the rerun (codex-role-review-r01/F-04)" || { bad "a loop.yaml write that fails after the deletion exits non-zero and names the rerun (codex-role-review-r01/F-04)"; printf '       %s\n' "$out"; }
+  out="$(prole "$PW" add-export review pi:openai/gpt-6.2-sol:medium:api --worktree new --replace 2>&1)"; rc=$?
+  [[ "$rc" == 0 && "$(kv_get "$rl" reviewer.session)" == sess-3 ]] \
+    && ok "rerunning the replacement after a failed write hands the round to the new reviewer (codex-role-review-r01/F-04)" || { bad "rerunning the replacement after a failed write hands the round to the new reviewer (codex-role-review-r01/F-04)"; printf '       %s\n' "$out"; }
+  pi_project "$CX_IMPL" "$(role_block review codex gpt-6.1-sol high worktree=new)" "$CX_FIN"; pstart "$PD" add-export >/dev/null 2>&1; rl="$PW/.agent-handoff/add-export/loop.yaml"
+  commit_in "$PW" impl; hw "$PW" --role implement --status done --head HEAD; HOME="$PI_HOME" route_in "$PW" >/dev/null 2>&1
+  chmod 555 "$PW-review/.agent-handoff/add-export"
+  out="$(prole "$PW" add-export review codex:gpt-6.2-sol:high --replace 2>&1)"; rc=$?
+  chmod 755 "$PW-review/.agent-handoff/add-export"
+  [[ "$rc" != 0 && "$(created)" == 2 && "$(kv_get "$rl" reviewer.session)" == sess-2 ]] && grep -qF -- '--replace' <<<"$out" \
+    && ok "a failed write to another loop.yaml copy keeps the old session recorded for a rerun (codex-role-review-r01/F-04)" || { bad "a failed write to another loop.yaml copy keeps the old session recorded for a rerun (codex-role-review-r01/F-04)"; printf '       %s\n' "$out"; }
+  pi_project "$CX_IMPL" "$PI_REV_SHARED" "$CX_FIN"; pstart "$PD" add-export >/dev/null 2>&1; rl="$PW/.agent-handoff/add-export/loop.yaml"
+  commit_in "$PW" impl; hw "$PW" --role implement --status done --head HEAD; HOME="$PI_HOME" route_in "$PW" >/dev/null 2>&1
+  out="$(prole "$PW" add-export review pi:openai-codex/gpt-6.2-sol:medium:subscription --replace 2>&1)"; rc=$?
+  [[ "$rc" == 0 && "$(created)" == 3 && "$(kv_get "$rl" reviewer.session)" == sess-3 ]] && jq -e '.defaultThinkingLevel=="medium"' "$PW/.pi/settings.json" >/dev/null 2>&1 \
+    && ok "a Pi reviewer replaced in the same worktree rewrites the settings the loop wrote (codex-role-review-r01/F-06)" || { bad "a Pi reviewer replaced in the same worktree rewrites the settings the loop wrote (codex-role-review-r01/F-06)"; printf '       %s\n' "$out"; }
+  open_reviewer; px="$(git -C "$PW" rev-parse --path-format=absolute --git-path info/exclude)"; mkdir -p "$(dirname "$px")"; printf '/.pi/settings.json\n' >> "$px"
+  mkdir -p "$PW/.pi"; printf '{"defaultModel":"mine"}\n' > "$PW/.pi/settings.json"; s0="$(sum "$rl")"
+  out="$(prole "$PW" add-export review pi:openai/gpt-6.2-sol:medium:api --replace 2>&1)"; rc=$?
+  [[ "$rc" != 0 && "$(sum "$rl")" == "$s0" && -z "$(deleted)" ]] && grep -q 'settings.json' <<<"$out" \
+    && ok "Pi settings the loop did not write refuse the replacement before the old session is deleted (codex-role-review-r01/F-06)" || { bad "Pi settings the loop did not write refuse the replacement before the old session is deleted (codex-role-review-r01/F-06)"; printf '       %s\n' "$out"; }
+  open_reviewer; wrpt "$PW"; hw "$PW" --role review --status done --verdict pass --head HEAD --report r.md; HOME="$PI_HOME" route_in "$PW" >/dev/null 2>&1
+  out="$(prole "$PW" add-export review pi:openai/gpt-6.2-sol:high:api --replace 2>&1)"; rc=$?
+  fout="$(HOME="$PI_HOME" finish_in "$PW" add-export 2>&1)"; frc=$?
+  [[ "$rc" == 0 && "$frc" == 0 && "$(created)" == 3 && "$(kv_get "$rl" finish.session)" == sess-3 ]] \
+    && ok "a Codex pass recorded before the reviewer became Pi still lets the loop finish (codex-role-review-r01/F-07)" || { bad "a Codex pass recorded before the reviewer became Pi still lets the loop finish (codex-role-review-r01/F-07)"; printf '       %s\n' "$out" "$fout"; }
+  hw "$PW" --role finish --status blocked --head HEAD --note quota
+  out="$(prole "$PW" add-export review pi:openai/gpt-api-only:high:api 2>&1)"; rc=$?
+  fout="$(HOME="$PI_HOME" finish_in "$PW" add-export 2>&1)"; frc=$?
+  [[ "$rc" == 0 && "$frc" == 0 ]] && msgs | grep -q '^sess-3' \
+    && ok "a blocked finish is retried after a further reviewer change (codex-role-review-r01/F-07)" || { bad "a blocked finish is retried after a further reviewer change (codex-role-review-r01/F-07)"; printf '       %s\n' "$out" "$fout"; }
 fi
 
 if [[ "$fail" -ne 0 ]]; then
