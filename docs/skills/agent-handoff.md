@@ -87,6 +87,49 @@ sources:
 
 ---
 
+## 交接迴圈三軸架構：Host × Harness × Model
+
+交接迴圈在底層（`scripts/handoff/lib/handoff.sh`）採用了三軸完全正交的模組化分層設計。這三個維度各自獨立，可在同一個迴圈中自由組合與按角色覆寫：
+
+```text
+┌────────────────────────────────────────────────────────────────────────┐
+│                        交接迴圈三軸正交設計架構                        │
+├────────────────────────────────────────────────────────────────────────┤
+│                                                                        │
+│  【軸 1：Session 宿主 (Host)】                                         │
+│   • xirp       ── 桌面背景程序 / 獨立 Session                          │
+│   • herdr      ── 終端機 UI (Workspace / Tab / Pane)                   │
+│   • herdr-app  ── 桌面 App (Space / Tab，herdr-core terminal 執行)      │
+│   ► 職責：管理視窗排版、程序生命週期、狀態回報與提示詞底層注入         │
+│                                                                        │
+│                                  ▲                                     │
+│                                  │ 正交組合                            │
+│                                  ▼                                     │
+│                                                                        │
+│  【軸 2：CLI 驅動適配層 (Harness)】                                    │
+│   • claude     ── Claude Code CLI (/skill 語法，argv: --model, --effort)│
+│   • codex      ── Codex CLI ($skill 語法，argv: -m, -c reasoning_effort)│
+│   • pi         ── Pi CLI (/skill:name 語法，provider 認證與專屬設定)  │
+│   ► 職責：抹平各 AI CLI 命令列參數、Prompt 語法與 Worktree 鉤子差異     │
+│                                                                        │
+│                                  ▲                                     │
+│                                  │ 正交組合                            │
+│                                  ▼                                     │
+│                                                                        │
+│  【軸 3：執行模型 (Model & Effort)】                                   │
+│   • 模型名稱 (例如: opus, gpt-6.1-sol, openai-codex/gpt-6.2-sol)       │
+│   • 推論強度 (例如: low, medium, high, xhigh)                          │
+│   ► 職責：提供該回合任務所需的推理能力與輸出品質                       │
+│                                                                        │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+- **Host 分派（`ho_host_*`）**：負責開啟、發訊、檢查在線與關閉。不管跑哪種 Agent 工具，宿主只專注管理 Terminal 或視窗。
+- **Harness 適配（`ho_harness_*`）**：集中抹平各 AI 工具的差異（包含 command line argv、skill 呼叫語法、override 格式檢驗、以及 Pi 的 `.pi/settings.json` 與信任掛勾）。
+- **Model 配置**：各角色的模型與推論強度直接傳遞給 Harness 轉換為原生旗標。
+
+---
+
 ## 角色範本配置 (`.agent-handoff/roles.yaml`)
 
 迴圈運作依賴主工作區（Main Worktree）下的 `.agent-handoff/roles.yaml`（該檔案由 `.gitignore` 排除，不納入版本控制）。
@@ -355,7 +398,7 @@ handoff-role <change-id> review pi:openai/gpt-6.2-sol:medium:api --worktree new 
 - **自動適配語法**：自動重寫 Prompt 開頭的 Skill 呼叫（如 Claude `$change-review` 轉 Pi `/skill:change-review`）與 Session 名稱。
 - **嚴格預檢**：呼叫 `handoff-doctor` 執行範本、工具、host 與 Pi 憑證驗證，若不通過則完全不改動現有配置。
 - **`--worktree new`**：將角色移至獨立目錄（`<worktree>-review` 或 `<worktree>-finish`），避免多個 Pi 角色共用工作區的限制。
-- **`--replace` 汰換舊 Session**：
+- **`--replace` 汰換舊 Session**：目前支援 Xirp 與 Herdr TUI（`herdr-app` 角色尚不支援更換，會直接拒絕）。
   1. 透過 host 安全終止舊 Session（Xirp 刪除 Session；Herdr 關閉該角色 Tab/Pane）。
   2. 清空 `loop.yaml` 舊 Session 記錄並寫入新範本（既有歷史交件單結論依然有效）。
 - **自動改送交件單**：

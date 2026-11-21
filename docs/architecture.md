@@ -76,10 +76,13 @@ wk-agent-ops/
 │   └── dotnet/                ← .NET profile; Stryker.NET mutation skill selection
 │
 ├── scripts/
+│   ├── handoff/               ← Multi-agent handoff loop (start, role, finish, cleanup, doctor, route, lib)
 │   ├── skills/install.sh      ← Propagates template/ to .claude/ and target projects
 │   ├── workflow/              ← opsx-branch (global CLI) and its zsh completion
 │   │   └── openspec-branch-creator/  ← PostToolUse hook: auto-creates feature branches
 │   └── notify/telegram/       ← Telegram notification hook setup
+│
+├── tests/                     ← Offline test suites (tests/handoff/*.sh in 16 parallel sections, acceptance bank, etc.)
 │
 ├── openspec/
 │   ├── specs/                 ← Canonical requirements (source of truth for behaviour)

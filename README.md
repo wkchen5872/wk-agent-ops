@@ -274,11 +274,12 @@ bash scripts/user/install-bulk-read-routing.sh
 wk-agent-ops/
 ├── template/                   ← 擴充套件來源（單一維護點）
 ├── scripts/
+│   ├── handoff/                ← Agent 交接迴圈（start, role, finish, cleanup, doctor, route）
 │   ├── notify/                 ← 通知系統共用庫與 Telegram 實作
 │   ├── skills/
 │   │   └── install.sh          ← 安裝擴充套件到目標專案
 │   └── workflow/               ← opsx-branch 與 branch hook
-├── tests/                      ← installer 與規範的行為測試
+├── tests/                      ← installer、規範測試、tests/handoff/ 16 個平行區段與驗收題庫
 ├── docs/
 │   ├── workflow/               ← 多 Agent 協作與 Commit 流程說明
 │   ├── notify/                 ← 通知系統架構與 Telegram 安裝說明
