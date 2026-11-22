@@ -1044,11 +1044,14 @@ ho_skill_prefix() {
   printf '%s' "$best"
 }
 
+# Skills the bundled role templates call inside a prompt, after its leading call. Only these are
+# switched there, so literal paths and variables such as /tmp or $branch stay as written.
+HANDOFF_EMBEDDED_SKILLS="git-commit-writer"
+
 # ho_retool <old-tool> <new-tool> <name|prompt> <text>: a session name that starts with "<old-tool> - "
 # and the skill calls in a prompt (/x Claude Code, $x Codex, /skill:x Pi) follow the new tool: the call the
-# prompt starts with, and every later space-separated word that is exactly a skill call (such as
-# "/git-commit-writer" in "用 /git-commit-writer 提交").
-# ponytail: a later one-segment word like "/tmp" also counts as a call; multi-segment paths do not.
+# prompt starts with, and every later space-separated word that is exactly a call to one of
+# HANDOFF_EMBEDDED_SKILLS (such as "/git-commit-writer" in "用 /git-commit-writer 提交").
 ho_retool() {
   local old="$1" new="$2" kind="$3" text="$4" skill="" best out="" word rest
   if [[ "$kind" == name ]]; then
@@ -1058,12 +1061,12 @@ ho_retool() {
   best="$(ho_skill_prefix "$text")"
   [[ -n "$best" ]] && skill="${text#"$best"}"
   if [[ "$skill" =~ ^[a-z0-9] ]]; then text="$(ho_harness_skill "$new" "$skill")" || text="$4"; fi
-  # Later words: keep the first word (handled above) and the spacing; rewrite whole-word skill calls.
+  # Later words: keep the first word (handled above) and the spacing; rewrite whole-word embedded skill calls.
   [[ "$text" == *" "* ]] || { printf '%s' "$text"; return 0; }
   out="${text%%" "*}"; rest="${text#*" "}"
   while :; do
     word="${rest%%" "*}"; best="$(ho_skill_prefix "$word")"; skill="${word#"$best"}"
-    if [[ -n "$best" && "$skill" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then word="$(ho_harness_skill "$new" "$skill")"; fi
+    if [[ -n "$best" && " $HANDOFF_EMBEDDED_SKILLS " == *" $skill "* ]]; then word="$(ho_harness_skill "$new" "$skill")"; fi
     out+=" $word"
     [[ "$rest" == *" "* ]] || break
     rest="${rest#*" "}"

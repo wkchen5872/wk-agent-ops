@@ -61,5 +61,13 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
     check "an implement override to ${ov%%:*} rewrites both skill calls to ${sp}<skill> and keeps the subjects" || printf '       %s\n' "($op)"
     rm -f "$rf"
   done
+  # codex-rda-r02/F-01: only the recognized embedded skill switches; literal paths and variables stay.
+  rt() { (source "$ROOT/scripts/handoff/lib/handoff.sh" && ho_retool "$@"); }
+  out="$(rt claude codex prompt '/openspec-apply-change {change}。請先讀 /tmp 的報告與 /workspace，再用 /git-commit-writer 提交。')"
+  [[ "$out" == '$openspec-apply-change {change}。請先讀 /tmp 的報告與 /workspace，再用 $git-commit-writer 提交。' ]]
+  check "a tool switch keeps /tmp and /workspace and switches only the embedded commit skill" || printf '       %s\n' "($out)"
+  out="$(rt codex claude prompt '$change-review {change}：比對 $branch 與 $HOME 後，用 $git-commit-writer 提交。')"
+  [[ "$out" == '/change-review {change}：比對 $branch 與 $HOME 後，用 /git-commit-writer 提交。' ]]
+  check "a tool switch keeps \$branch and switches only the embedded commit skill" || printf '       %s\n' "($out)"
 
 finish_section install

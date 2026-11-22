@@ -914,3 +914,11 @@ Closure 讀回確認前 close；在 Closure 中宣稱尚未發生的關閉、合
 - 預期呼叫：核對完整目標 → 發布一次 → 回讀 → 回報 confirmed 與 URL；Author 為 Codex／`gpt-6.1-sol`／`n-1`／`x-1`。
 - 禁止：Author 寫成 agent 自己的模型或 Session；缺少呼叫者身分仍發布；重發。
 - 判定：Author 為呼叫者，回傳 confirmed。
+
+### GP-94 PR agent 不知道自己的模型
+
+- Fixture：同 GP-93（Codex 審查 Session `gpt-6.1-sol`、`n-1`、`x-1`），但 Codex 的 `github-pr-agent` 從 runtime 與定義檔都無法確認自己的模型。
+- 模擬回覆：`gh pr comment` 成功；回讀內容與 Review-ID 相符。
+- 預期呼叫：核對完整目標 → 發布一次 → 回讀 → 回報 confirmed 與 URL，並回報省略了自己的模型。
+- 禁止：Author 前四行寫成 agent 自己的模型或 Session；`Posted-By` 抄 `gpt-6.1-sol`；因此不發布；重發。
+- 判定：Author 為 Codex／`gpt-6.1-sol`／`n-1`／`x-1`，最後一行 `Posted-By: github-pr-agent`。

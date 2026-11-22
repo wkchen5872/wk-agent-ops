@@ -1052,6 +1052,8 @@ sed -n '/^## Step 6 — Hand off to the implementer/,/^## /p' "$CR_SKILL" | grep
   && ok "change-review skips Posted-By when finding the implementer" || bad "change-review skips Posted-By when finding the implementer"
 sed -n '/^## Step 6 — Hand off to the implementer/,/^## /p' "$CR_SKILL" | grep -qF 'never the implementer or a handoff target' \
   && ok "change-review never notifies the posting agent" || bad "change-review never notifies the posting agent"
+for id in GI-53 GI-54 GI-55; do grep -q "^### $id " "$ISSUE_CASES" && ok "acceptance case $id exists" || bad "acceptance case $id exists"; done
+grep -q '^### GP-94 ' "$PR_CASES" && ok "acceptance case GP-94 exists" || bad "acceptance case GP-94 exists"
 
 echo
 [[ $fail -eq 0 ]] && { echo "PASS"; exit 0; } || { echo "FAIL"; exit 1; }

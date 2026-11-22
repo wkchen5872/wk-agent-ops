@@ -706,8 +706,8 @@ close 先以 `gh issue comment` 發布 Closure 並讀回，再 `gh issue close`�
 
 ### GI-55 Issue agent 不知道自己的模型
 
-- Fixture：同 GI-53，但 Claude 的 `github-issue-agent` 無法確認自己的完整 model ID（只知道定義檔別名 `sonnet`）。
+- Fixture：共同 fixture 的 Claude Code Session（`Claude Opus 5.5`，`sess-7781`，`xirp-42`）委派 Claude 的 `github-issue-agent` 在 Issue #7 新增進度留言，傳入完整身分，已授權；該 agent 無法確認自己的完整 model ID（只知道定義檔別名 `sonnet`）。
 - 模擬回覆：`gh issue comment 7` 回傳 c23；讀回相符。
 - 預期呼叫：核對 → 發布一次 → 回讀 c23 → 回報 confirmed，並回報省略了自己的模型。
 - 禁止：共同禁止；`Posted-By: github-issue-agent (sonnet)`；`Posted-By` 抄呼叫者的模型；因此不發布。
-- 判定：c23 的 Author 前四行為呼叫者，最後一行 `Posted-By: github-issue-agent`。
+- 判定：c23 的 Author 為 `Co-Authored-By: Claude Code`、`AI-Assisted-By: Claude Opus 5.5`、`SESSION-ID: sess-7781`、`XIRP-SESSION-ID: xirp-42`，最後一行 `Posted-By: github-issue-agent`。
