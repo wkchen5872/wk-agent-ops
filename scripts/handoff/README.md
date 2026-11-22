@@ -79,7 +79,8 @@ Claude Code calls skills as `/skill`, Codex as `$skill`, Pi as `/skill:<name>`. 
 The example implement prompt commits each round through the `git-commit-writer` skill
 (`/git-commit-writer` in Claude Code, `/skill:git-commit-writer` in Pi, `$git-commit-writer` in Codex)
 and passes the round's title as `subject`: `feat({change}): <摘要>` first, `fix({change}): address <review-id>`
-after a review. That keeps the commit trailers in the skill's format (`Co-Authored-By: <tool>` plus
+after a review. When `handoff-start --impl` switches the implementer to another tool, both skill
+calls in the prompt switch with it (for example `/git-commit-writer` becomes `$git-commit-writer`). That keeps the commit trailers in the skill's format (`Co-Authored-By: <tool>` plus
 `AI-Assisted-By: <model>`) instead of the tool's built-in trailer. The installer creates `roles.yaml`
 only when it is missing and never overwrites it, so an existing file keeps its old prompt. To update it,
 copy the `implement:` `prompt:` line from `.agents/skills/agent-handoff/roles.example.yaml` (or

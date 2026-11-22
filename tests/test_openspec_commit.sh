@@ -581,6 +581,31 @@ for f in "$COMMIT_SKILL" "$COMMIT_AGENT" "$CODEX_COMMIT_AGENT"; do
   require_text "$f" 'subject=<optional caller-supplied subject line>' "$b accepts a subject input"
   require_text "$f" 'use it verbatim as the subject line' "$b uses the supplied subject verbatim"
   require_text "$f" 'empty or longer than 72 characters' "$b reports and replaces an invalid subject"
+  # codex-rda-r01/F-03: Git's default cleanup strips trailing whitespace from a supplied subject.
+  require_text "$f" 'git commit --cleanup=verbatim -m' "$b commits with verbatim cleanup"
+  forbid_text "$f" 'git commit -m "<message>' "$b has no default-cleanup commit command"
+done
+RT="$(mktemp -d)"; git init -q -b main "$RT"
+git -C "$RT" config user.name T; git -C "$RT" config user.email t@example.invalid; git -C "$RT" config commit.gpgsign false
+subj='fix(add-export): address codex-add-export-r02 '
+printf 'x\n' > "$RT/a"; git -C "$RT" add a
+git -C "$RT" commit -q --cleanup=verbatim -m "$subj
+
+Repair the export round.
+
+Co-Authored-By: Claude Code <noreply@anthropic.com>
+AI-Assisted-By: Claude Opus 5.5"
+first="$(git -C "$RT" cat-file commit HEAD | sed -n '/^$/{n;p;q;}')"
+[[ "$first" == "$subj" ]] && ok "verbatim cleanup keeps the supplied subject byte for byte" || bad "verbatim cleanup keeps the supplied subject byte for byte ('$first')"
+tr="$(git -C "$RT" log -1 --format=%B | git interpret-trailers --parse | cut -d: -f1 | tr '\n' ' ')"
+[[ "$tr" == "Co-Authored-By AI-Assisted-By " ]] && ok "verbatim message still parses its trailers ($tr)" || bad "verbatim message still parses its trailers ($tr)"
+rm -rf "$RT"
+# codex-rda-r01/F-02: a Pi subagent without a root model still records itself.
+wc20="$(sed -n '/^### WC-20 /,/^### /p' "$ROOT/tests/acceptance/git-commit-writer.md")"
+grep -qF 'Committed-By: git-commit-writer (gpt-6-luna)' <<<"$wc20" && ! grep -qF '訊息尾端只有 `Co-Authored-By: Pi`' <<<"$wc20" \
+  && ok "WC-20 expects Committed-By with the subagent's model" || bad "WC-20 expects Committed-By with the subagent's model"
+for t in 'Issue agent 不知道自己的模型'; do
+  grep -E '^### GI-[0-9]+' "$ROOT/tests/acceptance/github-issue.md" | grep -qF -- "$t" && ok "github-issue case for '$t'" || bad "github-issue case for '$t'"
 done
 
 printf '\ndelegated PR writes add Posted-By (2.5)\n'

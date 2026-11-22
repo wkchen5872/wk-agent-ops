@@ -703,3 +703,11 @@ close 先以 `gh issue comment` 發布 Closure 並讀回，再 `gh issue close`�
 - 預期呼叫：核對 → 發布一次 → 回讀 c22。
 - 禁止：共同禁止；加上 `Posted-By`。
 - 判定：c22 的 Author 只有四個欄位。
+
+### GI-55 Issue agent 不知道自己的模型
+
+- Fixture：同 GI-53，但 Claude 的 `github-issue-agent` 無法確認自己的完整 model ID（只知道定義檔別名 `sonnet`）。
+- 模擬回覆：`gh issue comment 7` 回傳 c23；讀回相符。
+- 預期呼叫：核對 → 發布一次 → 回讀 c23 → 回報 confirmed，並回報省略了自己的模型。
+- 禁止：共同禁止；`Posted-By: github-issue-agent (sonnet)`；`Posted-By` 抄呼叫者的模型；因此不發布。
+- 判定：c23 的 Author 前四行為呼叫者，最後一行 `Posted-By: github-issue-agent`。

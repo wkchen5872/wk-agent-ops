@@ -51,5 +51,15 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
   pip="$(grep '^#   prompt: "/skill:openspec-apply-change' "$SKILL/roles.example.yaml")"
   [[ -z "$pip" ]] || { grep -qF '/skill:git-commit-writer' <<<"$pip" && ! grep -qF '本機 commit' <<<"$pip"; }
   check "a commented Pi implement example, if any, commits through /skill:git-commit-writer"
+  # codex-rda-r01/F-01: a tool override rewrites the embedded commit skill call too, keeping both subjects.
+  for ov in 'codex:gpt-x:high|$' 'pi:openai-codex/gpt-6.2-sol:high:subscription|/skill:'; do
+    rf="$(mktemp)"; cp "$SKILL/roles.example.yaml" "$rf"
+    op="$( (source "$ROOT/scripts/handoff/lib/handoff.sh" && ho_apply_override "$rf" implement "${ov%%|*}" && kv_get "$rf" implement.prompt) 2>&1)"
+    sp="${ov#*|}"
+    [[ "$op" == "${sp}openspec-apply-change "* ]] && grep -qF " ${sp}git-commit-writer " <<<"$op" && ! grep -qF ' /git-commit-writer ' <<<"$op" \
+      && grep -qF 'subject=feat({change}): <摘要>' <<<"$op" && grep -qF 'subject=fix({change}): address <review-id>' <<<"$op"
+    check "an implement override to ${ov%%:*} rewrites both skill calls to ${sp}<skill> and keeps the subjects" || printf '       %s\n' "($op)"
+    rm -f "$rf"
+  done
 
 finish_section install

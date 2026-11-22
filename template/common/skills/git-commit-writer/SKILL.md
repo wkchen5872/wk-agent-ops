@@ -266,12 +266,15 @@ tool name and MUST NOT guess an address. When the current root-session model is 
 follow it immediately with the model trailer:
 
 ```bash
-git commit -m "<message>
+git commit --cleanup=verbatim -m "<message>
 
 Refs: <references>
 <resolved Co-Authored-By trailer>
 AI-Assisted-By: <assisting_model>"
 ```
+
+`--cleanup=verbatim` keeps the message byte for byte, so a supplied `subject` is
+not trimmed; never add trailing blank lines or `#` comment lines to the message.
 
 Omit the `Refs:` line when no reference is confirmed — never write an empty
 value or a placeholder.

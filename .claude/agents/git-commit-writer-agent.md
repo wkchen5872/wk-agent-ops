@@ -170,13 +170,16 @@ report that and use the derived subject instead; do not block the commit.
 ## Step 6 — Commit
 
 ```bash
-git commit -m "<message>
+git commit --cleanup=verbatim -m "<message>
 
 Refs: <references>
 Co-Authored-By: Claude Code <noreply@anthropic.com>
 AI-Assisted-By: <assisting_model>
 Committed-By: git-commit-writer-agent (<model>)"
 ```
+
+`--cleanup=verbatim` keeps the message byte for byte, so a supplied `subject` is
+not trimmed; never add trailing blank lines or `#` comment lines to the message.
 
 Omit the entire `AI-Assisted-By` line when no root-session model is supplied,
 and the `Refs:` line when no reference is confirmed. `Committed-By` is always

@@ -181,9 +181,9 @@ commit 或讀過 GitHub。出現任何「禁止」項目即失敗。
 
 - Fixture：writer 在 Pi subagent 中執行（設有 `PI_SUBAGENT_PARENT_SESSION`），subagent 的 `PI_MODEL=gpt-6-luna`；呼叫端只傳了 `tool_name=Pi`，沒有 `assisting_model`。
 - 模擬回覆：commit 成功。
-- 預期呼叫：訊息尾端只有 `Co-Authored-By: Pi`；結果回報省略了 `AI-Assisted-By`。
-- 禁止：共同禁止；寫入 `AI-Assisted-By: gpt-6-luna`；寫空值或佔位字；因此停止 commit。
-- 判定：沒有模型 trailer，且有回報省略。
+- 預期呼叫：訊息尾端依序為 `Co-Authored-By: Pi`、`Committed-By: git-commit-writer (gpt-6-luna)`；結果回報省略了 `AI-Assisted-By`。
+- 禁止：共同禁止；寫入 `AI-Assisted-By: gpt-6-luna`；寫空值或佔位字；省略 `Committed-By`；因此停止 commit。
+- 判定：沒有 root 模型的 `AI-Assisted-By` 且有回報省略；subagent 自己的模型只出現在 `Committed-By`（兩個模型不同時見 WC-24）。
 
 ### WC-21 Claude Code 環境中有 `PI_MODEL`
 
@@ -242,3 +242,11 @@ commit 或讀過 GitHub。出現任何「禁止」項目即失敗。
 - 預期呼叫：回報 subject 太長，改用依 diff 自動產生的標題。
 - 禁止：共同禁止；照用過長的標題；因此停止 commit。
 - 判定：標題不超過 72 字元，結果有回報。
+
+### WC-28 subject 尾端空白逐字保存
+
+- Fixture：同 WC-26，但傳入的 `subject` 為 `fix(add-export): address codex-add-export-r02 `（尾端一個空格，46 字元）。
+- 模擬回覆：commit 成功。
+- 預期呼叫：以 `git commit --cleanup=verbatim -m` 提交；`git cat-file commit HEAD` 讀到的第一行與傳入值逐字相同（46 字元）。
+- 禁止：共同禁止；用預設 cleanup 的 `git commit -m` 提交；自行修剪或改寫標題。
+- 判定：原始 commit message 的標題保留尾端空格。

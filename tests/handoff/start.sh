@@ -81,6 +81,9 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
   # The overrides above change both tools: Codex review → Claude, Claude implement → Codex.
   [[ "$(kv_get "$ol" review_template.prompt)" == '/change-review {change}'* && "$(kv_get "$ol" review_template.name)" == 'claude - review - {change}' ]] \
     && jq -e '.customName=="codex - impl - add-export" and (.goal|startswith("$openspec-apply-change add-export"))' "$FAKE_XIRP_DIR/create-1.json" >/dev/null; check "an override that changes the tool rewrites the skill call and session name" || { printf '       %s | %s\n' "$(kv_get "$ol" review_template.name)" "$(kv_get "$ol" review_template.prompt | cut -c1-40)"; }
+  # codex-rda-r01/F-01: the opened Codex implementer gets the commit skill in Codex syntax.
+  jq -e '(.goal|contains(" $git-commit-writer ")) and (.goal|contains(" /git-commit-writer ")|not) and (.goal|contains("subject=feat(add-export): <摘要>"))' "$FAKE_XIRP_DIR/create-1.json" >/dev/null
+  check "a Codex implement override opens with \$git-commit-writer and the change's subject" || printf '       %s\n' "$(jq -r .goal "$FAKE_XIRP_DIR/create-1.json" | cut -c1-200)"
   OS="$tmp/start-same-tool"; new_project "$OS"; use_project "$OS"; fresh_state s6s
   start_in "$OS" add-export --review codex:gpt-6.1-terra:high >/dev/null 2>&1
   osl="$OS-add-export/.agent-handoff/add-export/loop.yaml"
