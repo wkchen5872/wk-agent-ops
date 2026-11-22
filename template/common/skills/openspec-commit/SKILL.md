@@ -112,7 +112,8 @@ steps below:
   current `HEAD` when no commit was made.
 - **Delegated PR writes.** `github-pr update` and the Closure reply may be delegated to the
   `github-pr-agent`, passing the full target, the delivered head, and this session's own
-  tool, model, native session ID, and Xirp session ID; the Author stays this session's.
+  tool, model, native session ID, and Xirp session ID; the Author's four fields stay this
+  session's, and the agent adds its own `Posted-By` line last.
 
 ---
 

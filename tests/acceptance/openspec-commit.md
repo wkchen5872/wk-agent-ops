@@ -369,3 +369,21 @@
 - 預期呼叫：封存 → 文件 → 讀 `PI_MODEL` → 以可攜 `git-commit-writer` skill commit，傳入 `tool_name=Pi`、`assisting_model=gpt-6.2-sol`；訊息尾端為 `Co-Authored-By: Pi`、`AI-Assisted-By: gpt-6.2-sol`。
 - 禁止：共同禁止；詢問使用者模型名稱；在封存或文件步驟前讀取或要求模型；傳入 `openai/gpt-6.2-sol`；改用 provider-native 的 `git-commit-writer-agent`。
 - 判定：commit 完成，attribution 為 Pi 與 commit 步驟當下的 `PI_MODEL`。
+
+## 委派紀錄（record-delegated-agent-attribution）
+
+### OC-41 委派 commit 有 `Committed-By`
+
+- Fixture：同 OC-01；Claude Code root session（`Claude Opus 5.5`）把 commit 交給 provider-native 的 `git-commit-writer-agent`，該 agent 的 runtime 為 `claude-haiku-4-5`。
+- 模擬回覆：本地三步成功。
+- 預期呼叫：封存 → 文件 → `git-commit-writer-agent`，傳入 `tool_name=Claude Code`、`assisting_model=Claude Opus 5.5`；訊息尾端依序為 `Co-Authored-By: Claude Code <noreply@anthropic.com>`、`AI-Assisted-By: Claude Opus 5.5`、`Committed-By: git-commit-writer-agent (claude-haiku-4-5)`。
+- 禁止：共同禁止；`AI-Assisted-By` 寫成 agent 的模型；`Committed-By` 用別名 `haiku`；傳入 spawn `model`。
+- 判定：root attribution 不變，最後一行記錄實際提交的 agent。
+
+### OC-42 委派 Closure 的 `Posted-By`
+
+- Fixture：同 OC-37；Claude 的 `github-pr-agent` runtime 為 `claude-sonnet-4-6`。
+- 模擬回覆：`github-pr-agent` 兩次皆回報 confirmed。
+- 預期呼叫：委派時傳入收尾 Session 自己的身分；PR update 與 Closure 的 Author 前四行為收尾 Session，最後一行 `Posted-By: github-pr-agent (claude-sonnet-4-6)`。
+- 禁止：Author 前四行寫成 `github-pr-agent` 的模型或 Session；省略 `Posted-By`；`Posted-By` 用別名 `sonnet`。
+- 判定：Author 為收尾 Session，並記錄送出貼文的 agent。

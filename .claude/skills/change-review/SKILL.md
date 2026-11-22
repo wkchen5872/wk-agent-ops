@@ -99,7 +99,8 @@ the matching parts of the steps below; without a loop, nothing below changes.
 - **Delegated PR reply.** With a confirmed PR, the reply may be delegated to the
   `github-pr-agent` within this round. Pass the full repository and PR target, the report
   path, the Review-ID, the reviewed version, and your own tool, model, native session ID,
-  and Xirp session ID; the posted Author stays yours. The readback rules of Step 5 apply
+  and Xirp session ID; the Author's four fields stay yours, and the agent adds its own `Posted-By`
+  line last. The readback rules of Step 5 apply
   unchanged.
 
 ## Step 1 — Resolve the target
@@ -341,7 +342,9 @@ sent to the implementer as a repair request.
 
 1. **Find the implementation Author** — in the PR description or the latest
    implementation or repair reply: `Co-Authored-By`, `AI-Assisted-By`,
-   `SESSION-ID`, `XIRP-SESSION-ID`. The newest reply may be a reviewer's; never
+   `SESSION-ID`, `XIRP-SESSION-ID` — only these four. Skip `Posted-By`: it names the
+   dedicated agent that typed the post for its caller, never the implementer or a handoff target.
+   The newest reply may be a reviewer's; never
    take a reviewer's or your own identity for the implementer's. Several
    plausible implementers, or none: send nothing, return the message.
    **Relayed report** — identified by `原報告作者` and its source; an

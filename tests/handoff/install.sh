@@ -43,5 +43,13 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
   grep -q '^  prompt: "\$openspec-commit.*直接同步主規格' "$SKILL/roles.example.yaml"; check "the example finish prompt says to sync main specs without asking"
   rp="$(grep '^  prompt: "\$change-review' "$SKILL/roles.example.yaml")"
   grep -q '由 handoff hook 通知' <<<"$rp" && grep -q '不是排除通知' <<<"$rp"; check "the example review prompt says the hook notifies the implementer and this is not a notification exclusion"
+  # record-delegated-agent-attribution 3.1: implementers commit through git-commit-writer.
+  ip="$(grep '^  prompt: "/openspec-apply-change' "$SKILL/roles.example.yaml")"
+  grep -qF '/git-commit-writer' <<<"$ip" && grep -qF 'subject=feat({change}): <摘要>' <<<"$ip" \
+    && grep -qF 'subject=fix({change}): address <review-id>' <<<"$ip" && ! grep -qF '本機 commit' <<<"$ip"
+  check "the example implement prompt commits through /git-commit-writer with a subject, not a direct commit"
+  pip="$(grep '^#   prompt: "/skill:openspec-apply-change' "$SKILL/roles.example.yaml")"
+  [[ -z "$pip" ]] || { grep -qF '/skill:git-commit-writer' <<<"$pip" && ! grep -qF '本機 commit' <<<"$pip"; }
+  check "a commented Pi implement example, if any, commits through /skill:git-commit-writer"
 
 finish_section install

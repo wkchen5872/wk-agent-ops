@@ -76,6 +76,16 @@ appends the output of `agent-handoff/scripts/handoff-author` so the shell, not t
 Claude Code calls skills as `/skill`, Codex as `$skill`, Pi as `/skill:<name>`. Session names default to
 `<tool> - <impl|review|finish> - <change-id>`.
 
+The example implement prompt commits each round through the `git-commit-writer` skill
+(`/git-commit-writer` in Claude Code, `/skill:git-commit-writer` in Pi, `$git-commit-writer` in Codex)
+and passes the round's title as `subject`: `feat({change}): <摘要>` first, `fix({change}): address <review-id>`
+after a review. That keeps the commit trailers in the skill's format (`Co-Authored-By: <tool>` plus
+`AI-Assisted-By: <model>`) instead of the tool's built-in trailer. The installer creates `roles.yaml`
+only when it is missing and never overwrites it, so an existing file keeps its old prompt. To update it,
+copy the `implement:` `prompt:` line from `.agents/skills/agent-handoff/roles.example.yaml` (or
+`.claude/skills/agent-handoff/roles.example.yaml`) into your `roles.yaml`, or replace its "本機 commit"
+instruction with the same `/git-commit-writer` call and `subject` values.
+
 ## Session hosts
 
 A session host is where a role's session runs and where you watch it: `xirp` (the default),

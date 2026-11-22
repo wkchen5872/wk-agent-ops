@@ -194,7 +194,13 @@ Codex 版本：`.codex/agents/git-commit-writer-agent.toml`（`gpt-5.6-luna`、m
   等名稱，不補猜變體。完全未知時省略該 trailer 並回報，不阻擋 commit
 - Pi：在 Pi root session（`PI_CODING_AGENT=true` 且沒有 `PI_SUBAGENT_PARENT_SESSION`）中，可攜 Skill
   讀 commit 當下的 `PI_MODEL` 原樣記錄模型 ID，trailer 為 `Co-Authored-By: Pi`（無 email）；
-  Pi subagent 與其他工具不使用 `PI_MODEL`，provider-native agent 定義不變
+  Pi subagent 與其他工具不使用 `PI_MODEL` 作為 root 模型，provider-native agent 定義不變
+- 委派紀錄：本 agent（Claude、Codex）一律在 `AI-Assisted-By` 後加 `Committed-By: git-commit-writer-agent (<model>)`，
+  model 取自自己的 runtime（Claude 用完整 model ID，不用別名 `haiku`；Codex 可退回定義檔的 `model`），不取自
+  caller 的 `assisting_model`；不知道時只寫名稱並回報。可攜 Skill 只在 Pi subagent 加
+  `Committed-By: git-commit-writer (<PI_MODEL>)`，root 自己提交時不加
+- 選填 `subject`：caller 傳入時原樣作為標題（交接迴圈實作者用來保留 `feat(<change>): …`／`fix(<change>): address <review-id>`）；
+  空字串或超過 72 字元時回報並改用自動產生的標題
 - Archive guard：若傳入 `archive_path`，在 commit 前驗證目錄存在；archive 未完成則停止
 - GitHub 引用：caller（openspec-commit、github-pr create）傳入已確認的直接 Issue／PR，寫成 attribution 前的
   `Refs: #N`；背景與 `depends-on` 只在另被確認為直接處理時列入；跨 repo 用完整 URL，不猜編號、不用 `Closes`，也不為補引用 amend 或另外 commit
@@ -273,7 +279,7 @@ Checkpoint 或 Closure 回覆（也用來代記人類的設計批准），close 
 
 **用途：** 交接迴圈中每個 Agent 結束一輪時，以 `handoff-write` 寫入 `.agent-handoff/<change-id>/NN-<role>.yaml` 交件單，作者欄位由 `handoff-author` 產生。迴圈本身（`handoff-start`／`handoff-role`／`handoff-finish`／`handoff-cleanup`／`handoff-doctor`）在 `scripts/handoff/`，為選用，支援 `xirp`、`herdr`（Terminal UI agent session manager）與 `herdr-app`（Herdr 桌面 app）三種宿主，見 `scripts/handoff/README.md`。
 
-`github-pr-agent`、`github-issue-agent`（Claude `.md` 與 Codex `.toml`）讓呼叫端 Session 把 PR／Issue 文案與寫入委派給較輕量的模型；仍遵循對應 Skill，並寫入呼叫端提供的 Author。
+`github-pr-agent`、`github-issue-agent`（Claude `.md` 與 Codex `.toml`）讓呼叫端 Session 把 PR／Issue 文案與寫入委派給較輕量的模型；仍遵循對應 Skill，並寫入呼叫端提供的 Author，最後加一行自己的 `Posted-By: <agent 名稱> (<model>)`。讀取 Author 找實作者或通知對象時略過 `Posted-By`。
 
 ### testland/qa mutation runner + survivor triage
 
@@ -345,6 +351,8 @@ Skill 和 Agent 應該遵循相同的邏輯和步驟，差異只在：
   不要求完整 variant；完全未知時省略模型 trailer 並回報；
   接手既有變更或只負責提交的 root session 也記錄當下已知模型，不追查原始實作者；
   commit-only subagent 必須沿用 caller 傳來的 root-session 模型，不可改填自己的模型；
+  另外加一行 `Committed-By: <agent 名稱> (<自己的 model>)` 記錄自己（GitHub 委派貼文則是 Author 最後的
+  `Posted-By`），root 自己執行時不加；
   此 attribution metadata 不得覆寫 agent 自身的 runtime model 或 reasoning effort。
 - 兩者在 Step 5 均加入 archive guard：archive 目錄不存在則停止
 

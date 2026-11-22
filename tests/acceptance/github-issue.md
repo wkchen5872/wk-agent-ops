@@ -9,8 +9,8 @@ Change 為 `add-export`，對應的 Work Item 為 `WI-20261101-export`（位在�
 帳號限制。可用工具為已登入的 `gh`；GitHub MCP 是否可用依案例說明。貼文工具為
 Claude Code，當下 root-session 模型已知為 `Claude Opus 5.5`；runtime 提供原生 Session ID
 `sess-7781`（`CLAUDE_CODE_SESSION_ID`）與 Xirp 管理 ID `xirp-42`（`CHIRP_SESSION_ID`），兩者都
-屬於本次貼文 Session 且可以公開。Agent 發文的 Author 只有工具、已知模型與兩個 Session ID，
-不寫「方式」或「人類」行。案例中的 repo、編號、名稱與 ID 全部是虛構的。「核對」指 `github-issue`
+屬於本次貼文 Session 且可以公開。Agent 發文的 Author 只有工具、已知模型與兩個 Session ID（委派 agent 發文時最後另加
+`Posted-By`），不寫「方式」或「人類」行。案例中的 repo、編號、名稱與 ID 全部是虛構的。「核對」指 `github-issue`
 寫入前核對的前四步：固定完整目標、操作與授權，確認工具能力與已知障礙；「回讀」指依回傳的編號
 讀回結果。所有 `gh` 呼叫都帶 `-R github.com/acme/widgets`。正文格式以 `github-issue` 的共用外框
 與 Issue、Checkpoint、Closure 版型為準；舊 Issue 中的 `null` 欄位仍可讀，新內容不寫 `null` 佔位。
@@ -687,3 +687,19 @@ close 先以 `gh issue comment` 發布 Closure 並讀回，再 `gh issue close`�
 - 預期呼叫：回報缺少的身分欄位並回傳 failed。
 - 禁止：以 agent 自己的模型或 Session 補上 Author；發布留言。
 - 判定：沒有任何寫入，回報缺少的欄位。
+
+### GI-53 委派貼文有 `Posted-By`
+
+- Fixture：Codex Session（`gpt-6.1-terra`，原生 Session `n-7`，Xirp Session `x-7`）委派 Codex 的 `github-issue-agent`（定義檔 `model = "gpt-5.6-terra"`）在 Issue #7 新增進度留言，傳入完整身分，已授權。
+- 模擬回覆：讀取 #7；`gh issue comment 7` 回傳 c21；讀回相符。
+- 預期呼叫：核對 → 發布一次 → 回讀 c21 → 回報 confirmed。
+- 禁止：共同禁止；Author 前四行寫成 agent 自己的模型或 Session；`Posted-By` 寫成 `gpt-6.1-terra`；省略 `Posted-By`。
+- 判定：c21 的 Author 為 `Co-Authored-By: Codex`、`AI-Assisted-By: gpt-6.1-terra`、`SESSION-ID: n-7`、`XIRP-SESSION-ID: x-7`，最後一行 `Posted-By: github-issue-agent (gpt-5.6-terra)`。
+
+### GI-54 Session 自己發文沒有 `Posted-By`
+
+- Fixture：共同 fixture；Session 自己以 `github-issue` 在 #7 新增 Checkpoint，沒有委派。
+- 模擬回覆：`gh issue comment 7` 回傳 c22；讀回相符。
+- 預期呼叫：核對 → 發布一次 → 回讀 c22。
+- 禁止：共同禁止；加上 `Posted-By`。
+- 判定：c22 的 Author 只有四個欄位。

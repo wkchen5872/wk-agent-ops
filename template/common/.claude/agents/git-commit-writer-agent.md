@@ -20,6 +20,7 @@ tool_name=<executing agent tool>
 assisting_model=<current root-session model>
 commit_repository=<host/owner/repo of the repository being committed>
 github_references=<list of: url=<Issue or PR URL> evidence=<how it was confirmed>>
+subject=<optional caller-supplied subject line>
 ```
 
 When archive_path and change_id are provided, use them directly. If only one is
@@ -35,10 +36,21 @@ question. Tool names are not model names. If no root-session model is supplied,
 omit `AI-Assisted-By` and report the omission; never write an empty value or placeholder.
 It MUST NOT resolve it from this commit-only agent's runtime identity.
 Never infer it from documentation, session logs, environment variables, or Git history.
+This ban applies only to the root-session model in `AI-Assisted-By`.
 
 `assisting_model` is Git attribution metadata only. It identifies the current
 collaborating root-session model for
 the `AI-Assisted-By` trailer. It MUST NOT select or override this writer's runtime model or reasoning effort.
+
+## Delegated commit record
+
+This agent is always a delegated commit writer, so after the root-session
+trailers it adds `Committed-By: git-commit-writer-agent (<model>)` with its own
+model. Use the full model ID stated in your runtime context (the system prompt),
+never the definition alias `haiku`. Never take it from `assisting_model` or any
+other caller input. If you cannot determine your own model,
+write `Committed-By: git-commit-writer-agent` and report the omission; it never
+blocks the commit. `Committed-By` never replaces `Co-Authored-By` or `AI-Assisted-By`.
 
 ## GitHub references
 
@@ -151,6 +163,10 @@ With context:
 Without context, omit `(<change_id>)`. Keep the subject at most 72 characters
 with no trailing period.
 
+When the caller supplies `subject`, use it verbatim as the subject line and
+still write the body and trailers. If it is empty or longer than 72 characters,
+report that and use the derived subject instead; do not block the commit.
+
 ## Step 6 — Commit
 
 ```bash
@@ -158,11 +174,13 @@ git commit -m "<message>
 
 Refs: <references>
 Co-Authored-By: Claude Code <noreply@anthropic.com>
-AI-Assisted-By: <assisting_model>"
+AI-Assisted-By: <assisting_model>
+Committed-By: git-commit-writer-agent (<model>)"
 ```
 
 Omit the entire `AI-Assisted-By` line when no root-session model is supplied,
-and the `Refs:` line when no reference is confirmed.
+and the `Refs:` line when no reference is confirmed. `Committed-By` is always
+present; drop only its ` (<model>)` when your own model is unknown.
 
 On pre-commit failure, fix the in-scope issue. **Re-run `git add -A`**, inspect
 the cached diff, and retry without `--no-verify`.
@@ -175,5 +193,5 @@ git log -1 --format='%h %s'
 
 ```text
 💾 Commit: <short-hash> <type>(<change_id>): <subject>
-🤖 Executed by: git-commit-writer agent (haiku)
+🤖 Executed by: git-commit-writer-agent (<model>)
 ```

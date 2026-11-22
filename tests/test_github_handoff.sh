@@ -1037,5 +1037,21 @@ want "$ISSUE_SKILL/SKILL.md" "caller's identity" "github-issue keeps the caller'
 grep -q '^### GP-93 ' "$PR_CASES" && ok "acceptance case GP-93 exists" || bad "acceptance case GP-93 exists"
 grep -q '^### GI-52 ' "$ISSUE_CASES" && ok "acceptance case GI-52 exists" || bad "acceptance case GI-52 exists"
 
+# ── record-delegated-agent-attribution ───────────────────────────────────────
+# Maps to openspec/changes/record-delegated-agent-attribution specs/github-{issue,pr}.
+echo "RDA-2 delegated posts add Posted-By; readers skip it"
+frame_of "$ISSUE_SKILL/SKILL.md" | grep -qF 'Posted-By: <' && ok "shared frame shows the optional Posted-By line" \
+  || bad "shared frame shows the optional Posted-By line"
+frame_of "$ISSUE_SKILL/SKILL.md" | grep -qF 'only when a dedicated agent posts for a caller' \
+  && ok "shared frame limits Posted-By to delegated posts" || bad "shared frame limits Posted-By to delegated posts"
+for s in "$ISSUE_SKILL" "$PR_SKILL"; do
+  sed -n '/^## Dedicated agent/,/^## /p' "$s/SKILL.md" | grep -qF 'adds its own `Posted-By`' \
+    && ok "$(basename "$s") delegation paragraph names Posted-By" || bad "$(basename "$s") delegation paragraph names Posted-By"
+done
+sed -n '/^## Step 6 — Hand off to the implementer/,/^## /p' "$CR_SKILL" | grep -qF 'Skip `Posted-By`' \
+  && ok "change-review skips Posted-By when finding the implementer" || bad "change-review skips Posted-By when finding the implementer"
+sed -n '/^## Step 6 — Hand off to the implementer/,/^## /p' "$CR_SKILL" | grep -qF 'never the implementer or a handoff target' \
+  && ok "change-review never notifies the posting agent" || bad "change-review never notifies the posting agent"
+
 echo
 [[ $fail -eq 0 ]] && { echo "PASS"; exit 0; } || { echo "FAIL"; exit 1; }

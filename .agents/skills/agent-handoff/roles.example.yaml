@@ -23,7 +23,7 @@ implement:
   model: opus
   effort: high
   name: "claude - impl - {change}"
-  prompt: "/openspec-apply-change {change}。這是第 {round} 輪；若有審查報告，先讀 {report}。測試通過後本機 commit（第一輪 feat({change}): <摘要>，修正輪 fix({change}): address <review-id>），不要 push。最後執行 {handoff_write} --change {change} --role implement --status done --head HEAD；無法完成時改用 --status blocked 並以 --note 說明。{author}"
+  prompt: "/openspec-apply-change {change}。這是第 {round} 輪；若有審查報告，先讀 {report}。測試通過後用 /git-commit-writer 提交，傳入 subject（第一輪 subject=feat({change}): <摘要>，修正輪 subject=fix({change}): address <review-id>），不要 push。最後執行 {handoff_write} --change {change} --role implement --status done --head HEAD；無法完成時改用 --status blocked 並以 --note 說明。{author}"
 
 review:
   worktree: shared

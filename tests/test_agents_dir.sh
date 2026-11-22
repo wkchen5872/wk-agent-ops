@@ -199,7 +199,16 @@ for agent in github-pr-agent github-issue-agent; do
       && ok "$(basename "$f") requires the caller's identity" || bad "$(basename "$f") requires the caller's identity"
     grep -q 'author_file' "$f" 2>/dev/null && grep -qi 'verbatim' "$f" 2>/dev/null \
       && ok "$(basename "$f") appends a caller's author_file verbatim" || bad "$(basename "$f") appends a caller's author_file verbatim"
+    # record-delegated-agent-attribution 2.1: the posting agent names itself last.
+    grep -qF "Posted-By: $agent (<model>)" "$f" 2>/dev/null \
+      && ok "$(basename "$f") ends the Author with Posted-By" || bad "$(basename "$f") ends the Author with Posted-By"
+    grep -qF 'never the caller'"'"'s `assisting_model`' "$f" 2>/dev/null \
+      && ok "$(basename "$f") takes the Posted-By model from itself" || bad "$(basename "$f") takes the Posted-By model from itself"
+    grep -qF "write \`Posted-By: $agent\` and report the omission" "$f" 2>/dev/null \
+      && ok "$(basename "$f") keeps the name when its model is unknown" || bad "$(basename "$f") keeps the name when its model is unknown"
   done
+  grep -qF 'never the definition alias `sonnet`' "$claude" 2>/dev/null \
+    && ok "Claude $agent uses its full model ID, not the alias" || bad "Claude $agent uses its full model ID, not the alias"
   cmp -s "$claude" "$GH_T/.claude/agents/$agent.md" && ok "installer copies Claude $agent" || bad "installer copies Claude $agent"
   cmp -s "$codex" "$GH_T/.codex/agents/$agent.toml" && ok "installer copies Codex $agent" || bad "installer copies Codex $agent"
   cmp -s "$claude" "$ROOT/.claude/agents/$agent.md" && ok "repository Claude $agent synchronized" || bad "repository Claude $agent synchronized"

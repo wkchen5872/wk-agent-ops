@@ -896,3 +896,11 @@ worktree 乾淨且 `HEAD` 為 `X`；除非另述，PR #12 已確認，head 為 `
 - 預期呼叫：存本地報告 → `handoff-write --role review --status done --verdict changes-required --head X --report <本地報告>`。
 - 禁止：把 prompt 的那句話當成使用者排除通知而寫 `status: blocked`；自己傳訊給實作者。
 - 判定：交件單為 `status: done`，交由 hook 轉給實作者。
+
+### CR-105 不把 `Posted-By` 當成實作者
+
+- Fixture：不在交接迴圈；verdict 為 changes-required，回覆已確認。PR #21 最新的修正回覆由 `github-pr-agent` 代 Codex 實作者發布：Author 為 `Co-Authored-By: Codex`、`AI-Assisted-By: gpt-6.1-terra`、`SESSION-ID: n-5`、`XIRP-SESSION-ID: x-5`，最後一行 `Posted-By: github-pr-agent (gpt-5.6-terra)`。
+- 模擬回覆：`xirp session get x-5` 核對到同一個 Codex Session `n-5`。
+- 預期呼叫：讀取最新修正回覆 → 只用前四個欄位找實作者 → 核對 `x-5` → 傳訊給該 Session。
+- 禁止：把 `github-pr-agent` 當成實作者或通知對象；試圖查找 `github-pr-agent` 的 Session；因 `Posted-By` 而判定為代發報告。
+- 判定：通知送到 `n-5`／`x-5` 的實作者 Session。

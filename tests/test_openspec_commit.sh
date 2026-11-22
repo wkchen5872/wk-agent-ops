@@ -555,5 +555,38 @@ grep -E '^### OC-[0-9]+' "$ROOT/tests/acceptance/openspec-commit.md" 2>/dev/null
   && ok "openspec-commit case for 'Pi root session'" || bad "openspec-commit case for 'Pi root session'"
 fi
 
+# ── record-delegated-agent-attribution ───────────────────────────────────────
+# Maps to openspec/changes/record-delegated-agent-attribution specs/git-commit-writer.
+if run_section delegated; then
+printf '\ndelegated commit agent records itself (1.1)\n'
+for f in "$COMMIT_AGENT" "$CODEX_COMMIT_AGENT"; do
+  b="$(basename "$f")"
+  require_text "$f" 'Committed-By: git-commit-writer-agent (<model>)' "$b writes Committed-By with its own model"
+  require_text "$f" 'Never take it from `assisting_model`' "$b never copies the caller's model into Committed-By"
+  require_text "$f" 'write `Committed-By: git-commit-writer-agent` and report the omission' "$b keeps the name when its model is unknown"
+  require_text "$f" 'applies only to the root-session model' "$b limits the self-attribution ban to the root model"
+  a_line="$(line_of "$f" 'AI-Assisted-By: <assisting_model>')"
+  c_line="$(line_of "$f" 'Committed-By: git-commit-writer-agent (<model>)"')"
+  [[ -n "$a_line" && -n "$c_line" ]] && (( a_line < c_line )) \
+    && ok "$b places Committed-By after AI-Assisted-By" || bad "$b places Committed-By after AI-Assisted-By"
+done
+require_text "$COMMIT_AGENT" 'never the definition alias `haiku`' "Claude agent uses its full model ID, not the alias"
+require_text "$CODEX_COMMIT_AGENT" "this definition's \`model\`" "Codex agent falls back to its definition model"
+require_text "$COMMIT_SKILL" 'Committed-By: git-commit-writer (<PI_MODEL>)' "portable skill writes Committed-By in a Pi subagent"
+require_text "$COMMIT_SKILL" 'A root-session commit MUST NOT add `Committed-By`' "portable skill adds no Committed-By as root"
+
+printf '\ncaller-supplied subject (1.4)\n'
+for f in "$COMMIT_SKILL" "$COMMIT_AGENT" "$CODEX_COMMIT_AGENT"; do
+  b="$(basename "$f")"
+  require_text "$f" 'subject=<optional caller-supplied subject line>' "$b accepts a subject input"
+  require_text "$f" 'use it verbatim as the subject line' "$b uses the supplied subject verbatim"
+  require_text "$f" 'empty or longer than 72 characters' "$b reports and replaces an invalid subject"
+done
+
+printf '\ndelegated PR writes add Posted-By (2.5)\n'
+require_text "$ORCHESTRATOR" '`Posted-By`' "openspec-commit says the PR agent adds its own Posted-By"
+require_text "$ROOT/template/common/skills/change-review/SKILL.md" 'adds its own `Posted-By`' "change-review says the PR agent adds its own Posted-By"
+fi
+
 printf '\n'
 [[ $fail -eq 0 ]] && { echo "PASS"; exit 0; } || { echo "FAIL"; exit 1; }

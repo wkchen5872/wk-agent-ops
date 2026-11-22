@@ -9,7 +9,7 @@ commit 或讀過 GitHub。出現任何「禁止」項目即失敗。
 - Change 為 `add-export`，staged diff 屬於它，commit type 為 `feat`。
 - 執行工具為 Claude Code，root-session 模型為 `Claude Opus 5.5`。
 - 「訊息尾端」指 body 之後的 trailer 段落：`Refs:`（有確認的引用時）→ `Co-Authored-By:` →
-  `AI-Assisted-By:`。
+  `AI-Assisted-By:` →（只有委派 commit 才有）`Committed-By:`。
 - 案例中的編號、URL 與名稱都是虛構的。
 
 所有案例的共同禁止：
@@ -192,3 +192,53 @@ commit 或讀過 GitHub。出現任何「禁止」項目即失敗。
 - 預期呼叫：訊息尾端只有 `Co-Authored-By: Claude Code <noreply@anthropic.com>`；結果回報省略了 `AI-Assisted-By`。
 - 禁止：共同禁止；寫入 `AI-Assisted-By: gpt-6.2-sol`；把工具寫成 `Pi`。
 - 判定：Pi 例外沒有套用到 Claude Code。
+
+## 委派紀錄（record-delegated-agent-attribution）
+
+### WC-22 委派 commit 有 `Committed-By`
+
+- Fixture：Codex root session（`gpt-6.1-terra`）委派 Codex 的 `git-commit-writer-agent`（定義檔 `model = "gpt-5.6-luna"`），傳入 `tool_name=Codex`、`assisting_model=gpt-6.1-terra`。
+- 模擬回覆：commit 成功。
+- 預期呼叫：訊息尾端依序為 `Co-Authored-By: Codex <noreply@openai.com>`、`AI-Assisted-By: gpt-6.1-terra`、`Committed-By: git-commit-writer-agent (gpt-5.6-luna)`。
+- 禁止：共同禁止；把 `AI-Assisted-By` 改成 `gpt-5.6-luna`；`Committed-By` 寫成 `gpt-6.1-terra`；在括號裡寫 harness。
+- 判定：root 的兩行不變，最後多一行 agent 自己的 `Committed-By`。
+
+### WC-23 root 自己 commit 沒有 `Committed-By`
+
+- Fixture：Claude Code root session 自己執行可攜 `git-commit-writer` skill，沒有委派。
+- 模擬回覆：commit 成功。
+- 預期呼叫：訊息尾端只有 `Co-Authored-By: Claude Code <noreply@anthropic.com>`、`AI-Assisted-By: Claude Opus 5.5`。
+- 禁止：共同禁止；加上 `Committed-By`。
+- 判定：沒有 `Committed-By`。
+
+### WC-24 Pi subagent 加 `Committed-By`
+
+- Fixture：writer 在 Pi subagent 中執行（設有 `PI_SUBAGENT_PARENT_SESSION`），subagent 的 `PI_MODEL=gpt-6-luna`；呼叫端傳入 `tool_name=Pi`、`assisting_model=claude-opus-5-5`。
+- 模擬回覆：commit 成功。
+- 預期呼叫：訊息尾端依序為 `Co-Authored-By: Pi`、`AI-Assisted-By: claude-opus-5-5`、`Committed-By: git-commit-writer (gpt-6-luna)`。
+- 禁止：共同禁止；寫入 `AI-Assisted-By: gpt-6-luna`；`Committed-By` 寫成 `claude-opus-5-5`。
+- 判定：root 模型與 subagent 模型各在自己的 trailer。
+
+### WC-25 委派 agent 不知道自己的模型
+
+- Fixture：Claude 的 `git-commit-writer-agent` 收到 `assisting_model=Claude Opus 5.5`，但無法確認自己的完整 model ID（只知道定義檔別名 `haiku`）。
+- 模擬回覆：commit 成功。
+- 預期呼叫：訊息尾端依序為 `Co-Authored-By: Claude Code <noreply@anthropic.com>`、`AI-Assisted-By: Claude Opus 5.5`、`Committed-By: git-commit-writer-agent`；結果回報省略了自己的模型。
+- 禁止：共同禁止；`Committed-By: git-commit-writer-agent (haiku)`；`Committed-By` 抄 `Claude Opus 5.5`；因此停止 commit。
+- 判定：只寫 agent 名稱並回報，commit 照常完成。
+
+### WC-26 caller 傳入 subject
+
+- Fixture：交接迴圈實作者以 `/git-commit-writer` 提交，傳入 `subject=fix(add-export): address codex-add-export-r02`。
+- 模擬回覆：commit 成功。
+- 預期呼叫：commit 標題正好是 `fix(add-export): address codex-add-export-r02`，仍有 body 與 attribution trailer。
+- 禁止：共同禁止；改寫或另外產生標題；省略 body 或 trailer。
+- 判定：標題與傳入值逐字相同。
+
+### WC-27 subject 超過 72 字元
+
+- Fixture：同 WC-26，但傳入的 `subject` 超過 72 字元。
+- 模擬回覆：commit 成功。
+- 預期呼叫：回報 subject 太長，改用依 diff 自動產生的標題。
+- 禁止：共同禁止；照用過長的標題；因此停止 commit。
+- 判定：標題不超過 72 字元，結果有回報。

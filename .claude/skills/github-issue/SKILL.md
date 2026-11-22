@@ -42,9 +42,11 @@ A session may delegate one operation to the `github-issue-agent` (Claude Code
 `.claude/agents/`, Codex `.codex/agents/`). The agent follows this skill
 unchanged and posts with the caller's identity: the caller passes the
 operation, the full repository and Issue target, the content or report path, and
-its own tool, model, native session ID, and Xirp session ID. The Author is the
+its own tool, model, native session ID, and Xirp session ID. The Author's four fields are the
 caller's, never the agent's own model or session; without that identity the
-agent posts nothing. The caller keeps the authorization and gets back
+agent posts nothing. The agent adds its own `Posted-By` line last
+(`Posted-By: github-issue-agent (<model>)`), so the post shows which agent and
+model sent it. The caller keeps the authorization and gets back
 `confirmed`, `unconfirmed`, or `failed` with the URL or reason.
 
 ## What this skill may change
@@ -246,11 +248,17 @@ Co-Authored-By: <本次發布的工具>
 AI-Assisted-By: <已知的當下 root-session model>
 SESSION-ID: <本次原生 Session ID｜null>
 XIRP-SESSION-ID: <本次 Xirp 管理 Session ID｜null>
+Posted-By: <委派發文的 agent 名稱> (<該 agent 的 model>)
 ```
 
-- Author has only these four fields: no mode or human line, and no synonym such
-  as `mode` or a publisher account — the tool and model show where help came
-  from, and GitHub shows the posting account. Never infer the delegating person
+- `Posted-By` is optional and appears only when a dedicated agent posts for a caller
+  (`github-issue-agent` or `github-pr-agent`): the agent adds it last, with its own
+  model, and the four fields above stay the caller's. A post a session writes for
+  itself has no `Posted-By`. Readers looking for the author, the implementer, or
+  the session to notify use only the four fields and skip `Posted-By`.
+- Author has only these four fields (plus `Posted-By` on a delegated post): no
+  mode or human line, and no synonym such as `mode` or a publisher account — the
+  tool and model show where help came from, and GitHub shows the posting account. Never infer the delegating person
   from the API account. Issue and PR posts record no role, machine alias, time,
   or revision, and do not accumulate earlier rounds' provenance.
 - Content a human writes and posts directly, with no Agent involved, has

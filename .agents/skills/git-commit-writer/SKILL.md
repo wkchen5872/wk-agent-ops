@@ -8,7 +8,7 @@ license: MIT
 compatibility: "Requires git. Optional: openspec CLI."
 metadata:
   author: wkchen
-  version: "1.7"
+  version: "1.8"
 ---
 
 # Git Commit Writer
@@ -28,6 +28,7 @@ tool_name=<executing agent tool>
 assisting_model=<current root-session model>
 commit_repository=<host/owner/repo of the repository being committed>
 github_references=<list of: url=<Issue or PR URL> evidence=<how it was confirmed>>
+subject=<optional caller-supplied subject line>
 ```
 
 When archive_path and change_id are provided, use them directly. They are a
@@ -67,6 +68,15 @@ An empty `PI_MODEL` counts as an unknown model. In a Pi subagent
 as root-session attribution: use the caller-supplied `assisting_model`, or omit
 and report. The exception belongs to Pi alone; Claude Code, Codex, Antigravity,
 and every other tool MUST NOT use `PI_MODEL` even when it is present in the environment.
+
+**Delegated commit record (Pi subagent only).** When this writer runs in a Pi
+subagent (`PI_SUBAGENT_PARENT_SESSION` is set), it is a delegated commit writer:
+after the root-session trailers add `Committed-By: git-commit-writer (<PI_MODEL>)`
+with the subagent's own `PI_MODEL`, never the caller's `assisting_model`. With an
+empty `PI_MODEL`, write `Committed-By: git-commit-writer` and report the omission;
+it never blocks the commit. A root-session commit MUST NOT add `Committed-By`:
+in Claude Code, Codex, Antigravity, or a Pi root session the trailers stay
+`Co-Authored-By` and the optional `AI-Assisted-By`.
 
 `assisting_model` is Git attribution metadata only. It identifies the known
 current root-session collaboration model, at the available precision.
@@ -231,6 +241,9 @@ Rules:
 
 - Subject uses imperative mood, has at most 72 characters, and no trailing
   period.
+- When the caller supplies `subject`, use it verbatim as the subject line and
+  still write the body and trailers. If it is empty or longer than 72 characters,
+  report that and use the derived subject instead; do not block the commit.
 - Body is 2–5 lines explaining what changed and why.
 - Never claim a proposal item that is absent from the staged diff.
 - When confirmed references exist, add the `Refs:` line from "GitHub
@@ -262,6 +275,9 @@ AI-Assisted-By: <assisting_model>"
 
 Omit the `Refs:` line when no reference is confirmed — never write an empty
 value or a placeholder.
+
+In a Pi subagent only, add `Committed-By: git-commit-writer (<PI_MODEL>)` as the
+last trailer, after `AI-Assisted-By` (see "Delegated commit record").
 
 When the model is unknown, omit the entire `AI-Assisted-By` line, not an empty
 value or placeholder, and mention the omission in the result.
