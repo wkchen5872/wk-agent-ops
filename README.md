@@ -117,7 +117,7 @@ opsx-branch <change-id>              以自選工具開啟 Session／Worktree
 | `.agents/skills/openspec-commit/` | 跨 Provider 的 `openspec-commit` skill |
 | `.claude/commands/opsx/commit.md` | `/opsx:commit` slash command |
 | `.agents/workflows/opsx-commit.md` | Agent workflow |
-| `.claude/agents/git-commit-writer-agent.md` | `@"git-commit-writer-agent"` — 自動產生 Conventional Commits |
+| `.claude/agents/git-commit-writer-agent.md` | `@"git-commit-writer-agent"` — 自動產生 Conventional Commits；委派提交會加上 `Committed-By` |
 | `.claude/skills/git-commit-writer/` | `/git-commit-writer` skill |
 | `.claude/agents/doc-updater-agent.md` | `@"doc-updater-agent"` — 分析 git 變更並同步更新說明文件 |
 | `.claude/skills/doc-updater/` | `/doc-updater` skill |
@@ -134,7 +134,7 @@ opsx-branch <change-id>              以自選工具開啟 Session／Worktree
 | `.claude/skills/change-review/`、`.agents/skills/change-review/` | PR 審查、修正交接與複審 skill（含報告範例、檢查清單與流程圖） |
 | `.agents/skills/github-issue/`、`.agents/skills/github-pr/` | 同兩個入口的跨 Provider 副本 |
 | `.claude/skills/agent-handoff/`、`.agents/skills/agent-handoff/` | 交接單 Skill 與 `handoff-write` 腳本（交接迴圈用，支援 Xirp、Herdr TUI 與 Herdr 桌面 app） |
-| `.claude/agents/github-pr-agent.md`、`.claude/agents/github-issue-agent.md` | 代呼叫端執行一次 PR／Issue 操作的專用 Agent（Claude Sonnet），Author 沿用呼叫端身分 |
+| `.claude/agents/github-pr-agent.md`、`.claude/agents/github-issue-agent.md` | 代呼叫端執行一次 PR／Issue 操作的專用 Agent（Claude Sonnet）；Author 保留呼叫端身分，委派發文另附 `Posted-By` |
 | `.codex/agents/github-pr-agent.toml`、`.codex/agents/github-issue-agent.toml` | 同兩個 Agent 的 Codex 版本（`gpt-5.6-terra`、medium） |
 | `.gitignore` 的 `/.agent-handoff/`、主 worktree 的 `.agent-handoff/roles.yaml` | 交件單不進 Git；角色範本只在缺少時建立，不覆寫 |
 | `.claude/rules/github-handoff.md`、`.agents/rules/github-handoff.md` | 指向 GitHub 入口 Skill 的 Provider 原生載入入口與鏡像 |

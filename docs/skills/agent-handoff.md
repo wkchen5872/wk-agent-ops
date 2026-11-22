@@ -3,7 +3,7 @@ type: Playbook
 title: Agent Handoff 交接迴圈指南
 description: 使用 handoff-start、handoff-role、handoff-finish、handoff-cleanup 與 handoff-doctor 協調多 Agent 自動化實作、審查與收尾。
 tags: [skills, handoff, workflow, xirp, herdr, herdr-app, agents, notify]
-generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-20T14:05:00+08:00" }
+generated: { by: codex/GPT-5, at: 2026-11-22T23:23:18+08:00 }
 sources:
   - id: handoff-scripts
     resource: /scripts/handoff/README.md
@@ -148,6 +148,14 @@ sources:
 | `<role>.profile` | Codex 專用：指定設定檔名稱。如需執行遠端 PR 交付，請設為 `profile: handoff-net` 啟用網路存取 |
 | `<role>.provider` | Pi 專用、必填：擁有該模型的 Pi provider，例如 `openai-codex` |
 | `<role>.billing` | Pi 專用、必填：`subscription`（OAuth 登入）或 `api`（API key） |
+
+### 更新既有實作者範本
+
+Installer 只在 `.agent-handoff/roles.yaml` 不存在時建立範本，不會覆寫既有檔案。
+既有範本請把 `implement.prompt` 改為以對應工具的 `git-commit-writer` skill 提交，並傳入
+`subject`：第一輪為 `feat({change}): <摘要>`，修正輪為
+`fix({change}): address <review-id>`。Claude Code 使用 `/git-commit-writer`、Codex 使用
+`$git-commit-writer`、Pi 使用 `/skill:git-commit-writer`；`handoff-start --impl` 切換工具時，只會改寫這些 skill 呼叫，不會改寫一般文字或路徑。[^handoff-scripts]
 
 ### Prompt 支援的動態佔位符
 

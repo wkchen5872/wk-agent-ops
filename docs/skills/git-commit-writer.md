@@ -3,7 +3,11 @@ type: Playbook
 title: Git Commit Writer
 description: Stage a completed worktree and create one Conventional Commits commit.
 tags: [skills, git, commits]
-timestamp: 2026-08-01T00:00:00+08:00
+generated: { by: codex/GPT-5, at: 2026-11-22T23:23:18+08:00 }
+sources:
+  - id: commit-skill
+    resource: /template/common/skills/git-commit-writer/SKILL.md
+    title: Git Commit Writer Skill
 ---
 
 # Git Commit Writer
@@ -16,10 +20,11 @@ timestamp: 2026-08-01T00:00:00+08:00
 
 1. **精確 Context 優先**：若由 `openspec-commit` 呼叫，會直接接收並使用 `archive_path` 與 `change_id`；若為獨立呼叫，則依當前分支與 staged 變更自動關聯。
 2. **自動推斷 Commit Type**：根據 `git diff` 內容自動判斷變更性質（`feat`, `fix`, `docs`, `refactor`, `chore`, `test`）。
-3. **高品質 Subject 與 Body**：從 proposal 或實際變更內容推導「為什麼改 (Why)」與「改了什麼 (What)」。
+3. **高品質 Subject 與 Body**：從 proposal 或實際變更內容推導「為什麼改 (Why)」與「改了什麼 (What)」；呼叫端也可提供未超過 72 字元的 `subject` 原樣保留標題。
 4. **透明的協作標註**：
    - `Co-Authored-By`: 自動標註執行的 AI 工具與對應 email（如 Claude Code 或 Codex）。
    - `AI-Assisted-By`: 記錄協作的 AI 模型名稱。
+   - `Committed-By`: 僅在委派的提交 agent 實際建立 commit 時，記錄該 agent 與其模型。
    - `Refs`: 自動帶入本次工作直接處理且已確認的 GitHub Issue 或 PR 編號（如 `Refs: #19`）。
 5. **完整 Staging 防護**：自動執行 `git add -A`，若無任何變更則安全停止；若觸發 pre-commit hook 格式化檔案，會重新 staging 後再完成提交。
 6. **即刻執行**：生成符合規範的訊息後直接執行 `git commit`，不需開發者反覆手動確認。
@@ -98,10 +103,24 @@ Co-Authored-By: Pi
 AI-Assisted-By: claude-opus-5-5
 ```
 
+### 4. 委派的提交 agent
+委派給 Claude Code 或 Codex 的 `git-commit-writer-agent` 時，根 session 的
+`Co-Authored-By` 與 `AI-Assisted-By` 保持不變，並在其後記錄實際提交的 agent。
+Pi 只有在 subagent 執行 portable skill 時才使用相同規則；root session 不加這一行。[^commit-skill]
+
+```text
+Co-Authored-By: Codex <noreply@openai.com>
+AI-Assisted-By: gpt-6.1-terra
+Committed-By: git-commit-writer-agent (gpt-5.6-luna)
+```
+
+提供 `subject` 時會原樣作為 commit 標題；空字串或超過 72 字元時，writer 會回報並改用自動產生的標題。[^commit-skill]
+
 ### Trailer 標籤說明
 - **Refs**：直接處理的 Issue 或 PR 編號（同 repo 寫 `#N`，跨 repo 寫完整網址）。
 - **Co-Authored-By**：目前已驗證支援 `Claude Code <noreply@anthropic.com>` 與 `Codex <noreply@openai.com>`；Pi 寫成 `Co-Authored-By: Pi`，不附 email。
 - **AI-Assisted-By**：記錄本次協作的核心模型名稱（如 `GPT-6` 或 `Claude 3.7 Sonnet`）。模型名稱不從環境變數推定，唯一例外是 Pi root session（`PI_CODING_AGENT=true` 且沒有 `PI_SUBAGENT_PARENT_SESSION`）：Pi 不在 prompt 中寫出模型，而是在每個 shell 指令注入 `PI_MODEL`，所以沒有使用者或呼叫端提供的名稱時，writer 讀 commit 當下的 `PI_MODEL`，原樣記錄模型 ID、不加 provider；`/model` 換模型後記錄新模型，空值視為未知。Pi subagent 的 `PI_MODEL` 是 subagent 自己的模型，不使用；Claude Code、Codex 等其他工具即使環境中有 `PI_MODEL` 也不使用。
+- **Committed-By**：只出現在委派提交；模型取提交 agent 自己的 runtime 或定義，絕不取 root session 的 `assisting_model`。不知道模型時只保留 agent 名稱並回報，不阻擋提交。[^commit-skill]
 
 ---
 
@@ -150,3 +169,5 @@ AI-Assisted-By: claude-opus-5-5
 - **Codex Agent**：`template/common/.codex/agents/git-commit-writer-agent.toml`
 - **安裝目標**：`.claude/skills/git-commit-writer/` 與 `.agents/skills/git-commit-writer/`
 - **上層工作流**：[OpenSpec Commit 工作流程](/docs/workflow/commit.md)
+
+[^commit-skill]: [Git Commit Writer Skill](/template/common/skills/git-commit-writer/SKILL.md)
